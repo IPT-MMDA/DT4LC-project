@@ -33,3 +33,4 @@ disallow_incomplete_defs = true
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_ignores = true
+exclude = ["build"]
