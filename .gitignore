@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.egg-info
+.mypy_cache
+
+# Environment
+.venv
+.env
+
+# Build
+build/
+dist/
+
+# OS-specific
+.DS_Store

@@ -1,0 +1,30 @@
+[project]
+name = "dt4lc-project"
+version = "0.1.0"
+description = "Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["mypy>=1.15.0", "ruff>=0.11.6", "types-requests>=2.32.0.20250328"]
+ui = [
+    "streamlit>=1.44.1",
+    "python-dotenv>=1.1.0",
+    "rasterio>=1.4.3",
+    "matplotlib>=3.10.1",
+]
+
+[tool.ruff]
+line-length = 119
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "double"
+
+[tool.mypy]
+strict = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_ignores = true
