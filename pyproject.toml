@@ -1,0 +1,61 @@
+[project]
+name = "dt4lc-project"
+version = "0.1.0"
+description = "Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.2.5",
+    "torch>=2.6.0",
+    "python-dotenv>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.15.0",
+    "ruff>=0.11.6",
+    "types-requests>=2.32.0.20250328",
+    "watchdog>=6.0.0",
+    "huggingface-hub>=0.30.2",
+    "requests>=2.32.3",
+    "types-pyyaml>=6.0.12.20250402",
+]
+ui = [
+    "streamlit>=1.44.1",
+    "rasterio>=1.4.3",
+    "matplotlib>=3.10.1",
+]
+models = [
+    "pyyaml>=6.0.2",
+    "einops>=0.8.1",
+    "timm>=1.0.15",
+]
+
+[project.scripts]
+cdt = "cognitive_ui.cli:run_app"
+
+[tool.setuptools]
+# Define specific packages to include in the distribution
+packages = ["cognitive_ui", "digital_twin"]
+
+[tool.ruff]
+line-length = 119
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = "double"
+
+[tool.ruff.lint]
+select = ["I"]  # Import sorting
+
+[tool.mypy]
+strict = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_ignores = true
+exclude = ["build", "scripts"]
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"

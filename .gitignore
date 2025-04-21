@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.egg-info
+.mypy_cache
+.ruff_cache
+
+# Environment
+.venv
+.env
+
+# Build
+build/
+dist/
+
+# OS-specific
+.DS_Store
+
+# Project-specific
+resources/.cache/
+resources/prithvi_eo_v1_100m/
