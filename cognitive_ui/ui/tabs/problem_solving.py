@@ -6,14 +6,13 @@ This module contains the UI components for the Problem Solving & Queries tab.
 """
 
 import streamlit as st
-from typing import Optional
 
 from cognitive_ui.cognitive_functions import CognitiveDigitalTwin
-from cognitive_ui.config import UI_MAX_TEXT_LENGTH, SYNTHESIS_QUERY, UNCERTAINTY_QUERY
+from cognitive_ui.config import SYNTHESIS_QUERY, UI_MAX_TEXT_LENGTH, UNCERTAINTY_QUERY
 from cognitive_ui.utils import truncate_text
 
 
-def display_problem_solving_tab(twin: Optional[CognitiveDigitalTwin] = None) -> None:
+def display_problem_solving_tab(twin: CognitiveDigitalTwin | None = None) -> None:
     """Display the Problem Solving & Queries tab content.
 
     Args:

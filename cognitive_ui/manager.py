@@ -8,20 +8,20 @@ This module contains functions for initializing and managing the Cognitive Digit
 import os
 import traceback
 from pathlib import Path
+
 import numpy as np
 import rasterio
 import streamlit as st
-from typing import Optional
+
+from cognitive_ui.config import CACHE_DIR, DEFAULT_HISTORICAL_TIMESTAMP
+from cognitive_ui.core.visualization import save_array_as_geotiff
+from cognitive_ui.utils import debug_info
 
 from .cognitive_functions import CognitiveDigitalTwin
 from .core.visualization import enhance_raster_for_visualization
 
-from cognitive_ui.config import DEFAULT_HISTORICAL_TIMESTAMP, CACHE_DIR
-from cognitive_ui.utils import debug_info
-from cognitive_ui.core.visualization import save_array_as_geotiff
 
-
-def initialize_twin(debug_mode: bool = False) -> Optional[CognitiveDigitalTwin]:
+def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
     """Initialize the Cognitive Digital Twin.
 
     Args:
@@ -517,7 +517,7 @@ def fix_kahovka_visualization() -> None:
             debug_info("No kahovka_visualization_rgb found", "Warning")
 
 
-def generate_synthetic_historical_data(twin: Optional[CognitiveDigitalTwin] = None) -> bool:
+def generate_synthetic_historical_data(twin: CognitiveDigitalTwin | None = None) -> bool:
     """Generate synthetic historical data for demonstration purposes.
 
     Args:

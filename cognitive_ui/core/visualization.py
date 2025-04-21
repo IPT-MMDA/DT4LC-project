@@ -6,12 +6,13 @@ satellite imagery and other raster data for visualization.
 """
 
 import io
-import rasterio
-import numpy as np
-from numpy.typing import NDArray
 from pathlib import Path
 from typing import cast
+
+import numpy as np
+import rasterio
 from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from rasterio.transform import Affine
 
 from cognitive_ui.config import VIZ_NO_DATA, VIZ_NO_DATA_FLOAT, VIZ_PERCENTILES

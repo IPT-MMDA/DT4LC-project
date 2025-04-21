@@ -5,15 +5,16 @@ Change Analysis Tab for Cognitive Digital Twin Interactive UI
 This module contains the UI components for the Change Analysis tab.
 """
 
+from typing import Literal
+
 import matplotlib.pyplot as plt
 import streamlit as st
-from typing import Literal
 
 from cognitive_ui.cognitive_functions import CognitiveDigitalTwin
 from cognitive_ui.core.visualization import plot_to_image
 from cognitive_ui.utils import truncate_text
 
-from ..widgets_visualization import display_centered_image, display_centered_chart
+from ..widgets_visualization import display_centered_chart, display_centered_image
 
 
 def display_change_analysis_tab(twin: CognitiveDigitalTwin | None = None, has_historical: bool = False) -> None:

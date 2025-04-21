@@ -7,9 +7,10 @@ This module contains UI component functions for the Cognitive Digital Twin appli
 
 import tempfile
 from pathlib import Path
-import streamlit as st
-import rasterio
+
 import numpy as np
+import rasterio
+import streamlit as st
 
 from cognitive_ui.cognitive_functions import CognitiveDigitalTwin
 from cognitive_ui.core.visualization import enhance_raster_for_visualization, load_raster

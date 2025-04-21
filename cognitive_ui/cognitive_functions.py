@@ -1,14 +1,15 @@
-from typing import Optional, Dict, Any
-import numpy as np
-from numpy.typing import NDArray
-import torch
-from pathlib import Path
 import json
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
+from numpy.typing import NDArray
 
 from .core.llm import query_gemini
-from .model import model as prithvi_model
-from .core.viz import enhance_raster_for_visualization, load_raster
-from .config import PRITHVI_MODEL_PATH, RESOURCES_PATH
+from .core.visualization import enhance_raster_for_visualization, load_raster
+from .sample_model import PRITHVI_MODEL_PATH
+from .sample_model import model as prithvi_model
 
 
 class CognitiveDigitalTwin:
@@ -20,7 +21,7 @@ class CognitiveDigitalTwin:
     for natural language interaction with the digital twin.
     """
 
-    def __init__(self, study_area_path: Optional[Path] = None):
+    def __init__(self, study_area_path: Path | None = None):
         """
         Initialize the Cognitive Digital Twin
 
@@ -28,10 +29,6 @@ class CognitiveDigitalTwin:
             study_area_path: Path to satellite imagery of the study area
         """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-        # Create temp directory for generated files
-        self.temp_dir = RESOURCES_PATH / ".temp"
-        self.temp_dir.mkdir(exist_ok=True, parents=True)
 
         # Default study area if none provided
         if study_area_path is None:
@@ -44,7 +41,7 @@ class CognitiveDigitalTwin:
             self.study_area_path = study_area_path
 
         # Physical layer state
-        self.physical_state: Dict[str, Any] = {
+        self.physical_state: dict[str, Any] = {
             "current_imagery": None,
             "historical_states": [],
             "detected_changes": [],
@@ -52,7 +49,7 @@ class CognitiveDigitalTwin:
         }
 
         # Cognitive layer state
-        self.cognitive_state: Dict[str, Any] = {
+        self.cognitive_state: dict[str, Any] = {
             "interpretations": [],
             "causal_hypotheses": [],
             "scientific_context": {},
@@ -135,7 +132,7 @@ class CognitiveDigitalTwin:
         if raster.shape[0] >= 4:
             self._calculate_ndvi_and_land_cover(raster, self.physical_state["parameters"])
 
-    def _calculate_ndvi_and_land_cover(self, raster: NDArray[np.float32], target_params: Dict[str, Any]) -> None:
+    def _calculate_ndvi_and_land_cover(self, raster: NDArray[np.float32], target_params: dict[str, Any]) -> None:
         """
         Calculate NDVI and land cover classifications from raster data
 
@@ -189,7 +186,7 @@ class CognitiveDigitalTwin:
             historical_raster = load_raster(imagery_path)
 
             # Extract parameters from historical imagery
-            historical_state: Dict[str, Any] = {"timestamp": timestamp, "imagery": historical_raster, "parameters": {}}
+            historical_state: dict[str, Any] = {"timestamp": timestamp, "imagery": historical_raster, "parameters": {}}
 
             # Calculate NDVI and land cover for historical imagery
             if historical_raster.shape[0] >= 4:
@@ -450,7 +447,7 @@ class CognitiveDigitalTwin:
 
         return response if response else "Unable to process query"
 
-    def get_visualization(self) -> Optional[NDArray[np.float32]]:
+    def get_visualization(self) -> NDArray[np.float32] | None:
         """
         Get visualization of the current physical state
 

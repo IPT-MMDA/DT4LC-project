@@ -2,15 +2,16 @@
 Large Language Model (LLM) integration for the Cognitive Digital Twin Framework
 """
 
-from typing import Any, cast
-import os
 import json
+import os
+from typing import Any, cast
+
 import requests
 from dotenv import load_dotenv
 
 from cognitive_ui.config import (
-    DEFAULT_GEMINI_MODEL,
     DEFAULT_GEMINI_MAX_TOKENS,
+    DEFAULT_GEMINI_MODEL,
     MAX_TOKENS,
 )
 

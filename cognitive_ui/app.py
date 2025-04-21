@@ -7,27 +7,31 @@ This app provides a user-friendly interface to interact with the framework's
 various components and visualize results.
 
 Configuration:
-- Streamlit-specific settings: src/interactive_ui/.streamlit/config.toml
-- Project configuration: src/interactive_ui/config.py and src/config.py
+- Streamlit-specific settings: .streamlit/config.toml
+- Application settings: cognitive_ui/config.py
 """
 
 import streamlit as st
 
-from cognitive_ui.utils import debug_info
 from cognitive_ui.config import UI_TABS
-from .manager import (
-    initialize_twin,
+from cognitive_ui.manager import (
     fix_kahovka_visualization,
     generate_synthetic_historical_data,
+    initialize_twin,
 )
-from .ui.components import display_sidebar
-from .ui.tabs.dataset_analysis import display_dataset_analysis_tab
-from .ui.tabs.change_analysis import display_change_analysis_tab
-from .ui.tabs.problem_solving import display_problem_solving_tab
+from cognitive_ui.ui.components import display_sidebar
+from cognitive_ui.ui.tabs.change_analysis import display_change_analysis_tab
+from cognitive_ui.ui.tabs.dataset_analysis import display_dataset_analysis_tab
+from cognitive_ui.ui.tabs.problem_solving import display_problem_solving_tab
+from cognitive_ui.utils import debug_info
 
 
 def main() -> None:
-    """Main function to run the application."""
+    """Main application entry point.
+
+    Sets up the Streamlit UI, initializes the digital twin,
+    and displays the interactive interface with visualization tabs.
+    """
     st.set_page_config(
         page_title="Cognitive Digital Twin",
         page_icon="🌍",

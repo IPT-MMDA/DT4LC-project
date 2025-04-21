@@ -1,0 +1,19 @@
+# Streamlit configuration for the Cognitive Digital Twin UI
+# See https://docs.streamlit.io/library/advanced-features/configuration
+
+[server]
+headless = true
+# fileWatcherType = "none"  # Options: none, poll, watchdog
+runOnSave = false
+# enableCORS = false  # Set to true if needed
+# enableXsrfProtection = true  # Default is true
+
+[theme]
+primaryColor = "#14213d"
+backgroundColor = "#F0F2F6"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#262730"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false

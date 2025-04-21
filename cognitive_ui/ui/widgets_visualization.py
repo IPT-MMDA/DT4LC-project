@@ -1,7 +1,8 @@
 import io
+from typing import Literal
+
 import streamlit as st
 from matplotlib.figure import Figure
-from typing import Literal
 
 
 def display_centered_image(image_data: io.BytesIO, width: int | None = None) -> None:
