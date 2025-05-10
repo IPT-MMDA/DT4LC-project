@@ -39,6 +39,21 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
+    # Display global title and logos
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(
+            """
+            <h1 style='text-align: left; margin-bottom: 2rem;'>
+                DT4LC: Developing Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning
+            </h1>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col2:
+        st.image("assets/7cd1dc0d1.png", width=100)
+        st.image("assets/logo_q5_fin5.png", width=100)
+
     # Initialize session state variables if they don't exist
     if "initialized" not in st.session_state:
         st.session_state.initialized = True

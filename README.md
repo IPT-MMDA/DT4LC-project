@@ -102,7 +102,7 @@ streamlit run cognitive_ui/app.py
 uv run cdt
 ```
 
-The application will be available at http://localhost:8501 by default.
+The application will be available at [localhost](http://localhost:8501) by default.
 
 ## Configuration
 
@@ -121,7 +121,7 @@ Application-specific settings are in `cognitive_ui/config.py`. This includes:
 
 ## Project Structure
 
-```
+```text
 dt4lc-project/
 ├── .streamlit/              # Streamlit configuration
 ├── cognitive_ui/            # Main application package
@@ -143,12 +143,12 @@ dt4lc-project/
 
 If you use this software in your research, please cite:
 
-```
+```bibtex
 @software{cognitive_digital_twin,
-  author = {Your Name},
-  title = {Cognitive Digital Twin for Land Cover Change Detection},
-  year = {2023},
-  url = {https://github.com/your-org/dt4lc-project}
+  author = {Anton Chernyatevich},
+  title = {Cognitive Digital Twin for Land Cover Change Detection (DT4LC Project)},
+  year = {2025},
+  url = {https://github.com/IPT-MMDA/DT4LC-project}
 }
 ```
 
