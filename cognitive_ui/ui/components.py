@@ -5,8 +5,8 @@ UI Components for Cognitive Digital Twin Interactive UI
 This module contains UI component functions for the Cognitive Digital Twin application.
 """
 
-import tempfile
 from pathlib import Path
+import tempfile
 
 import numpy as np
 import rasterio

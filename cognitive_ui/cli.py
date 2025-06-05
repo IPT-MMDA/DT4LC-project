@@ -7,10 +7,9 @@ Cognitive Digital Twin UI application with appropriate configuration.
 """
 
 import argparse
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
-from typing import List
 
 
 def run_app() -> int:
@@ -76,7 +75,7 @@ def run_app() -> int:
         return 1
 
 
-def get_streamlit_args(app_path: Path) -> List[str]:
+def get_streamlit_args(app_path: Path) -> list[str]:
     """Build the Streamlit command line arguments.
 
     Args:

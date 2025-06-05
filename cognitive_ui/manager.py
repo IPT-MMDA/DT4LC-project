@@ -6,8 +6,8 @@ This module contains functions for initializing and managing the Cognitive Digit
 """
 
 import os
-import traceback
 from pathlib import Path
+import traceback
 
 import numpy as np
 import rasterio
@@ -27,11 +27,11 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
     Args:
         debug_mode: If True, forces creation of a basic twin without relying on session state
     """
-    print("Starting Cognitive Digital Twin initialization...")
+    debug_info("Starting Cognitive Digital Twin initialization")
 
     # When in debug mode, bypass session state and create a fresh twin
     if debug_mode:
-        print("Debug mode: Creating fresh twin")
+        debug_info("Debug mode: Creating fresh twin")
         try:
             # Create default twin and immediately ensure it has current imagery
             fresh_twin = CognitiveDigitalTwin()
@@ -44,28 +44,28 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
 
             return fresh_twin
         except Exception as e:
-            print(f"Error creating debug twin: {e}")
+            debug_info("Error creating debug twin", str(e))
             return None
 
     # Check if we already have a twin in session state
     if "twin" in st.session_state and st.session_state.twin is not None:
         twin_instance = st.session_state.twin
         if isinstance(twin_instance, CognitiveDigitalTwin):
-            print(f"Using existing twin from session state: {type(twin_instance)}")
+            debug_info("Using existing twin from session state", type(twin_instance))
             return twin_instance
         else:
-            print(f"Twin in session state is not a CognitiveDigitalTwin: {type(twin_instance)}")
+            debug_info("Twin in session state is not a CognitiveDigitalTwin", type(twin_instance))
             return None
 
     # Initialize default data source selection if not already set
     if "data_source" not in st.session_state:
         st.session_state.data_source = "example_dataset"  # Changed default from kahovka to example
-        print(f"Setting default data source: {st.session_state.data_source}")
+        debug_info("Setting default data source", st.session_state.data_source)
 
     try:
         # Create the twin with the selected data source
         if st.session_state.data_source == "kahovka_data":
-            print("Attempting to load Kahovka data...")
+            debug_info("Attempting to load Kahovka data")
             # Use Kahovka data
             kahovka_path = Path(
                 os.path.join(
@@ -102,14 +102,13 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
 
             # Check if file exists
             if not kahovka_path.exists():
-                print(f"Kahovka data file not found at {kahovka_path}. Falling back to default data.")
-                print("Creating default CognitiveDigitalTwin instance...")
+                debug_info("Kahovka data file not found, falling back to default data", str(kahovka_path))
                 st.session_state.twin = CognitiveDigitalTwin()
                 st.session_state.data_source = "example_dataset"
                 return st.session_state.twin
 
             # Custom initialization for Kahovka data to handle band differences
-            print("Creating CognitiveDigitalTwin with Kahovka data...")
+            debug_info("Creating CognitiveDigitalTwin with Kahovka data")
             st.session_state.twin = CognitiveDigitalTwin()
 
             try:
@@ -118,11 +117,11 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                     img = src.read()
 
                     # Debug info
-                    print(f"Kahovka image shape: {img.shape}, dtype: {img.dtype}, min: {img.min()}, max: {img.max()}")
+                    debug_info("Kahovka image loaded", f"shape: {img.shape}, dtype: {img.dtype}")
 
                 # Fix all NaN values in the original image right at the start
                 img = np.nan_to_num(img, nan=0.0)
-                print(f"After NaN fixing - min: {img.min()}, max: {img.max()}")
+                debug_info("After NaN fixing", f"min: {img.min()}, max: {img.max()}")
 
                 # Create a better visualization for Kahovka data
                 try:
@@ -145,7 +144,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                         st.session_state.kahovka_visualization = rgb_display
                         # Also store as visualization_rgb to match with the historical data naming convention
                         st.session_state.visualization_rgb = rgb_display
-                        print(f"Kahovka visualization created with shape: {rgb_display.shape}")
+                        debug_info("Kahovka visualization created", f"shape: {rgb_display.shape}")
 
                         # Create a padded version for Prithvi processing
                         padded_img = np.zeros((6, img.shape[1], img.shape[2]), dtype=img.dtype)
@@ -153,7 +152,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                         padded_img[5, :, :] = img[4, :, :]  # Duplicate the last band
                     else:
                         # For unexpected channel counts, still try to create a visualization
-                        print(f"Unexpected channel count in Kahovka data: {img.shape[0]}")
+                        debug_info("Unexpected channel count in Kahovka data", img.shape[0])
 
                         if img.shape[0] >= 3:
                             # Just use first 3 bands for RGB
@@ -188,7 +187,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                             padded_img[i] = img[min(img.shape[0] - 1, i)]
 
                 except Exception as e:
-                    print(f"Error in Kahovka visualization: {e}")
+                    debug_info("Error in Kahovka visualization", str(e))
                     # Create a simple colored placeholder
                     h, w = img.shape[1], img.shape[2]
                     placeholder = np.ones((h, w, 3), dtype=np.float32)
@@ -293,7 +292,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
         elif st.session_state.data_source == "upload_data" and "uploaded_data_path" in st.session_state:
             # Use user uploaded data
             try:
-                print(f"Loading uploaded data from {st.session_state.uploaded_data_path}")
+                debug_info("Loading uploaded data", st.session_state.uploaded_data_path)
                 # Create the CognitiveDigitalTwin with the uploaded data
                 st.session_state.twin = CognitiveDigitalTwin()
 
@@ -301,7 +300,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                 uploaded_path = st.session_state.uploaded_data_path
                 with rasterio.open(uploaded_path) as src:
                     img = src.read()
-                    print(f"Uploaded image shape: {img.shape}")
+                    debug_info("Uploaded image loaded", f"shape: {img.shape}")
 
                 # Fix NaN values
                 img = np.nan_to_num(img, nan=0.0)
@@ -374,7 +373,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
 
                         st.session_state.visualization_swir = np.transpose(normalized_swir, (1, 2, 0))
                 except Exception as e:
-                    print(f"Error in visualization: {e}")
+                    debug_info("Error in uploaded data visualization", str(e))
                     # Create a simple colored placeholder
                     h, w = img.shape[1], img.shape[2]
                     placeholder = np.ones((h, w, 3), dtype=np.float32)
@@ -415,11 +414,10 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                 st.session_state.twin = CognitiveDigitalTwin()
         else:
             # Use default Prithvi data for example_dataset
-            print("Initializing with default Prithvi data")
+            debug_info("Initializing with default Prithvi data")
             try:
                 st.session_state.twin = CognitiveDigitalTwin()
-                # For debugging
-                print(f"Initialized twin with default Prithvi data: {type(st.session_state.twin)}")
+                debug_info("Initialized twin with default Prithvi data", type(st.session_state.twin))
                 # Ensure we have necessary session state variables initialized
                 if "visualization" not in st.session_state:
                     # Get the default visualization from twin
@@ -428,7 +426,7 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                         st.session_state.visualization = vis
                         st.session_state.visualization_rgb = vis
             except Exception as e:
-                print(f"Error creating default twin: {e}")
+                debug_info("Error creating default twin", str(e))
                 return None
 
         # Always initialize these to prevent errors
@@ -464,20 +462,20 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
         st.session_state.historical_visualization = None
 
     except Exception as e:
-        print(f"Error during twin initialization: {e}")
-        print(traceback.format_exc())
+        debug_info("Error during twin initialization", str(e))
+        debug_info("Traceback", traceback.format_exc())
         return None
 
     if "twin" in st.session_state and st.session_state.twin is not None:
         result_twin = st.session_state.twin
         if isinstance(result_twin, CognitiveDigitalTwin):
-            print(f"Returning twin of type: {type(result_twin)}")
+            debug_info("Returning twin of type", type(result_twin))
             return result_twin
         else:
-            print(f"Twin in session state is not a CognitiveDigitalTwin: {type(result_twin)}")
+            debug_info("Twin in session state is not a CognitiveDigitalTwin", type(result_twin))
             return None
     else:
-        print("No twin in session state")
+        debug_info("No twin in session state")
         return None
 
 

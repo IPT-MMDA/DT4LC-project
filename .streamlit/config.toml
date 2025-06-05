@@ -3,7 +3,7 @@
 
 [server]
 headless = true
-# fileWatcherType = "none"  # Options: none, poll, watchdog
+fileWatcherType = "none"  # Options: none, poll, watchdog - none disables file watching
 runOnSave = false
 # enableCORS = false  # Set to true if needed
 # enableXsrfProtection = true  # Default is true

@@ -3,8 +3,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import torch
 from numpy.typing import NDArray
+import torch
 
 from .core.llm import query_gemini
 from .core.visualization import enhance_raster_for_visualization, load_raster

@@ -17,16 +17,15 @@
 # transformers: https://github.com/huggingface/transformers
 # --------------------------------------------------------
 
-import logging
 from functools import partial
-from typing import List, Tuple
+import logging
 
-import numpy as np
-import torch
-import torch.nn as nn
 from einops import rearrange
+import numpy as np
 from timm.layers import to_2tuple
 from timm.models.vision_transformer import Block
+import torch
+import torch.nn as nn
 
 
 def get_3d_sincos_pos_embed(embed_dim, grid_size, add_cls_token=False):
@@ -135,8 +134,8 @@ class PatchEmbed(nn.Module):
 
     def __init__(
         self,
-        input_size: Tuple[int, int, int] = (1, 224, 224),
-        patch_size: Tuple[int, int, int] = (1, 16, 16),
+        input_size: tuple[int, int, int] = (1, 224, 224),
+        patch_size: tuple[int, int, int] = (1, 16, 16),
         in_chans: int = 3,
         embed_dim: int = 768,
         norm_layer: nn.Module | None = None,
@@ -237,8 +236,8 @@ class PrithviViT(nn.Module):
 
     def __init__(
         self,
-        img_size: int | Tuple[int, int] = 224,
-        patch_size: int | Tuple[int, int, int] = (1, 16, 16),
+        img_size: int | tuple[int, int] = 224,
+        patch_size: int | tuple[int, int, int] = (1, 16, 16),
         num_frames: int = 1,
         in_chans: int = 3,
         embed_dim: int = 1024,
@@ -246,7 +245,7 @@ class PrithviViT(nn.Module):
         num_heads: int = 16,
         mlp_ratio: float = 4.0,
         norm_layer: nn.Module = partial(torch.nn.LayerNorm, eps=1e-6),
-        coords_encoding: List[str] | None = None,
+        coords_encoding: list[str] | None = None,
         coords_scale_learn: bool = False,
         encoder_only: bool = True,  # needed for timm
         **kwargs,
@@ -474,8 +473,8 @@ class MAEDecoder(nn.Module):
 
     def __init__(
         self,
-        patch_size: int | Tuple[int, int, int] = (1, 16, 16),
-        grid_size: List[int] | Tuple[int, int, int] = (3, 14, 14),
+        patch_size: int | tuple[int, int, int] = (1, 16, 16),
+        grid_size: list[int] | tuple[int, int, int] = (3, 14, 14),
         in_chans: int = 3,
         encoder_embed_dim: int = 1024,
         decoder_embed_dim: int = 512,
@@ -483,7 +482,7 @@ class MAEDecoder(nn.Module):
         num_heads: int = 16,
         mlp_ratio: float = 4.0,
         norm_layer: nn.Module = nn.LayerNorm,
-        coords_encoding: List[str] | None = None,
+        coords_encoding: list[str] | None = None,
         coords_scale_learn: bool = False,
     ):
         super().__init__()
@@ -603,8 +602,8 @@ class PrithviMAE(nn.Module):
 
     def __init__(
         self,
-        img_size: int | Tuple[int, int] = 224,
-        patch_size: int | Tuple[int, int, int] = (1, 16, 16),
+        img_size: int | tuple[int, int] = 224,
+        patch_size: int | tuple[int, int, int] = (1, 16, 16),
         num_frames: int = 3,
         in_chans: int = 3,
         embed_dim: int = 1024,
@@ -616,7 +615,7 @@ class PrithviMAE(nn.Module):
         mlp_ratio: float = 4.0,
         norm_layer: nn.Module = partial(torch.nn.LayerNorm, eps=1e-6),
         norm_pix_loss: bool = False,
-        coords_encoding: List[str] | None = None,
+        coords_encoding: list[str] | None = None,
         coords_scale_learn: bool = False,
         encoder_only: bool = False,
         **kwargs,
@@ -683,7 +682,7 @@ class PrithviMAE(nn.Module):
 
         return patchified_pixel_values
 
-    def unpatchify(self, patchified_pixel_values, image_size: Tuple[int, int] | None = None):
+    def unpatchify(self, patchified_pixel_values, image_size: tuple[int, int] | None = None):
         """
         Args:
             patchified_pixel_values (`torch.FloatTensor` of shape
@@ -760,5 +759,5 @@ class PrithviMAE(nn.Module):
         x: torch.Tensor,
         temporal_coords: None | torch.Tensor = None,
         location_coords: None | torch.Tensor = None,
-    ) -> List[torch.Tensor]:
+    ) -> list[torch.Tensor]:
         return self.encoder.forward_features(x, temporal_coords, location_coords)

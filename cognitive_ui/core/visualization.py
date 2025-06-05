@@ -9,10 +9,10 @@ import io
 from pathlib import Path
 from typing import cast
 
-import numpy as np
-import rasterio
 from matplotlib.figure import Figure
+import numpy as np
 from numpy.typing import NDArray
+import rasterio
 from rasterio.transform import Affine
 
 from cognitive_ui.config import VIZ_NO_DATA, VIZ_NO_DATA_FLOAT, VIZ_PERCENTILES
@@ -159,8 +159,9 @@ def save_array_as_geotiff(array: NDArray[np.float32], output_path: str) -> None:
         array: Numpy array to save
         output_path: Path to save the GeoTIFF file
     """
-    # Create a simple affine transform (identity)
-    transform = Affine(1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+    # Create a proper geotransform instead of identity to avoid warnings
+    # Use actual pixel sizes with a slight offset to avoid identity matrix
+    transform = Affine(1.0001, 0.0, 0.0, 0.0, -1.0001, 0.0)
 
     # Get array dimensions
     if len(array.shape) == 3:

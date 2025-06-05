@@ -6,8 +6,8 @@ import json
 import os
 from typing import Any, cast
 
-import requests
 from dotenv import load_dotenv
+import requests
 
 from cognitive_ui.config import (
     DEFAULT_GEMINI_MAX_TOKENS,
