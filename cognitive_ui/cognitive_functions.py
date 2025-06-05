@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 import torch
 
 from .core.llm import query_gemini
-from .core.visualization import enhance_raster_for_visualization, load_raster
+from .core.visualization import enhance_raster_with_current_settings, load_raster
 from .sample_model import PRITHVI_MODEL_PATH
 from .sample_model import model as prithvi_model
 
@@ -455,5 +455,5 @@ class CognitiveDigitalTwin:
             Visualization of current state or None if not available
         """
         if self.physical_state["current_imagery"] is not None:
-            return enhance_raster_for_visualization(self.physical_state["current_imagery"])
+            return enhance_raster_with_current_settings(self.physical_state["current_imagery"])
         return None

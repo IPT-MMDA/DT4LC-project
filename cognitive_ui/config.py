@@ -14,7 +14,7 @@ DEFAULT_GEMINI_MAX_TOKENS: int | None = None
 # --- Visualization ---
 VIZ_NO_DATA: float = -9999  # No data value for visualizations
 VIZ_NO_DATA_FLOAT = 0.0001
-VIZ_PERCENTILES = (0.1, 99.9)
+VIZ_PERCENTILES = (2, 98)
 
 # --- Data Settings ---
 DEFAULT_HISTORICAL_TIMESTAMP = "2017-01-01"
@@ -27,6 +27,9 @@ RESOURCES_PATH.mkdir(parents=True, exist_ok=True)
 
 CACHE_DIR = RESOURCES_PATH / ".cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+TMP_DIR = RESOURCES_PATH / "tmp"
+TMP_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- UI Settings ---
 UI_MAX_TEXT_LENGTH = {

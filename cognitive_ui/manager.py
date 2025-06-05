@@ -18,7 +18,19 @@ from cognitive_ui.core.visualization import save_array_as_geotiff
 from cognitive_ui.utils import debug_info
 
 from .cognitive_functions import CognitiveDigitalTwin
-from .core.visualization import enhance_raster_for_visualization
+from .core.visualization import (
+    enhance_raster_with_current_settings,
+    get_visualization_settings,
+)
+
+
+def _get_current_percentiles() -> tuple[float, float]:
+    """Get current contrast percentiles from session state or defaults."""
+    try:
+        _, percentiles = get_visualization_settings()
+        return percentiles
+    except Exception:
+        return (2.0, 98.0)
 
 
 def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
@@ -123,26 +135,16 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                 img = np.nan_to_num(img, nan=0.0)
                 debug_info("After NaN fixing", f"min: {img.min()}, max: {img.max()}")
 
-                # Create a better visualization for Kahovka data
+                # Create a better visualization for Kahovka data using standardized functions
                 try:
                     # If image has 5 bands, we need to handle visualization differently
                     if img.shape[0] == 5:
-                        # For visualization, use standard RGB channels (assuming bands 0,1,2 are RGB)
-                        rgb_img = img[:3].copy()  # Use only first 3 bands for RGB visualization
-
-                        # Manually normalize each band for better visualization
-                        normalized_img = np.zeros_like(rgb_img, dtype=np.float32)
-                        for i in range(3):
-                            # Get 2nd and 98th percentile for robust normalization using nanpercentile to handle NaN values
-                            p2, p98 = np.nanpercentile(rgb_img[i], (2, 98))
-                            normalized_img[i] = np.clip((rgb_img[i] - p2) / (p98 - p2), 0, 1)
-
-                        # Convert to channels-last format for matplotlib
-                        rgb_display = np.transpose(normalized_img, (1, 2, 0))
+                        # Use our standardized enhancement function with Kahovka-specific band mapping
+                        # For RGB: use bands 0,1,2 (assuming these are RGB in Kahovka data)
+                        rgb_display = enhance_raster_with_current_settings(img, rgb_bands=(0, 1, 2))
 
                         # Store the visualization
                         st.session_state.kahovka_visualization = rgb_display
-                        # Also store as visualization_rgb to match with the historical data naming convention
                         st.session_state.visualization_rgb = rgb_display
                         debug_info("Kahovka visualization created", f"shape: {rgb_display.shape}")
 
@@ -155,26 +157,13 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                         debug_info("Unexpected channel count in Kahovka data", img.shape[0])
 
                         if img.shape[0] >= 3:
-                            # Just use first 3 bands for RGB
-                            rgb_img = img[:3].copy()
-
-                            # Normalize
-                            normalized_img = np.zeros_like(rgb_img, dtype=np.float32)
-                            for i in range(3):
-                                p2, p98 = np.nanpercentile(rgb_img[i], (2, 98))
-                                normalized_img[i] = np.clip((rgb_img[i] - p2) / (p98 - p2), 0, 1)
-
-                            # Convert to channels-last
-                            rgb_display = np.transpose(normalized_img, (1, 2, 0))
+                            # Use standardized function with first 3 bands
+                            rgb_display = enhance_raster_with_current_settings(img, rgb_bands=(0, 1, 2))
                             st.session_state.kahovka_visualization = rgb_display
                             st.session_state.visualization_rgb = rgb_display
                         else:
-                            # Fall back to grayscale if fewer than 3 channels
-                            gray_img = img[0].copy()
-                            p2, p98 = np.nanpercentile(gray_img, (2, 98))
-                            normalized = np.clip((gray_img - p2) / (p98 - p2), 0, 1)
-                            # Create RGB by duplicating the single channel
-                            rgb_display = np.stack([normalized, normalized, normalized], axis=-1)
+                            # Use standardized function for grayscale (will duplicate the band)
+                            rgb_display = enhance_raster_with_current_settings(img, rgb_bands=(0, 0, 0))
                             st.session_state.kahovka_visualization = rgb_display
                             st.session_state.visualization_rgb = rgb_display
 
@@ -227,32 +216,23 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                 try:
                     # Store additional visualizations with different band combinations
                     if img.shape[0] >= 5:
-                        # Store the RGB visualization (bands 0,1,2)
-                        rgb_img = img[:3].copy()
-                        normalized_rgb = np.zeros_like(rgb_img, dtype=np.float32)
-                        for i in range(3):
-                            p2, p98 = np.nanpercentile(rgb_img[i], (2, 98))
-                            normalized_rgb[i] = np.clip((rgb_img[i] - p2) / (p98 - p2), 0, 1)
-                        st.session_state.kahovka_visualization_rgb = np.transpose(normalized_rgb, (1, 2, 0))
+                        # Store the RGB visualization (bands 0,1,2) using standardized function
+                        st.session_state.kahovka_visualization_rgb = enhance_raster_with_current_settings(
+                            img, rgb_bands=(0, 1, 2)
+                        )
 
-                        # False color - NIR-Red-Green (4,2,1)
-                        false_color_bands = [min(4, img.shape[0] - 1), 2, 1]
-                        false_color_img = np.stack([img[i] for i in false_color_bands])
-                        normalized_false = np.zeros_like(false_color_img, dtype=np.float32)
-                        for i in range(3):
-                            p2, p98 = np.nanpercentile(false_color_img[i], (2, 98))
-                            normalized_false[i] = np.clip((false_color_img[i] - p2) / (p98 - p2), 0, 1)
-                        st.session_state.kahovka_visualization_false = np.transpose(normalized_false, (1, 2, 0))
+                        # False color - NIR-Red-Green (4,2,1) using standardized function
+                        false_color_bands = (min(4, img.shape[0] - 1), 2, 1)
+                        st.session_state.kahovka_visualization_false = enhance_raster_with_current_settings(
+                            img, rgb_bands=false_color_bands
+                        )
 
                         # SWIR Composite (if available) - typically bands 5,4,3 or similar
                         if img.shape[0] >= 5:  # Need at least 5 bands for SWIR
-                            swir_bands = [min(4, img.shape[0] - 1), 3, 2]
-                            swir_img = np.stack([img[i] for i in swir_bands])
-                            normalized_swir = np.zeros_like(swir_img, dtype=np.float32)
-                            for i in range(3):
-                                p2, p98 = np.nanpercentile(swir_img[i], (2, 98))
-                                normalized_swir[i] = np.clip((swir_img[i] - p2) / (p98 - p2), 0, 1)
-                            st.session_state.kahovka_visualization_swir = np.transpose(normalized_swir, (1, 2, 0))
+                            swir_bands = (min(4, img.shape[0] - 1), 3, 2)
+                            st.session_state.kahovka_visualization_swir = enhance_raster_with_current_settings(
+                                img, rgb_bands=swir_bands
+                            )
 
                         # Set the current visualization based on user selection
                         if hasattr(st.session_state, "viz_option"):
@@ -316,62 +296,39 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
                 else:
                     padded_img = img[:6]  # Use first 6 bands if more are available
 
-                # Create visualizations for the uploaded data
+                # Create visualizations for the uploaded data using standardized functions
                 try:
                     # Try to create RGB visualization
                     if img.shape[0] >= 3:
-                        # Use the first 3 bands for RGB
-                        rgb_img = img[:3].copy()
-
-                        # Normalize for better visualization
-                        normalized_img = np.zeros_like(rgb_img, dtype=np.float32)
-                        for i in range(3):
-                            p2, p98 = np.nanpercentile(rgb_img[i], (2, 98))
-                            normalized_img[i] = np.clip((rgb_img[i] - p2) / (p98 - p2), 0, 1)
-
-                        # Convert to channels-last format for matplotlib
-                        rgb_display = np.transpose(normalized_img, (1, 2, 0))
+                        # Use the first 3 bands for RGB with standardized function
+                        rgb_display = enhance_raster_with_current_settings(img, rgb_bands=(0, 1, 2))
                         st.session_state.visualization = rgb_display
                         st.session_state.visualization_rgb = rgb_display
                     else:
-                        # For grayscale images
-                        gray_img = img[0].copy()
-                        p2, p98 = np.nanpercentile(gray_img, (2, 98))
-                        normalized = np.clip((gray_img - p2) / (p98 - p2), 0, 1)
-                        rgb_display = np.stack([normalized, normalized, normalized], axis=-1)
+                        # For grayscale images, use standardized function with duplicated band
+                        rgb_display = enhance_raster_with_current_settings(img, rgb_bands=(0, 0, 0))
                         st.session_state.visualization = rgb_display
                         st.session_state.visualization_rgb = rgb_display
 
                     # Try to create false color visualization (NIR, Red, Green)
                     if img.shape[0] >= 4:
-                        # Use near-infrared, red, and green bands (assumed to be 3,2,1)
+                        # Use near-infrared, red, and green bands (3,2,1) with standardized function
                         nir_band_idx = min(3, img.shape[0] - 1)  # Near-infrared (usually band 4, index 3)
                         red_band_idx = min(2, img.shape[0] - 1)  # Red (usually band 3, index 2)
                         green_band_idx = min(1, img.shape[0] - 1)  # Green (usually band 2, index 1)
 
-                        false_color_img = np.stack([img[nir_band_idx], img[red_band_idx], img[green_band_idx]])
-
-                        # Normalize for better visualization
-                        normalized_false = np.zeros_like(false_color_img, dtype=np.float32)
-                        for i in range(3):
-                            p2, p98 = np.nanpercentile(false_color_img[i], (2, 98))
-                            normalized_false[i] = np.clip((false_color_img[i] - p2) / (p98 - p2), 0, 1)
-
-                        st.session_state.visualization_false = np.transpose(normalized_false, (1, 2, 0))
+                        false_color_bands = (nir_band_idx, red_band_idx, green_band_idx)
+                        st.session_state.visualization_false = enhance_raster_with_current_settings(
+                            img, rgb_bands=false_color_bands
+                        )
 
                     # Try to create SWIR visualization if enough bands are available
                     if img.shape[0] >= 5:
-                        # Use SWIR, NIR, and Red bands (assumed positions)
-                        swir_bands = [min(4, img.shape[0] - 1), min(3, img.shape[0] - 1), min(2, img.shape[0] - 1)]
-                        swir_img = np.stack([img[i] for i in swir_bands])
-
-                        # Normalize for better visualization
-                        normalized_swir = np.zeros_like(swir_img, dtype=np.float32)
-                        for i in range(3):
-                            p2, p98 = np.nanpercentile(swir_img[i], (2, 98))
-                            normalized_swir[i] = np.clip((swir_img[i] - p2) / (p98 - p2), 0, 1)
-
-                        st.session_state.visualization_swir = np.transpose(normalized_swir, (1, 2, 0))
+                        # Use SWIR, NIR, and Red bands with standardized function
+                        swir_bands = (min(4, img.shape[0] - 1), min(3, img.shape[0] - 1), min(2, img.shape[0] - 1))
+                        st.session_state.visualization_swir = enhance_raster_with_current_settings(
+                            img, rgb_bands=swir_bands
+                        )
                 except Exception as e:
                     debug_info("Error in uploaded data visualization", str(e))
                     # Create a simple colored placeholder
@@ -470,6 +427,8 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
         result_twin = st.session_state.twin
         if isinstance(result_twin, CognitiveDigitalTwin):
             debug_info("Returning twin of type", type(result_twin))
+            # Apply current visualization settings to any existing visualizations
+            _apply_brightness_to_existing_visualizations()
             return result_twin
         else:
             debug_info("Twin in session state is not a CognitiveDigitalTwin", type(result_twin))
@@ -477,6 +436,41 @@ def initialize_twin(debug_mode: bool = False) -> CognitiveDigitalTwin | None:
     else:
         debug_info("No twin in session state")
         return None
+
+
+def _apply_brightness_to_existing_visualizations() -> None:
+    """Apply current brightness settings to existing cached visualizations."""
+    try:
+        brightness_factor = st.session_state.get("brightness_factor", 1.0)
+        if brightness_factor == 1.0:
+            return  # No adjustment needed
+
+        # Apply brightness to main visualizations
+        viz_keys = [
+            "visualization",
+            "visualization_rgb",
+            "visualization_false",
+            "visualization_swir",
+            "kahovka_visualization",
+            "kahovka_visualization_rgb",
+            "kahovka_visualization_false",
+            "kahovka_visualization_swir",
+            "historical_visualization",
+            "historical_visualization_rgb",
+            "historical_visualization_false",
+            "historical_visualization_swir",
+        ]
+
+        for key in viz_keys:
+            if key in st.session_state and st.session_state[key] is not None:
+                original = st.session_state[key]
+                # Only apply brightness if it's not already applied
+                if not hasattr(st.session_state, f"{key}_brightness_applied"):
+                    st.session_state[key] = np.clip(original * brightness_factor, 0, 1)
+                    st.session_state[f"{key}_brightness_applied"] = True
+
+    except Exception as e:
+        debug_info("Error applying brightness to existing visualizations", str(e))
 
 
 def fix_kahovka_visualization() -> None:
@@ -555,7 +549,7 @@ def generate_synthetic_historical_data(twin: CognitiveDigitalTwin | None = None)
                 twin.add_historical_state(imagery_path=Path(temp_file_path), timestamp=timestamp_str)
 
                 # Create visualizations
-                historical_vis = enhance_raster_for_visualization(historical_imagery)
+                historical_vis = enhance_raster_with_current_settings(historical_imagery)
                 st.session_state.historical_visualization = historical_vis
                 st.session_state.historical_visualization_rgb = historical_vis
 

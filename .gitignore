@@ -27,4 +27,5 @@ dist/
 
 # Project-specific
 resources/.cache/
+resources/tmp/
 resources/prithvi_eo_v1_100m/

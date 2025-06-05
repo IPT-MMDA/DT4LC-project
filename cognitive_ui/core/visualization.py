@@ -18,6 +18,20 @@ from rasterio.transform import Affine
 from cognitive_ui.config import VIZ_NO_DATA, VIZ_NO_DATA_FLOAT, VIZ_PERCENTILES
 
 
+def get_visualization_settings():
+    """Get visualization settings from Streamlit session state or defaults."""
+    try:
+        import streamlit as st
+
+        brightness = st.session_state.get("brightness_factor", 1.0)
+        contrast_low = st.session_state.get("contrast_low", VIZ_PERCENTILES[0])
+        contrast_high = st.session_state.get("contrast_high", VIZ_PERCENTILES[1])
+        return brightness, (contrast_low, contrast_high)
+    except ImportError:
+        # Fallback when not in Streamlit context
+        return 1.0, VIZ_PERCENTILES
+
+
 def load_raster(file_path: Path, crop: tuple[int, int] | None = None) -> NDArray[np.float32]:
     """
     Load raster data from a file
@@ -64,6 +78,8 @@ def enhance_raster_for_visualization(
     raster: NDArray[np.float32],
     rgb_bands: tuple[int, int, int] = (2, 1, 0),
     ref_img: NDArray[np.float32] | None = None,
+    brightness_factor: float = 1.0,
+    contrast_percentiles: tuple[float, float] | None = None,
 ) -> NDArray[np.float32]:
     """
     Enhance a satellite imagery raster for visualization by combining RGB bands
@@ -73,6 +89,8 @@ def enhance_raster_for_visualization(
         raster: Satellite imagery raster data (bands, height, width)
         rgb_bands: Tuple of (red, green, blue) band indices to use for RGB visualization
         ref_img: Optional reference image for normalization
+        brightness_factor: Multiplicative brightness adjustment (1.0 = normal)
+        contrast_percentiles: Custom percentiles for contrast enhancement
 
     Returns:
         Visualization-ready RGB image array (height, width, 3)
@@ -120,7 +138,9 @@ def enhance_raster_for_visualization(
         if valid_values.size == 0:
             continue
 
-        min_val, max_val = np.percentile(valid_values, VIZ_PERCENTILES)
+        # Use custom percentiles if provided, otherwise use config default
+        percentiles = contrast_percentiles if contrast_percentiles is not None else VIZ_PERCENTILES
+        min_val, max_val = np.percentile(valid_values, percentiles)
 
         # Avoid division by zero
         if max_val > min_val:
@@ -133,7 +153,32 @@ def enhance_raster_for_visualization(
     if np.any(no_data_mask):
         rgb[no_data_mask] = 0
 
+    # Apply brightness adjustment
+    if brightness_factor != 1.0:
+        rgb = np.clip(rgb * brightness_factor, 0, 1)
+
     return cast(NDArray[np.float32], rgb)
+
+
+def enhance_raster_with_current_settings(
+    raster: NDArray[np.float32],
+    rgb_bands: tuple[int, int, int] = (2, 1, 0),
+    ref_img: NDArray[np.float32] | None = None,
+) -> NDArray[np.float32]:
+    """
+    Enhance raster using current session state visualization settings.
+
+    This is a convenience wrapper around enhance_raster_for_visualization
+    that automatically applies brightness and contrast settings from the UI.
+    """
+    brightness, contrast_percentiles = get_visualization_settings()
+    return enhance_raster_for_visualization(
+        raster=raster,
+        rgb_bands=rgb_bands,
+        ref_img=ref_img,
+        brightness_factor=brightness,
+        contrast_percentiles=contrast_percentiles,
+    )
 
 
 def plot_to_image(fig: Figure) -> io.BytesIO:
