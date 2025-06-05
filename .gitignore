@@ -8,12 +8,22 @@ __pycache__/
 .venv
 .env
 
+# IDEs
+.vscode/
+.idea/
+.cursor/
+.claude/
+
 # Build
 build/
 dist/
 
 # OS-specific
 .DS_Store
+
+# Tests
+.coverage
+.pytest_cache/
 
 # Project-specific
 resources/.cache/
