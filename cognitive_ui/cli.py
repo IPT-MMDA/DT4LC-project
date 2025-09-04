@@ -25,6 +25,7 @@ def run_app() -> int:
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run the Cognitive Digital Twin UI")
     parser.add_argument("--version", action="store_true", help="Print version and exit")
+    parser.add_argument("--ui", choices=["streamlit"], default="streamlit", help="UI implementation to launch")
     args = parser.parse_args()
 
     # If --version flag is set, just print version and exit
@@ -43,8 +44,12 @@ def run_app() -> int:
     project_root = Path(__file__).parent.parent.absolute()
 
     try:
-        # Define app path and verify it exists
-        app_path = Path(__file__).parent / "app.py"
+        # Choose UI implementation
+        if args.ui == "streamlit":
+            app_path = Path(__file__).parent / "app.py"
+        else:
+            print(f"Unknown UI: {args.ui}")
+            return 1
         if not app_path.exists():
             print(f"Error: App file not found at {app_path}")
             return 1

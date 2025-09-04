@@ -10,6 +10,7 @@ import streamlit as st
 from cognitive_ui.cognitive_functions import CognitiveDigitalTwin
 from cognitive_ui.config import SYNTHESIS_QUERY, UI_MAX_TEXT_LENGTH, UNCERTAINTY_QUERY
 from cognitive_ui.utils import truncate_text
+from cognitive_ui.interface import run_flow
 
 
 def display_problem_solving_tab(twin: CognitiveDigitalTwin | None = None) -> None:
@@ -43,6 +44,7 @@ def display_problem_solving_tab(twin: CognitiveDigitalTwin | None = None) -> Non
         st.session_state.current_query = query
 
         query_button = st.button("Process Query", key="query_btn")
+        orch_button = st.button("Run Orchestrated Flow (Planner)", key="orch_btn")
         if query_button:
             with st.spinner("Processing query..."):
                 if twin is not None:
@@ -57,12 +59,32 @@ def display_problem_solving_tab(twin: CognitiveDigitalTwin | None = None) -> Non
                 else:
                     st.error("Twin not initialized. Cannot process query.")
 
+        if orch_button:
+            with st.spinner("Planning and executing pipeline..."):
+                payload = run_flow(st.session_state.current_query)
+                st.session_state.orchestration_payload = payload
+
     # Display response if available
     if st.session_state.get("query_response"):
         with st.expander("View Query Response", expanded=True):
             with st.container(border=True):
                 st.markdown("##### 🔍 Query Analysis")
                 st.markdown(st.session_state.query_response)
+
+    if st.session_state.get("orchestration_payload"):
+        with st.expander("View Planned Pipeline & Result", expanded=True):
+            with st.container(border=True):
+                plan = st.session_state.orchestration_payload["plan"]
+                result = st.session_state.orchestration_payload["result"]
+                st.markdown("##### 📋 Pipeline Plan")
+                st.json(plan)
+                st.markdown("##### 📝 Summary")
+                artifacts = result.get("artifacts", {})
+                summary = artifacts.get("S1", {}).get("summary") if isinstance(artifacts.get("S1"), dict) else None
+                if summary:
+                    st.write(summary)
+                else:
+                    st.info("No summary available.")
 
     # Intervention suggestions - always available
     st.divider()

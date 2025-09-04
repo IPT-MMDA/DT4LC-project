@@ -7,7 +7,7 @@ import os
 from typing import Any, cast
 
 from dotenv import load_dotenv
-import requests
+import requests  # type: ignore[import-untyped]
 
 from cognitive_ui.config import (
     DEFAULT_GEMINI_MAX_TOKENS,
@@ -25,9 +25,23 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 GEMINI_MAX_TOKENS = DEFAULT_GEMINI_MAX_TOKENS or MAX_TOKENS
 
 
+def _normalize_model(model: str) -> str:
+    """Normalize common model aliases to API-supported names.
+
+    Examples:
+    - gemini-1.5-flash-001 -> gemini-1.5-flash
+    - gemini-1.5-flash-latest -> gemini-1.5-flash
+    """
+    model = model.strip()
+    if model.startswith("gemini-1.5-flash"):
+        return "gemini-1.5-flash"
+    return model
+
+
 def query_gemini(prompt: str, max_tokens: int = GEMINI_MAX_TOKENS) -> str | None:
     """Query the Google Gemini API with a prompt"""
-    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    model = _normalize_model(GEMINI_MODEL)
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     if not GEMINI_API_KEY:
         print("Error: GEMINI_API_KEY environment variable not set.")
@@ -48,9 +62,12 @@ def query_gemini(prompt: str, max_tokens: int = GEMINI_MAX_TOKENS) -> str | None
 
     except requests.exceptions.HTTPError as http_err:
         print(f"HTTP error occurred: {http_err}")
-        if response is not None:
+        # response may not exist; recompute safely
+        try:
             print(f"Response status: {response.status_code}")
             print(f"Response content: {response.text}")
+        except Exception:
+            pass
         return None
 
     except Exception as e:

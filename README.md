@@ -4,7 +4,14 @@ Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learn
 
 ## Overview
 
-This project implements a cognitive digital twin framework that enables interactive analysis of land cover changes using satellite imagery. At current stage it provides an intuitive Streamlit-based UI for exploring datasets, analyzing temporal changes, and querying the model for insights about environmental patterns.
+This project implements a cognitive digital twin framework with a modular architecture:
+
+- Context Orchestration Engine (COE): agentic layer that understands a request and drafts a pipeline plan
+- Digital Twin Aggregator (DTA): executes the plan using a registry of loaders, models, and algorithms
+- Interface layer: thin adapter UIs use to invoke orchestration (in‑process now; API-ready)
+- UI implementations: Streamlit UI today; a JS UI can be added later without changing the back end
+
+At the current stage the project ships a Streamlit UI, a capabilities registry, and a minimal set of tools (Kahovka raster loader, NDVI/NDVI-change algorithms, a Prithvi MAE features stub, and textual post‑processing).
 
 ## Features
 
@@ -52,18 +59,24 @@ uv venv
 source .venv/bin/activate
 
 # Install the package with development dependencies
+# Optional extras:
+#   ui      – Streamlit and rasterio
+#   models  – model-related libs
+#   api     – FastAPI + Uvicorn for the HTTP server (optional)
 uv pip install -e ".[dev,ui,models]"
 ```
 
 ## Data Management
 
-### Downloading Model Weights and Sample Data
+### Downloading Model Weights and Sample Data (optional)
 
-To run the application with pre-configured examples, you need to download the Prithvi model weights and sample data. Use the provided script:
+You can optionally download the Prithvi model weights and sample data. The current orchestration uses a lightweight Prithvi features stub so weights are not strictly required to run the basic flow.
+
+Use the provided script:
 
 ```bash
 # Download Prithvi model weights and sample data
-python scripts/fetch_prithvi_v1_weight.py
+python scripts/fetch_prithvi_v1_weights.py
 ```
 
 This script will:
@@ -72,17 +85,17 @@ This script will:
 2. Place them in the correct directory structure
 3. Download sample satellite imagery datasets for testing
 
-After running this script, the application will be ready to use with working examples.
+After running this script, you can experiment with model-backed features when enabled.
 
 ## Running the Application
 
 Once installed, you can run the application in several ways:
 
-### Using the CLI Command
+### Using the CLI Command (recommended)
 
 ```bash
-# Run with default settings
-cdt
+# Run with default UI (Streamlit)
+cdt --ui streamlit
 
 # Check version
 cdt --version
@@ -104,6 +117,22 @@ uv run cdt
 
 The application will be available at [localhost](http://localhost:8501) by default.
 
+### Optional: Run the HTTP API server
+
+The server exposes a minimal POST `/flow` endpoint that accepts a request and returns the planned pipeline and execution output (JSON).
+
+```bash
+# Install API extras if not installed yet
+uv pip install -e ".[api]"
+
+# Start the API (factory pattern)
+dt4lc-api
+
+# Then POST a request (example)
+curl -X POST http://127.0.0.1:8000/flow -H 'Content-Type: application/json' \
+  -d '{"prompt":"ndvi on kahovka data"}'
+```
+
 ## Configuration
 
 ### Streamlit Configuration
@@ -123,21 +152,46 @@ Application-specific settings are in `cognitive_ui/config.py`. This includes:
 
 ```text
 dt4lc-project/
-├── .streamlit/              # Streamlit configuration
-├── cognitive_ui/            # Main application package
-│   ├── app.py               # Streamlit application entry point
-│   ├── cli.py               # Command-line interface
-│   ├── config.py            # Application configuration
-│   ├── manager.py           # Digital twin management
-│   ├── utils.py             # Utility functions
-│   └── ui/                  # UI components
-├── digital_twin/            # Core digital twin models
-│   └── models/
-│       └── prithvi_v1/      # Prithvi model implementation
-├── resources/               # Data resources
-├── scripts/                 # Utility scripts
-└── pyproject.toml           # Project configuration
+├── .streamlit/                 # Streamlit configuration
+├── capabilities/
+│   └── capabilities.yaml       # Registry of tools (ids, inputs, outputs, tags)
+├── orchestrator/               # Context Orchestration Engine
+│   ├── agents.py               # ContextUnderstanding, DecisionMaking, Planner
+│   ├── registry.py             # Loads capabilities.yaml
+│   └── types.py                # Plan and step data structures
+├── dta/                        # Digital Twin Aggregator (runtime services)
+│   ├── assets.py               # DataAssetManager (e.g., Kahovka raster loader)
+│   ├── algorithms.py           # NDVI, NDVI change (minimal)
+│   ├── executor.py             # PipelineExecutor
+│   ├── models.py               # ModelRegistry (Prithvi features stub)
+│   └── post.py                 # PostProcessor (summary only)
+├── server/                     # Optional HTTP API server (FastAPI)
+│   ├── app.py                  # /flow endpoint
+│   └── cli.py                  # dt4lc-api entry point
+├── cognitive_ui/               # UI and interface layer
+│   ├── app.py                  # Streamlit app entry
+│   ├── cli.py                  # cdt --ui streamlit
+│   ├── interface/              # UI-neutral controller (run_flow)
+│   ├── ui_streamlit/           # Streamlit implementation placeholder
+│   └── ui/                     # Streamlit UI components
+├── digital_twin/
+│   └── models/prithvi_v1/      # Prithvi model implementation
+├── resources/                  # Data resources (e.g., kahovka_data/*.tif)
+├── scripts/                    # Utility scripts
+└── pyproject.toml              # Project configuration
 ```
+
+## How it Works (Architecture at a Glance)
+
+1) The UI (Streamlit) collects a natural-language request. Use the Problem Solving tab and click “Run Orchestrated Flow (Planner)”.
+2) The Interface layer calls the orchestrator in-process.
+3) The Orchestrator reads `capabilities.yaml`, interprets the intent, and drafts a plan (sequence of steps with inputs/outputs).
+4) The DTA `PipelineExecutor` runs the plan by invoking loaders/models/algorithms and returns artifacts.
+5) Post-processing returns a concise textual summary for now (WMS/static visualization can be added later).
+
+Example intents supported today:
+- “ndvi on kahovka data” → load Kahovka raster → compute NDVI → summarize
+- “ndvi change on kahovka data” with two uploaded images (future UI hook) → compute NDVI on both → change map → summarize
 
 ## Citation
 

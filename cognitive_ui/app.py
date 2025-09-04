@@ -20,9 +20,7 @@ from cognitive_ui.manager import (
     initialize_twin,
 )
 from cognitive_ui.ui.components import display_sidebar
-from cognitive_ui.ui.tabs.change_analysis import display_change_analysis_tab
-from cognitive_ui.ui.tabs.dataset_analysis import display_dataset_analysis_tab
-from cognitive_ui.ui.tabs.problem_solving import display_problem_solving_tab
+from cognitive_ui.ui.chat import display_chat_interface
 from cognitive_ui.utils import debug_info
 
 
@@ -75,55 +73,15 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    # Initialize the digital twin
-    twin = initialize_twin()
-
-    # Fix Kahovka visualization if needed
-    fix_kahovka_visualization()
-
-    # Check for synthetic historical data generation trigger
-    if st.session_state.get("trigger_hist_gen", False) and twin is not None:
-        success = generate_synthetic_historical_data(twin)
-        if success:
-            debug_info("Generated synthetic historical data", "Success")
-        # Clear trigger flag
-        st.session_state.trigger_hist_gen = False
-    # Auto-generate historical data if needed
-    elif (
-        twin is not None
-        and (
-            "historical_visualization" not in st.session_state
-            or "historical_visualization_rgb" not in st.session_state
-        )
-        and not st.session_state.get("historical_data_added", False)
-    ):
-        debug_info("Auto-generating historical data", "Missing visualizations")
-        success = generate_synthetic_historical_data(twin)
-        if success:
-            debug_info("Auto-generated historical data", "Success")
-            st.session_state.historical_data_added = True
-
-    # Display the sidebar first (this will set up the environment and data)
+    # We no longer preload heavy twin computations. Sidebar still manages dataset selection
+    # and optional uploads/adjustments.
+    twin = None
     display_sidebar(twin)
 
-    # Get historical data state once for use in multiple places
-    has_historical = st.session_state.get("historical_data_added", False)
+    # Minimalist layout: chat only
+    display_chat_interface()
 
-    # Define tabs using the centralized configuration
-    tab1, tab2, tab3 = st.tabs([UI_TABS["DATASET_ANALYSIS"], UI_TABS["CHANGE_ANALYSIS"], UI_TABS["PROBLEM_SOLVING"]])
-
-    # Display content in each tab
-    with tab1:
-        display_dataset_analysis_tab(twin)
-
-    with tab2:
-        display_change_analysis_tab(twin, has_historical)
-
-    with tab3:
-        display_problem_solving_tab(twin)
-
-    if twin is None:
-        st.error("Unable to initialize the Cognitive Digital Twin. Please try refreshing the page.")
+    # No error if twin is None; orchestration runs in-process without preloading.
 
 
 if __name__ == "__main__":

@@ -1,0 +1,69 @@
+version: 0.1
+tools:
+  - id: input/file
+    kind: input
+    tags: [file, raster]
+    inputs: []
+    outputs: [RasterPath]
+
+  - id: load/kahovka_raster
+    kind: loader
+    tags: [raster, kahovka]
+    inputs: []
+    outputs: [RasterPath]
+    params:
+      filename: {type: string, required: false}
+
+  - id: load/prithvi_example_raster
+    kind: loader
+    tags: [raster, prithvi_example]
+    inputs: []
+    outputs: [RasterPath]
+
+  - id: models/prithvi_features
+    kind: model
+    tags: [prithvi, features]
+    inputs: [RasterPath]
+    outputs: [Features]
+
+  - id: algorithms/ndvi
+    kind: algorithm
+    tags: [ndvi]
+    inputs: [RasterPath]
+    outputs: [NDVIMap]
+
+  - id: algorithms/stats_basic
+    kind: algorithm
+    tags: [stats, distribution]
+    inputs: [RasterPath]
+    outputs: [Stats]
+
+  - id: algorithms/ndvi_change
+    kind: algorithm
+    tags: [ndvi, change]
+    inputs: [NDVIMap, NDVIMap]
+    outputs: [ChangeMap]
+
+  - id: post/summarize
+    kind: post
+    tags: [summary]
+    inputs: [Any]
+    outputs: [Summary]
+
+  - id: post/visualize_ndvi
+    kind: post
+    tags: [visualization, ndvi]
+    inputs: [NDVIMap]
+    outputs: [Image]
+
+  - id: post/visualize_raster
+    kind: post
+    tags: [visualization, raster]
+    inputs: [RasterPath]
+    outputs: [Image]
+
+  - id: agent/llm_response
+    kind: agent
+    tags: [agent, llm]
+    inputs: [Any]
+    outputs: [Text]
