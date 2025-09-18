@@ -60,7 +60,7 @@ $(VENV_DIR)/pyvenv.cfg:
 
 install: $(VENV_DIR)/pyvenv.cfg
 	@echo ">>> Installing '$(PROJECT_NAME)' in editable mode with dev dependencies into '$(VENV_DIR)'..."
-	uv pip install -e .[dev,ui,models]
+	uv pip install -e .[dev,ui,models,server,agents]
 	@echo ">>> Installation complete."
 
 sync: $(VENV_DIR)/pyvenv.cfg
