@@ -1,23 +1,21 @@
-from collections.abc import AsyncGenerator
-import json
 import asyncio
+import base64
+from collections.abc import AsyncIterator
+import io
+import json
 from typing import Any
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, JSONResponse
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-
-from digital_twin.config import get_settings
-from digital_twin.agents.gemini_context import GeminiContextUnderstandingAgent
-from digital_twin.schemas import ChatRequest
-
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
-from typing import Any
-import io, base64
+from fastapi.responses import JSONResponse, StreamingResponse
 import numpy as np
 from PIL import Image
-import rasterio
 from rasterio.io import MemoryFile
+
+from digital_twin.agents.gemini_context import GeminiContextUnderstandingAgent
+from digital_twin.config import get_settings
+
+from .schemas import ChatRequest
 
 app = FastAPI(title="DT4LC")
 HEARTBEAT_SECS = 15
@@ -42,14 +40,13 @@ async def health() -> dict[str, Any]:
     return {"ok": True, "model": settings.gemini_model}
 
 
-@app.post("/v1/chat")
-@app.post("/v1/chat")
+@app.post("/v1/chat")  # type: ignore[misc]
 async def chat(req: ChatRequest) -> StreamingResponse:
     agent = GeminiContextUnderstandingAgent()
 
-    async def gen():
+    async def gen() -> AsyncIterator[bytes]:
         # Heartbeat generator
-        async def heartbeat():
+        async def heartbeat() -> AsyncIterator[bytes]:
             try:
                 while True:
                     await asyncio.sleep(HEARTBEAT_SECS)
@@ -59,14 +56,19 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
         hb = heartbeat()
         agent_stream = agent.stream([m.model_dump() for m in req.messages]).__aiter__()
-        hb_next = hb.__anext__()
+
+        async def next_agent_chunk() -> str | bytes:
+            return await agent_stream.__anext__()
+
+        async def next_heartbeat() -> bytes:
+            return await hb.__anext__()
 
         try:
             while True:
                 done, _ = await asyncio.wait(
                     {
-                        asyncio.create_task(agent_stream.__anext__()),
-                        asyncio.create_task(hb_next),
+                        asyncio.create_task(next_agent_chunk()),
+                        asyncio.create_task(next_heartbeat()),
                     },
                     return_when=asyncio.FIRST_COMPLETED,
                 )
@@ -85,24 +87,28 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                         # handle agent text/error marker
                         if isinstance(val, str) and val.startswith("__ERROR__::"):
                             err = json.loads(val.split("::", 1)[1])
-                            yield sse_frame({"error": err.get("message"),
-                                            "retry_after": err.get("retry_after"),
-                                            "kind": err.get("type")})
+                            yield sse_frame(
+                                {
+                                    "error": err.get("message"),
+                                    "retry_after": err.get("retry_after"),
+                                    "kind": err.get("type"),
+                                }
+                            )
                             yield sse_frame({"done": True})
                             return
                         if val:
                             yield sse_frame({"delta": val})
 
-                # rearm heartbeat
-                hb_next = hb.__anext__()
+                # rearm happens via calling next_heartbeat() again in next loop
         finally:
             # best-effort close marker
             yield sse_frame({"done": True})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 
-@app.post("/v1/upload")
-async def upload_geotiff(file: UploadFile = File(...)) -> JSONResponse:
+
+@app.post("/v1/upload")  # type: ignore[misc]
+async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
     # Basic checks
     if not file.filename.lower().endswith((".tif", ".tiff")):
         raise HTTPException(status_code=400, detail="Please upload a .tif/.tiff GeoTIFF.")
@@ -151,4 +157,4 @@ async def upload_geotiff(file: UploadFile = File(...)) -> JSONResponse:
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
