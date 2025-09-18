@@ -13,14 +13,8 @@ Configuration:
 
 import streamlit as st
 
-from cognitive_ui.config import UI_TABS
-from cognitive_ui.manager import (
-    fix_kahovka_visualization,
-    generate_synthetic_historical_data,
-    initialize_twin,
-)
-from cognitive_ui.ui.components import display_sidebar
 from cognitive_ui.ui.chat import display_chat_interface
+from cognitive_ui.ui.components import display_sidebar
 from cognitive_ui.utils import debug_info
 
 

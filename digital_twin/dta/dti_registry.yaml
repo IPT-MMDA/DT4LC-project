@@ -1,0 +1,46 @@
+version: 0.1
+types:
+ - NDVIMap
+ - Features
+ - RasterPath
+ - Statistics
+
+instances:
+  - id: input/file
+    kind: input
+    keywords: [file, raster]
+    inputs: []  # nothing required
+    outputs: [RasterPath]
+    runner:
+      type: passthrough # executor just forwards provided file path
+
+  - id: algorithms/ndvi
+    kind: algorithm
+    keywords: [ndvi, vegetation index]
+    inputs: [RasterPath]
+    outputs: [NDVIMap]
+    runner:
+      type: python
+      entrypoint: "dti/algorithms/ndvi.py"
+
+  - id: models/prithvi_features
+    kind: model
+    keywords: [prithvi, features]
+    inputs: [RasterPath]
+    outputs: [Features]
+    runner:
+      type: python
+      entrypoint: "resources/prithvi_eo_v1_100m/inference.py"
+      env:
+        HF_REPO: "ibm-nasa-geospatial/Prithvi-EO-1.0-100M"
+        HF_MODEL_FILE: "Prithvi_EO_V1_100M.pt"
+        PRITHVI_CACHE: "resources/prithvi_eo_v1_100m"
+
+  - id: post-processing/agent-analysis
+    kind: postprocess
+    keywords: [llm, summarize]
+    inputs: [Features]
+    outputs: []
+    runner:
+      type: agent
+      prompt_template: "prompts/analysis.md"

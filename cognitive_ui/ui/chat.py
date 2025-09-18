@@ -121,10 +121,12 @@ def display_chat_interface() -> None:
                     import altair as alt  # noqa: F401
                     import pandas as pd  # noqa: F401
 
-                    df = pd.DataFrame({
-                        "bin": hist.get("bins", [])[1:],
-                        "count": hist.get("counts", []),
-                    })
+                    df = pd.DataFrame(
+                        {
+                            "bin": hist.get("bins", [])[1:],
+                            "count": hist.get("counts", []),
+                        }
+                    )
                     chart = alt.Chart(df).mark_bar().encode(x="bin:Q", y="count:Q").properties(height=120)
                     st.altair_chart(chart, use_container_width=True)
                 except Exception:
@@ -133,12 +135,14 @@ def display_chat_interface() -> None:
 
             # Update context signals for LLM context in subsequent turns
             st.session_state.context_signals = st.session_state.get("context_signals", {})
-            st.session_state.context_signals.update({
-                "last_summary": short,
-                "has_ndvi_image": bool(img is not None),
-                "has_raster_preview": bool(base_img is not None),
-                "has_histogram": bool(isinstance(artifacts.get("T1"), dict) and "histogram" in artifacts["T1"]),
-            })
+            st.session_state.context_signals.update(
+                {
+                    "last_summary": short,
+                    "has_ndvi_image": bool(img is not None),
+                    "has_raster_preview": bool(base_img is not None),
+                    "has_histogram": bool(isinstance(artifacts.get("T1"), dict) and "histogram" in artifacts["T1"]),
+                }
+            )
 
             with st.expander("View pipeline plan", expanded=False):
                 st.json(plan)

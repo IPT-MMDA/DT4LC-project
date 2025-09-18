@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from orchestrator import orchestrate_request
 from dta import DataAssetManager, ModelRegistry, PipelineExecutor, PostProcessor
+from orchestrator import orchestrate_request
 
 
 def run_orchestrated_flow(
     prompt: str,
     *,
-    selected_area: Dict[str, Any] | None = None,
+    selected_area: dict[str, Any] | None = None,
     attached_files: list[str] | None = None,
-    options: Dict[str, Any] | None = None,
-) -> Dict[str, Any]:
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Run the full orchestrated flow in-process and return plan + result.
 
     This is used by the Streamlit UI to demonstrate the architecture without
@@ -43,4 +43,7 @@ def run_orchestrated_flow(
     result = executor.run(plan.flow, plan.steps, on_step=on_step)
     result["progress"] = progress
 
-    return {"plan": {"flow": plan.flow, "steps": [asdict(s) for s in plan.steps], "notes": plan.notes}, "result": result}
+    return {
+        "plan": {"flow": plan.flow, "steps": [asdict(s) for s in plan.steps], "notes": plan.notes},
+        "result": result,
+    }

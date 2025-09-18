@@ -1,47 +1,48 @@
-from __future__ import annotations
+from collections.abc import AsyncGenerator
+import json
+import asyncio
+from typing import Any
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-from dataclasses import asdict
-from pathlib import Path
-from typing import Any, Dict
+from digital_twin.config import get_settings
+from digital_twin.agents.gemini_context import GeminiContextUnderstandingAgent
+from digital_twin.schemas import ChatRequest
 
-from orchestrator import orchestrate_request
-from dta import DataAssetManager, ModelRegistry, PipelineExecutor, PostProcessor
+app = FastAPI(title="DT4LC")
 
-
-def build_app(project_root: Path) -> Any:
-    try:
-        from fastapi import FastAPI
-        from pydantic import BaseModel
-        from fastapi.responses import JSONResponse
-    except Exception as exc:  # pragma: no cover - import-time guard
-        raise RuntimeError("FastAPI is not installed. Install with `[api]` extras.") from exc
-
-    app = FastAPI(title="DT4LC Orchestration API", version="0.1.0")
-
-    assets = DataAssetManager(project_root=project_root)
-    models = ModelRegistry()
-    post = PostProcessor()
-    executor = PipelineExecutor(assets=assets, models=models, post=post)
-
-    def run_flow(req: Dict[str, Any]) -> Any:
-        prompt = req.get("prompt", "")
-        plan = orchestrate_request(prompt, extras={
-            "selected_area": req.get("selected_area"),
-            "attached_files": req.get("attached_files", []) or [],
-            "options": req.get("options", {}) or {},
-        })
-        result = executor.run(plan.flow, plan.steps)
-        payload = {
-            "plan": {"flow": plan.flow, "steps": [asdict(s) for s in plan.steps], "notes": plan.notes},
-            "result": {k: ("<ndarray>" if k == "artifacts" and isinstance(v, dict) and "WMS1" in v else v) for k, v in result.items()},
-        }
-        return JSONResponse(payload)
-
-    # Register route without decorator to keep typing strict
-    app.add_api_route("/flow", run_flow, methods=["POST"])  # pragma: no cover
-
-    return app
+# CORS
+settings = get_settings()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-def app_factory() -> Any:
-    return build_app(Path(__file__).resolve().parents[1])
+def sse_frame(payload: dict[str, Any]) -> bytes:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
+
+
+@app.get("/v1/health")  # type: ignore[misc]
+async def health() -> dict[str, Any]:
+    return {"ok": True, "model": settings.gemini_model}
+
+
+@app.post("/v1/chat")  # type: ignore[misc]
+async def chat(req: ChatRequest) -> StreamingResponse:
+    agent = GeminiContextUnderstandingAgent()
+
+    async def gen() -> AsyncGenerator:
+        try:
+            async for chunk in agent.stream([m.model_dump() for m in req.messages]):
+                yield sse_frame({"delta": chunk})
+                await asyncio.sleep(0)  # cooperative
+            yield sse_frame({"done": True})
+        except Exception as e:
+            yield sse_frame({"error": str(e)})
+
+    return StreamingResponse(gen(), media_type="text/event-stream")

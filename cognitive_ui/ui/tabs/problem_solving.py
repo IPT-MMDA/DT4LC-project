@@ -9,8 +9,8 @@ import streamlit as st
 
 from cognitive_ui.cognitive_functions import CognitiveDigitalTwin
 from cognitive_ui.config import SYNTHESIS_QUERY, UI_MAX_TEXT_LENGTH, UNCERTAINTY_QUERY
-from cognitive_ui.utils import truncate_text
 from cognitive_ui.interface import run_flow
+from cognitive_ui.utils import truncate_text
 
 
 def display_problem_solving_tab(twin: CognitiveDigitalTwin | None = None) -> None:

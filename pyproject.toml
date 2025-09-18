@@ -22,11 +22,14 @@ dev = [
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "ipdb>=0.13.13",
+    "python-dotenv>=1.0",
+    "pydantic>=2.8",
 ]
 ui = ["streamlit>=1.44.1", "rasterio>=1.4.3", "matplotlib>=3.10.1"]
 models = ["pyyaml>=6.0.2", "einops>=0.8.1", "timm>=1.0.15"]
 api = ["fastapi>=0.115.6", "uvicorn>=0.32.1"]
-agents = ["google-genai>=1.33.0"]
+agents = ["google-genai>=1.35.0,<2.0.0"]
+server = ["uvicorn>=0.35.0,<1.0.0", "fastapi>=0.116.2,<1.0.0"]
 
 [project.scripts]
 cdt = "cognitive_ui.cli:run_app"
