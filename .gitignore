@@ -29,3 +29,13 @@ dist/
 resources/.cache/
 resources/tmp/
 resources/prithvi_eo_v1_100m/
+
+# Backups
+*.bak
+
+# Third-party models
+dta/dti/models/third_party/
+
+# Cache
+.cache/
+.temp/

@@ -1,4 +1,4 @@
-version: 0.1
+version: "0.1"
 types:
  - NDVIMap
  - Features
@@ -25,16 +25,16 @@ instances:
 
   - id: models/prithvi_features
     kind: model
-    keywords: [prithvi, features]
+    keywords: [prithvi, features, hls, temporal, geotiff]
     inputs: [RasterPath]
     outputs: [Features]
     runner:
       type: python
-      entrypoint: "resources/prithvi_eo_v1_100m/inference.py"
+      entrypoint: "dta/dti/models/third_party/prithvi_eo_v1_100m/inference.py"
       env:
-        HF_REPO: "ibm-nasa-geospatial/Prithvi-EO-1.0-100M"
-        HF_MODEL_FILE: "Prithvi_EO_V1_100M.pt"
-        PRITHVI_CACHE: "resources/prithvi_eo_v1_100m"
+        PRITHVI_DIR: "dta/dti/models/third_party/prithvi_eo_v1_100m"
+        PRITHVI_CONFIG: "dta/dti/models/third_party/prithvi_eo_v1_100m/config.json"
+        PRITHVI_WEIGHTS: "dta/dti/models/third_party/prithvi_eo_v1_100m/Prithvi_EO_V1_100M.pt"
 
   - id: post-processing/agent-analysis
     kind: postprocess

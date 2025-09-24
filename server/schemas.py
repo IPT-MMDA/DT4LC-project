@@ -1,14 +1,35 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
-Role = Literal["user", "assistant", "system"]
+Role = Literal["user", "assistant"]
 
 
-class ChatTurn(BaseModel):
+class ChatMessage(BaseModel):
     role: Role
     content: str
 
 
 class ChatRequest(BaseModel):
-    messages: list[ChatTurn]
+    messages: list[ChatMessage]
+
+
+class Plan(BaseModel):
+    tags: list[str] = []
+    goals: list[str] = []
+    pipeline: list[str] = []  # tool ids
+    inputs: dict[str, Any] = {}  # e.g., {"file_path": "..."}
+    meta: dict[str, Any] = {}
+
+
+class CreateJobRequest(BaseModel):
+    plan: Plan
+
+
+class JobStatus(BaseModel):
+    id: str
+    state: Literal["queued", "running", "succeeded", "failed"] = "queued"
+    progress: float = 0.0
+    message: str | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None

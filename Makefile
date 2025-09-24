@@ -7,7 +7,7 @@ PROJECT_NAME := dt4lc-project
 # Directories to target for linting, formatting, and type checking.
 # Using "." applies to all files recognized by tools, respecting .gitignore/excludes.
 # Alternatively, be more specific: $(PACKAGE_LIB_DIRS) tests
-SRC_TARGET_DIRS := cognitive_ui digital_twin tests
+SRC_TARGET_DIRS := .
 # ----- End Project Specific Variables -----
 
 VENV_DIR := .venv
