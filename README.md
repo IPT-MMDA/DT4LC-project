@@ -2,16 +2,32 @@
 
 Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning
 
+**📋 [Quick Start Guide](QUICKSTART.md)** | **📖 [Implementation Plan](PLAN.md)** | **✅ [Phase 1 Complete](PHASE1_COMPLETE.md)**
+
+---
+
+## 🚀 Status: MVP Phase 1 Complete
+
+**Latest**: Full COE → DTA pipeline operational with HTTP API (Oct 2, 2025)
+
+- ✅ Pipeline executor with algorithm support
+- ✅ NDVI and statistical analysis
+- ✅ FastAPI server with 6 endpoints
+- ✅ Comprehensive test coverage (7/7 passing)
+- 🔄 Phase 2 (Multi-LLM) starting next
+
+---
+
 ## Overview
 
 This project implements a cognitive digital twin framework with a modular architecture:
 
-- Context Orchestration Engine (COE): agentic layer that understands a request and drafts a pipeline plan
-- Digital Twin Aggregator (DTA): executes the plan using a registry of loaders, models, and algorithms
-- Interface layer: thin adapter UIs use to invoke orchestration (in‑process now; API-ready)
-- UI implementations: Streamlit UI today; a JS UI can be added later without changing the back end
+- **Context Orchestration Engine (COE)**: Agentic layer using LLMs to understand requests and generate pipeline plans
+- **Digital Twin Aggregator (DTA)**: Execution engine with registry-based algorithms, models, and data management
+- **Server API**: FastAPI-based HTTP interface for frontend communication
+- **Registry System**: YAML-based component registry for dynamic capability discovery
 
-At the current stage the project ships a Streamlit UI, a capabilities registry, and a minimal set of tools (Kahovka raster loader, NDVI/NDVI-change algorithms, a Prithvi MAE features stub, and textual post‑processing).
+**Current MVP**: The system supports NDVI calculation, statistical analysis, and LLM-powered insights via HTTP API. Frontend integration ready.
 
 ## Features
 

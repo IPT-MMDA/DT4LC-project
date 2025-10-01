@@ -1,4 +1,5 @@
 import io
+import os
 
 from google import genai
 from google.genai import types
@@ -7,8 +8,25 @@ import rasterio
 
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
 
-MODEL = "gemini-2.5-flash"
-client = genai.Client()
+MODEL = "gemini-2.0-flash-exp"  # Use flash-exp for better availability
+
+
+def _get_client() -> genai.Client:
+    """Lazy initialization of Gemini client.
+
+    Returns:
+        Gemini client
+
+    Raises:
+        ValueError: If GEMINI_API_KEY is not set
+    """
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "GEMINI_API_KEY environment variable is required. Set it via: export GEMINI_API_KEY=your_key_here"
+        )
+    return genai.Client(api_key=api_key)
+
 
 SYS = (
     "You are a Context Understanding Agent for a geospatial DT. "
@@ -60,6 +78,20 @@ def _image_part(att: Attachment) -> types.Part:
 
 
 def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding:
+    """Analyze user request and extract structured context.
+
+    Args:
+        req: User chat request
+        registry_types: Available types from registry
+
+    Returns:
+        Structured context understanding
+
+    Raises:
+        ValueError: If GEMINI_API_KEY is not set
+    """
+    client = _get_client()
+
     parts: list[types.Part | str] = [f"[REGISTRY_TYPES]={registry_types}", SYS, req.prompt]
     for att in req.attachments:
         if att.mime_type.startswith("image/"):

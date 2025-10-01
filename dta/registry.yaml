@@ -16,12 +16,21 @@ instances:
 
   - id: algorithms/ndvi
     kind: algorithm
-    keywords: [ndvi, vegetation index]
+    keywords: [ndvi, vegetation, index]
     inputs: [RasterPath]
     outputs: [NDVIMap]
     runner:
       type: python
-      entrypoint: "dti/algorithms/ndvi.py"
+      entrypoint: "dta/dti/algorithms/ndvi.py"
+
+  - id: algorithms/statistics
+    kind: algorithm
+    keywords: [statistics, stats, distribution, histogram]
+    inputs: [RasterPath]
+    outputs: [Statistics]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/statistics.py"
 
   - id: models/prithvi_features
     kind: model
@@ -38,8 +47,8 @@ instances:
 
   - id: post-processing/agent-analysis
     kind: postprocess
-    keywords: [llm, summarize]
-    inputs: [Features]
+    keywords: [llm, summarize, analysis]
+    inputs: []  # Agent can work with any available artifacts
     outputs: []
     runner:
       type: agent
