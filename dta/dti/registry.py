@@ -27,4 +27,19 @@ def find_items_producing(reg: Registry, out_type: str) -> list[RegistryItem]:
 
 
 def get_item(reg: Registry, item_id: str) -> RegistryItem:
-    return next(i for i in reg.instances if i.id == item_id)
+    """Get registry item by ID.
+
+    Args:
+        reg: Registry
+        item_id: Item identifier
+
+    Returns:
+        Registry item
+
+    Raises:
+        KeyError: If item not found
+    """
+    try:
+        return next(i for i in reg.instances if i.id == item_id)
+    except StopIteration:
+        raise KeyError(f"Registry item not found: {item_id}") from None
