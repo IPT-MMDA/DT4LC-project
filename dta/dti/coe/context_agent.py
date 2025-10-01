@@ -1,31 +1,27 @@
 import io
-import os
+from typing import Any
 
-from google import genai
-from google.genai import types
 import numpy as np
 import rasterio
 
+from dta.dti.coe.llm import LLMMessage, LLMRouter
+from dta.dti.coe.llm.config import create_router_from_env
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
 
-MODEL = "gemini-2.0-flash-exp"  # Use flash-exp for better availability
+# Lazy router initialization
+_router: LLMRouter | None = None
 
 
-def _get_client() -> genai.Client:
-    """Lazy initialization of Gemini client.
+def _get_router() -> LLMRouter:
+    """Lazy initialization of LLM router.
 
     Returns:
-        Gemini client
-
-    Raises:
-        ValueError: If GEMINI_API_KEY is not set
+        Configured LLM router with fallback
     """
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "GEMINI_API_KEY environment variable is required. Set it via: export GEMINI_API_KEY=your_key_here"
-        )
-    return genai.Client(api_key=api_key)
+    global _router
+    if _router is None:
+        _router = create_router_from_env()
+    return _router
 
 
 SYS = (
@@ -68,13 +64,14 @@ def _tiff_to_png_bytes(tif_path: str) -> bytes:
         return buf.getvalue()
 
 
-def _image_part(att: Attachment) -> types.Part:
-    if att.mime_type.lower() in {"image/tiff", "image/tif"}:
-        png_bytes = _tiff_to_png_bytes(att.path)
-        return types.Part.from_bytes(data=png_bytes, mime_type="image/png")
-    # JPEG/PNG/WebP are fine inline under ~20 MB
-    with open(att.path, "rb") as fh:
-        return types.Part.from_bytes(data=fh.read(), mime_type=att.mime_type)
+def _image_part(att: Attachment) -> Any:
+    """Convert attachment to image part.
+
+    TODO: Implement multimodal support for LLM router.
+    For now, returns None as we handle text-only.
+    """
+    # TODO: Support images in router
+    return None
 
 
 def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding:
@@ -88,25 +85,27 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
         Structured context understanding
 
     Raises:
-        ValueError: If GEMINI_API_KEY is not set
+        Exception: If all LLM providers fail
     """
-    client = _get_client()
+    router = _get_router()
 
-    parts: list[types.Part | str] = [f"[REGISTRY_TYPES]={registry_types}", SYS, req.prompt]
-    for att in req.attachments:
-        if att.mime_type.startswith("image/"):
-            parts.append(_image_part(att))
-    resp = client.models.generate_content(
-        model=MODEL,
-        contents=parts,
-        # TODO: disable "thinking" for speed/budget
-        # generation_config=types.GenerationConfig(thinking={'thinking_budget': 0})
-    )
-    # let Gemini produce a small JSON block; simple parse:
+    # Build prompt with registry types and system instructions
+    system_msg = f"{SYS}\n\n[REGISTRY_TYPES]={registry_types}"
+    user_msg = req.prompt
+
+    # TODO: Handle image attachments for multimodal providers
+    # For now, just use text
+
+    messages = [LLMMessage(role="system", content=system_msg), LLMMessage(role="user", content=user_msg)]
+
+    # Generate with router (will try Gemini, fallback to Ollama)
+    response = router.generate(messages, temperature=0.3)  # Lower temp for structured output
+
+    # Parse JSON from response
     import json
     import re
 
-    m = re.search(r"\{.*\}", resp.text, re.S)
+    m = re.search(r"\{.*\}", response.text, re.S)
     data = (
         json.loads(m.group(0))
         if m
