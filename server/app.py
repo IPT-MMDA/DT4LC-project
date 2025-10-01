@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import numpy as np
@@ -15,9 +15,12 @@ from rasterio.io import MemoryFile
 
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
+from dta.dti.metrics import get_metrics_collector
+from dta.dti.models.registry import get_model_registry
 from dta.dti.schemas import ChatRequest as COEChatRequest
 
-from .schemas import ChatRequest
+from .jobs import JobStatus, get_job_queue
+from .schemas import ChatRequest, JobSubmitRequest
 
 app = FastAPI(title="DT4LC API", version="1.0.0")
 HEARTBEAT_SECS = 15
@@ -274,3 +277,174 @@ async def list_capabilities() -> JSONResponse:
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load registry: {e}") from e
+
+
+@app.get("/v1/models")  # type: ignore[misc]
+async def list_models() -> JSONResponse:
+    """List all available models from the model registry.
+
+    Returns model information including requirements and availability.
+    """
+    try:
+        registry = get_model_registry()
+        models = []
+
+        for model_id in registry.list_available():
+            req = registry.check_requirements(model_id)
+            models.append(req)
+
+        return JSONResponse({"models": models, "count": len(models)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load models: {e}") from e
+
+
+@app.get("/v1/metrics")  # type: ignore[misc]
+async def get_metrics() -> JSONResponse:
+    """Get system metrics including execution and LLM stats."""
+    try:
+        collector = get_metrics_collector()
+        stats = collector.get_stats()
+
+        return JSONResponse(
+            {
+                "total_executions": stats.total_executions,
+                "successful_executions": stats.successful_executions,
+                "failed_executions": stats.failed_executions,
+                "average_duration_seconds": stats.average_duration_seconds,
+                "total_llm_calls": stats.total_llm_calls,
+                "total_llm_tokens": stats.total_llm_tokens,
+                "total_llm_cost": stats.total_llm_cost,
+                "llm_by_provider": stats.llm_by_provider,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get metrics: {e}") from e
+
+
+# Async Job Endpoints
+
+
+@app.on_event("startup")  # type: ignore[misc]
+async def startup_event() -> None:
+    """Start job queue on app startup."""
+    queue = get_job_queue()
+    await queue.start()
+
+
+@app.on_event("shutdown")  # type: ignore[misc]
+async def shutdown_event() -> None:
+    """Stop job queue on app shutdown."""
+    queue = get_job_queue()
+    await queue.stop()
+
+
+@app.post("/v1/jobs")  # type: ignore[misc]
+async def submit_job(req: JobSubmitRequest) -> JSONResponse:
+    """Submit a new async job.
+
+    The job will be queued and processed in the background.
+    Use GET /v1/jobs/{job_id} to check status and retrieve results.
+    """
+    try:
+        queue = get_job_queue()
+        job_id = await queue.submit_job(prompt=req.prompt, mode=req.mode, context=req.context)
+
+        job = await queue.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=500, detail="Job creation failed")
+
+        return JSONResponse(job.to_dict(), status_code=202)
+    except RuntimeError as e:
+        raise HTTPException(status_code=429, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Job submission failed: {e}") from e
+
+
+@app.get("/v1/jobs/{job_id}")  # type: ignore[misc]
+async def get_job_status(job_id: str) -> JSONResponse:
+    """Get job status and results.
+
+    Returns job details including status, progress, plan, and results (if completed).
+    """
+    try:
+        queue = get_job_queue()
+        job = await queue.get_job(job_id)
+
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        return JSONResponse(job.to_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get job: {e}") from e
+
+
+@app.post("/v1/jobs/{job_id}/cancel")  # type: ignore[misc]
+async def cancel_job(job_id: str) -> JSONResponse:
+    """Cancel a running or pending job."""
+    try:
+        queue = get_job_queue()
+        cancelled = await queue.cancel_job(job_id)
+
+        if not cancelled:
+            job = await queue.get_job(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+            raise HTTPException(status_code=400, detail=f"Job {job_id} cannot be cancelled (already finished)")
+
+        job = await queue.get_job(job_id)
+        return JSONResponse(job.to_dict() if job else {"id": job_id, "cancelled": True})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {e}") from e
+
+
+@app.get("/v1/jobs")  # type: ignore[misc]
+async def list_jobs(
+    status: str | None = Query(None, description="Filter by status"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum results"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+) -> JSONResponse:
+    """List jobs with optional filtering and pagination."""
+    try:
+        queue = get_job_queue()
+
+        # Parse status filter
+        status_filter = None
+        if status:
+            try:
+                status_filter = JobStatus(status)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid status: {status}. Must be one of: {', '.join(s.value for s in JobStatus)}",
+                ) from None
+
+        jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset)
+        total = len(queue._jobs)
+
+        return JSONResponse(
+            {
+                "jobs": [job.to_dict() for job in jobs],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list jobs: {e}") from e
+
+
+@app.get("/v1/queue/stats")  # type: ignore[misc]
+async def get_queue_stats() -> JSONResponse:
+    """Get job queue statistics."""
+    try:
+        queue = get_job_queue()
+        stats = queue.get_stats()
+        return JSONResponse(stats)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e

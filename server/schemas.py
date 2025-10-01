@@ -14,6 +14,14 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
 
 
+class JobSubmitRequest(BaseModel):
+    """Request for submitting a new job."""
+
+    prompt: str
+    mode: str = "hybrid"  # hybrid/llm/template
+    context: dict[str, Any] | None = None
+
+
 class Plan(BaseModel):
     tags: list[str] = []
     goals: list[str] = []
