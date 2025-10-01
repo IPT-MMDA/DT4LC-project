@@ -146,7 +146,6 @@ dta/dti/coe/llm/
 - Feature extraction outputs
 
 ### 3.3 Climate Model Integration (`dta/dti/models/climate/`)
-- DestinE model support
 - Temporal interpolation
 - Multi-variable predictions
 - Uncertainty quantification
