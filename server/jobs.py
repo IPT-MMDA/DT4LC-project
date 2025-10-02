@@ -40,6 +40,7 @@ class Job:
     id: str
     status: JobStatus
     prompt: str
+    attachments: list[dict[str, Any]] = field(default_factory=list)  # File attachments
     plan: ExecutionPlan | None = None
     result: dict[str, Any] | None = None
     progress: float = 0.0  # 0.0 to 1.0
@@ -136,6 +137,7 @@ class JobQueue:
         self,
         prompt: str,
         mode: str = "hybrid",
+        attachments: list[dict[str, Any]] | None = None,
         context: dict[str, Any] | None = None,
     ) -> str:
         """Submit a new job.
@@ -143,6 +145,7 @@ class JobQueue:
         Args:
             prompt: User prompt
             mode: Planning mode (hybrid/llm/template)
+            attachments: Optional file attachments
             context: Optional context
 
         Returns:
@@ -160,6 +163,7 @@ class JobQueue:
             id=job_id,
             status=JobStatus.PENDING,
             prompt=prompt,
+            attachments=attachments or [],
         )
 
         async with self._lock:
@@ -294,6 +298,7 @@ class JobQueue:
                 try:
                     job_id = await asyncio.wait_for(self._queue.get(), timeout=1.0)
                 except TimeoutError:
+                    # Queue is empty, continue polling
                     continue
 
                 # Process job
@@ -332,7 +337,21 @@ class JobQueue:
         try:
             # Plan execution
             job.progress = 0.2
-            coe_req = COEChatRequest(prompt=job.prompt, attachments=[])
+
+            # Convert job attachments to COE format
+            from dta.dti.schemas import Attachment as COEAttachment
+
+            coe_attachments = [
+                COEAttachment(
+                    id=att.get("id", ""),
+                    filename=att.get("filename", ""),
+                    mime_type=att.get("mime_type", "image/tiff"),
+                    path=att.get("path"),
+                )
+                for att in job.attachments
+            ]
+
+            coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
             plan_result = orchestrate(coe_req)
 
             if not plan_result.get("ok"):

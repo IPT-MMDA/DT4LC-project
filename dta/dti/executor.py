@@ -13,12 +13,30 @@ from pathlib import Path
 import sys
 from typing import Any
 
+from dta.dti.coe.llm import LLMRouter
+from dta.dti.coe.llm.config import create_router_from_env
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
 
 
 class ExecutionError(Exception):
     """Raised when step execution fails."""
+
+
+# Lazy router initialization for agent summarization
+_router: LLMRouter | None = None
+
+
+def _get_router() -> LLMRouter:
+    """Lazy initialization of LLM router.
+
+    Returns:
+        Configured LLM router with fallback
+    """
+    global _router
+    if _router is None:
+        _router = create_router_from_env()
+    return _router
 
 
 class PipelineExecutor:
@@ -256,10 +274,14 @@ class PipelineExecutor:
             ExecutionError: If agent execution fails
         """
         # Collect inputs
-        inputs: dict[str, Any] = {}
-        for input_type in item.inputs:
-            if input_type in self.artifacts:
-                inputs[input_type] = self.artifacts[input_type]
+        # If agent has no specific inputs, pass all available artifacts
+        if not item.inputs:
+            inputs = dict(self.artifacts)  # Pass all artifacts to agent
+        else:
+            inputs: dict[str, Any] = {}
+            for input_type in item.inputs:
+                if input_type in self.artifacts:
+                    inputs[input_type] = self.artifacts[input_type]
 
         # For now, implement basic summarization
         # TODO: Expand with different agent types based on item.id
@@ -277,6 +299,8 @@ class PipelineExecutor:
     def _agent_summarize(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Use LLM to summarize analysis results.
 
+        Uses LLM router with automatic Gemini → Ollama fallback.
+
         Args:
             inputs: Dictionary of input artifacts
 
@@ -284,18 +308,7 @@ class PipelineExecutor:
             Dictionary with summary text
         """
         try:
-            import os
-
-            from google import genai
-
-            api_key = os.environ.get("GEMINI_API_KEY")
-            if not api_key:
-                return {
-                    "summary": "Analysis complete. LLM summarization unavailable (GEMINI_API_KEY not set).",
-                    "inputs": inputs,
-                }
-
-            client = genai.Client(api_key=api_key)
+            router = _get_router()
 
             # Format inputs for LLM
             context = []
@@ -311,15 +324,24 @@ class PipelineExecutor:
                 "in 2-3 sentences. Be concise and focus on key insights:\n\n" + "\n".join(context)
             )
 
-            response = client.models.generate_content(
-                model="gemini-2.0-flash-exp",
-                contents=prompt,
+            # Use router with automatic fallback
+            from dta.dti.coe.llm import LLMMessage
+
+            response = router.generate(
+                messages=[
+                    LLMMessage(role="user", content=prompt),
+                ],
+                temperature=0.7,
             )
 
-            return {"summary": response.text, "inputs": inputs}
+            return {
+                "summary": response.text,
+                "inputs": inputs,
+                "llm_provider": response.provider,  # Track which provider was used
+            }
 
         except Exception as e:
-            # Graceful degradation if LLM fails
+            # Graceful degradation if all LLMs fail
             return {
                 "summary": f"Analysis complete. Results available but summarization failed: {e}",
                 "inputs": inputs,

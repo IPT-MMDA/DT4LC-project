@@ -99,23 +99,30 @@ def plan_with_llm(
     system_prompt = """You are a pipeline planner for a geospatial analysis system.
 Your job is to create a valid execution plan given available components.
 
-Rules:
-1. Each step must reference a component ID from the registry
-2. Steps execute in order - ensure outputs from previous steps match inputs needed
-3. Always start with input components to load data
+CRITICAL RULES:
+1. ALWAYS start with an INPUT component (like "input/file") to load data FIRST
+2. Each step must reference a component ID from the registry
+3. Steps execute in order - ensure outputs from previous steps match inputs needed
 4. Chain processing steps (algorithms/models) to transform data
 5. End with post-processing to format results
 6. Return ONLY valid JSON - no markdown, no explanation
 
+PIPELINE STRUCTURE (MANDATORY):
+Step 1: INPUT component (e.g., "input/file") - loads data and produces RasterPath
+Step 2+: ALGORITHM/MODEL components - process the data (need RasterPath as input)
+Last step: POSTPROCESS component - format results for user
+
 Output format:
 {
   "steps": [
-    {"uses": "component-id-1"},
-    {"uses": "component-id-2"},
-    ...
+    {"uses": "input/file"},
+    {"uses": "algorithms/ndvi"},
+    {"uses": "post-processing/agent-analysis"}
   ],
   "reasoning": "brief explanation of plan logic"
-}"""
+}
+
+IMPORTANT: If algorithms need RasterPath input, you MUST include input/file as the first step!"""
 
     user_prompt = f"""Create a pipeline plan for this request:
 

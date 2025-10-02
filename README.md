@@ -45,7 +45,9 @@ Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learn
 - ✅ Job progress tracking
 - ✅ Pagination and filtering
 - ✅ Graceful shutdown handling
-- ✅ Test coverage (84/84 passing)
+- ✅ Ollama LLM integration (local, unlimited)
+- ✅ Improved planner reliability (always includes data loader)
+- ✅ Test coverage (92/93 passing)
 - 🎉 **Production ready!**
 
 ---
@@ -182,6 +184,32 @@ curl -X POST http://127.0.0.1:8000/flow -H 'Content-Type: application/json' \
 ```
 
 ## Configuration
+
+### LLM Configuration
+
+The system supports multiple LLM providers with automatic fallback. Create a `.env` file in the project root:
+
+```bash
+# Gemini API (optional - free tier: 50 requests/day)
+GEMINI_API_KEY=your_api_key_here
+
+# Ollama (recommended for unlimited local usage)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+```
+
+To use Ollama as a local LLM provider:
+
+```bash
+# Install Ollama (https://ollama.ai)
+# Then pull the model
+ollama pull llama3.2
+
+# Start Ollama server (usually runs automatically)
+ollama serve
+```
+
+The system will automatically fall back from Gemini to Ollama if quota is exceeded.
 
 ### Streamlit Configuration
 

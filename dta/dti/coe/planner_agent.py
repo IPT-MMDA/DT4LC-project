@@ -64,12 +64,30 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     """
     steps: list[PlanStep] = []
 
-    # 1) ensure inputs exist; if user attached raster, use "input/file"
-    for need in ctx.required_inputs or []:
-        # naive: prefer passthrough inputs that produce need
+    # 1) ALWAYS start with data loader - check if we need any data inputs
+    needs_data_loader = False
+    required_inputs = ctx.required_inputs or []
+
+    # Check if any desired algorithms/models need inputs
+    for want in ctx.desired_outputs or []:
+        for item in reg.instances:
+            if want in item.outputs and item.inputs:
+                # This component needs inputs, so we need a data loader
+                needs_data_loader = True
+                break
+
+    # If we need data or have required inputs, add input/file loader
+    if (
+        needs_data_loader
+        or required_inputs
+        or any(kw in ctx.hints.get("keywords", []) for kw in ["kahovka", "data", "raster", "load"])
+    ):
         for it in reg.instances:
-            if it.kind == "input" and need in it.outputs:
-                steps.append(PlanStep(uses=it.id))
+            if it.kind == "input" and it.id == "input/file":
+                # Add input/file step without binds - the file path will be provided
+                # by the frontend/API when the user uploads a file
+                steps.append(PlanStep(uses=it.id, binds={}))
+                logger.info("Added data loader step: input/file (waiting for user upload)")
                 break
 
     # 2) choose a chain to reach desired outputs

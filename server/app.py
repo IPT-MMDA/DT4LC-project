@@ -6,7 +6,11 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+
+# Load environment variables from .env file
+load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import numpy as np
@@ -207,13 +211,20 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 @app.post("/v1/upload")  # type: ignore[misc]
 async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
     # Basic checks
-    if not file.filename.lower().endswith((".tif", ".tiff")):
+    if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
         raise HTTPException(status_code=400, detail="Please upload a .tif/.tiff GeoTIFF.")
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file.")
 
-    # Read in-memory with rasterio
+    # Save file to temp directory
+    import uuid
+
+    file_id = str(uuid.uuid4())[:8]
+    saved_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
+    saved_path.write_bytes(raw)
+
+    # Read in-memory with rasterio for preview
     try:
         with MemoryFile(raw) as mem, mem.open() as src:
             # Read first band as masked array
@@ -246,7 +257,9 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
 
         return JSONResponse(
             {
+                "id": file_id,
                 "filename": file.filename,
+                "path": str(saved_path),  # File path for use in execution
                 "size": [int(w), int(h)],
                 "crs": crs,
                 "bounds": [bounds.left, bounds.bottom, bounds.right, bounds.top],
@@ -254,6 +267,9 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
             }
         )
     except Exception as e:
+        # Clean up saved file on error
+        if saved_path.exists():
+            saved_path.unlink()
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
 
 
@@ -347,7 +363,13 @@ async def submit_job(req: JobSubmitRequest) -> JSONResponse:
     """
     try:
         queue = get_job_queue()
-        job_id = await queue.submit_job(prompt=req.prompt, mode=req.mode, context=req.context)
+
+        # Convert attachments to dict for storage
+        attachments_dict = [att.model_dump() for att in req.attachments]
+
+        job_id = await queue.submit_job(
+            prompt=req.prompt, mode=req.mode, attachments=attachments_dict, context=req.context
+        )
 
         job = await queue.get_job(job_id)
         if not job:

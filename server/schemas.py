@@ -14,11 +14,22 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
 
 
+class Attachment(BaseModel):
+    """File attachment metadata."""
+
+    id: str
+    filename: str
+    path: str
+    mime_type: str = "image/tiff"
+    size_bytes: int | None = None
+
+
 class JobSubmitRequest(BaseModel):
     """Request for submitting a new job."""
 
     prompt: str
     mode: str = "hybrid"  # hybrid/llm/template
+    attachments: list[Attachment] = []
     context: dict[str, Any] | None = None
 
 

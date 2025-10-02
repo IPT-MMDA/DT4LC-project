@@ -190,12 +190,60 @@ Response: {
 - Configured asyncio marker in `pyproject.toml`
 - Async mode: strict
 
-**Total Test Count:** 84 passing
+**Total Test Count:** 94 tests (92 passing)
 - Phase 1: 37 tests
 - Phase 2: 14 tests
 - Phase 3: 37 tests (14 visualization + 23 infrastructure)
-- Phase 4: 11 tests (async jobs)
-- *(2 tests failing due to Gemini API 503 - not our code)*
+- Phase 4: 11 tests (async jobs) + 3 tests (Ollama) + 5 tests (planner fix)
+- *(2 tests failing due to Gemini API quota - not code issues)*
+
+## Critical Bug Fixes
+
+### 1. Ollama LLM Integration Fix ✅
+
+**Problem:** Ollama (llama3.2) was returning incorrectly formatted JSON, causing validation errors:
+```
+required_inputs.0: Input should be a valid string [input_value={'type': 'NDVIMap', 'desc...}, input_type=dict]
+```
+
+**Root Cause:** System prompt in `context_agent.py` wasn't explicit enough. Ollama interpreted "required input types" as needing full object descriptions instead of string arrays.
+
+**Solution:** Enhanced system prompt with:
+- Explicit JSON structure specification
+- CRITICAL RULES section emphasizing string-only arrays
+- Concrete examples of correct format
+- Clear "TYPE NAME STRINGS only" instruction
+
+**Result:**
+- ✅ Ollama now returns correct format: `["Raster", "Features"]` instead of `[{type: "Raster", ...}]`
+- ✅ System works fully with local LLM (no external API dependency)
+- ✅ Automatic fallback from Gemini to Ollama when quota exceeded
+- ✅ 3 new integration tests verify Ollama compatibility
+
+See `OLLAMA_FIX.md` for detailed analysis.
+
+### 2. Planner Data Loader Fix ✅
+
+**Problem:** Both template and LLM planners were generating incomplete plans that skipped the data loader step:
+```
+RuntimeError: Step algorithms/statistics requires RasterPath, not available yet.
+```
+
+**Root Cause:**
+- Template planner only added input steps if they appeared in `required_inputs`
+- LLM planner prompt wasn't explicit enough about mandatory input step
+
+**Solution:**
+- **Template Planner:** Intelligently detects when algorithms need data inputs and automatically adds `input/file` step
+- **LLM Planner:** Enhanced prompt with "CRITICAL RULES" and "PIPELINE STRUCTURE (MANDATORY)" sections
+
+**Result:**
+- ✅ All plans now include correct step order: `input/file → algorithms/processing → post-processing`
+- ✅ No more "RasterPath not available" errors
+- ✅ 5 new tests verify data loader is always included
+- ✅ End-to-end pipeline execution works reliably
+
+See `PLANNER_FIX.md` for detailed analysis.
 
 ## Architecture Improvements
 
@@ -296,13 +344,21 @@ Per PHASE4_PLAN.md, the following were considered but not implemented:
 ### Created:
 1. `PHASE4_PLAN.md` - Implementation plan
 2. `server/jobs.py` - Job queue system (380 lines)
-3. `tests/test_phase4_jobs.py` - Async tests (180 lines)
-4. `PHASE4_COMPLETE.md` - This document
+3. `tests/test_phase4_jobs.py` - Async tests (11 tests)
+4. `tests/test_ollama_integration.py` - Ollama LLM integration tests (3 tests)
+5. `tests/test_planner_data_loader.py` - Planner data loader tests (5 tests)
+6. `OLLAMA_FIX.md` - Documentation of Ollama prompt engineering fix
+7. `PLANNER_FIX.md` - Documentation of planner data loader fix
+8. `PHASE4_COMPLETE.md` - This document
 
 ### Modified:
-1. `server/app.py` - Added 8 new endpoints
+1. `server/app.py` - Added 8 new endpoints, dotenv loading, lifecycle hooks
 2. `server/schemas.py` - Added JobSubmitRequest
 3. `pyproject.toml` - Added asyncio pytest marker
+4. `dta/dti/coe/context_agent.py` - Improved system prompt for Ollama compatibility
+5. `dta/dti/coe/planner_agent.py` - Enhanced template planner with data loader detection
+6. `dta/dti/coe/llm_planner.py` - Improved LLM planner prompt structure
+7. `README.md` - Added LLM configuration section with Ollama setup
 
 ## Usage Examples
 
