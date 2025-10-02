@@ -297,7 +297,7 @@ class JobQueue:
                 # Get job from queue (with timeout)
                 try:
                     job_id = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     # Queue is empty, continue polling
                     continue
 
@@ -306,6 +306,9 @@ class JobQueue:
 
             except asyncio.CancelledError:
                 break
+            except (TimeoutError, asyncio.TimeoutError):
+                # Timeout during shutdown - ignore
+                continue
             except Exception as e:
                 logger.error(f"Worker {worker_id} error: {e}", exc_info=True)
 
