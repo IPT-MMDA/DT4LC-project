@@ -1,285 +1,580 @@
-# Cognitive Digital Twin for Land Cover Change Detection (DT4LC Project)
+# DT4LC - Digital Twin for Land Cover
 
-Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning
-
-**📋 [Quick Start Guide](QUICKSTART.md)** | **📖 [Implementation Plan](PLAN.md)** | **✅ [Phase 1](PHASE1_COMPLETE.md)** | **✅ [Phase 2](PHASE2_COMPLETE.md)** | **✅ [Phase 3](PHASE3_COMPLETE.md)** | **✅ [Phase 4](PHASE4_COMPLETE.md)**
-
----
-
-## 🚀 Status: MVP Phase 4 Complete!
-
-**Latest**: Production-ready with async job processing and enhanced API (Oct 2, 2025)
-
-### Phase 1 ✅
-- ✅ Pipeline executor with algorithm support
-- ✅ NDVI and statistical analysis
-- ✅ FastAPI server with 6 endpoints
-- ✅ Test coverage (37/37 passing)
-
-### Phase 2 ✅
-- ✅ LLM backend abstraction (Gemini + Ollama)
-- ✅ Automatic fallback routing
-- ✅ Configuration management
-- ✅ Context agent with router
-- ✅ LLM-powered intelligent planner
-- ✅ Hybrid planning (template + LLM)
-- ✅ Confidence scoring
-- ✅ Test coverage (51/51 passing)
-
-### Phase 3 ✅
-- ✅ Post-processing & visualization (NDVI maps, charts, GeoJSON)
-- ✅ LLM-powered insights with template fallback
-- ✅ Comprehensive error handling & validation
-- ✅ Structured logging with correlation IDs
-- ✅ Metrics collection (execution + LLM tracking)
-- ✅ Result caching with LRU & TTL
-- ✅ Model registry infrastructure
-- ✅ Enhanced Prithvi model wrapper
-- ✅ Test coverage (74/74 passing)
-
-### Phase 4 ✅
-- ✅ Async job queue with background workers
-- ✅ Job lifecycle management (submit/cancel/list)
-- ✅ 8 new API endpoints (12 total)
-- ✅ Queue monitoring and statistics
-- ✅ Job progress tracking
-- ✅ Pagination and filtering
-- ✅ Graceful shutdown handling
-- ✅ Ollama LLM integration (local, unlimited)
-- ✅ Improved planner reliability (always includes data loader)
-- ✅ Test coverage (92/93 passing)
-- 🎉 **Production ready!**
-
----
-
-## Overview
-
-This project implements a cognitive digital twin framework with a modular architecture:
-
-- **Context Orchestration Engine (COE)**: Agentic layer using LLMs to understand requests and generate pipeline plans
-- **Digital Twin Aggregator (DTA)**: Execution engine with registry-based algorithms, models, and data management
-- **Server API**: FastAPI-based HTTP interface for frontend communication
-- **Registry System**: YAML-based component registry for dynamic capability discovery
-
-**Current MVP**: The system supports NDVI calculation, statistical analysis, and LLM-powered insights via HTTP API. Frontend integration ready.
+A cognitive digital twin framework for land cover change detection and vegetation analysis using satellite imagery, machine learning, and LLM-powered orchestration.
 
 ## Features
 
-- Interactive visualization of satellite imagery
-- Temporal comparison of land cover changes
-- AI-powered analysis and interpretation of environmental patterns
-- Query interface for exploring specific aspects of detected changes
-- Synthetic data generation for historical comparisons
+- **NDVI Analysis** - Calculate vegetation health indices from satellite imagery
+- **Change Detection** - Compare before/after images to detect land cover changes
+- **Field Boundary Detection** - Delineate-Anything model for agricultural field segmentation
+- **LLM-Powered Planning** - Natural language interface with automatic pipeline generation
+- **Intent Classification** - Smart routing between pipeline execution and conversational responses
+- **Multi-Turn Conversations** - Follow-up requests using previous context and attachments
+- **Multi-Provider LLM Support** - Gemini, Groq, and local Ollama with automatic fallback
+- **Prithvi Model Integration** - NASA/IBM foundation model for geospatial features
 
-## Installation
+## Architecture
 
-### Prerequisites
-
-- Python 3.10 or higher
-- UV package manager (recommended) or pip
-
-### Installing UV
-
-UV is a fast, reliable Python package installer and resolver. To install UV:
-
-```bash
-# macOS/Linux
-curl -sSf https://astral.sh/uv/install.sh | sh
-
-# Windows (PowerShell)
-irm https://astral.sh/uv/install.ps1 | iex
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                         │
+│                    http://localhost (port 80)                    │
+└─────────────────────────────────────┬───────────────────────────┘
+                                      │ /v1/* (nginx proxy)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Backend (FastAPI)                            │
+│                    http://localhost:8000                         │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ Context Orchestration Engine (COE)                          ││
+│  │  • Intent Classifier (routes pipeline vs conversation)      ││
+│  │  • Context Agent (understands user intent)                  ││
+│  │  • Planner Agent (builds execution pipeline)                ││
+│  │  • Decision Agent (validates plan)                          ││
+│  └─────────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ Digital Twin Instance (DTI)                                 ││
+│  │  • Pipeline Executor                                        ││
+│  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
+│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────┬───────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   LLM Providers (fallback chain)                 │
+│  Gemini (fast) → Groq (ultra-fast) → Ollama (local)             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-For more installation options, see the [UV documentation](https://github.com/astral-sh/uv).
+## Quick Start
 
-### Setting up the environment
+### Docker (Recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/dt4lc-project.git
-cd dt4lc-project
+# 1. Clone and navigate to project
+git clone <repo-url>
+cd DT4LC-project
 
-# Create and activate a virtual environment with UV
-uv venv
+# 2. Set up environment
+cp .env.example .env
+# Optional: Add GEMINI_API_KEY or GROQ_API_KEY for faster LLM responses
 
-# Activate the environment
-# On Windows:
-.venv\Scripts\activate
-# On macOS/Linux:
+# 3. Start all services
+docker compose up -d
+
+# 4. Wait for services (1-2 min for Ollama model download)
+docker compose ps
+
+# 5. Open application
+open http://localhost
+```
+
+### Local Development
+
+#### Prerequisites
+
+- Python 3.10+
+- [uv](https://github.com/astral-sh/uv) (recommended) or pip
+- [Task](https://taskfile.dev/) (optional but recommended)
+
+#### Backend
+
+```bash
+# Using Task (recommended)
+task venv           # Create virtual environment
+task install        # Install all dependencies
+task test           # Run tests
+task run:api:dev    # Start server with hot reload
+
+# Or manually with uv
+uv venv .venv --python 3.10
 source .venv/bin/activate
-
-# Install the package with development dependencies
-# Optional extras:
-#   ui      – Streamlit and rasterio
-#   models  – model-related libs
-#   api     – FastAPI + Uvicorn for the HTTP server (optional)
-uv pip install -e ".[dev,ui,models]"
+uv pip install -e ".[dev,server]"
+pytest tests/ -v
+uvicorn server.app:app --reload --port 8000
 ```
 
-## Data Management
-
-### Downloading Model Weights and Sample Data (optional)
-
-You can optionally download the Prithvi model weights and sample data. The current orchestration uses a lightweight Prithvi features stub so weights are not strictly required to run the basic flow.
-
-Use the provided script:
+#### Frontend
 
 ```bash
-# Download Prithvi model weights and sample data
-python scripts/fetch_prithvi_v1_weights.py
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start dev server
+npm run dev
+
+# Build for production
+npm run build
 ```
 
-This script will:
+## Running Tests
 
-1. Download the pre-trained Prithvi model weights
-2. Place them in the correct directory structure
-3. Download sample satellite imagery datasets for testing
-
-After running this script, you can experiment with model-backed features when enabled.
-
-## Running the Application
-
-Once installed, you can run the application in several ways:
-
-### Using the CLI Command (recommended)
+### Using Task (Recommended)
 
 ```bash
-# Run with default UI (Streamlit)
-cdt --ui streamlit
-
-# Check version
-cdt --version
+task test              # Run all tests
+task test:fast         # Run tests excluding slow ones
+task test:verbose      # Run with verbose output
+task coverage          # Run with coverage report
 ```
 
-### Using Streamlit Directly
+### Using pytest directly
 
 ```bash
-# Run the Streamlit app directly
-streamlit run cognitive_ui/app.py
+source .venv/bin/activate
+pytest tests/ -v
 ```
 
-### Using UV
+### Test Categories
+
+Tests are organized by component:
 
 ```bash
-# Run with UV
-uv run cdt
+# Core components
+pytest tests/test_registry.py -v      # Component registry
+pytest tests/test_executor.py -v      # Pipeline executor
+pytest tests/test_algorithms.py -v    # NDVI, Statistics, Change Detection
+
+# LLM infrastructure
+pytest tests/test_llm_providers.py -v # Gemini, Ollama, router
+pytest tests/test_planner.py -v       # Template & LLM planners
+
+# Infrastructure
+pytest tests/test_cache.py -v         # Caching
+pytest tests/test_metrics.py -v       # Metrics collection
+pytest tests/test_validation.py -v    # Input/plan validation
+
+# Application
+pytest tests/test_orchestrator.py -v  # COE orchestration
+pytest tests/test_jobs.py -v          # Async job queue
+pytest tests/test_visualization.py -v # Visualization & insights
+
+# Model integrations
+pytest tests/test_models_prithvi.py -v    # Prithvi E2E
+pytest tests/test_models_delineate.py -v  # Delineate-Anything E2E
 ```
 
-The application will be available at [localhost](http://localhost:8501) by default.
-
-### Optional: Run the HTTP API server
-
-The server exposes a minimal POST `/flow` endpoint that accepts a request and returns the planned pipeline and execution output (JSON).
+### Test Coverage
 
 ```bash
-# Install API extras if not installed yet
-uv pip install -e ".[api]"
-
-# Start the API (factory pattern)
-dt4lc-api
-
-# Then POST a request (example)
-curl -X POST http://127.0.0.1:8000/flow -H 'Content-Type: application/json' \
-  -d '{"prompt":"ndvi on kahovka data"}'
+task coverage
+# Or manually:
+pytest tests/ --cov=dta --cov=server --cov-report=html
+open htmlcov/index.html
 ```
-
-## Configuration
-
-### LLM Configuration
-
-The system supports multiple LLM providers with automatic fallback. Create a `.env` file in the project root:
-
-```bash
-# Gemini API (optional - free tier: 50 requests/day)
-GEMINI_API_KEY=your_api_key_here
-
-# Ollama (recommended for unlimited local usage)
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-```
-
-To use Ollama as a local LLM provider:
-
-```bash
-# Install Ollama (https://ollama.ai)
-# Then pull the model
-ollama pull llama3.2
-
-# Start Ollama server (usually runs automatically)
-ollama serve
-```
-
-The system will automatically fall back from Gemini to Ollama if quota is exceeded.
-
-### Streamlit Configuration
-
-Streamlit settings are configured in `.streamlit/config.toml`. You can modify this file to change server behavior, themes, and other Streamlit-specific settings.
-
-### Application Configuration
-
-Application-specific settings are in `cognitive_ui/config.py`. This includes:
-
-- Path definitions
-- Visualization parameters
-- UI settings
-- Default query templates
 
 ## Project Structure
 
 ```text
-dt4lc-project/
-├── .streamlit/                 # Streamlit configuration
-├── capabilities/
-│   └── capabilities.yaml       # Registry of tools (ids, inputs, outputs, tags)
-├── orchestrator/               # Context Orchestration Engine
-│   ├── agents.py               # ContextUnderstanding, DecisionMaking, Planner
-│   ├── registry.py             # Loads capabilities.yaml
-│   └── types.py                # Plan and step data structures
-├── dta/                        # Digital Twin Aggregator (runtime services)
-│   ├── assets.py               # DataAssetManager (e.g., Kahovka raster loader)
-│   ├── algorithms.py           # NDVI, NDVI change (minimal)
-│   ├── executor.py             # PipelineExecutor
-│   ├── models.py               # ModelRegistry (Prithvi features stub)
-│   └── post.py                 # PostProcessor (summary only)
-├── server/                     # Optional HTTP API server (FastAPI)
-│   ├── app.py                  # /flow endpoint
-│   └── cli.py                  # dt4lc-api entry point
-├── cognitive_ui/               # UI and interface layer
-│   ├── app.py                  # Streamlit app entry
-│   ├── cli.py                  # cdt --ui streamlit
-│   ├── interface/              # UI-neutral controller (run_flow)
-│   ├── ui_streamlit/           # Streamlit implementation placeholder
-│   └── ui/                     # Streamlit UI components
-├── digital_twin/
-│   └── models/prithvi_v1/      # Prithvi model implementation
-├── resources/                  # Data resources (e.g., kahovka_data/*.tif)
-├── scripts/                    # Utility scripts
-└── pyproject.toml              # Project configuration
+DT4LC-project/
+├── Taskfile.yml                # Task runner commands
+├── docker-compose.yml          # Docker orchestration
+├── Dockerfile                  # Backend container
+├── .env.example                # Environment template
+│
+├── dta/                        # Digital Twin Application
+│   ├── dti/                    # Digital Twin Instance
+│   │   ├── coe/                # Context Orchestration Engine
+│   │   │   ├── llm/            # LLM providers (Gemini, Groq, Ollama)
+│   │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
+│   │   │   ├── context_agent.py
+│   │   │   ├── planner_agent.py
+│   │   │   └── orchestrator.py
+│   │   ├── algorithms/         # NDVI, Statistics, Change Detection
+│   │   ├── models/             # Prithvi, Delineate-Anything
+│   │   └── executor.py         # Pipeline execution
+│   └── registry.yaml           # Component registry
+│
+├── server/                     # FastAPI server
+│   ├── app.py                  # Main application
+│   └── schemas.py              # API schemas
+│
+├── frontend/                   # React + TypeScript UI
+│   ├── Dockerfile              # Frontend container
+│   ├── nginx.conf              # Production nginx config
+│   ├── src/
+│   │   ├── components/         # React components
+│   │   ├── api/                # API client
+│   │   └── store/              # Zustand state
+│   └── package.json
+│
+├── tests/                      # Test suite (organized by component)
+│   ├── test_registry.py        # Component registry tests
+│   ├── test_executor.py        # Pipeline executor tests
+│   ├── test_algorithms.py      # Algorithm tests
+│   ├── test_llm_providers.py   # LLM provider tests
+│   ├── test_planner.py         # Planner tests
+│   ├── test_orchestrator.py    # Orchestration tests
+│   └── ...
+│
+├── resources/                  # Sample data (kahovka_data/)
+├── docs/                       # Development docs & architecture diagrams
+└── scripts/                    # Utility scripts
 ```
 
-## How it Works (Architecture at a Glance)
+## Configuration
 
-1) The UI (Streamlit) collects a natural-language request. Use the Problem Solving tab and click “Run Orchestrated Flow (Planner)”.
-2) The Interface layer calls the orchestrator in-process.
-3) The Orchestrator reads `capabilities.yaml`, interprets the intent, and drafts a plan (sequence of steps with inputs/outputs).
-4) The DTA `PipelineExecutor` runs the plan by invoking loaders/models/algorithms and returns artifacts.
-5) Post-processing returns a concise textual summary for now (WMS/static visualization can be added later).
+### LLM Providers
 
-Example intents supported today:
-- “ndvi on kahovka data” → load Kahovka raster → compute NDVI → summarize
-- “ndvi change on kahovka data” with two uploaded images (future UI hook) → compute NDVI on both → change map → summarize
+The system supports multiple LLM providers with automatic fallback:
 
-## Citation
+| Provider | Speed | Free Tier | Setup |
+|----------|-------|-----------|-------|
+| Gemini | Fast | Yes | `GEMINI_API_KEY` from [AI Studio](https://aistudio.google.com/apikey) |
+| Groq | Ultra-fast (300+ tok/s) | Yes | `GROQ_API_KEY` from [Console](https://console.groq.com/) |
+| Ollama | Local (5-10 tok/s) | N/A | Automatic in Docker |
+| Apertus | Local (GPU) | N/A | Requires GPU (~16GB+ VRAM) |
 
-If you use this software in your research, please cite:
+#### Basic Setup
 
-```bibtex
-@software{cognitive_digital_twin,
-  author = {Anton Chernyatevich},
-  title = {Cognitive Digital Twin for Land Cover Change Detection (DT4LC Project)},
-  year = {2025},
-  url = {https://github.com/IPT-MMDA/DT4LC-project}
-}
+Add API keys to `.env`:
+```bash
+GEMINI_API_KEY=your_key
+GROQ_API_KEY=your_key
+```
+
+#### Model Selection
+
+Choose specific models for each provider:
+```bash
+# Gemini: Single model or multiple (rotates for rate limit balancing)
+GEMINI_MODELS=gemini-2.0-flash-exp
+GEMINI_MODELS=gemini-1.5-flash,gemini-2.0-flash  # rotates between models
+
+# Groq: Single model (already ultra-fast, no rotation needed)
+GROQ_MODEL=llama-3.3-70b-versatile
+
+# Ollama: Local model
+OLLAMA_MODEL=llama3.2
+```
+
+Available models:
+- **Gemini**: `gemini-1.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-exp`
+- **Groq**: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`
+- **Ollama**: Any installed model (e.g., `llama3.2`, `mistral`)
+- **Apertus**: `swiss-ai/Apertus-8B`, `swiss-ai/Apertus-70B`
+
+#### Apertus (Local GPU Model)
+
+[Apertus](https://www.swiss-ai.org/apertus) is an open-source multilingual LLM from Swiss AI. Runs locally via HuggingFace Transformers.
+
+```bash
+# Enable Apertus (disabled by default)
+APERTUS_ENABLED=true
+APERTUS_MODEL=swiss-ai/Apertus-8B  # or swiss-ai/Apertus-70B
+APERTUS_DEVICE=0                    # GPU device index
+APERTUS_DTYPE=bfloat16              # bfloat16, float16, float32
+
+# Add to provider order
+LLM_PROVIDER_ORDER=apertus,gemini,groq,ollama
+```
+
+**Requirements**: GPU with ~16GB VRAM (8B) or ~140GB VRAM (70B)
+
+#### Advanced LLM Configuration
+
+Control which providers are used and their priority:
+
+```bash
+# Enable/disable specific providers
+LLM_ENABLE_GEMINI=true
+LLM_ENABLE_GROQ=true
+LLM_ENABLE_OLLAMA=true
+
+# Set priority order (comma-separated)
+LLM_PROVIDER_ORDER=gemini,groq,ollama
+
+# Routing strategy: fallback | cost | availability
+LLM_STRATEGY=fallback
+```
+
+**Examples:**
+
+```bash
+# Use only Groq (fastest free option)
+LLM_ENABLE_GEMINI=false
+LLM_ENABLE_OLLAMA=false
+LLM_PROVIDER_ORDER=groq
+
+# Use only local Ollama (no external API calls)
+LLM_ENABLE_GEMINI=false
+LLM_ENABLE_GROQ=false
+LLM_PROVIDER_ORDER=ollama
+
+# Prefer Groq, fallback to Ollama
+LLM_PROVIDER_ORDER=groq,ollama
+```
+
+### Intent Classification
+
+The system automatically classifies user requests into two categories:
+
+- **PIPELINE** - Requests that need data processing (triggers algorithm execution)
+- **CONVERSATION** - Questions, guidance requests, or general conversation
+
+Examples:
+
+| Request | Intent | Action |
+|---------|--------|--------|
+| "Calculate NDVI" | PIPELINE | Executes NDVI algorithm |
+| "Detect field boundaries" | PIPELINE | Runs Delineate-Anything model |
+| "What can we do next?" | CONVERSATION | Returns helpful guidance |
+| "Explain what NDVI means" | CONVERSATION | Provides explanation |
+
+The classifier uses pattern matching for clear action requests and falls back to LLM-based classification for ambiguous cases.
+
+### Multi-Turn Conversations
+
+The system supports follow-up requests that reference previously uploaded data:
+
+```text
+User: [uploads image.tif] "Detect agricultural parcels in this area"
+→ Runs field boundary detection
+
+User: "What can we do with this data?"
+→ Returns guidance about available analyses
+
+User: "Calculate NDVI"
+→ Uses the previously uploaded image.tif automatically
+```
+
+Context is maintained per chat session, including:
+
+- Previous file attachments with their server paths
+- Conversation history for context-aware responses
+- Job results for reference in follow-up questions
+
+### Adding New Algorithms
+
+1. Create algorithm file:
+
+   ```python
+   # dta/dti/algorithms/my_algorithm.py
+   def run(RasterPath: str) -> dict:
+       """Process raster and return results."""
+       return {"result": ..., "statistics": {...}}
+   ```
+
+2. Register in `dta/registry.yaml`:
+
+   ```yaml
+   - id: algorithms/my-algorithm
+     kind: algorithm
+     keywords: [my, algorithm, keywords]
+     inputs: [RasterPath]
+     outputs: [MyOutput]
+     runner:
+       type: python
+       entrypoint: "dta/dti/algorithms/my_algorithm.py"
+   ```
+
+### Field Boundary Detection (Delineate-Anything)
+
+The Delineate-Anything model detects agricultural field boundaries from satellite imagery:
+
+```bash
+# Install dependencies
+pip install -e ".[delineate]"
+```
+
+Usage via natural language:
+
+```text
+"Detect field boundaries in this image"
+"Delineate agricultural parcels from the satellite image"
+```
+
+The model outputs GeoPackage files with polygon geometries representing detected fields.
+
+**Note**: Input must be GeoTIFF format with at least 3 bands (RGB). Model variants:
+
+- `small`: Faster inference, good for initial testing
+- `large`: Higher accuracy, better for production use
+
+Set model via environment:
+
+```bash
+DELINEATE_MODEL=large  # or "small" (default)
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/health` | GET | Health check |
+| `/v1/chat` | POST | Submit analysis request |
+| `/v1/upload` | POST | Upload raster file |
+| `/v1/jobs` | GET | List jobs |
+| `/v1/jobs/{id}` | GET | Get job status |
+| `/v1/jobs/{id}/cancel` | POST | Cancel job |
+
+### Example Request
+
+```bash
+# Upload a file
+curl -X POST http://localhost:8000/v1/upload \
+  -F "file=@image.tif"
+
+# Submit analysis
+curl -X POST http://localhost:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Calculate NDVI for vegetation analysis",
+    "attachments": [{"id": "att-1", "filename": "image.tif", "path": "/tmp/image.tif", "mime_type": "image/tiff"}]
+  }'
+```
+
+## Docker Deployment
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Frontend | 80 | React UI (nginx) |
+| Backend | 8000 | FastAPI server |
+| Ollama | 11434 | Local LLM server |
+
+### Commands
+
+```bash
+# Start all services
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# View specific service
+docker compose logs -f backend
+
+# Rebuild after changes
+docker compose build --no-cache
+docker compose up -d
+
+# Stop all services
+docker compose down
+
+# Stop and remove volumes
+docker compose down -v
+```
+
+### Health Checks
+
+```bash
+# All services status
+docker compose ps
+
+# Backend health
+curl http://localhost:8000/v1/health
+
+# Ollama models
+curl http://localhost:11434/api/tags
+```
+
+### Troubleshooting
+
+**Backend won't start:**
+
+```bash
+docker compose logs backend
+# Check for port conflicts or missing dependencies
+```
+
+**Ollama model download slow:**
+
+```bash
+docker compose logs ollama-pull
+# Model is ~2GB, takes 2-5 minutes
+```
+
+**Frontend shows Network Error:**
+
+```bash
+curl http://localhost:8000/v1/health
+# Verify backend is running
+```
+
+**LLM responses slow:**
+
+```bash
+# Add API keys to .env for faster providers:
+GROQ_API_KEY=your_key  # 300+ tokens/sec
+```
+
+### Resource Requirements
+
+| Service | RAM | CPU | Storage |
+|---------|-----|-----|---------|
+| Frontend | 128MB | 0.1 | 50MB |
+| Backend | 512MB | 0.5 | 200MB |
+| Ollama | 4GB+ | 2+ | 3GB |
+
+**Total minimum**: 5GB RAM, 2 CPU cores, 4GB storage
+
+## Sample Data
+
+Sample Kahovka region data in `resources/kahovka_data/`:
+
+- `hlsl_20230601.tif` - Before image
+- `hlsl_20230609.tif` - After image
+
+Test change detection:
+
+```text
+"Compare before and after images to detect changes"
+```
+
+## Development
+
+### Task Commands
+
+All development commands are available via [Task](https://taskfile.dev/):
+
+```bash
+task --list  # Show all available commands
+```
+
+| Command | Description |
+|---------|-------------|
+| **Environment** | |
+| `task venv` | Create virtual environment |
+| `task install` | Install with all dev dependencies |
+| `task sync` | Sync environment with pyproject.toml |
+| **Code Quality** | |
+| `task lint` | Run ruff linter |
+| `task lint:fix` | Run linter with auto-fix |
+| `task format` | Format code with ruff |
+| `task format:check` | Check formatting (no changes) |
+| `task typecheck` | Run mypy type checker |
+| **Testing** | |
+| `task test` | Run all tests |
+| `task test:fast` | Run tests excluding slow ones |
+| `task test:verbose` | Run with verbose output |
+| `task coverage` | Run with coverage report |
+| **Application** | |
+| `task run:ui` | Run Streamlit UI |
+| `task run:api` | Run FastAPI server |
+| `task run:api:dev` | Run API with hot reload |
+| **Build & Clean** | |
+| `task build` | Build wheel and sdist |
+| `task clean` | Remove build artifacts |
+| `task check` | Run all quality checks |
+
+### Code Style
+
+- **Python**: ruff for linting/formatting, mypy for type checking
+- **TypeScript**: ESLint with react-hooks plugin
+- **Line length**: 119 characters
+
+### Type Checking
+
+```bash
+task typecheck  # or: uv run mypy .
+
+# TypeScript
+cd frontend && npm run lint
 ```
 
 ## License
@@ -289,3 +584,14 @@ This project is licensed under the Research Use License - see the [LICENSE](LICE
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## Citation
+
+```bibtex
+@software{dt4lc,
+  author = {Anton Chernyatevich},
+  title = {DT4LC - Digital Twin for Land Cover},
+  year = {2025},
+  url = {https://github.com/IPT-MMDA/DT4LC-project}
+}
+```

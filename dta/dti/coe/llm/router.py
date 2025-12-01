@@ -167,12 +167,16 @@ class LLMRouter:
             ... }
             >>> router = LLMRouter.from_config(config)
         """
+        from .apertus import ApertusProvider
         from .gemini import GeminiProvider
+        from .groq import GroqProvider
         from .ollama import OllamaProvider
 
         provider_map = {
             "gemini": GeminiProvider,
+            "groq": GroqProvider,
             "ollama": OllamaProvider,
+            "apertus": ApertusProvider,
         }
 
         providers = []

@@ -100,29 +100,54 @@ def plan_with_llm(
 Your job is to create a valid execution plan given available components.
 
 CRITICAL RULES:
-1. ALWAYS start with an INPUT component (like "input/file") to load data FIRST
+1. ALWAYS start with INPUT component(s) to load data FIRST
 2. Each step must reference a component ID from the registry
 3. Steps execute in order - ensure outputs from previous steps match inputs needed
 4. Chain processing steps (algorithms/models) to transform data
 5. End with post-processing to format results
 6. Return ONLY valid JSON - no markdown, no explanation
 
-PIPELINE STRUCTURE (MANDATORY):
-Step 1: INPUT component (e.g., "input/file") - loads data and produces RasterPath
-Step 2+: ALGORITHM/MODEL components - process the data (need RasterPath as input)
-Last step: POSTPROCESS component - format results for user
+PIPELINE STRUCTURES:
+
+A) SINGLE FILE ANALYSIS (ndvi, statistics, etc):
+   Step 1: "input/file" - loads data and produces RasterPath
+   Step 2+: algorithm component - processes RasterPath
+   Last: "post-processing/agent-analysis"
+
+B) CHANGE DETECTION / COMPARISON (requires 2 files):
+   Step 1: "input/file-before" - loads first file, produces RasterPathBefore
+   Step 2: "input/file-after" - loads second file, produces RasterPathAfter
+   Step 3: "algorithms/change-detection" - compares both, produces ChangeMap
+   Last: "post-processing/agent-analysis"
+
+WHEN TO USE EACH FLOW:
+
+USE SINGLE FILE FLOW (with "input/file") for:
+- NDVI, vegetation, greenness analysis (single image)
+- Statistics, histogram, distribution analysis
+- Feature extraction with Prithvi model
+- Land cover analysis (single image)
+- Any analysis that works on ONE image
+
+USE CHANGE DETECTION FLOW (with "input/file-before" + "input/file-after") ONLY when:
+- User explicitly says "compare" or "comparison"
+- User explicitly says "change detection"
+- User explicitly says "difference between"
+- User explicitly mentions "before and after"
+- User asks to detect changes between two time periods
+
+DEFAULT: Use single file flow unless change detection is explicitly requested!
 
 Output format:
 {
   "steps": [
-    {"uses": "input/file"},
-    {"uses": "algorithms/ndvi"},
-    {"uses": "post-processing/agent-analysis"}
+    {"uses": "component-id-here"},
+    ...
   ],
   "reasoning": "brief explanation of plan logic"
 }
 
-IMPORTANT: If algorithms need RasterPath input, you MUST include input/file as the first step!"""
+IMPORTANT: Match the correct flow based on the user's intent!"""
 
     user_prompt = f"""Create a pipeline plan for this request:
 
@@ -256,8 +281,8 @@ def estimate_plan_confidence(ctx: ContextUnderstanding) -> float:
     """Estimate confidence in using template vs LLM planner.
 
     Simple heuristic:
-    - High confidence (>0.8) → use template planner (fast)
-    - Low confidence (<0.8) → use LLM planner (smart)
+    - High confidence (>0.7) → use template planner (fast)
+    - Low confidence (<0.7) → use LLM planner (smart)
 
     Args:
         ctx: Context understanding
@@ -272,14 +297,27 @@ def estimate_plan_confidence(ctx: ContextUnderstanding) -> float:
     if keywords:
         score += 0.3
 
-    # Known patterns boost confidence
-    if any(kw in keywords for kw in ["ndvi", "statistics", "change"]):
-        score += 0.3
+    # Known patterns boost confidence - including change detection and models
+    known_patterns = [
+        "ndvi",
+        "statistics",
+        "change",
+        "compare",
+        "comparison",
+        "difference",
+        "before",
+        "after",
+        "prithvi",  # Prithvi model - uses single file flow
+        "features",  # Feature extraction - uses single file flow
+        "temporal",  # Temporal features - single file, NOT change detection
+    ]
+    if any(kw.lower() in [k.lower() for k in keywords] for kw in known_patterns):
+        score += 0.4  # Increased from 0.3 - we have good templates for these
 
     # Clear inputs/outputs boost confidence
     if ctx.required_inputs:
-        score += 0.2
+        score += 0.15
     if ctx.desired_outputs:
-        score += 0.2
+        score += 0.15
 
     return min(score, 1.0)

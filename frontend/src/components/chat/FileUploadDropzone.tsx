@@ -1,0 +1,303 @@
+import { useState, useRef, useCallback } from 'react';
+import { Upload, X, Loader2, AlertCircle, CheckCircle, Paperclip } from 'lucide-react';
+import { useUploadFile } from '../../api/hooks/useUpload';
+import { useAppStore } from '../../store/useAppStore';
+
+interface FileUploadDropzoneProps {
+  onClose?: () => void;
+  compact?: boolean;
+}
+
+interface UploadedFilePreview {
+  id: string;
+  filename: string;
+  preview_png_base64?: string;
+  size: [number, number];
+  crs: string | null;
+}
+
+export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropzoneProps) {
+  const [dragActive, setDragActive] = useState(false);
+  const [recentUpload, setRecentUpload] = useState<UploadedFilePreview | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadFile = useUploadFile();
+  const { addAttachment, uploadedAttachments } = useAppStore();
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFiles(e.dataTransfer.files);
+    }
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      handleFiles(e.target.files);
+    }
+  };
+
+  const handleFiles = async (files: FileList) => {
+    const file = files[0];
+
+    // Validate file type
+    const validExtensions = ['.tif', '.tiff', '.geotiff'];
+    const isValid = validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+
+    if (!isValid) {
+      alert('Please upload a GeoTIFF file (.tif, .tiff)');
+      return;
+    }
+
+    try {
+      const result = await uploadFile.mutateAsync(file);
+
+      // Store preview for display
+      setRecentUpload({
+        id: result.id,
+        filename: result.filename,
+        preview_png_base64: result.preview_png_base64,
+        size: result.size,
+        crs: result.crs,
+      });
+
+      // Add to global attachments store (including preview for chat display)
+      addAttachment({
+        id: result.id,
+        filename: result.filename,
+        path: result.path,
+        mime_type: 'image/tiff',
+        preview_png_base64: result.preview_png_base64,
+      });
+
+      // Auto-close after successful upload if compact mode
+      if (compact && onClose) {
+        setTimeout(() => onClose(), 1500);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+    }
+  };
+
+  const onButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Compact inline version
+  if (compact) {
+    return (
+      <div
+        className={`rounded-lg border-2 border-dashed p-4 transition-colors ${
+          dragActive
+            ? 'border-primary-500 bg-primary-50 dark:bg-primary-950'
+            : uploadFile.isError
+            ? 'border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950'
+            : 'border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900'
+        }`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".tif,.tiff,.geotiff"
+          onChange={handleChange}
+          className="hidden"
+        />
+
+        {uploadFile.isPending ? (
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-primary-500 animate-spin" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Uploading...</span>
+          </div>
+        ) : uploadFile.isError ? (
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <span className="text-sm text-red-600 dark:text-red-400">
+              {uploadFile.error instanceof Error ? uploadFile.error.message : 'Upload failed'}
+            </span>
+            <button
+              onClick={() => uploadFile.reset()}
+              className="ml-auto text-xs text-primary-500 hover:text-primary-600"
+            >
+              Try again
+            </button>
+          </div>
+        ) : recentUpload ? (
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                {recentUpload.filename}
+              </p>
+              <p className="text-xs text-gray-500">
+                {recentUpload.size[0]} x {recentUpload.size[1]} px
+              </p>
+            </div>
+            {recentUpload.preview_png_base64 && (
+              <img
+                src={`data:image/png;base64,${recentUpload.preview_png_base64}`}
+                alt="Preview"
+                className="w-12 h-12 rounded object-cover"
+              />
+            )}
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-3 cursor-pointer"
+            onClick={onButtonClick}
+          >
+            <Upload className="w-5 h-5 text-gray-400" />
+            <div className="flex-1">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Drop a GeoTIFF here or <span className="text-primary-500">browse</span>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Full dropdown version with preview
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-lg p-4 w-80">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+          Upload GeoTIFF
+        </h3>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Current attachments */}
+      {uploadedAttachments.length > 0 && (
+        <div className="mb-3 space-y-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400">Attached files:</p>
+          {uploadedAttachments.map((att) => (
+            <div
+              key={att.id}
+              className="flex items-center gap-2 px-2 py-1 bg-primary-50 dark:bg-primary-950 rounded text-sm"
+            >
+              <Paperclip className="w-3 h-3 text-primary-500" />
+              <span className="flex-1 truncate text-primary-700 dark:text-primary-300">
+                {att.filename}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upload zone */}
+      <div
+        className={`rounded-lg border-2 border-dashed p-6 transition-colors ${
+          dragActive
+            ? 'border-primary-500 bg-primary-50 dark:bg-primary-950'
+            : uploadFile.isError
+            ? 'border-red-300 dark:border-red-700'
+            : 'border-gray-300 dark:border-gray-700'
+        }`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".tif,.tiff,.geotiff"
+          onChange={handleChange}
+          className="hidden"
+        />
+
+        <div className="text-center">
+          {uploadFile.isPending ? (
+            <>
+              <Loader2 className="w-8 h-8 mx-auto text-primary-500 mb-2 animate-spin" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Processing GeoTIFF...
+              </p>
+            </>
+          ) : uploadFile.isError ? (
+            <>
+              <AlertCircle className="w-8 h-8 mx-auto text-red-500 mb-2" />
+              <p className="text-sm text-red-600 dark:text-red-400 mb-2">
+                {uploadFile.error instanceof Error ? uploadFile.error.message : 'Upload failed'}
+              </p>
+              <button
+                onClick={() => uploadFile.reset()}
+                className="text-xs text-primary-500 hover:text-primary-600"
+              >
+                Try again
+              </button>
+            </>
+          ) : recentUpload ? (
+            <>
+              <CheckCircle className="w-8 h-8 mx-auto text-green-500 mb-2" />
+              <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                {recentUpload.filename}
+              </p>
+              <p className="text-xs text-gray-500">
+                {recentUpload.size[0]} x {recentUpload.size[1]} px
+                {recentUpload.crs && ` | ${recentUpload.crs}`}
+              </p>
+              {recentUpload.preview_png_base64 && (
+                <img
+                  src={`data:image/png;base64,${recentUpload.preview_png_base64}`}
+                  alt="Preview"
+                  className="mt-2 mx-auto w-full h-24 rounded object-cover"
+                />
+              )}
+              <button
+                onClick={() => {
+                  setRecentUpload(null);
+                  uploadFile.reset();
+                }}
+                className="mt-2 text-xs text-primary-500 hover:text-primary-600"
+              >
+                Upload another
+              </button>
+            </>
+          ) : (
+            <>
+              <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Drag & drop or{' '}
+                <button
+                  onClick={onButtonClick}
+                  className="text-primary-500 hover:text-primary-600"
+                >
+                  browse
+                </button>
+              </p>
+              <p className="text-xs text-gray-400">
+                Supports: .tif, .tiff
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -14,6 +14,8 @@ import logging
 from typing import Any
 import uuid
 
+import numpy as np
+
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import load_registry
@@ -21,6 +23,38 @@ from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
 logger = logging.getLogger(__name__)
+
+
+def _make_json_serializable(obj: Any) -> Any:
+    """Convert numpy arrays and other non-serializable objects to JSON-safe types.
+
+    Args:
+        obj: Object to convert
+
+    Returns:
+        JSON-serializable version of the object
+    """
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: _make_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_make_json_serializable(item) for item in obj]
+    elif isinstance(obj, (np.integer, np.floating)):
+        val = float(obj)
+        # Handle NaN and Inf values (not JSON compliant)
+        if np.isnan(val):
+            return None
+        elif np.isinf(val):
+            return None
+        return val
+    elif isinstance(obj, float):
+        # Handle Python float NaN and Inf
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
 
 
 class JobStatus(str, Enum):
@@ -41,6 +75,7 @@ class Job:
     status: JobStatus
     prompt: str
     attachments: list[dict[str, Any]] = field(default_factory=list)  # File attachments
+    context: dict[str, Any] | None = None  # Chat context including previous attachments
     plan: ExecutionPlan | None = None
     result: dict[str, Any] | None = None
     progress: float = 0.0  # 0.0 to 1.0
@@ -60,7 +95,7 @@ class Job:
             "status": self.status.value,
             "prompt": self.prompt,
             "plan": self.plan.model_dump() if self.plan else None,
-            "result": self.result,
+            "result": _make_json_serializable(self.result) if self.result else None,
             "progress": self.progress,
             "error": self.error,
             "created_at": self.created_at.isoformat(),
@@ -164,6 +199,7 @@ class JobQueue:
             status=JobStatus.PENDING,
             prompt=prompt,
             attachments=attachments or [],
+            context=context,
         )
 
         async with self._lock:
@@ -344,6 +380,7 @@ class JobQueue:
             # Convert job attachments to COE format
             from dta.dti.schemas import Attachment as COEAttachment
 
+            # Collect attachments from current request
             coe_attachments = [
                 COEAttachment(
                     id=att.get("id", ""),
@@ -354,12 +391,44 @@ class JobQueue:
                 for att in job.attachments
             ]
 
+            # If no current attachments, check context for previous attachments
+            if not coe_attachments and job.context:
+                context_attachments = job.context.get("previous_attachments", [])
+                for att in context_attachments:
+                    if att.get("path"):
+                        coe_attachments.append(
+                            COEAttachment(
+                                id=att.get("id", ""),
+                                filename=att.get("filename", ""),
+                                mime_type=att.get("mime_type", "image/tiff"),
+                                path=att.get("path"),
+                            )
+                        )
+                if coe_attachments:
+                    logger.info(f"Using {len(coe_attachments)} attachment(s) from context")
+
             coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
             plan_result = orchestrate(coe_req)
 
             if not plan_result.get("ok"):
                 raise RuntimeError(plan_result.get("error", "Planning failed"))
 
+            # Handle conversational intent - no pipeline execution needed
+            if plan_result.get("intent") == "conversation":
+                result = {
+                    "intent": "conversation",
+                    "response": plan_result.get("response", ""),
+                    "reason": plan_result.get("reason", ""),
+                }
+                async with self._lock:
+                    job.result = result
+                    job.status = JobStatus.COMPLETED
+                    job.progress = 1.0
+                    job.completed_at = datetime.now()
+                logger.info(f"Worker {worker_id} completed conversational job {job_id}")
+                return
+
+            # Pipeline intent - execute the plan
             job.plan = ExecutionPlan(**plan_result["plan"])
             job.progress = 0.4
 
@@ -369,6 +438,7 @@ class JobQueue:
 
             # Build result
             result = {
+                "intent": "pipeline",
                 "plan": job.plan.model_dump(),
                 "execution": execution_result,
             }

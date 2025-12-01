@@ -39,3 +39,10 @@ dta/dti/models/third_party/
 # Cache
 .cache/
 .temp/
+
+# Frontend (Node.js)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.log
+npm-debug.log*

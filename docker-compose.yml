@@ -1,0 +1,96 @@
+services:
+  # Ollama LLM Server (CPU mode)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: dt4lc-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  # Backend API Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dt4lc-backend
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      # LLM Provider Selection
+      - LLM_ENABLE_GEMINI=${LLM_ENABLE_GEMINI:-true}
+      - LLM_ENABLE_GROQ=${LLM_ENABLE_GROQ:-true}
+      - LLM_ENABLE_OLLAMA=${LLM_ENABLE_OLLAMA:-true}
+      - LLM_ENABLE_APERTUS=${LLM_ENABLE_APERTUS:-true}
+      - LLM_PROVIDER_ORDER=${LLM_PROVIDER_ORDER:-gemini,groq,ollama}
+      - LLM_STRATEGY=${LLM_STRATEGY:-fallback}
+      # LLM API Keys and Models
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODELS=${GEMINI_MODELS:-gemini-2.0-flash-exp}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      # Ollama Configuration
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2}
+      # Apertus Configuration (disabled by default - requires GPU)
+      - APERTUS_ENABLED=${APERTUS_ENABLED:-false}
+      - APERTUS_MODEL=${APERTUS_MODEL:-swiss-ai/Apertus-8B}
+      - APERTUS_DEVICE=${APERTUS_DEVICE:-0}
+      - APERTUS_DTYPE=${APERTUS_DTYPE:-bfloat16}
+    volumes:
+      - ./resources:/app/resources:ro
+      - uploads_data:/tmp/dt4lc_uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # Frontend (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dt4lc-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Ollama model puller (one-time setup)
+  ollama-pull:
+    image: curlimages/curl:latest
+    container_name: dt4lc-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        echo 'Pulling llama3.2 model...' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.2\"}' &&
+        echo 'Model pull complete!'
+      "
+    restart: "no"
+
+volumes:
+  ollama_data:
+    driver: local
+  uploads_data:
+    driver: local

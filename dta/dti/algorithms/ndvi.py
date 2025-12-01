@@ -6,11 +6,67 @@ Higher values indicate healthier vegetation.
 
 from __future__ import annotations
 
+import base64
+import io
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import rasterio
+
+# Try to import matplotlib for visualization
+try:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.colors import LinearSegmentedColormap
+    import matplotlib.pyplot as plt
+
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
+
+def _create_ndvi_visualization(ndvi_array: np.ndarray, title: str = "NDVI") -> str | None:
+    """Create a colored visualization of NDVI.
+
+    Args:
+        ndvi_array: NDVI array
+        title: Title for the image
+
+    Returns:
+        Base64 encoded PNG image, or None if matplotlib unavailable
+    """
+    if not HAS_MATPLOTLIB:
+        return None
+
+    # NDVI colormap: Brown/Red (low) -> Yellow -> Green (high)
+    colors = [
+        (0.6, 0.3, 0.1),  # Brown - bare soil/water
+        (0.8, 0.6, 0.2),  # Tan - sparse vegetation
+        (1.0, 1.0, 0.4),  # Yellow - moderate vegetation
+        (0.6, 0.8, 0.2),  # Yellow-green
+        (0.2, 0.6, 0.2),  # Green - healthy vegetation
+        (0.0, 0.4, 0.0),  # Dark green - dense vegetation
+    ]
+    cmap = LinearSegmentedColormap.from_list("ndvi", colors, N=256)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    im = ax.imshow(ndvi_array, cmap=cmap, vmin=-0.2, vmax=0.8)
+
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.axis("off")
+
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
+    cbar.set_label("NDVI", fontsize=10)
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    buf.seek(0)
+
+    return base64.b64encode(buf.read()).decode("utf-8")
 
 
 def calculate_ndvi(raster_path: str) -> dict[str, Any]:
@@ -82,17 +138,26 @@ def calculate_ndvi(raster_path: str) -> dict[str, Any]:
 
         metadata = {
             "crs": src.crs.to_string() if src.crs else None,
-            "transform": src.transform,
-            "bounds": src.bounds,
+            "transform": list(src.transform) if src.transform else None,
+            "bounds": [src.bounds.left, src.bounds.bottom, src.bounds.right, src.bounds.top],
             "width": src.width,
             "height": src.height,
             "count": src.count,
         }
 
+        # Generate visualization
+        visualizations = {}
+        if HAS_MATPLOTLIB:
+            visualizations["ndvi_map"] = _create_ndvi_visualization(
+                ndvi_filled,
+                title=f"NDVI - {Path(raster_path).stem}",
+            )
+
         return {
-            "ndvi_array": ndvi_filled,
+            "ndvi_array": ndvi_filled.tolist(),  # Convert to list for JSON serialization
             "metadata": metadata,
             "statistics": stats,
+            "visualizations": visualizations,
             "path": str(raster_path),
         }
 

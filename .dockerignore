@@ -1,0 +1,56 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Git
+.git/
+.gitignore
+
+# Docs (keep README)
+*.md
+!README.md
+
+# Temporary files
+.temp/
+.cache/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files (handled via docker-compose)
+.env
+.env.*
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Backup files
+*.bak

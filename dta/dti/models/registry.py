@@ -116,6 +116,14 @@ class ModelRegistry:
         """
         return [model_id for model_id, model in self._models.items() if model.is_available()]
 
+    def list_all(self) -> list[str]:
+        """List all registered models (including unavailable).
+
+        Returns:
+            List of model IDs
+        """
+        return list(self._models.keys())
+
     def check_requirements(self, model_id: str) -> dict[str, Any]:
         """Get model requirements.
 
@@ -128,12 +136,22 @@ class ModelRegistry:
         model = self.get(model_id)
         metadata = self._metadata.get(model_id, {})
 
+        # Get missing requirements if available
+        missing_requirements: list[str] = []
+        if hasattr(model, "get_missing_requirements"):
+            missing_requirements = model.get_missing_requirements()
+
         return {
-            "name": model.name,
+            "model_id": model.name,
+            "name": metadata.get("display_name", model.name),
             "version": model.version,
+            "description": metadata.get("description", ""),
+            "author": metadata.get("author", ""),
+            "source_url": metadata.get("source_url", ""),
             "inputs": model.required_inputs,
             "outputs": model.outputs,
             "available": model.is_available(),
+            "missing_requirements": missing_requirements,
             "gpu_required": metadata.get("gpu_required", False),
             "memory_mb": metadata.get("memory_mb", 0),
             "latency_ms": metadata.get("latency_ms", 0),
@@ -169,15 +187,26 @@ def get_model_registry() -> ModelRegistry:
 
 
 def _initialize_default_models() -> None:
-    """Initialize default models (Prithvi, etc.)."""
-    # Import and register Prithvi if available
+    """Initialize default models (Prithvi, Delineate-Anything, etc.)."""
+    registry = get_model_registry()
+
+    # Register Prithvi model
     try:
         from .prithvi import PrithviModel
 
         prithvi = PrithviModel()
-        get_model_registry().register(
+        registry.register(
             prithvi,
             metadata={
+                "display_name": "Prithvi EO Foundation Model",
+                "description": (
+                    "IBM/NASA foundation model for Earth observation. "
+                    "Extracts temporal features and embeddings from HLS satellite data "
+                    "using a Vision Transformer (ViT) architecture trained on "
+                    "Harmonized Landsat-Sentinel data."
+                ),
+                "author": "IBM Research & NASA",
+                "source_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-100M",
                 "gpu_required": False,  # Can run on CPU
                 "memory_mb": 1024,
                 "latency_ms": 5000,
@@ -186,3 +215,28 @@ def _initialize_default_models() -> None:
         logger.info("Registered Prithvi model")
     except Exception as e:
         logger.warning(f"Failed to register Prithvi model: {e}")
+
+    # Register Delineate-Anything model
+    try:
+        from .delineate import DelineateAnythingModel
+
+        delineate = DelineateAnythingModel()
+        registry.register(
+            delineate,
+            metadata={
+                "display_name": "Delineate-Anything",
+                "description": (
+                    "YOLO-based agricultural field boundary detection model. "
+                    "Segments individual fields from satellite imagery and outputs "
+                    "GeoPackage files with polygon geometries and area statistics."
+                ),
+                "author": "IPT-MMDA",
+                "source_url": "https://github.com/IPT-MMDA/Delineate-Anything",
+                "gpu_required": True,  # Benefits from GPU
+                "memory_mb": 2048,
+                "latency_ms": 10000,
+            },
+        )
+        logger.info("Registered Delineate-Anything model")
+    except Exception as e:
+        logger.warning(f"Failed to register Delineate-Anything model: {e}")

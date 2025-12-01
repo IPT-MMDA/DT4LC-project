@@ -48,12 +48,53 @@ def plan(ctx: ContextUnderstanding, reg: Registry, use_llm: bool = True) -> Exec
     return plan_template(ctx, reg)
 
 
+def _is_change_detection_request(ctx: ContextUnderstanding) -> bool:
+    """Check if request is for change detection (comparing two images).
+
+    Only triggers for explicit change detection requests, not general vegetation analysis.
+    Requires specific keywords like "change detection", "compare", or "before/after".
+
+    Args:
+        ctx: Context understanding
+
+    Returns:
+        True if this is a change detection / comparison request
+    """
+    keywords = ctx.hints.get("keywords", []) if ctx.hints else []
+    goal_lower = (ctx.goal or "").lower()
+    keywords_lower = " ".join(kw.lower() for kw in keywords)
+
+    # Explicit change detection keywords - require strong signals
+    # Note: "difference" alone is too weak (matches "normalized difference vegetation index")
+    # Use "image difference", "temporal difference", etc. for specificity
+    strong_change_keywords = [
+        "change detection",
+        "detect changes",
+        "compare images",
+        "image comparison",
+        "temporal comparison",
+        "image difference",
+        "temporal difference",
+    ]
+    has_strong_signal = any(kw in goal_lower or kw in keywords_lower for kw in strong_change_keywords)
+
+    # Combination signals: "before" AND "after" together suggest comparison
+    has_before_after = "before" in goal_lower and "after" in goal_lower
+    has_before_after = has_before_after or ("before" in keywords_lower and "after" in keywords_lower)
+
+    # Check if explicitly requesting ChangeMap output
+    wants_changemap = "ChangeMap" in (ctx.desired_outputs or [])
+
+    return has_strong_signal or has_before_after or wants_changemap
+
+
 def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     """Template-based planning using keyword matching.
 
     Fast but limited - works for common patterns like:
     - "ndvi on kahovka data"
     - "statistics on uploaded raster"
+    - "compare before and after images"
 
     Args:
         ctx: Context understanding
@@ -64,6 +105,35 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     """
     steps: list[PlanStep] = []
 
+    # Check if this is a change detection request (needs two files)
+    is_change_detection = _is_change_detection_request(ctx)
+
+    if is_change_detection:
+        # Change detection flow: two input files + change detection algorithm
+        logger.info("Detected change detection request - using dual-file input")
+
+        # Add before/after input steps
+        steps.append(PlanStep(uses="input/file-before", binds={}))
+        steps.append(PlanStep(uses="input/file-after", binds={}))
+
+        # Add change detection algorithm
+        steps.append(PlanStep(uses="algorithms/change-detection"))
+
+        # Add post-processing
+        for it in reg.instances:
+            if it.kind == "postprocess":
+                steps.append(PlanStep(uses=it.id))
+                break
+
+        plan_obj = ExecutionPlan(
+            flow=ctx.goal,
+            steps=steps,
+            outputs=["publish: chat"],
+        )
+        logger.info(f"Change detection plan: {len(steps)} steps")
+        return plan_obj
+
+    # Standard single-file flow
     # 1) ALWAYS start with data loader - check if we need any data inputs
     needs_data_loader = False
     required_inputs = ctx.required_inputs or []
@@ -92,12 +162,42 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
 
     # 2) choose a chain to reach desired outputs
     kw_ranked = find_items_by_keywords(reg, ctx.hints.get("keywords", []))
-    for want in ctx.desired_outputs or []:
-        candidates = [i for i in kw_ranked if want in i.outputs] or find_items_producing(reg, want)
-        if not candidates:
-            continue
-        chosen = candidates[0]
-        steps.append(PlanStep(uses=chosen.id))
+    keywords = ctx.hints.get("keywords", []) if ctx.hints else []
+    keywords_lower = [kw.lower() for kw in keywords]
+    goal_lower = (ctx.goal or "").lower()
+    added_step = False
+
+    # First, check for explicit model/component name mentions (strongest signal)
+    # e.g., "Prithvi", "ndvi" in goal or keywords
+    best_item = None
+    best_score = 0
+    for item in kw_ranked:
+        if item.kind in ("algorithm", "model"):
+            item_keywords = [k.lower() for k in (item.keywords or [])]
+            # Check how many of the item's keywords appear in user's context
+            match_count = sum(1 for kw in item_keywords if kw in goal_lower or any(kw in uk for uk in keywords_lower))
+            # Give extra weight if item ID fragment appears (e.g., "prithvi" in goal)
+            id_name = item.id.split("/")[-1].lower()
+            if id_name in goal_lower:
+                match_count += 5  # Strong signal for explicit component mention
+            if match_count > best_score:
+                best_score = match_count
+                best_item = item
+
+    if best_item and best_score > 0:
+        steps.append(PlanStep(uses=best_item.id))
+        added_step = True
+        logger.info(f"Added step from keyword match (score={best_score}): {best_item.id}")
+
+    # If no keyword match, try desired outputs
+    if not added_step:
+        for want in ctx.desired_outputs or []:
+            candidates = [i for i in kw_ranked if want in i.outputs] or find_items_producing(reg, want)
+            if not candidates:
+                continue
+            chosen = candidates[0]
+            steps.append(PlanStep(uses=chosen.id))
+            added_step = True
 
     # 3) optional postprocess if LLM summary is desired
     for it in kw_ranked:

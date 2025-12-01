@@ -1,0 +1,240 @@
+# https://taskfile.dev
+version: '3'
+
+vars:
+  PYTHON_VERSION: '3.10'
+  PROJECT_NAME: dt4lc-project
+  VENV_DIR: .venv
+  SRC_TARGET_DIRS: .
+
+env:
+  VIRTUAL_ENV: '{{.VENV_DIR}}'
+
+tasks:
+  # =============================================================================
+  # Environment Setup
+  # =============================================================================
+
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  venv:
+    desc: Create virtual environment with Python {{.PYTHON_VERSION}}
+    cmds:
+      - |
+        command -v uv >/dev/null 2>&1 || (echo "Error: uv not found. Install: curl -LsSf https://astral.sh/uv/install.sh | sh" && exit 1)
+        uv venv {{.VENV_DIR}} --python {{.PYTHON_VERSION}}
+        echo "Virtual environment created. Activate with: source {{.VENV_DIR}}/bin/activate"
+    status:
+      - test -f {{.VENV_DIR}}/pyvenv.cfg
+
+  install:
+    desc: Install project in editable mode with all dev dependencies
+    deps: [venv]
+    cmds:
+      - uv pip install -e .[dev,ui,models,server,agents]
+      - echo "Installation complete."
+
+  install:delineate:
+    desc: Install with Delineate-Anything dependencies
+    deps: [venv]
+    cmds:
+      - uv pip install -e .[dev,ui,models,server,agents,delineate]
+
+  sync:
+    desc: Sync environment with pyproject.toml
+    deps: [venv]
+    cmds:
+      - uv pip install -e .[dev,ui,models]
+      - echo "Environment synced."
+
+  # =============================================================================
+  # Code Quality
+  # =============================================================================
+
+  lint:
+    desc: Run ruff linter
+    deps: [venv]
+    cmds:
+      - uv run ruff check {{.SRC_TARGET_DIRS}}
+
+  lint:fix:
+    desc: Run ruff linter with auto-fix
+    deps: [venv]
+    cmds:
+      - uv run ruff check {{.SRC_TARGET_DIRS}} --fix
+
+  format:
+    desc: Format code with ruff
+    deps: [venv]
+    cmds:
+      - uv run ruff format {{.SRC_TARGET_DIRS}}
+      - uv run ruff check {{.SRC_TARGET_DIRS}} --fix --exit-zero
+
+  format:check:
+    desc: Check formatting without making changes
+    deps: [venv]
+    cmds:
+      - uv run ruff format --check {{.SRC_TARGET_DIRS}}
+
+  typecheck:
+    desc: Run mypy type checker
+    deps: [venv]
+    cmds:
+      - uv run mypy .
+
+  # =============================================================================
+  # Testing
+  # =============================================================================
+
+  test:
+    desc: Run all tests
+    deps: [venv]
+    cmds:
+      - uv run pytest
+
+  test:fast:
+    desc: Run tests excluding slow ones
+    deps: [venv]
+    cmds:
+      - uv run pytest -m "not slow"
+
+  test:verbose:
+    desc: Run tests with verbose output
+    deps: [venv]
+    cmds:
+      - uv run pytest -v --tb=long
+
+  test:file:
+    desc: Run tests for a specific file (pass file as argument)
+    deps: [venv]
+    cmds:
+      - uv run pytest {{.CLI_ARGS}}
+
+  test:watch:
+    desc: Run tests in watch mode
+    deps: [venv]
+    cmds:
+      - uv run pytest-watch -- -v --tb=short
+
+  coverage:
+    desc: Run tests with coverage and open HTML report
+    deps: [venv]
+    cmds:
+      - uv run pytest
+      - python -m webbrowser -t htmlcov/index.html 2>/dev/null || echo "Coverage report at htmlcov/index.html"
+
+  # =============================================================================
+  # Application Commands
+  # =============================================================================
+
+  run:ui:
+    desc: Run Streamlit UI
+    deps: [venv]
+    cmds:
+      - uv run streamlit run cognitive_ui/app.py
+
+  run:api:
+    desc: Run FastAPI server
+    deps: [venv]
+    cmds:
+      - uv run dt4lc-api
+
+  run:api:dev:
+    desc: Run FastAPI server with hot reload
+    deps: [venv]
+    cmds:
+      - uv run uvicorn server:app --reload --host 0.0.0.0 --port 8000
+
+  # =============================================================================
+  # Models & Data
+  # =============================================================================
+
+  download:prithvi:
+    desc: Download Prithvi model weights
+    deps: [venv]
+    cmds:
+      - uv run python scripts/download_prithvi.py
+
+  # =============================================================================
+  # Build & Clean
+  # =============================================================================
+
+  build:
+    desc: Build wheel and sdist
+    deps: [venv]
+    cmds:
+      - uv build
+      - ls -l dist/
+
+  clean:
+    desc: Remove build artifacts and caches
+    cmds:
+      - rm -rf dist/ build/ .coverage* htmlcov/
+      - find . -maxdepth 1 -type d -name "*.egg-info" -exec rm -rf {} + -print
+      - find . -type d -name "__pycache__" -exec rm -rf {} + -print
+      - find . -type d -name ".pytest_cache" -exec rm -rf {} + -print
+      - find . -type d -name ".mypy_cache" -exec rm -rf {} + -print
+      - find . -type d -name ".ruff_cache" -exec rm -rf {} + -print
+      - echo "Cleanup complete."
+
+  clean:venv:
+    desc: Remove virtual environment
+    cmds:
+      - rm -rf {{.VENV_DIR}}
+      - echo "Virtual environment removed."
+
+  clean:all:
+    desc: Remove everything (venv + artifacts)
+    cmds:
+      - task: clean
+      - task: clean:venv
+
+  # =============================================================================
+  # CI / All Checks
+  # =============================================================================
+
+  check:
+    desc: Run all quality checks (format, lint, typecheck, test)
+    cmds:
+      - task: format:check
+      - task: lint
+      - task: typecheck
+      - task: test
+
+  ci:
+    desc: Run CI pipeline (same as check)
+    cmds:
+      - task: check
+
+  # =============================================================================
+  # Development Helpers
+  # =============================================================================
+
+  shell:
+    desc: Open Python shell with project loaded
+    deps: [venv]
+    cmds:
+      - uv run python
+
+  ipython:
+    desc: Open IPython shell with project loaded
+    deps: [venv]
+    cmds:
+      - uv run ipython
+
+  repl:
+    desc: Open Python REPL with common imports
+    deps: [venv]
+    cmds:
+      - |
+        uv run python -c "
+        print('Loading DT4LC environment...')
+        from dta.config import ROOT_DIR, TEMP_PATH
+        from dta.dti.registry import load_registry
+        from dta.dti.coe.orchestrator import orchestrate
+        from dta.dti.schemas import ChatRequest
+        print('Available: ROOT_DIR, TEMP_PATH, load_registry, orchestrate, ChatRequest')
+        " -i

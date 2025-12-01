@@ -2,6 +2,7 @@ import base64
 from collections.abc import AsyncIterator
 import io
 import json
+import logging
 from pathlib import Path
 import tempfile
 from typing import Any
@@ -9,10 +10,12 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
 load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
@@ -234,7 +237,8 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
             crs = src.crs.to_string() if src.crs else None
 
             # Simple percentile stretch to 8-bit for preview
-            data = band1.filled(np.nan).astype("float64")
+            # Convert to float FIRST, then fill with NaN (can't fill uint8 with NaN)
+            data = band1.astype("float64").filled(np.nan)
             finite = np.isfinite(data)
             if not finite.any():
                 raise HTTPException(status_code=400, detail="All pixels are nodata.")
@@ -242,10 +246,16 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
             # percentiles on finite pixels only
             p2, p98 = np.percentile(data[finite], [2, 98])
             if not np.isfinite(p2) or not np.isfinite(p98) or p98 <= p2:
-                p2, p98 = float(np.min(data[finite])), float(np.max(data[finite]))
+                p2, p98 = float(np.nanmin(data[finite])), float(np.nanmax(data[finite]))
 
-            scaled = (data - p2) / (p98 - p2)
-            scaled = np.where(np.isfinite(scaled), scaled, 0.0)  # sanitize inf/nan
+            # Handle edge case where p2 == p98
+            if p98 - p2 < 1e-10:
+                scaled = np.zeros_like(data)
+            else:
+                scaled = (data - p2) / (p98 - p2)
+
+            # Replace NaN/inf with 0 BEFORE converting to uint8
+            scaled = np.nan_to_num(scaled, nan=0.0, posinf=1.0, neginf=0.0)
             scaled = np.clip(scaled, 0.0, 1.0)
             scaled = (scaled * 255.0 + 0.5).astype("uint8")
 
@@ -297,15 +307,17 @@ async def list_capabilities() -> JSONResponse:
 
 @app.get("/v1/models")  # type: ignore[misc]
 async def list_models() -> JSONResponse:
-    """List all available models from the model registry.
+    """List all registered models from the model registry.
 
-    Returns model information including requirements and availability.
+    Returns model information including requirements, availability,
+    descriptions, author info, and source URLs.
     """
     try:
         registry = get_model_registry()
         models = []
 
-        for model_id in registry.list_available():
+        # List ALL models, not just available ones
+        for model_id in registry.list_all():
             req = registry.check_requirements(model_id)
             models.append(req)
 
@@ -458,6 +470,7 @@ async def list_jobs(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to list jobs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to list jobs: {e}") from e
 
 
@@ -470,3 +483,58 @@ async def get_queue_stats() -> JSONResponse:
         return JSONResponse(stats)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e
+
+
+@app.get("/v1/download")  # type: ignore[misc]
+async def download_file(path: str) -> FileResponse:
+    """Download a file from the server.
+
+    Used for downloading generated outputs like GeoPackage files.
+
+    Args:
+        path: Path to the file to download
+
+    Returns:
+        File response with appropriate content type
+    """
+    file_path = Path(path)
+
+    # Security: Only allow downloads from specific directories
+    allowed_dirs = [
+        Path(tempfile.gettempdir()) / "dt4lc_delineate",
+        UPLOAD_DIR,
+        Path(tempfile.gettempdir()),
+    ]
+
+    # Check if path is under an allowed directory
+    is_allowed = False
+    for allowed_dir in allowed_dirs:
+        try:
+            file_path.resolve().relative_to(allowed_dir.resolve())
+            is_allowed = True
+            break
+        except ValueError:
+            continue
+
+    if not is_allowed:
+        raise HTTPException(status_code=403, detail="Access denied: path not in allowed directories")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    # Determine content type based on extension
+    suffix = file_path.suffix.lower()
+    content_types = {
+        ".gpkg": "application/geopackage+sqlite3",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
+        ".png": "image/png",
+        ".json": "application/json",
+    }
+    media_type = content_types.get(suffix, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=file_path.name,
+    )

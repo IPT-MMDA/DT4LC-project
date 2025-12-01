@@ -3,20 +3,42 @@ types:
  - NDVIMap
  - Features
  - RasterPath
+ - RasterPathBefore
+ - RasterPathAfter
  - Statistics
+ - ChangeMap
+ - FieldBoundaries
 
 instances:
+  # Standard single-file input (default for most analyses)
   - id: input/file
     kind: input
-    keywords: [file, raster]
-    inputs: []  # nothing required
+    keywords: [file, raster, data, image, input]
+    inputs: []
     outputs: [RasterPath]
     runner:
-      type: passthrough # executor just forwards provided file path
+      type: passthrough
+
+  # Multi-file inputs for change detection only
+  - id: input/file-before
+    kind: input
+    keywords: [before, first, earlier, pre, baseline]
+    inputs: []
+    outputs: [RasterPathBefore]
+    runner:
+      type: passthrough
+
+  - id: input/file-after
+    kind: input
+    keywords: [after, second, later, post, current]
+    inputs: []
+    outputs: [RasterPathAfter]
+    runner:
+      type: passthrough
 
   - id: algorithms/ndvi
     kind: algorithm
-    keywords: [ndvi, vegetation, index]
+    keywords: [ndvi, vegetation, index, health, greenness]
     inputs: [RasterPath]
     outputs: [NDVIMap]
     runner:
@@ -32,6 +54,15 @@ instances:
       type: python
       entrypoint: "dta/dti/algorithms/statistics.py"
 
+  - id: algorithms/change-detection
+    kind: algorithm
+    keywords: [change, detection, difference, compare, comparison, temporal, before, after, loss, gain, vegetation]
+    inputs: [RasterPathBefore, RasterPathAfter]
+    outputs: [ChangeMap]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/change_detection.py"
+
   - id: models/prithvi_features
     kind: model
     keywords: [prithvi, features, hls, temporal, geotiff]
@@ -44,6 +75,17 @@ instances:
         PRITHVI_DIR: "dta/dti/models/third_party/prithvi_eo_v1_100m"
         PRITHVI_CONFIG: "dta/dti/models/third_party/prithvi_eo_v1_100m/config.json"
         PRITHVI_WEIGHTS: "dta/dti/models/third_party/prithvi_eo_v1_100m/Prithvi_EO_V1_100M.pt"
+
+  - id: models/delineate-anything
+    kind: model
+    keywords: [delineate, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, detect, farm, crop, plot, land, polygon, vector, outline, edges]
+    inputs: [RasterPath]
+    outputs: [FieldBoundaries]
+    runner:
+      type: python
+      entrypoint: "dta/dti/models/third_party/delineate_anything/inference.py"
+      env:
+        DELINEATE_MODEL: "small"
 
   - id: post-processing/agent-analysis
     kind: postprocess

@@ -85,6 +85,14 @@ class PrithviModel:
         """
         return True  # Stub mode always available
 
+    def get_missing_requirements(self) -> list[str]:
+        """Get list of missing requirements.
+
+        Returns:
+            Empty list (Prithvi always available in stub mode)
+        """
+        return []  # No missing requirements in stub mode
+
     def predict(self, inputs: dict[str, Any]) -> dict[str, Any]:
         """Run prediction.
 

@@ -39,7 +39,12 @@ SYS = (
     '- required_inputs MUST be an array of TYPE NAME STRINGS only (e.g., ["Raster", "Features"])\n'
     "- Do NOT use objects or nested structures for these arrays\n"
     "- Only use types from the registry list provided below\n"
-    "- If unsure, use empty arrays []"
+    "- If unsure, use empty arrays []\n\n"
+    "DOMAIN KNOWLEDGE (Geospatial Analysis):\n"
+    '- "vegetation health", "greenness", "plant vigor" → desired_outputs: ["NDVIMap"]\n'
+    '- "ndvi", "normalized difference vegetation index" → desired_outputs: ["NDVIMap"]\n'
+    '- "statistics", "distribution", "summary" → desired_outputs: ["Statistics"]\n'
+    '- "features", "embeddings", "ml features" → desired_outputs: ["Features"]'
 )
 
 
