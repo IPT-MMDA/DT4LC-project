@@ -31,23 +31,17 @@ tasks:
       - test -f {{.VENV_DIR}}/pyvenv.cfg
 
   install:
-    desc: Install project in editable mode with all dev dependencies
+    desc: Install project in editable mode with all dependencies
     deps: [venv]
     cmds:
-      - uv pip install -e .[dev,ui,models,server,agents]
+      - uv pip install -e .[dev,server]
       - echo "Installation complete."
-
-  install:delineate:
-    desc: Install with Delineate-Anything dependencies
-    deps: [venv]
-    cmds:
-      - uv pip install -e .[dev,ui,models,server,agents,delineate]
 
   sync:
     desc: Sync environment with pyproject.toml
     deps: [venv]
     cmds:
-      - uv pip install -e .[dev,ui,models]
+      - uv pip install -e .[dev,server]
       - echo "Environment synced."
 
   # =============================================================================
@@ -129,12 +123,6 @@ tasks:
   # =============================================================================
   # Application Commands
   # =============================================================================
-
-  run:ui:
-    desc: Run Streamlit UI
-    deps: [venv]
-    cmds:
-      - uv run streamlit run cognitive_ui/app.py
 
   run:api:
     desc: Run FastAPI server
@@ -238,3 +226,165 @@ tasks:
         from dta.dti.schemas import ChatRequest
         print('Available: ROOT_DIR, TEMP_PATH, load_registry, orchestrate, ChatRequest')
         " -i
+
+  # =============================================================================
+  # Docker Commands
+  # =============================================================================
+
+  docker:build:
+    desc: Build all Docker images
+    cmds:
+      - docker compose build
+
+  docker:up:
+    desc: Start services (frontend + backend, uses cloud LLM providers)
+    cmds:
+      - docker compose up -d
+      - 'echo "Services starting..."'
+      - 'echo "Frontend: http://localhost"'
+      - 'echo "Backend:  http://localhost:8000"'
+      - 'echo "Using cloud LLM providers (Gemini/Groq from .env)"'
+
+  docker:up:ollama:
+    desc: Start all services including Ollama (local LLM)
+    cmds:
+      - docker compose --profile ollama up -d
+      - 'echo "Services starting with Ollama..."'
+      - 'echo "Frontend: http://localhost"'
+      - 'echo "Backend:  http://localhost:8000"'
+      - 'echo "Ollama:   http://localhost:11434"'
+
+  docker:up:build:
+    desc: Build and start services (no Ollama)
+    cmds:
+      - docker compose up -d --build
+      - 'echo "Services starting..."'
+      - 'echo "Frontend: http://localhost"'
+      - 'echo "Backend:  http://localhost:8000"'
+
+  docker:up:build:ollama:
+    desc: Build and start all services including Ollama
+    cmds:
+      - docker compose --profile ollama up -d --build
+      - 'echo "Services starting with Ollama..."'
+      - 'echo "Frontend: http://localhost"'
+      - 'echo "Backend:  http://localhost:8000"'
+      - 'echo "Ollama:   http://localhost:11434"'
+
+  docker:down:
+    desc: Stop all services
+    cmds:
+      - docker compose down
+
+  docker:down:clean:
+    desc: Stop all services and remove volumes
+    cmds:
+      - docker compose down -v
+      - echo "All services stopped and volumes removed."
+
+  docker:logs:
+    desc: Show logs from all services
+    cmds:
+      - docker compose logs -f
+
+  docker:logs:backend:
+    desc: Show backend logs only
+    cmds:
+      - docker compose logs -f backend
+
+  docker:logs:frontend:
+    desc: Show frontend logs only
+    cmds:
+      - docker compose logs -f frontend
+
+  docker:restart:
+    desc: Restart all services
+    cmds:
+      - docker compose restart
+
+  docker:restart:backend:
+    desc: Restart backend service only
+    cmds:
+      - docker compose restart backend
+
+  docker:status:
+    desc: Show status of all services
+    cmds:
+      - docker compose ps
+
+  docker:shell:backend:
+    desc: Open shell in backend container
+    cmds:
+      - docker compose exec backend /bin/bash
+
+  docker:shell:frontend:
+    desc: Open shell in frontend container
+    cmds:
+      - docker compose exec frontend /bin/sh
+
+  docker:prune:
+    desc: Remove unused Docker resources
+    cmds:
+      - docker system prune -f
+      - echo "Unused Docker resources removed."
+
+  # =============================================================================
+  # Frontend Commands
+  # =============================================================================
+
+  frontend:install:
+    desc: Install frontend dependencies
+    dir: cognitive_ui
+    cmds:
+      - npm install
+
+  frontend:dev:
+    desc: Run frontend in development mode
+    dir: cognitive_ui
+    cmds:
+      - npm run dev
+
+  frontend:build:
+    desc: Build frontend for production
+    dir: cognitive_ui
+    cmds:
+      - npm run build
+
+  frontend:preview:
+    desc: Preview production build
+    dir: cognitive_ui
+    cmds:
+      - npm run preview
+
+  frontend:lint:
+    desc: Lint frontend code
+    dir: cognitive_ui
+    cmds:
+      - npm run lint
+
+  # =============================================================================
+  # Full Stack Development
+  # =============================================================================
+
+  dev:
+    desc: Run backend and frontend in development mode (parallel)
+    deps: [venv]
+    cmds:
+      - echo "Starting backend on :8000 and frontend on :5173..."
+      - |
+        trap 'kill 0' EXIT
+        uv run dt4lc-api &
+        cd cognitive_ui && npm run dev &
+        wait
+
+  dev:backend:
+    desc: Run only backend in development mode
+    deps: [venv]
+    cmds:
+      - uv run dt4lc-api
+
+  dev:frontend:
+    desc: Run only frontend in development mode
+    dir: cognitive_ui
+    cmds:
+      - npm run dev

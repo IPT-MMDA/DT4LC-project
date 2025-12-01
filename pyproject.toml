@@ -10,39 +10,47 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=2.2.5", "torch>=2.6.0", "python-dotenv>=1.1.0"]
 
 [project.optional-dependencies]
+# Development tools (linting, testing, type-checking)
 dev = [
     "mypy>=1.15.0",
     "ruff>=0.11.6",
-    "types-requests>=2.32.0.20250328",
-    "watchdog>=6.0.0",
-    "huggingface-hub>=0.30.2",
-    "requests>=2.32.3",
-    "types-pyyaml>=6.0.12.20250402",
     "pytest>=8.3.4",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "ipdb>=0.13.13",
-    "python-dotenv>=1.0",
-    "pydantic>=2.8",
+    "types-requests>=2.32.0.20250328",
+    "types-pyyaml>=6.0.12.20250402",
 ]
-ui = ["streamlit>=1.44.1", "rasterio>=1.4.3", "matplotlib>=3.10.1"]
-models = ["pyyaml>=6.0.2", "einops>=0.8.1", "timm>=1.0.15"]
-delineate = [
-    "ultralytics>=8.3.0",
+
+# Server: FastAPI backend with all ML/geo processing capabilities
+server = [
+    # Web framework
+    "fastapi>=0.116.2,<1.0.0",
+    "uvicorn>=0.35.0,<1.0.0",
+    "pydantic>=2.8",
+    "python-multipart>=0.0.9",
+    # Image processing
+    "pillow>=10.0.0",
     "rasterio>=1.4.3",
+    "opencv-python>=4.10.0",
+    # ML models
+    "pyyaml>=6.0.2",
+    "einops>=0.8.1",
+    "timm>=1.0.15",
+    "ultralytics>=8.3.0",
+    "huggingface-hub>=0.25.0",
+    # Geo processing
     "shapely>=2.0.0",
     "geopandas>=1.0.0",
-    "opencv-python>=4.10.0",
-    "huggingface-hub>=0.25.0",
+    # LLM agents
+    "google-genai>=1.35.0,<2.0.0",
+    # Utils
     "numba>=0.60.0",
     "tqdm>=4.66.0",
+    "requests>=2.32.3",
 ]
-api = ["fastapi>=0.115.6", "uvicorn>=0.32.1"]
-agents = ["google-genai>=1.35.0,<2.0.0"]
-server = ["uvicorn>=0.35.0,<1.0.0", "fastapi>=0.116.2,<1.0.0"]
 
 [project.scripts]
-cdt = "cognitive_ui.cli:run_app"
 dt4lc-api = "server.cli:run"
 
 # --- Build System ---
@@ -52,8 +60,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["cognitive_ui", "orchestrator", "dta", "server"]
-include = ["cognitive_ui/py.typed", "dta/py.typed"]
+packages = ["dta", "server"]
+include = ["dta/py.typed"]
 
 [tool.hatch.version]
 path = "dta/__init__.py"

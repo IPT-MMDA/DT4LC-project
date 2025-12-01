@@ -392,8 +392,12 @@ class JobQueue:
             ]
 
             # If no current attachments, check context for previous attachments
+            logger.info(
+                f"Job {job_id}: {len(coe_attachments)} direct attachments, context={'present' if job.context else 'None'}"
+            )
             if not coe_attachments and job.context:
                 context_attachments = job.context.get("previous_attachments", [])
+                logger.info(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
                 for att in context_attachments:
                     if att.get("path"):
                         coe_attachments.append(
@@ -405,7 +409,9 @@ class JobQueue:
                             )
                         )
                 if coe_attachments:
-                    logger.info(f"Using {len(coe_attachments)} attachment(s) from context")
+                    logger.info(f"Job {job_id}: Using {len(coe_attachments)} attachment(s) from context")
+                else:
+                    logger.warning(f"Job {job_id}: No valid attachments found in context")
 
             coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
             plan_result = orchestrate(coe_req)
@@ -431,6 +437,7 @@ class JobQueue:
             # Pipeline intent - execute the plan
             job.plan = ExecutionPlan(**plan_result["plan"])
             job.progress = 0.4
+            logger.debug(f"Executing plan with {len(job.plan.steps)} steps")
 
             # Execute plan
             execution_result = self._executor.execute(job.plan)

@@ -405,6 +405,9 @@ async def get_job_status(job_id: str) -> JSONResponse:
         job = await queue.get_job(job_id)
 
         if not job:
+            # Log available jobs for debugging
+            available_jobs = list(queue._jobs.keys())
+            logger.warning(f"Job {job_id} not found. Available jobs: {available_jobs}")
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
         return JSONResponse(job.to_dict())

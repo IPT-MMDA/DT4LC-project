@@ -65,7 +65,21 @@ export function useJobSync() {
 
       // Job still in progress
       return false;
-    } catch (error) {
+    } catch (error: unknown) {
+      // Handle 404 - job not found (server restarted or job expired)
+      const isNotFound = error instanceof Error &&
+        (error.message.includes('404') || error.message.includes('not found'));
+
+      if (isNotFound) {
+        console.warn(`[JobSync] Job ${jobId.slice(0, 8)} not found on server (may have expired)`);
+        updateMessageByJobId(jobId, {
+          content: `Job not found. The server may have been restarted. Please try your request again.`,
+          type: 'error',
+        });
+        untrackJob(jobId);
+        return true; // Consider it "handled"
+      }
+
       console.error(`[JobSync] Error syncing job ${jobId}:`, error);
       return false;
     }

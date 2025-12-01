@@ -3,7 +3,6 @@
 Tests the classification of user requests into PIPELINE vs CONVERSATION intents.
 """
 
-
 from dta.dti.coe.intent_classifier import (
     IntentType,
     _is_clear_action_request,

@@ -171,6 +171,9 @@ class PipelineExecutor:
         Args:
             step: Step configuration (may contain binds with values)
             item: Registry item
+
+        Raises:
+            ExecutionError: If required output has no binding
         """
         # For passthrough, binds in step contain the actual values
         # Example: step.binds = {"RasterPath": "/path/to/file.tif"}
@@ -178,7 +181,13 @@ class PipelineExecutor:
             if output_type in step.binds:
                 self.artifacts[output_type] = step.binds[output_type]
             else:
-                # If no bind, mark as pending (will be filled by upstream)
+                # Input steps require file bindings to work
+                if step.uses.startswith("input/"):
+                    raise ExecutionError(
+                        f"No file provided for {step.uses}. "
+                        f"Please upload a file or ensure a previous file is available in the context."
+                    )
+                # For other passthrough steps, mark as pending
                 self.artifacts[output_type] = None
 
     def _run_python(self, step: PlanStep, item: RegistryItem) -> None:
