@@ -33,9 +33,11 @@ class GeminiProvider(BaseLLMProvider):
             model: Gemini model ID
             **config: Additional configuration
                 - api_key: Override API key (otherwise uses GEMINI_API_KEY env)
+                - timeout: Request timeout in seconds (default: 60)
         """
         super().__init__(model, **config)
         self._client: genai.Client | None = None
+        self.timeout = config.get("timeout", 60)
 
     def _get_client(self) -> genai.Client:
         """Lazy initialization of Gemini client."""
@@ -103,7 +105,7 @@ class GeminiProvider(BaseLLMProvider):
         gen_config.update(kwargs.get("generation_config", {}))
 
         try:
-            # Pass generation_config as config dict, not as types.GenerationConfig
+            # Pass generation_config as config dict, not as types.GenerateContentConfig
             gen_kwargs: dict[str, Any] = {
                 "model": self.model,
                 "contents": contents,
@@ -111,7 +113,19 @@ class GeminiProvider(BaseLLMProvider):
             if gen_config:
                 gen_kwargs["config"] = types.GenerateContentConfig(**gen_config)
 
-            response = client.models.generate_content(**gen_kwargs)
+            # Use signal-based timeout on Unix, or try with concurrent.futures on all platforms
+            def _generate_with_timeout() -> Any:
+                """Generate with timeout handling."""
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(client.models.generate_content, **gen_kwargs)
+                    try:
+                        return future.result(timeout=self.timeout)
+                    except concurrent.futures.TimeoutError:
+                        raise TimeoutError(f"Gemini request timed out after {self.timeout}s")
+
+            response = _generate_with_timeout()
 
             # Extract usage if available
             usage = None
@@ -132,6 +146,8 @@ class GeminiProvider(BaseLLMProvider):
                 },
             )
 
+        except TimeoutError:
+            raise  # Re-raise timeout as-is
         except Exception as e:
             raise Exception(f"Gemini generation failed: {e}") from e
 

@@ -95,3 +95,68 @@ instances:
     runner:
       type: agent
       prompt_template: "prompts/analysis.md"
+
+  # =============================================================================
+  # Hosted Models (DT4LC Team) - Models hosted on external platforms
+  # =============================================================================
+  # These are core DT4LC models developed by the team but hosted externally.
+  # Integration status: planned -> active -> deprecated
+
+  - id: models/ndvi-convlstm
+    kind: model
+    keywords: [ndvi, forecast, prediction, convlstm, lstm, deep-learning, vegetation, health, greenness, time-series, temporal, ukraine, agriculture, crop, monitoring, satellite, remote-sensing]
+    description: |
+      ConvLSTM NDVI Forecasting Model - Predicts vegetation health in Ukrainian
+      agricultural regions. Uses 6 weeks of input data to forecast 4 future weeks
+      of NDVI values. Trained on Cherkasy, Vinnytsia, and Mykolaiv oblasts (2018-2021).
+    inputs: [NDVITimeSeries, WeatherData, TerrainData, SoilData]
+    outputs: [NDVIForecast]
+    integration:
+      type: huggingface-spaces
+      url: "https://huggingface.co/spaces/LordZeee/ndvi-convlstm"
+      status: planned
+    metadata:
+      team: "DT4LC"
+      author: "LordZeee"
+      hosting: "huggingface"
+      features: 20
+
+  - id: models/pinn-linda
+    kind: model
+    keywords: [pinn, physics-informed, neural-network, deep-learning, precipitation, rain, nowcasting, weather, forecast, prediction, linda, lagrangian, radar, meteorology, short-term, real-time]
+    description: |
+      PINN-LINDA Weather Nowcasting - Physics-Informed Neural Network implementing
+      LINDA (Lagrangian Integro-Difference equation with Nowcasting and Data Assimilation)
+      for short-term precipitation forecasting. Compares traditional LINDA with PINN-enhanced
+      approaches using radar precipitation sequences.
+    inputs: [RadarSequence, ForecastConfig]
+    outputs: [PrecipitationForecast]
+    integration:
+      type: huggingface-spaces
+      url: "https://huggingface.co/spaces/yaotj/swissdt"
+      status: planned
+    metadata:
+      team: "DT4LC"
+      author: "yaotj"
+      hosting: "huggingface"
+      framework: "gradio"
+      source_code: "https://github.com/4rste1f/DT4LC-project/tree/master/digital_twin/pinn_gradio"
+
+  - id: models/vi-forecasting-dti
+    kind: model
+    keywords: [vegetation, index, ndvi, evi, savi, forecast, prediction, time-series, temporal, earth-engine, gee, satellite, remote-sensing, agriculture, crop, monitoring, cloud-computing]
+    description: |
+      Vegetation Index Forecasting DTI - Time-series forecasting model for
+      vegetation indices using Google Earth Engine integration.
+    inputs: [RasterPath, TimeRange]
+    outputs: [VIForecast]
+    integration:
+      type: google-earth-engine
+      url: "https://ee-sofidrozd13.projects.earthengine.app/view/viforecastingdti"
+      status: planned
+      requires: ["earthengine-api"]
+    metadata:
+      team: "DT4LC"
+      author: "sofidrozd13"
+      hosting: "gee"
+      platform: "Google Earth Engine"

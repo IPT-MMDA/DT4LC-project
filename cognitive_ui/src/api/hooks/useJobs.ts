@@ -30,7 +30,10 @@ export function useSubmitJob() {
 
   return useMutation({
     mutationFn: async (data: JobSubmitRequest): Promise<Job> => {
+      // Debug logging for job submission
+      console.log('[useSubmitJob] Sending to API:', JSON.stringify(data, null, 2));
       const raw = await apiClient.post<JobSubmitRequest, unknown>('/v1/jobs', data);
+      console.log('[useSubmitJob] API response:', raw);
       return transformJob(raw);
     },
     onSuccess: () => {

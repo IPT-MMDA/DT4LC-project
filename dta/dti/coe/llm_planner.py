@@ -35,6 +35,8 @@ def _get_router() -> LLMRouter:
 def format_registry_for_llm(reg: Registry) -> str:
     """Format registry as structured text for LLM.
 
+    Only includes locally executable components (excludes hosted models).
+
     Args:
         reg: Component registry
 
@@ -43,9 +45,12 @@ def format_registry_for_llm(reg: Registry) -> str:
     """
     lines = ["# Available Pipeline Components\n"]
 
-    # Group by kind
+    # Group by kind, excluding hosted models (those with integration field)
     by_kind: dict[str, list] = {}
     for item in reg.instances:
+        # Skip hosted models - they can't be executed locally
+        if item.integration is not None:
+            continue
         kind = item.kind or "other"
         by_kind.setdefault(kind, []).append(item)
 
@@ -97,46 +102,51 @@ def plan_with_llm(
 
     # Build planning prompt
     system_prompt = """You are a pipeline planner for a geospatial analysis system.
-Your job is to create a valid execution plan given available components.
+Your job is to create a minimal, focused execution plan that directly addresses the user's request.
+
+CORE PRINCIPLES:
+1. UNDERSTAND THE USER'S INTENT - What specific task are they asking for?
+2. KEEP IT SIMPLE - Only include components that directly serve the user's goal
+3. DON'T OVER-ENGINEER - If user asks for one thing, don't add unrelated processing
 
 CRITICAL RULES:
-1. ALWAYS start with INPUT component(s) to load data FIRST
+1. ALWAYS start with INPUT component(s) to load data
 2. Each step must reference a component ID from the registry
-3. Steps execute in order - ensure outputs from previous steps match inputs needed
-4. Chain processing steps (algorithms/models) to transform data
-5. End with post-processing to format results
-6. Return ONLY valid JSON - no markdown, no explanation
+3. Steps execute in order - outputs from previous steps feed into next steps
+4. End with post-processing to format results
+5. Return ONLY valid JSON - no markdown, no explanation
+
+WHEN TO USE MULTIPLE MODELS/ALGORITHMS:
+- ONLY if the user explicitly requests multiple analyses
+- ONLY if one component's output is required as input for another
+- Example: "extract features AND calculate statistics" → both are requested
+- Example: User needs Features → then another model that consumes Features
+
+WHEN TO USE A SINGLE MODEL/ALGORITHM:
+- User asks for ONE specific task (most common case)
+- "detect parcels" → ONLY delineate-anything (NOT prithvi - user didn't ask for features)
+- "calculate ndvi" → ONLY ndvi algorithm
+- "get statistics" → ONLY statistics algorithm
 
 PIPELINE STRUCTURES:
 
-A) SINGLE FILE ANALYSIS (ndvi, statistics, etc):
-   Step 1: "input/file" - loads data and produces RasterPath
-   Step 2+: algorithm component - processes RasterPath
+A) SINGLE FILE ANALYSIS:
+   Step 1: "input/file" - loads data, produces RasterPath
+   Step 2+: Only the component(s) that match user's request
    Last: "post-processing/agent-analysis"
 
-B) CHANGE DETECTION / COMPARISON (requires 2 files):
-   Step 1: "input/file-before" - loads first file, produces RasterPathBefore
-   Step 2: "input/file-after" - loads second file, produces RasterPathAfter
-   Step 3: "algorithms/change-detection" - compares both, produces ChangeMap
+B) CHANGE DETECTION (requires explicit comparison request):
+   Step 1: "input/file-before" - produces RasterPathBefore
+   Step 2: "input/file-after" - produces RasterPathAfter
+   Step 3: "algorithms/change-detection" - produces ChangeMap
    Last: "post-processing/agent-analysis"
 
-WHEN TO USE EACH FLOW:
-
-USE SINGLE FILE FLOW (with "input/file") for:
-- NDVI, vegetation, greenness analysis (single image)
-- Statistics, histogram, distribution analysis
-- Feature extraction with Prithvi model
-- Land cover analysis (single image)
-- Any analysis that works on ONE image
-
-USE CHANGE DETECTION FLOW (with "input/file-before" + "input/file-after") ONLY when:
-- User explicitly says "compare" or "comparison"
-- User explicitly says "change detection"
-- User explicitly says "difference between"
-- User explicitly mentions "before and after"
-- User asks to detect changes between two time periods
-
-DEFAULT: Use single file flow unless change detection is explicitly requested!
+COMPONENT PURPOSE (use to match user intent):
+- models/delineate-anything: Field boundaries, parcels, agricultural plots, segmentation
+- algorithms/ndvi: Vegetation index, greenness, plant health from spectral bands
+- algorithms/statistics: Band statistics, histograms, data distribution
+- models/prithvi_features: Foundation model embeddings, deep features (ONLY if user asks for features/embeddings)
+- algorithms/change-detection: Temporal comparison, before/after analysis
 
 Output format:
 {
@@ -144,10 +154,8 @@ Output format:
     {"uses": "component-id-here"},
     ...
   ],
-  "reasoning": "brief explanation of plan logic"
-}
-
-IMPORTANT: Match the correct flow based on the user's intent!"""
+  "reasoning": "brief explanation matching user's specific request"
+}"""
 
     user_prompt = f"""Create a pipeline plan for this request:
 

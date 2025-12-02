@@ -27,7 +27,13 @@ export function useJobSync() {
   // Sync a single job
   const syncJob = useCallback(async (jobId: string) => {
     try {
-      const job = await apiClient.get<Job>(`/v1/jobs/${jobId}`);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = await apiClient.get<any>(`/v1/jobs/${jobId}`);
+      // Transform: backend uses "status", frontend uses "state"
+      const job: Job = {
+        ...raw,
+        state: raw.status || raw.state,
+      };
 
       console.log(`[JobSync] Job ${jobId.slice(0, 8)} state: ${job.state}`);
 

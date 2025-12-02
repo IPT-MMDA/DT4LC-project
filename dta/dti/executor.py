@@ -23,6 +23,10 @@ class ExecutionError(Exception):
     """Raised when step execution fails."""
 
 
+class CancellationError(Exception):
+    """Raised when execution is cancelled."""
+
+
 # Lazy router initialization for agent summarization
 _router: LLMRouter | None = None
 
@@ -65,12 +69,14 @@ class PipelineExecutor:
         self,
         plan: ExecutionPlan,
         on_progress: Callable[[dict[str, Any]], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
     ) -> dict[str, Any]:
         """Execute a pipeline plan step by step.
 
         Args:
             plan: Execution plan from COE planner
             on_progress: Optional callback for progress events
+            is_cancelled: Optional callback to check if execution should be cancelled
 
         Returns:
             Dictionary with:
@@ -81,11 +87,16 @@ class PipelineExecutor:
 
         Raises:
             ExecutionError: If any step fails
+            CancellationError: If execution is cancelled
         """
         self.artifacts = {}  # Reset for each execution
         executed_steps: list[str] = []
 
         for idx, step in enumerate(plan.steps, start=1):
+            # Check for cancellation before each step
+            if is_cancelled and is_cancelled():
+                raise CancellationError("Execution cancelled by user")
+
             if on_progress:
                 on_progress(
                     {

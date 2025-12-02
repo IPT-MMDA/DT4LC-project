@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Paperclip, Info, PanelLeftOpen, PanelLeftClose, CheckCircle, XCircle, ExternalLink, X, Plus } from 'lucide-react';
+import { Send, Loader2, Paperclip, Info, PanelLeftOpen, PanelLeftClose, CheckCircle, XCircle, ExternalLink, X, Plus, StopCircle } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useChatStore } from '../store/useChatStore';
-import { useSubmitJob, useJob } from '../api/hooks/useJobs';
+import { useSubmitJob, useJob, useCancelJob } from '../api/hooks/useJobs';
 import { Link, useSearchParams } from 'react-router-dom';
 import { JobResultCard, parseJobResult } from '../components/chat/JobResultCard';
 import { ChatHistory } from '../components/chat/ChatHistory';
@@ -38,6 +38,7 @@ export function ChatPage() {
   const { uploadedAttachments, clearAttachments, removeAttachment } = useAppStore();
 
   const submitJob = useSubmitJob();
+  const cancelJob = useCancelJob();
 
   // Sync pending jobs on mount and periodically
   useJobSync();
@@ -64,6 +65,11 @@ export function ChatPage() {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const { data: currentJob } = useJob(currentJobId || undefined, !!currentJobId);
 
+  // Reset currentJobId when session changes (e.g., New Chat clicked)
+  useEffect(() => {
+    setCurrentJobId(null);
+  }, [currentSessionId]);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -79,6 +85,14 @@ export function ChatPage() {
       addMessage({
         role: 'assistant',
         content: `Job ${currentJob.id} failed: ${currentJob.error || 'Unknown error'}`,
+        type: 'error',
+        jobId: currentJob.id,
+      });
+      setCurrentJobId(null);
+    } else if (currentJob && currentJob.state === 'cancelled') {
+      addMessage({
+        role: 'assistant',
+        content: `Job ${currentJob.id} was cancelled`,
         type: 'error',
         jobId: currentJob.id,
       });
@@ -112,6 +126,14 @@ export function ChatPage() {
     try {
       // Build context for backend (includes previous attachments from this session)
       const backendContext = getContextForBackend();
+
+      // Debug logging for attachment submission
+      console.log('[ChatPage] Submitting job with:', {
+        prompt: input,
+        attachmentsCount: uploadedAttachments.length,
+        attachments: uploadedAttachments,
+        context: backendContext,
+      });
 
       const job = await submitJob.mutateAsync({
         prompt: input,
@@ -196,25 +218,42 @@ export function ChatPage() {
         (m) => m.type === 'job_result' && m.jobId === message.jobId
       );
 
-      // Check if there's an error message for this job
-      const hasErrorMessage = messages.some(
+      // Check if there's an error message for this job (failed or cancelled)
+      const errorMessage = messages.find(
         (m) => m.type === 'error' && m.jobId === message.jobId
       );
+      const isCancelled = errorMessage?.content?.includes('cancelled');
 
-      // If job failed, show error state
-      if (hasErrorMessage) {
+      // If job failed or cancelled, show appropriate state
+      if (errorMessage) {
         return (
           <div key={index} className="flex justify-start">
             <div className="max-w-[90%]">
-              <div className="bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800 p-3">
+              <div className={`rounded-lg border p-3 ${
+                isCancelled
+                  ? 'bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800'
+                  : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
+              }`}>
                 <div className="flex items-center gap-2">
-                  <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
-                  <span className="text-sm text-red-700 dark:text-red-300">
-                    Job failed
+                  {isCancelled ? (
+                    <StopCircle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                  )}
+                  <span className={`text-sm ${
+                    isCancelled
+                      ? 'text-orange-700 dark:text-orange-300'
+                      : 'text-red-700 dark:text-red-300'
+                  }`}>
+                    {isCancelled ? 'Job cancelled' : 'Job failed'}
                   </span>
                   <Link
                     to={`/jobs/${message.jobId}`}
-                    className="ml-auto flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:underline"
+                    className={`ml-auto flex items-center gap-1 text-xs hover:underline ${
+                      isCancelled
+                        ? 'text-orange-600 dark:text-orange-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
                   >
                     <ExternalLink className="w-3 h-3" />
                     Details
@@ -251,6 +290,12 @@ export function ChatPage() {
         );
       }
 
+      const handleCancelJob = () => {
+        if (message.jobId && !cancelJob.isPending) {
+          cancelJob.mutate(message.jobId);
+        }
+      };
+
       return (
         <div key={index} className="flex justify-start">
           <div className="max-w-[90%]">
@@ -258,11 +303,24 @@ export function ChatPage() {
               <JobResultCard job={job} compact={true} />
             ) : (
               <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {message.content}
-                  </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {message.content}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleCancelJob}
+                    disabled={cancelJob.isPending}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 dark:text-red-400
+                             bg-red-100 dark:bg-red-900 rounded hover:bg-red-200 dark:hover:bg-red-800
+                             disabled:opacity-50 transition-colors"
+                    title="Cancel job"
+                  >
+                    <StopCircle className="w-3 h-3" />
+                    {cancelJob.isPending ? 'Cancelling...' : 'Cancel'}
+                  </button>
                 </div>
                 <Link
                   to={`/jobs/${message.jobId}`}
@@ -391,7 +449,11 @@ export function ChatPage() {
               </div>
               {/* New Chat button */}
               <button
-                onClick={() => createNewSession()}
+                onClick={() => {
+                  createNewSession();
+                  clearAttachments();
+                  setCurrentJobId(null);
+                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 title="Start new chat"
               >

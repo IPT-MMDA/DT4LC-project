@@ -27,13 +27,25 @@ class Runner(BaseModel):  # type: ignore[misc]
     env: dict[str, str] = {}
 
 
+class Integration(BaseModel):  # type: ignore[misc]
+    """External model integration configuration."""
+
+    type: str  # e.g., "huggingface-spaces", "google-earth-engine"
+    url: str
+    status: Literal["planned", "active", "deprecated"] = "planned"
+    requires: list[str] = []  # required packages
+
+
 class RegistryItem(BaseModel):  # type: ignore[misc]
     id: str
     kind: Literal["input", "algorithm", "model", "postprocess"]
     keywords: list[str] = []
     inputs: list[str] = []
     outputs: list[str] = []
-    runner: Runner
+    runner: Runner | None = None  # Optional for hosted models
+    description: str | None = None  # Optional description
+    integration: Integration | None = None  # For hosted models (HuggingFace, GEE, etc.)
+    metadata: dict[str, Any] = {}  # Additional metadata (team, author, hosting, etc.)
 
 
 class Registry(BaseModel):  # type: ignore[misc]

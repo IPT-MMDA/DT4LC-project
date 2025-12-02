@@ -11,8 +11,10 @@ import {
   Cpu,
   Grid3X3,
   Download,
+  StopCircle,
 } from 'lucide-react';
 import type { Job, JobResultData } from '../../types';
+import { useCancelJob } from '../../api/hooks/useJobs';
 
 interface JobResultCardProps {
   job: Job;
@@ -201,6 +203,17 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
   const isComplete = job.state === 'completed' || job.state === 'succeeded';
   const isFailed = job.state === 'failed';
   const isRunning = job.state === 'running';
+  const isPending = job.state === 'pending' || job.state === 'queued';
+  const canCancel = isRunning || isPending;
+
+  // Cancel job mutation
+  const cancelJob = useCancelJob();
+
+  const handleCancel = () => {
+    if (canCancel && !cancelJob.isPending) {
+      cancelJob.mutate(job.id);
+    }
+  };
 
   // Parse result if not provided
   const data = resultData || (isComplete ? parseJobResult(job) : undefined);
@@ -244,6 +257,14 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
                 />
               </div>
               <span className="text-xs text-gray-500">{Math.round(job.progress * 100)}%</span>
+              <button
+                onClick={handleCancel}
+                disabled={cancelJob.isPending}
+                className="text-red-500 hover:text-red-600 disabled:opacity-50"
+                title="Cancel job"
+              >
+                <StopCircle className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -309,9 +330,22 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
             <div className="flex-1">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm text-yellow-700 dark:text-yellow-300">Processing...</span>
-                <span className="text-sm text-yellow-600 dark:text-yellow-400">
-                  {Math.round(job.progress * 100)}%
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-yellow-600 dark:text-yellow-400">
+                    {Math.round(job.progress * 100)}%
+                  </span>
+                  <button
+                    onClick={handleCancel}
+                    disabled={cancelJob.isPending}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 dark:text-red-400
+                             bg-red-100 dark:bg-red-900 rounded hover:bg-red-200 dark:hover:bg-red-800
+                             disabled:opacity-50 transition-colors"
+                    title="Cancel job"
+                  >
+                    <StopCircle className="w-3 h-3" />
+                    {cancelJob.isPending ? 'Cancelling...' : 'Cancel'}
+                  </button>
+                </div>
               </div>
               <div className="bg-yellow-200 dark:bg-yellow-800 rounded-full h-2">
                 <div

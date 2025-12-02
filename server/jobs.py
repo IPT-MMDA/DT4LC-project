@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+import functools
 import logging
 from typing import Any
 import uuid
@@ -142,9 +144,11 @@ class JobQueue:
         self._running = False
         self._lock = asyncio.Lock()
 
-        # Initialize components
+        # Thread pool for running blocking operations
+        self._thread_pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="job_worker")
+
+        # Initialize components - registry is thread-safe (read-only), executor is created per-job
         self._registry = load_registry()
-        self._executor = PipelineExecutor(self._registry)
 
     async def start(self) -> None:
         """Start worker pool."""
@@ -166,6 +170,9 @@ class JobQueue:
         # Wait for workers to finish
         await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
+
+        # Shutdown thread pool
+        self._thread_pool.shutdown(wait=False)
         logger.info("Stopped job queue")
 
     async def submit_job(
@@ -326,6 +333,7 @@ class JobQueue:
         Args:
             worker_id: Worker identifier
         """
+        print(f"[WORKER] Worker {worker_id} started", flush=True)
         logger.info(f"Worker {worker_id} started")
 
         while self._running:
@@ -337,6 +345,7 @@ class JobQueue:
                     # Queue is empty, continue polling
                     continue
 
+                print(f"[WORKER] Worker {worker_id} picked up job {job_id}", flush=True)
                 # Process job
                 await self._process_job(job_id, worker_id)
 
@@ -350,6 +359,125 @@ class JobQueue:
 
         logger.info(f"Worker {worker_id} stopped")
 
+    async def _check_cancelled(self, job_id: str) -> bool:
+        """Check if a job has been cancelled.
+
+        Args:
+            job_id: Job identifier
+
+        Returns:
+            True if job was cancelled
+        """
+        async with self._lock:
+            job = self._jobs.get(job_id)
+            return job is not None and job.status == JobStatus.CANCELLED
+
+    def _run_blocking_job(self, job: Job, job_id: str, worker_id: int) -> dict[str, Any]:
+        """Run blocking job operations in a thread.
+
+        This runs in a separate thread to not block the async event loop.
+
+        Args:
+            job: Job object
+            job_id: Job identifier
+            worker_id: Worker identifier
+
+        Returns:
+            Result dictionary or raises exception
+        """
+        from dta.dti.executor import CancellationError
+        from dta.dti.schemas import Attachment as COEAttachment
+
+        # Convert job attachments to COE format
+        print(f"[WORKER] Job {job_id}: Starting processing with {len(job.attachments)} attachments", flush=True)
+        logger.info(f"Job {job_id}: Raw attachments: {job.attachments}")
+        coe_attachments = []
+        for att in job.attachments:
+            path = att.get("path")
+            if path:
+                coe_attachments.append(
+                    COEAttachment(
+                        id=att.get("id", ""),
+                        filename=att.get("filename", ""),
+                        mime_type=att.get("mime_type", "image/tiff"),
+                        path=path,
+                    )
+                )
+            else:
+                logger.warning(f"Job {job_id}: Attachment missing path: {att.get('filename', 'unknown')}")
+
+        # If no current attachments, check context for previous attachments
+        logger.info(
+            f"Job {job_id}: {len(coe_attachments)} direct attachments with paths, context={'present' if job.context else 'None'}"
+        )
+        if not coe_attachments and job.context:
+            context_attachments = job.context.get("previous_attachments", [])
+            logger.info(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
+            for att in context_attachments:
+                if att.get("path"):
+                    coe_attachments.append(
+                        COEAttachment(
+                            id=att.get("id", ""),
+                            filename=att.get("filename", ""),
+                            mime_type=att.get("mime_type", "image/tiff"),
+                            path=att.get("path"),
+                        )
+                    )
+            if coe_attachments:
+                logger.info(f"Job {job_id}: Using {len(coe_attachments)} attachment(s) from context")
+            else:
+                logger.warning(f"Job {job_id}: No valid attachments found in context")
+
+        # Check for cancellation before planning
+        if job.status == JobStatus.CANCELLED:
+            raise CancellationError("Job cancelled before planning")
+
+        job.progress = 0.2
+        print(f"[WORKER] Job {job_id}: Calling orchestrate with {len(coe_attachments)} attachments", flush=True)
+        coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
+        plan_result = orchestrate(coe_req)
+        print(f"[WORKER] Job {job_id}: Orchestrate returned ok={plan_result.get('ok')}", flush=True)
+
+        if not plan_result.get("ok"):
+            raise RuntimeError(plan_result.get("error", "Planning failed"))
+
+        # Check for cancellation after planning
+        if job.status == JobStatus.CANCELLED:
+            raise CancellationError("Job cancelled after planning")
+
+        # Handle conversational intent - no pipeline execution needed
+        if plan_result.get("intent") == "conversation":
+            return {
+                "intent": "conversation",
+                "response": plan_result.get("response", ""),
+                "reason": plan_result.get("reason", ""),
+            }
+
+        # Pipeline intent - execute the plan
+        job.plan = ExecutionPlan(**plan_result["plan"])
+        job.progress = 0.4
+        logger.debug(f"Executing plan with {len(job.plan.steps)} steps")
+
+        # Create synchronous cancellation checker
+        def check_cancelled() -> bool:
+            """Check if job was cancelled (sync version for executor)."""
+            return job.status == JobStatus.CANCELLED
+
+        # Create a fresh executor for this job (executor has mutable state - artifacts dict)
+        executor = PipelineExecutor(self._registry)
+
+        # Execute plan with cancellation support
+        execution_result = executor.execute(job.plan, is_cancelled=check_cancelled)
+
+        job.progress = 0.8
+
+        # Build result
+        return {
+            "intent": "pipeline",
+            "plan": job.plan.model_dump(),
+            "execution": execution_result,
+        }
+
     async def _process_job(self, job_id: str, worker_id: int) -> None:
         """Process a single job.
 
@@ -357,6 +485,8 @@ class JobQueue:
             job_id: Job identifier
             worker_id: Worker identifier
         """
+        from dta.dti.executor import CancellationError
+
         # Get job
         async with self._lock:
             job = self._jobs.get(job_id)
@@ -374,81 +504,12 @@ class JobQueue:
         logger.info(f"Worker {worker_id} processing job {job_id}")
 
         try:
-            # Plan execution
-            job.progress = 0.2
-
-            # Convert job attachments to COE format
-            from dta.dti.schemas import Attachment as COEAttachment
-
-            # Collect attachments from current request
-            coe_attachments = [
-                COEAttachment(
-                    id=att.get("id", ""),
-                    filename=att.get("filename", ""),
-                    mime_type=att.get("mime_type", "image/tiff"),
-                    path=att.get("path"),
-                )
-                for att in job.attachments
-            ]
-
-            # If no current attachments, check context for previous attachments
-            logger.info(
-                f"Job {job_id}: {len(coe_attachments)} direct attachments, context={'present' if job.context else 'None'}"
+            # Run blocking operations in thread pool to not block the event loop
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self._thread_pool,
+                functools.partial(self._run_blocking_job, job, job_id, worker_id),
             )
-            if not coe_attachments and job.context:
-                context_attachments = job.context.get("previous_attachments", [])
-                logger.info(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
-                for att in context_attachments:
-                    if att.get("path"):
-                        coe_attachments.append(
-                            COEAttachment(
-                                id=att.get("id", ""),
-                                filename=att.get("filename", ""),
-                                mime_type=att.get("mime_type", "image/tiff"),
-                                path=att.get("path"),
-                            )
-                        )
-                if coe_attachments:
-                    logger.info(f"Job {job_id}: Using {len(coe_attachments)} attachment(s) from context")
-                else:
-                    logger.warning(f"Job {job_id}: No valid attachments found in context")
-
-            coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
-            plan_result = orchestrate(coe_req)
-
-            if not plan_result.get("ok"):
-                raise RuntimeError(plan_result.get("error", "Planning failed"))
-
-            # Handle conversational intent - no pipeline execution needed
-            if plan_result.get("intent") == "conversation":
-                result = {
-                    "intent": "conversation",
-                    "response": plan_result.get("response", ""),
-                    "reason": plan_result.get("reason", ""),
-                }
-                async with self._lock:
-                    job.result = result
-                    job.status = JobStatus.COMPLETED
-                    job.progress = 1.0
-                    job.completed_at = datetime.now()
-                logger.info(f"Worker {worker_id} completed conversational job {job_id}")
-                return
-
-            # Pipeline intent - execute the plan
-            job.plan = ExecutionPlan(**plan_result["plan"])
-            job.progress = 0.4
-            logger.debug(f"Executing plan with {len(job.plan.steps)} steps")
-
-            # Execute plan
-            execution_result = self._executor.execute(job.plan)
-            job.progress = 0.8
-
-            # Build result
-            result = {
-                "intent": "pipeline",
-                "plan": job.plan.model_dump(),
-                "execution": execution_result,
-            }
 
             # Mark completed
             async with self._lock:
@@ -458,6 +519,10 @@ class JobQueue:
                 job.completed_at = datetime.now()
 
             logger.info(f"Worker {worker_id} completed job {job_id} in {job.duration_seconds:.2f}s")
+
+        except CancellationError:
+            logger.info(f"Job {job_id} execution cancelled")
+            # Status already set to CANCELLED, just return
 
         except Exception as e:
             # Mark failed

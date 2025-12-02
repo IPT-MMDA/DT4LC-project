@@ -10,6 +10,12 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 
+# Configure logging BEFORE any loggers are used
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
@@ -24,6 +30,7 @@ from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.metrics import get_metrics_collector
 from dta.dti.models.registry import get_model_registry
+from dta.dti.registry import load_registry
 from dta.dti.schemas import ChatRequest as COEChatRequest
 
 from .jobs import JobStatus, get_job_queue
@@ -316,10 +323,37 @@ async def list_models() -> JSONResponse:
         registry = get_model_registry()
         models = []
 
-        # List ALL models, not just available ones
+        # List ALL models from Python registry
         for model_id in registry.list_all():
             req = registry.check_requirements(model_id)
             models.append(req)
+
+        # Also include hosted models from YAML registry (models with integration field)
+        try:
+            yaml_registry = load_registry()
+            for item in yaml_registry.instances:
+                if item.kind == "model" and item.integration:
+                    models.append(
+                        {
+                            "model_id": item.id,
+                            "name": item.id.split("/")[-1].replace("-", " ").title(),
+                            "description": item.description or "",
+                            "author": item.metadata.get("author", ""),
+                            "source_url": item.integration.url,
+                            "available": item.integration.status == "active",
+                            "missing_requirements": item.integration.requires
+                            if item.integration.status == "planned"
+                            else [],
+                            "gpu_required": False,
+                            "integration_type": item.integration.type,
+                            "integration_status": item.integration.status,
+                            "keywords": item.keywords,
+                            "hosting": item.metadata.get("hosting", "external"),
+                            "team": item.metadata.get("team", ""),
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to load hosted models from YAML registry: {e}")
 
         return JSONResponse({"models": models, "count": len(models)})
     except Exception as e:
@@ -378,6 +412,7 @@ async def submit_job(req: JobSubmitRequest) -> JSONResponse:
 
         # Convert attachments to dict for storage
         attachments_dict = [att.model_dump() for att in req.attachments]
+        logger.info(f"Job submit: {len(req.attachments)} attachments received: {attachments_dict}")
 
         job_id = await queue.submit_job(
             prompt=req.prompt, mode=req.mode, attachments=attachments_dict, context=req.context

@@ -30,21 +30,26 @@ SYS = (
     "Return ONLY valid JSON with this EXACT structure:\n"
     "{\n"
     '  "goal": "brief description of what user wants to accomplish",\n'
-    '  "desired_outputs": ["OutputType1", "OutputType2"],\n'
-    '  "required_inputs": ["InputType1", "InputType2"],\n'
+    '  "desired_outputs": ["OutputType1"],\n'
+    '  "required_inputs": ["InputType1"],\n'
     '  "hints": {"keywords": ["keyword1", "keyword2"]}\n'
     "}\n\n"
     "CRITICAL RULES:\n"
-    '- desired_outputs MUST be an array of TYPE NAME STRINGS only (e.g., ["NDVIMap", "Statistics"])\n'
-    '- required_inputs MUST be an array of TYPE NAME STRINGS only (e.g., ["Raster", "Features"])\n'
+    "- desired_outputs MUST be an array of TYPE NAME STRINGS only\n"
+    "- required_inputs MUST be an array of TYPE NAME STRINGS only\n"
     "- Do NOT use objects or nested structures for these arrays\n"
     "- Only use types from the registry list provided below\n"
+    "- ONLY include outputs that the user EXPLICITLY requests\n"
     "- If unsure, use empty arrays []\n\n"
-    "DOMAIN KNOWLEDGE (Geospatial Analysis):\n"
-    '- "vegetation health", "greenness", "plant vigor" → desired_outputs: ["NDVIMap"]\n'
-    '- "ndvi", "normalized difference vegetation index" → desired_outputs: ["NDVIMap"]\n'
-    '- "statistics", "distribution", "summary" → desired_outputs: ["Statistics"]\n'
-    '- "features", "embeddings", "ml features" → desired_outputs: ["Features"]'
+    "DOMAIN KNOWLEDGE - Match user intent to SINGLE output type:\n"
+    '- "field boundaries", "parcels", "delineate", "agricultural plots" → ["FieldBoundaries"]\n'
+    '- "vegetation health", "greenness", "ndvi" → ["NDVIMap"]\n'
+    '- "statistics", "distribution", "histogram" → ["Statistics"]\n'
+    '- "change detection", "compare images", "before/after" → ["ChangeMap"]\n'
+    '- "prithvi", "features", "embeddings", "foundation model" → ["Features"]\n\n'
+    "IMPORTANT: Do NOT add multiple outputs unless user explicitly asks for multiple analyses.\n"
+    '"Detect parcels" → ONLY ["FieldBoundaries"], NOT ["FieldBoundaries", "Features"]\n'
+    '"Calculate NDVI" → ONLY ["NDVIMap"], NOT ["NDVIMap", "Features"]'
 )
 
 

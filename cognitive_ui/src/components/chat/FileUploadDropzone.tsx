@@ -65,6 +65,14 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
     try {
       const result = await uploadFile.mutateAsync(file);
 
+      // Debug logging for upload result
+      console.log('[FileUploadDropzone] Upload result:', {
+        id: result.id,
+        filename: result.filename,
+        path: result.path,
+        hasPath: !!result.path,
+      });
+
       // Store preview for display
       setRecentUpload({
         id: result.id,
@@ -75,13 +83,15 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
       });
 
       // Add to global attachments store (including preview for chat display)
-      addAttachment({
+      const attachment = {
         id: result.id,
         filename: result.filename,
         path: result.path,
         mime_type: 'image/tiff',
         preview_png_base64: result.preview_png_base64,
-      });
+      };
+      console.log('[FileUploadDropzone] Adding attachment to store:', attachment);
+      addAttachment(attachment);
 
       // Auto-close after successful upload if compact mode
       if (compact && onClose) {
