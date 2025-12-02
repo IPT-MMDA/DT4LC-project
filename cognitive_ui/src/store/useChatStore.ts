@@ -127,40 +127,8 @@ export const useChatStore = create<ChatStore>()(
 
       // Session management
       createNewSession: () => {
-        const state = get();
-
-        // Save current session first if it has messages
-        if (state.currentSessionId && state.messages.length > 0) {
-          const now = new Date().toISOString();
-          const existingIndex = state.sessions.findIndex(
-            (s) => s.id === state.currentSessionId
-          );
-
-          const updatedSession: ChatSession = {
-            id: state.currentSessionId,
-            title: generateTitle(state.messages),
-            messages: state.messages,
-            jobIds: state.messages
-              .filter((m) => m.jobId)
-              .map((m) => m.jobId as string),
-            createdAt:
-              existingIndex >= 0
-                ? state.sessions[existingIndex].createdAt
-                : now,
-            updatedAt: now,
-          };
-
-          const sessions =
-            existingIndex >= 0
-              ? state.sessions.map((s, i) =>
-                  i === existingIndex ? updatedSession : s
-                )
-              : [updatedSession, ...state.sessions];
-
-          set({ sessions: sessions.slice(0, MAX_SESSIONS) });
-        }
-
-        // Create new session
+        // Sessions are now auto-saved when messages are added,
+        // so we just need to create a new empty session
         const newSessionId = generateSessionId();
         set({
           currentSessionId: newSessionId,
@@ -175,38 +143,7 @@ export const useChatStore = create<ChatStore>()(
       loadSession: (sessionId: string) => {
         const state = get();
 
-        // Save current session first
-        if (state.currentSessionId && state.messages.length > 0) {
-          const now = new Date().toISOString();
-          const existingIndex = state.sessions.findIndex(
-            (s) => s.id === state.currentSessionId
-          );
-
-          const updatedSession: ChatSession = {
-            id: state.currentSessionId,
-            title: generateTitle(state.messages),
-            messages: state.messages,
-            jobIds: state.messages
-              .filter((m) => m.jobId)
-              .map((m) => m.jobId as string),
-            createdAt:
-              existingIndex >= 0
-                ? state.sessions[existingIndex].createdAt
-                : now,
-            updatedAt: now,
-          };
-
-          const sessions =
-            existingIndex >= 0
-              ? state.sessions.map((s, i) =>
-                  i === existingIndex ? updatedSession : s
-                )
-              : [updatedSession, ...state.sessions];
-
-          set({ sessions: sessions.slice(0, MAX_SESSIONS) });
-        }
-
-        // Load the requested session
+        // Sessions are auto-saved when messages are added, so just load
         const session = state.sessions.find((s) => s.id === sessionId);
         if (session) {
           const tokenCount = session.messages.reduce(
@@ -281,11 +218,31 @@ export const useChatStore = create<ChatStore>()(
             jobToSessionMap[message.jobId] = sessionId;
           }
 
+          // Auto-save session to sessions array for visibility in history
+          const now = new Date().toISOString();
+          const existingIndex = state.sessions.findIndex((s) => s.id === sessionId);
+          const updatedSession: ChatSession = {
+            id: sessionId,
+            title: generateTitle(newMessages),
+            messages: newMessages,
+            jobIds: newMessages
+              .filter((m) => m.jobId)
+              .map((m) => m.jobId as string),
+            createdAt: existingIndex >= 0 ? state.sessions[existingIndex].createdAt : now,
+            updatedAt: now,
+          };
+
+          const sessions =
+            existingIndex >= 0
+              ? state.sessions.map((s, i) => (i === existingIndex ? updatedSession : s))
+              : [updatedSession, ...state.sessions];
+
           return {
             currentSessionId: sessionId,
             messages: newMessages,
             contextTokenCount: newTokenCount,
             jobToSessionMap,
+            sessions: sessions.slice(0, MAX_SESSIONS),
           };
         }),
 
@@ -309,8 +266,31 @@ export const useChatStore = create<ChatStore>()(
 
           // Update job-to-session mapping
           const jobToSessionMap = { ...state.jobToSessionMap };
-          if (state.currentSessionId) {
-            jobToSessionMap[job.id] = state.currentSessionId;
+          const sessionId = state.currentSessionId;
+          if (sessionId) {
+            jobToSessionMap[job.id] = sessionId;
+          }
+
+          // Auto-save session to sessions array
+          let sessions = state.sessions;
+          if (sessionId) {
+            const now = new Date().toISOString();
+            const existingIndex = state.sessions.findIndex((s) => s.id === sessionId);
+            const updatedSession: ChatSession = {
+              id: sessionId,
+              title: generateTitle(newMessages),
+              messages: newMessages,
+              jobIds: newMessages
+                .filter((m) => m.jobId)
+                .map((m) => m.jobId as string),
+              createdAt: existingIndex >= 0 ? state.sessions[existingIndex].createdAt : now,
+              updatedAt: now,
+            };
+
+            sessions =
+              existingIndex >= 0
+                ? state.sessions.map((s, i) => (i === existingIndex ? updatedSession : s))
+                : [updatedSession, ...state.sessions];
           }
 
           return {
@@ -318,6 +298,7 @@ export const useChatStore = create<ChatStore>()(
             contextTokenCount: newTokenCount,
             activeJobIds: state.activeJobIds.filter((id) => id !== job.id),
             jobToSessionMap,
+            sessions: sessions.slice(0, MAX_SESSIONS),
           };
         }),
 
@@ -428,6 +409,48 @@ export const useChatStore = create<ChatStore>()(
         messages: state.messages,
         jobToSessionMap: state.jobToSessionMap,
       }),
+      // On rehydration, ensure current session is in the sessions array
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+
+        // If there's a current session with messages, ensure it's in sessions array
+        if (state.currentSessionId && state.messages.length > 0) {
+          const existingIndex = state.sessions.findIndex(
+            (s) => s.id === state.currentSessionId
+          );
+
+          if (existingIndex === -1) {
+            // Session not in array, add it
+            const now = new Date().toISOString();
+            const newSession: ChatSession = {
+              id: state.currentSessionId,
+              title: generateTitle(state.messages),
+              messages: state.messages,
+              jobIds: state.messages
+                .filter((m) => m.jobId)
+                .map((m) => m.jobId as string),
+              createdAt: now,
+              updatedAt: now,
+            };
+            state.sessions = [newSession, ...state.sessions].slice(0, MAX_SESSIONS);
+          } else {
+            // Session exists but might have stale messages, update it
+            const existingSession = state.sessions[existingIndex];
+            const updatedSession: ChatSession = {
+              ...existingSession,
+              messages: state.messages,
+              title: generateTitle(state.messages),
+              jobIds: state.messages
+                .filter((m) => m.jobId)
+                .map((m) => m.jobId as string),
+              updatedAt: new Date().toISOString(),
+            };
+            state.sessions = state.sessions.map((s, i) =>
+              i === existingIndex ? updatedSession : s
+            );
+          }
+        }
+      },
     }
   )
 );

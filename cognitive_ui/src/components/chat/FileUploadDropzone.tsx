@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, X, Loader2, AlertCircle, CheckCircle, Paperclip } from 'lucide-react';
 import { useUploadFile } from '../../api/hooks/useUpload';
 import { useAppStore } from '../../store/useAppStore';
+import { uploadLogger as logger } from '../../utils/logger';
 
 interface FileUploadDropzoneProps {
   onClose?: () => void;
@@ -65,8 +66,7 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
     try {
       const result = await uploadFile.mutateAsync(file);
 
-      // Debug logging for upload result
-      console.log('[FileUploadDropzone] Upload result:', {
+      logger.debug('Upload result:', {
         id: result.id,
         filename: result.filename,
         path: result.path,
@@ -90,7 +90,7 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
         mime_type: 'image/tiff',
         preview_png_base64: result.preview_png_base64,
       };
-      console.log('[FileUploadDropzone] Adding attachment to store:', attachment);
+      logger.debug('Adding attachment to store:', attachment);
       addAttachment(attachment);
 
       // Auto-close after successful upload if compact mode
@@ -98,7 +98,7 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
         setTimeout(() => onClose(), 1500);
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error('Upload error:', error);
     }
   };
 

@@ -9,6 +9,7 @@ import { ChatHistory } from '../components/chat/ChatHistory';
 import { FileUploadDropzone } from '../components/chat/FileUploadDropzone';
 import { ImagePreviewModal } from '../components/chat/ImagePreviewModal';
 import { useJobSync } from '../hooks/useJobSync';
+import { chatLogger as logger } from '../utils/logger';
 import type { ChatMessage } from '../types';
 
 export function ChatPage() {
@@ -127,8 +128,7 @@ export function ChatPage() {
       // Build context for backend (includes previous attachments from this session)
       const backendContext = getContextForBackend();
 
-      // Debug logging for attachment submission
-      console.log('[ChatPage] Submitting job with:', {
+      logger.debug('Submitting job with:', {
         prompt: input,
         attachmentsCount: uploadedAttachments.length,
         attachments: uploadedAttachments,

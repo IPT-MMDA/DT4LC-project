@@ -40,6 +40,9 @@ dta/dti/models/third_party/
 .cache/
 .temp/
 
+# Logs
+.logs/
+
 # Frontend (Node.js)
 cognitive_ui/node_modules/
 cognitive_ui/dist/

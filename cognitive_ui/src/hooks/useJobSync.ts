@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '../store/useChatStore';
 import apiClient from '../api/client';
 import { parseJobResult } from '../components/chat/JobResultCard';
+import { jobSyncLogger as logger } from '../utils/logger';
 import type { Job } from '../types';
 
 /**
@@ -35,7 +36,7 @@ export function useJobSync() {
         state: raw.status || raw.state,
       };
 
-      console.log(`[JobSync] Job ${jobId.slice(0, 8)} state: ${job.state}`);
+      logger.debug(`Job ${jobId.slice(0, 8)} state: ${job.state}`);
 
       if (job.state === 'completed' || job.state === 'succeeded') {
         // Job completed - add result message
@@ -48,7 +49,7 @@ export function useJobSync() {
           type: 'job_result',
         });
 
-        console.log(`[JobSync] Job ${jobId.slice(0, 8)} completed, result added to chat`);
+        logger.debug(`Job ${jobId.slice(0, 8)} completed, result added to chat`);
         return true;
       } else if (job.state === 'failed') {
         // Job failed - update message
@@ -57,7 +58,7 @@ export function useJobSync() {
           type: 'error',
         });
         untrackJob(jobId);
-        console.log(`[JobSync] Job ${jobId.slice(0, 8)} failed: ${job.error}`);
+        logger.debug(`Job ${jobId.slice(0, 8)} failed: ${job.error}`);
         return true;
       } else if (job.state === 'cancelled') {
         updateMessageByJobId(jobId, {
@@ -65,7 +66,7 @@ export function useJobSync() {
           type: 'error',
         });
         untrackJob(jobId);
-        console.log(`[JobSync] Job ${jobId.slice(0, 8)} cancelled`);
+        logger.debug(`Job ${jobId.slice(0, 8)} cancelled`);
         return true;
       }
 
@@ -77,7 +78,7 @@ export function useJobSync() {
         (error.message.includes('404') || error.message.includes('not found'));
 
       if (isNotFound) {
-        console.warn(`[JobSync] Job ${jobId.slice(0, 8)} not found on server (may have expired)`);
+        logger.warn(`Job ${jobId.slice(0, 8)} not found on server (may have expired)`);
         updateMessageByJobId(jobId, {
           content: `Job not found. The server may have been restarted. Please try your request again.`,
           type: 'error',
@@ -86,7 +87,7 @@ export function useJobSync() {
         return true; // Consider it "handled"
       }
 
-      console.error(`[JobSync] Error syncing job ${jobId}:`, error);
+      logger.error(`Error syncing job ${jobId}:`, error);
       return false;
     }
   }, [addJobResultMessage, updateMessageByJobId, untrackJob]);
@@ -103,7 +104,7 @@ export function useJobSync() {
         );
 
         if (!hasResult) {
-          console.log(`[JobSync] Checking pending job: ${message.jobId.slice(0, 8)}`);
+          logger.debug(`Checking pending job: ${message.jobId.slice(0, 8)}`);
           await syncJob(message.jobId);
         }
       }

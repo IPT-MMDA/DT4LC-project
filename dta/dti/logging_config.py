@@ -1,12 +1,19 @@
 """Logging configuration for DTA.
 
 Provides structured logging with correlation IDs and performance tracking.
+Logs are written to both console and .logs/ directory.
 """
 
 import logging
 import logging.config
+import logging.handlers
+from pathlib import Path
 import sys
 from typing import Any
+
+# Determine logs directory (project root/.logs/)
+_LOGS_DIR = Path(__file__).parent.parent.parent.parent / ".logs"
+_LOGS_DIR.mkdir(exist_ok=True)
 
 
 def setup_logging(level: str = "INFO", format_type: str = "standard") -> None:
@@ -17,6 +24,8 @@ def setup_logging(level: str = "INFO", format_type: str = "standard") -> None:
         format_type: Format type ("standard" or "json")
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
+
+    log_file = str(_LOGS_DIR / "backend.log")
 
     if format_type == "json":
         # JSON structured logging (for production)
@@ -36,9 +45,18 @@ def setup_logging(level: str = "INFO", format_type: str = "standard") -> None:
                     "level": log_level,
                     "formatter": "json",
                     "stream": sys.stdout,
-                }
+                },
+                "file": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "level": log_level,
+                    "formatter": "json",
+                    "filename": log_file,
+                    "maxBytes": 10485760,  # 10MB
+                    "backupCount": 5,
+                    "encoding": "utf-8",
+                },
             },
-            "root": {"level": log_level, "handlers": ["console"]},
+            "root": {"level": log_level, "handlers": ["console", "file"]},
             "loggers": {
                 "dta": {"level": log_level, "propagate": True},
                 "server": {"level": log_level, "propagate": True},
@@ -65,9 +83,18 @@ def setup_logging(level: str = "INFO", format_type: str = "standard") -> None:
                     "level": log_level,
                     "formatter": "standard",
                     "stream": sys.stdout,
-                }
+                },
+                "file": {
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "level": log_level,
+                    "formatter": "detailed",
+                    "filename": log_file,
+                    "maxBytes": 10485760,  # 10MB
+                    "backupCount": 5,
+                    "encoding": "utf-8",
+                },
             },
-            "root": {"level": log_level, "handlers": ["console"]},
+            "root": {"level": log_level, "handlers": ["console", "file"]},
             "loggers": {
                 "dta": {"level": log_level, "propagate": True},
                 "server": {"level": log_level, "propagate": True},

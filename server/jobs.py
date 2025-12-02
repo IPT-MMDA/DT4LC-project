@@ -333,8 +333,7 @@ class JobQueue:
         Args:
             worker_id: Worker identifier
         """
-        print(f"[WORKER] Worker {worker_id} started", flush=True)
-        logger.info(f"Worker {worker_id} started")
+        logger.debug(f"Worker {worker_id} started")
 
         while self._running:
             try:
@@ -345,7 +344,7 @@ class JobQueue:
                     # Queue is empty, continue polling
                     continue
 
-                print(f"[WORKER] Worker {worker_id} picked up job {job_id}", flush=True)
+                logger.debug(f"Worker {worker_id} picked up job {job_id}")
                 # Process job
                 await self._process_job(job_id, worker_id)
 
@@ -389,8 +388,8 @@ class JobQueue:
         from dta.dti.schemas import Attachment as COEAttachment
 
         # Convert job attachments to COE format
-        print(f"[WORKER] Job {job_id}: Starting processing with {len(job.attachments)} attachments", flush=True)
-        logger.info(f"Job {job_id}: Raw attachments: {job.attachments}")
+        logger.debug(f"Job {job_id}: Starting processing with {len(job.attachments)} attachments")
+        logger.debug(f"Job {job_id}: Raw attachments: {job.attachments}")
         coe_attachments = []
         for att in job.attachments:
             path = att.get("path")
@@ -407,12 +406,12 @@ class JobQueue:
                 logger.warning(f"Job {job_id}: Attachment missing path: {att.get('filename', 'unknown')}")
 
         # If no current attachments, check context for previous attachments
-        logger.info(
+        logger.debug(
             f"Job {job_id}: {len(coe_attachments)} direct attachments with paths, context={'present' if job.context else 'None'}"
         )
         if not coe_attachments and job.context:
             context_attachments = job.context.get("previous_attachments", [])
-            logger.info(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
+            logger.debug(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
             for att in context_attachments:
                 if att.get("path"):
                     coe_attachments.append(
@@ -424,7 +423,7 @@ class JobQueue:
                         )
                     )
             if coe_attachments:
-                logger.info(f"Job {job_id}: Using {len(coe_attachments)} attachment(s) from context")
+                logger.debug(f"Job {job_id}: Using {len(coe_attachments)} attachment(s) from context")
             else:
                 logger.warning(f"Job {job_id}: No valid attachments found in context")
 
@@ -433,10 +432,10 @@ class JobQueue:
             raise CancellationError("Job cancelled before planning")
 
         job.progress = 0.2
-        print(f"[WORKER] Job {job_id}: Calling orchestrate with {len(coe_attachments)} attachments", flush=True)
+        logger.debug(f"Job {job_id}: Calling orchestrate with {len(coe_attachments)} attachments")
         coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
         plan_result = orchestrate(coe_req)
-        print(f"[WORKER] Job {job_id}: Orchestrate returned ok={plan_result.get('ok')}", flush=True)
+        logger.debug(f"Job {job_id}: Orchestrate returned ok={plan_result.get('ok')}")
 
         if not plan_result.get("ok"):
             raise RuntimeError(plan_result.get("error", "Planning failed"))

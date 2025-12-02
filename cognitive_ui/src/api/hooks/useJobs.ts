@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../client';
+import { apiLogger as logger } from '../../utils/logger';
 import type { Job, JobSubmitRequest, JobsListResponse, JobState } from '../../types';
 
 interface JobFilters {
@@ -30,10 +31,9 @@ export function useSubmitJob() {
 
   return useMutation({
     mutationFn: async (data: JobSubmitRequest): Promise<Job> => {
-      // Debug logging for job submission
-      console.log('[useSubmitJob] Sending to API:', JSON.stringify(data, null, 2));
+      logger.debug('Sending to API:', JSON.stringify(data, null, 2));
       const raw = await apiClient.post<JobSubmitRequest, unknown>('/v1/jobs', data);
-      console.log('[useSubmitJob] API response:', raw);
+      logger.debug('API response:', raw);
       return transformJob(raw);
     },
     onSuccess: () => {

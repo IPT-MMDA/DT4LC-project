@@ -8,7 +8,6 @@ Documentation for the Digital Twin for Land Cover (DT4LC) project.
 - [API Reference](API.md) - Complete REST API documentation
 - [Architecture](ARCHITECTURE.md) - System design and components
 - [File Upload Flow](FILE_UPLOAD_FLOW.md) - How file uploads work
-- [Frontend Reference](FRONTEND_PLAN.md) - Frontend architecture (React)
 
 ## Architecture Diagrams
 

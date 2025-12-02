@@ -204,7 +204,7 @@ server/
 ├── jobs.py                       # Job queue system
 └── schemas.py                    # Request/response models
 
-frontend/                         # React application
+cognitive_ui/                     # React application
 ├── src/
 │   ├── components/               # UI components
 │   ├── hooks/                    # React hooks

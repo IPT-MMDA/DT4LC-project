@@ -98,7 +98,7 @@ uvicorn server.app:app --reload --port 8000
 #### Frontend
 
 ```bash
-cd frontend
+cd cognitive_ui
 
 # Install dependencies
 npm install
@@ -192,7 +192,7 @@ DT4LC-project/
 │   ├── app.py                  # Main application
 │   └── schemas.py              # API schemas
 │
-├── frontend/                   # React + TypeScript UI
+├── cognitive_ui/               # React + TypeScript UI
 │   ├── Dockerfile              # Frontend container
 │   ├── nginx.conf              # Production nginx config
 │   ├── src/
@@ -574,7 +574,7 @@ task --list  # Show all available commands
 task typecheck  # or: uv run mypy .
 
 # TypeScript
-cd frontend && npm run lint
+cd cognitive_ui && npm run lint
 ```
 
 ## License
