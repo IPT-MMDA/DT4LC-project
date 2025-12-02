@@ -1,11 +1,22 @@
+"""Execution plan validation.
+
+Validates that execution plans have satisfied dependencies and valid runners.
+"""
+
 from dta.dti.registry import get_item
 from dta.dti.schemas import ExecutionPlan, Registry
 
 
-class PlanError(Exception): ...
+class PlanError(Exception):
+    """Raised when plan validation fails."""
 
 
 def validate(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
+    """Validate execution plan dependencies and runner configuration.
+
+    Raises:
+        PlanError: If step dependencies are unmet or runner is misconfigured.
+    """
     have_types: set[str] = set()
     for step in plan.steps:
         it = get_item(reg, step.uses)

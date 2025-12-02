@@ -28,17 +28,11 @@ export function useJobSync() {
   // Sync a single job
   const syncJob = useCallback(async (jobId: string) => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw = await apiClient.get<any>(`/v1/jobs/${jobId}`);
-      // Transform: backend uses "status", frontend uses "state"
-      const job: Job = {
-        ...raw,
-        state: raw.status || raw.state,
-      };
+      const job = await apiClient.get<Job>(`/v1/jobs/${jobId}`);
 
-      logger.debug(`Job ${jobId.slice(0, 8)} state: ${job.state}`);
+      logger.debug(`Job ${jobId.slice(0, 8)} status: ${job.status}`);
 
-      if (job.state === 'completed' || job.state === 'succeeded') {
+      if (job.status === 'completed') {
         // Job completed - add result message
         const resultData = parseJobResult(job);
         addJobResultMessage(job, resultData);
@@ -51,7 +45,7 @@ export function useJobSync() {
 
         logger.debug(`Job ${jobId.slice(0, 8)} completed, result added to chat`);
         return true;
-      } else if (job.state === 'failed') {
+      } else if (job.status === 'failed') {
         // Job failed - update message
         updateMessageByJobId(jobId, {
           content: `Job failed: ${job.error || 'Unknown error'}`,
@@ -60,7 +54,7 @@ export function useJobSync() {
         untrackJob(jobId);
         logger.debug(`Job ${jobId.slice(0, 8)} failed: ${job.error}`);
         return true;
-      } else if (job.state === 'cancelled') {
+      } else if (job.status === 'cancelled') {
         updateMessageByJobId(jobId, {
           content: `Job was cancelled`,
           type: 'error',

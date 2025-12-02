@@ -78,7 +78,7 @@ no_site_packages = true
 warn_return_any = true
 warn_unused_ignores = true
 show_error_codes = true
-exclude = ["tests/", "build/", "scripts/"]
+exclude = ["tests/", "build/", "scripts/", ".venv/"]
 
 [tool.ruff]
 line-length = 119
@@ -91,7 +91,7 @@ ignore = []
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
-known-first-party = ["cognitive_ui", "digital_twin"]
+known-first-party = ["dta", "server"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -102,7 +102,8 @@ addopts = [
     "-rfE",
     "--color=yes",
     "--durations=40",
-    "--cov=senses",
+    "--cov=dta",
+    "--cov=server",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--strict-markers",

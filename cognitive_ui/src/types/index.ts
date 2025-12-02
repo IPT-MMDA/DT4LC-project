@@ -31,11 +31,11 @@ export interface ChatSession {
   updatedAt: string;
 }
 
-// Extended message with job result data for display in chat
+/** Extended message with job result data for display in chat. */
 export interface JobResultMessage extends ChatMessage {
   type: 'job_result';
   jobId: string;
-  jobState: JobState;
+  jobStatus: JobStatus;
   result?: JobResultData;
 }
 
@@ -95,12 +95,13 @@ export interface Plan {
   meta: Record<string, any>;
 }
 
-// Backend uses: pending, running, completed, failed, cancelled
-export type JobState = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'queued' | 'succeeded';
+/** Job status values matching backend JobStatus enum. */
+export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+/** Job model matching backend Job.to_dict() response. */
 export interface Job {
   id: string;
-  state: JobState;
+  status: JobStatus;
   progress: number;
   message?: string;
   result?: Record<string, any>;

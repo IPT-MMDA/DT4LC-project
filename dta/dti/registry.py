@@ -1,3 +1,9 @@
+"""Registry loading and querying utilities.
+
+Functions for loading the component registry from YAML and searching
+for items by keywords or output types.
+"""
+
 from pathlib import Path
 
 import yaml
@@ -8,12 +14,14 @@ from .schemas import Registry, RegistryItem
 
 
 def load_registry(path: Path = REGISTRY_PATH) -> Registry:
+    """Load component registry from YAML file."""
     with path.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return Registry(**data)
 
 
 def find_items_by_keywords(reg: Registry, keywords: list[str]) -> list[RegistryItem]:
+    """Find registry items matching keywords, sorted by relevance."""
     ks = {k.lower() for k in keywords}
 
     def score(item: RegistryItem) -> int:
@@ -23,6 +31,7 @@ def find_items_by_keywords(reg: Registry, keywords: list[str]) -> list[RegistryI
 
 
 def find_items_producing(reg: Registry, out_type: str) -> list[RegistryItem]:
+    """Find registry items that produce the specified output type."""
     return [i for i in reg.instances if out_type in i.outputs]
 
 

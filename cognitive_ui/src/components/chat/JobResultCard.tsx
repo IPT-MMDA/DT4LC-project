@@ -163,24 +163,22 @@ export function parseJobResult(job: Job): JobResultData | undefined {
 }
 
 // Status badge component
-function StatusBadge({ state }: { state: Job['state'] }) {
+function StatusBadge({ status }: { status: Job['status'] }) {
   const config = {
     pending: { icon: Clock, className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
-    queued: { icon: Clock, className: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
     running: { icon: Loader2, className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' },
     completed: { icon: CheckCircle, className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
-    succeeded: { icon: CheckCircle, className: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
     failed: { icon: XCircle, className: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' },
     cancelled: { icon: XCircle, className: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' },
   };
 
-  const { icon: Icon, className } = config[state] || config.pending;
-  const isAnimated = state === 'running';
+  const { icon: Icon, className } = config[status] || config.pending;
+  const isAnimated = status === 'running';
 
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${className}`}>
       <Icon className={`w-3 h-3 ${isAnimated ? 'animate-spin' : ''}`} />
-      {state}
+      {status}
     </span>
   );
 }
@@ -200,10 +198,10 @@ function ResultTypeIcon({ type }: { type: string }) {
 }
 
 export function JobResultCard({ job, resultData, compact = false }: JobResultCardProps) {
-  const isComplete = job.state === 'completed' || job.state === 'succeeded';
-  const isFailed = job.state === 'failed';
-  const isRunning = job.state === 'running';
-  const isPending = job.state === 'pending' || job.state === 'queued';
+  const isComplete = job.status === 'completed';
+  const isFailed = job.status === 'failed';
+  const isRunning = job.status === 'running';
+  const isPending = job.status === 'pending';
   const canCancel = isRunning || isPending;
 
   // Cancel job mutation
@@ -237,7 +235,7 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
             <span className="text-sm font-medium text-gray-900 dark:text-white">
               Job {job.id.slice(0, 8)}
             </span>
-            <StatusBadge state={job.state} />
+            <StatusBadge status={job.status} />
           </div>
           <Link
             to={`/jobs/${job.id}`}
@@ -309,7 +307,7 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <StatusBadge state={job.state} />
+            <StatusBadge status={job.status} />
             <Link
               to={`/jobs/${job.id}`}
               className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400

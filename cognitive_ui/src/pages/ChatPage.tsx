@@ -78,11 +78,11 @@ export function ChatPage() {
 
   // Handle job completion - add result to chat
   useEffect(() => {
-    if (currentJob && (currentJob.state === 'completed' || currentJob.state === 'succeeded')) {
+    if (currentJob && currentJob.status === 'completed') {
       const resultData = parseJobResult(currentJob);
       addJobResultMessage(currentJob, resultData);
       setCurrentJobId(null);
-    } else if (currentJob && currentJob.state === 'failed') {
+    } else if (currentJob && currentJob.status === 'failed') {
       addMessage({
         role: 'assistant',
         content: `Job ${currentJob.id} failed: ${currentJob.error || 'Unknown error'}`,
@@ -90,7 +90,7 @@ export function ChatPage() {
         jobId: currentJob.id,
       });
       setCurrentJobId(null);
-    } else if (currentJob && currentJob.state === 'cancelled') {
+    } else if (currentJob && currentJob.status === 'cancelled') {
       addMessage({
         role: 'assistant',
         content: `Job ${currentJob.id} was cancelled`,
@@ -99,7 +99,7 @@ export function ChatPage() {
       });
       setCurrentJobId(null);
     }
-  }, [currentJob?.state]);
+  }, [currentJob?.status]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,7 +186,7 @@ export function ChatPage() {
           <div className="max-w-[90%]">
             {resultData ? (
               <JobResultCard
-                job={{ id: message.jobId, state: 'completed', progress: 1 }}
+                job={{ id: message.jobId, status: 'completed', progress: 1 }}
                 resultData={resultData}
                 compact={false}
               />

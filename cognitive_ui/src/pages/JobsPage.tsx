@@ -94,18 +94,18 @@ export function JobsPage() {
                         </h3>
                         <span
                           className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            job.state === 'completed' || job.state === 'succeeded'
+                            job.status === 'completed'
                               ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                              : job.state === 'running'
+                              : job.status === 'running'
                               ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                              : job.state === 'failed'
+                              : job.status === 'failed'
                               ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                              : job.state === 'cancelled'
+                              : job.status === 'cancelled'
                               ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
                               : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
                           }`}
                         >
-                          {job.state}
+                          {job.status}
                         </span>
                       </div>
                       {job.message && (
@@ -132,7 +132,7 @@ export function JobsPage() {
                         </button>
                       )}
                       {/* Progress bar for running jobs */}
-                      {job.state === 'running' && (
+                      {job.status === 'running' && (
                         <div className="flex items-center gap-2">
                           <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                             <div

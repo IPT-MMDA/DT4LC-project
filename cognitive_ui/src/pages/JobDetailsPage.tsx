@@ -60,37 +60,37 @@ export function JobDetailsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {job.state === 'succeeded' && (
+            {job.status === 'completed' && (
               <CheckCircle className="w-6 h-6 text-green-500" />
             )}
-            {job.state === 'failed' && (
+            {job.status === 'failed' && (
               <XCircle className="w-6 h-6 text-red-500" />
             )}
-            {job.state === 'running' && (
+            {job.status === 'running' && (
               <Loader2 className="w-6 h-6 animate-spin text-yellow-500" />
             )}
-            {job.state === 'queued' && (
+            {job.status === 'pending' && (
               <Clock className="w-6 h-6 text-gray-500" />
             )}
             <span
               className={`px-3 py-1 rounded-full text-sm font-medium ${
-                job.state === 'succeeded'
+                job.status === 'completed'
                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                  : job.state === 'running'
+                  : job.status === 'running'
                   ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                  : job.state === 'failed'
+                  : job.status === 'failed'
                   ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
                   : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
               }`}
             >
-              {job.state}
+              {job.status}
             </span>
           </div>
         </div>
       </div>
 
       {/* Progress Bar */}
-      {job.state === 'running' && (
+      {job.status === 'running' && (
         <div className="mb-8 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">

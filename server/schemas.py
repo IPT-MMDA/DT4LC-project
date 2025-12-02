@@ -1,3 +1,9 @@
+"""Pydantic schemas for the FastAPI server.
+
+Defines request/response models for the REST API endpoints including
+job submission, chat messages, and file attachments.
+"""
+
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -6,11 +12,15 @@ Role = Literal["user", "assistant"]
 
 
 class ChatMessage(BaseModel):
+    """Single message in a chat conversation."""
+
     role: Role
     content: str
 
 
 class ChatRequest(BaseModel):
+    """Request containing chat message history."""
+
     messages: list[ChatMessage]
 
 
@@ -34,6 +44,8 @@ class JobSubmitRequest(BaseModel):
 
 
 class Plan(BaseModel):
+    """Execution plan for a pipeline of analysis steps."""
+
     tags: list[str] = []
     goals: list[str] = []
     pipeline: list[str] = []  # tool ids
@@ -42,10 +54,14 @@ class Plan(BaseModel):
 
 
 class CreateJobRequest(BaseModel):
+    """Request to create a job from a pre-defined plan."""
+
     plan: Plan
 
 
 class JobStatus(BaseModel):
+    """Current status and results of a job."""
+
     id: str
     state: Literal["queued", "running", "succeeded", "failed"] = "queued"
     progress: float = 0.0

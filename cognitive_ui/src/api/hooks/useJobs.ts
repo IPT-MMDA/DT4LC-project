@@ -1,29 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../client';
 import { apiLogger as logger } from '../../utils/logger';
-import type { Job, JobSubmitRequest, JobsListResponse, JobState } from '../../types';
+import type { Job, JobSubmitRequest, JobsListResponse } from '../../types';
 
 interface JobFilters {
   status?: string;
   limit?: number;
   offset?: number;
-}
-
-// Transform backend job response to frontend Job type
-// Backend uses "status", frontend uses "state"
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function transformJob(raw: any): Job {
-  return {
-    id: raw.id,
-    state: (raw.status || raw.state) as JobState,
-    progress: raw.progress || 0,
-    message: raw.message,
-    result: raw.result,
-    plan: raw.plan,
-    error: raw.error,
-    created_at: raw.created_at,
-    updated_at: raw.updated_at,
-  };
 }
 
 export function useSubmitJob() {
@@ -32,9 +15,9 @@ export function useSubmitJob() {
   return useMutation({
     mutationFn: async (data: JobSubmitRequest): Promise<Job> => {
       logger.debug('Sending to API:', JSON.stringify(data, null, 2));
-      const raw = await apiClient.post<JobSubmitRequest, unknown>('/v1/jobs', data);
-      logger.debug('API response:', raw);
-      return transformJob(raw);
+      const job = await apiClient.post<JobSubmitRequest, Job>('/v1/jobs', data);
+      logger.debug('API response:', job);
+      return job;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
@@ -46,15 +29,14 @@ export function useJob(jobId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ['job', jobId],
     queryFn: async (): Promise<Job> => {
-      const raw = await apiClient.get<unknown>(`/v1/jobs/${jobId}`);
-      return transformJob(raw);
+      return apiClient.get<Job>(`/v1/jobs/${jobId}`);
     },
     enabled: enabled && !!jobId,
     refetchInterval: (query) => {
       const data = query.state.data as Job | undefined;
-      const status = data?.state;
+      const jobStatus = data?.status;
       // Poll every 2 seconds for pending/running jobs
-      return status && ['pending', 'queued', 'running'].includes(status) ? 2000 : false;
+      return jobStatus && ['pending', 'running'].includes(jobStatus) ? 2000 : false;
     },
   });
 }
@@ -63,13 +45,7 @@ export function useJobs(filters?: JobFilters) {
   return useQuery({
     queryKey: ['jobs', filters],
     queryFn: async (): Promise<JobsListResponse> => {
-      const raw = await apiClient.get<{ jobs: unknown[]; total: number; limit: number; offset: number }>('/v1/jobs', { params: filters });
-      return {
-        jobs: raw.jobs.map(transformJob),
-        total: raw.total,
-        limit: raw.limit,
-        offset: raw.offset,
-      };
+      return apiClient.get<JobsListResponse>('/v1/jobs', { params: filters });
     },
   });
 }

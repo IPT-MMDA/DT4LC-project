@@ -16,14 +16,14 @@ export function Dashboard() {
     {
       label: 'Active Jobs',
       value:
-        jobsData?.jobs.filter((j: Job) => j.state === 'running').length || 0,
+        jobsData?.jobs.filter((j: Job) => j.status === 'running').length || 0,
       icon: Loader2,
       color: 'text-yellow-600',
     },
     {
       label: 'Completed',
       value:
-        jobsData?.jobs.filter((j: Job) => j.state === 'succeeded').length || 0,
+        jobsData?.jobs.filter((j: Job) => j.status === 'completed').length || 0,
       icon: CheckCircle,
       color: 'text-green-600',
     },
@@ -137,16 +137,16 @@ export function Dashboard() {
                       </span>
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          job.state === 'succeeded'
+                          job.status === 'completed'
                             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                            : job.state === 'running'
+                            : job.status === 'running'
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-                            : job.state === 'failed'
+                            : job.status === 'failed'
                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
                         }`}
                       >
-                        {job.state}
+                        {job.status}
                       </span>
                     </div>
                     {job.message && (
@@ -155,7 +155,7 @@ export function Dashboard() {
                       </p>
                     )}
                   </div>
-                  {job.state === 'running' && (
+                  {job.status === 'running' && (
                     <div className="flex items-center gap-2">
                       <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                         <div
