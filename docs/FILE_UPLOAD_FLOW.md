@@ -37,6 +37,7 @@ curl -X POST http://localhost:8000/v1/upload \
 ```
 
 **Response:**
+
 ```json
 {
   "id": "a1b2c3d4",
@@ -83,6 +84,7 @@ User: "Now calculate NDVI on this data"
 ```
 
 The frontend maintains chat session context including:
+
 - Previous file attachments with server paths
 - Conversation history
 - Job results for reference
@@ -96,6 +98,7 @@ The frontend maintains chat session context including:
 ## Validation
 
 Files are validated on upload:
+
 - Extension must be `.tif` or `.tiff`
 - Must be valid GeoTIFF (rasterio can open)
 - Must not be empty

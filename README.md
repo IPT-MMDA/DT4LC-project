@@ -81,6 +81,9 @@ open http://localhost
 #### Backend
 
 ```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # Using Task (recommended)
 task venv           # Create virtual environment
 task install        # Install all dependencies
@@ -231,6 +234,7 @@ The system supports multiple LLM providers with automatic fallback:
 #### Basic Setup
 
 Add API keys to `.env`:
+
 ```bash
 GEMINI_API_KEY=your_key
 GROQ_API_KEY=your_key
@@ -239,10 +243,11 @@ GROQ_API_KEY=your_key
 #### Model Selection
 
 Choose specific models for each provider:
+
 ```bash
 # Gemini: Single model or multiple (rotates for rate limit balancing)
-GEMINI_MODELS=gemini-2.0-flash-exp
-GEMINI_MODELS=gemini-1.5-flash,gemini-2.0-flash  # rotates between models
+GEMINI_MODELS=gemini-2.5-flash
+GEMINI_MODELS=gemini-2.0-flash,gemini-2.5-flash  # rotates between models
 
 # Groq: Single model (already ultra-fast, no rotation needed)
 GROQ_MODEL=llama-3.3-70b-versatile
@@ -252,7 +257,8 @@ OLLAMA_MODEL=llama3.2
 ```
 
 Available models:
-- **Gemini**: `gemini-1.5-flash`, `gemini-2.0-flash`, `gemini-2.0-flash-exp`
+
+- **Gemini**: `gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash-lite`
 - **Groq**: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`
 - **Ollama**: Any installed model (e.g., `llama3.2`, `mistral`)
 - **Apertus**: `swiss-ai/Apertus-8B`, `swiss-ai/Apertus-70B`
@@ -438,6 +444,34 @@ curl -X POST http://localhost:8000/v1/chat \
 | Ollama | 11434 | Local LLM server |
 
 ### Commands
+
+#### With Task
+
+```bash
+# Start services (uses cloud LLM providers from .env)
+task docker:up
+
+# Build and start services
+task docker:up:build
+
+# Start with local Ollama LLM
+task docker:up:ollama
+
+# Build and start with Ollama
+task docker:up:build:ollama
+
+# View logs
+task docker:logs
+task docker:logs:backend
+
+# Stop all services
+task docker:down
+
+# Stop and remove volumes
+task docker:down:clean
+```
+
+#### With docker compose
 
 ```bash
 # Start all services

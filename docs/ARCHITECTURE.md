@@ -5,6 +5,7 @@ System design and component overview for the Digital Twin for Land Cover project
 ## Overview
 
 DT4LC is a cognitive digital twin framework for geospatial analysis, combining:
+
 - **LLM-powered orchestration** for natural language interfaces
 - **Pipeline execution** for data processing workflows
 - **Multi-provider LLM support** with automatic fallback
@@ -58,6 +59,7 @@ DT4LC is a cognitive digital twin framework for geospatial analysis, combining:
 Located in `dta/dti/coe/`
 
 #### Intent Classifier (`intent_classifier.py`)
+
 Determines if a request needs pipeline execution or a conversational response.
 
 - **PIPELINE**: Requests that need data processing (NDVI, change detection)
@@ -66,7 +68,9 @@ Determines if a request needs pipeline execution or a conversational response.
 Uses pattern matching for clear action requests, falls back to LLM for ambiguous cases.
 
 #### Context Agent (`context_agent.py`)
+
 Extracts structured understanding from user requests:
+
 - Goal identification
 - Required inputs/outputs
 - Keywords and hints
@@ -74,11 +78,13 @@ Extracts structured understanding from user requests:
 #### Planner (`planner.py`)
 
 Generates execution plans using:
+
 - **Template planner**: Fast path for common patterns
 - **LLM planner**: Smart path for complex requests
 - Hybrid mode with confidence-based routing
 
 #### Plan Validator (`plan_validator.py`)
+
 Validates generated plans against registry constraints.
 
 ### LLM Router (`dta/dti/coe/llm/`)
@@ -92,6 +98,7 @@ Multi-provider LLM support with automatic fallback:
 | Ollama | Local | Free | `OLLAMA_BASE_URL` |
 
 **Fallback Strategy:**
+
 ```
 Request → Gemini (if available)
             ↓ (on failure)
@@ -107,28 +114,34 @@ Request → Gemini (if available)
 Located in `dta/dti/`
 
 #### Pipeline Executor (`executor.py`)
+
 Executes plans step-by-step:
+
 1. Load data via input components
 2. Process via algorithms/models
 3. Post-process for visualization
 4. Return artifacts
 
 #### Algorithm Registry (`algorithms/`)
+
 - **NDVI** (`ndvi.py`): Vegetation index calculation
 - **Statistics** (`statistics.py`): Raster statistics
 - **Change Detection** (`change_detection.py`): Before/after comparison
 
 #### Model Registry (`models/`)
+
 - **Prithvi** (`prithvi.py`): NASA/IBM foundation model for geospatial features
 - **Delineate-Anything**: Field boundary detection
 
 #### Post-Processing (`post_processing/`)
+
 - **Visualization** (`visualization.py`): Map rendering, charts
 - **Insights** (`insights.py`): LLM-powered analysis summaries
 
 ### Job Queue (`server/jobs.py`)
 
 Async job processing:
+
 - In-memory asyncio.Queue
 - Background worker pool (3 workers default)
 - Job states: pending → running → completed/failed/cancelled
@@ -138,6 +151,7 @@ Async job processing:
 ### Server (`server/app.py`)
 
 FastAPI application with:
+
 - 12 REST endpoints
 - CORS enabled
 - File upload support
@@ -263,6 +277,7 @@ instances:
 ### Adding New Algorithms
 
 1. Create algorithm file:
+
 ```python
 # dta/dti/algorithms/my_algorithm.py
 def run(RasterPath: str) -> dict:
@@ -271,6 +286,7 @@ def run(RasterPath: str) -> dict:
 ```
 
 2. Register in `dta/registry.yaml`:
+
 ```yaml
 - id: algorithms/my_algorithm
   kind: algorithm
@@ -285,6 +301,7 @@ def run(RasterPath: str) -> dict:
 ### Adding New LLM Providers
 
 1. Create provider class implementing `BaseLLMProvider`:
+
 ```python
 # dta/dti/coe/llm/my_provider.py
 class MyProvider(BaseLLMProvider):

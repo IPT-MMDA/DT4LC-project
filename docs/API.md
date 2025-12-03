@@ -17,6 +17,7 @@ Currently no authentication required (local development only).
 Health check endpoint.
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -30,6 +31,7 @@ Health check endpoint.
 List available algorithms, models, and components from the registry.
 
 **Response:**
+
 ```json
 {
   "instances": [
@@ -49,6 +51,7 @@ List available algorithms, models, and components from the registry.
 List available ML models.
 
 **Response:**
+
 ```json
 {
   "models": [
@@ -71,6 +74,7 @@ List available ML models.
 System-wide execution metrics.
 
 **Response:**
+
 ```json
 {
   "total_executions": 100,
@@ -90,6 +94,7 @@ System-wide execution metrics.
 Job queue statistics.
 
 **Response:**
+
 ```json
 {
   "total_jobs": 50,
@@ -111,6 +116,7 @@ Job queue statistics.
 Submit an async job for processing.
 
 **Request:**
+
 ```json
 {
   "prompt": "calculate ndvi on the uploaded image",
@@ -125,6 +131,7 @@ Submit an async job for processing.
 ```
 
 **Response:** (202 Accepted)
+
 ```json
 {
   "id": "job_xyz789",
@@ -140,6 +147,7 @@ Submit an async job for processing.
 Get job status and results.
 
 **Response (completed):**
+
 ```json
 {
   "id": "job_xyz789",
@@ -169,6 +177,7 @@ Get job status and results.
 ```
 
 **Response (conversation intent):**
+
 ```json
 {
   "id": "job_abc123",
@@ -186,6 +195,7 @@ Get job status and results.
 Cancel a pending or running job.
 
 **Response:** (200 OK)
+
 ```json
 {
   "id": "job_xyz789",
@@ -198,6 +208,7 @@ Cancel a pending or running job.
 List jobs with optional filtering and pagination.
 
 **Query Parameters:**
+
 - `status`: Filter by status (pending, running, completed, failed, cancelled)
 - `limit`: Max results (default: 20)
 - `offset`: Skip first N results (default: 0)
@@ -205,6 +216,7 @@ List jobs with optional filtering and pagination.
 **Example:** `GET /v1/jobs?status=completed&limit=10`
 
 **Response:**
+
 ```json
 {
   "jobs": [...],
@@ -228,6 +240,7 @@ curl -X POST http://localhost:8000/v1/upload \
 ```
 
 **Response:**
+
 ```json
 {
   "id": "abc123",
@@ -241,6 +254,7 @@ curl -X POST http://localhost:8000/v1/upload \
 ```
 
 **Supported Formats:**
+
 - GeoTIFF (.tif, .tiff)
 
 ### Legacy/Sync Endpoints
@@ -250,6 +264,7 @@ curl -X POST http://localhost:8000/v1/upload \
 Generate execution plan without executing (sync).
 
 **Request:**
+
 ```json
 {
   "messages": [
@@ -259,6 +274,7 @@ Generate execution plan without executing (sync).
 ```
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -279,6 +295,7 @@ Generate execution plan without executing (sync).
 Generate plan and execute synchronously.
 
 **Request:**
+
 ```json
 {
   "messages": [
@@ -288,6 +305,7 @@ Generate plan and execute synchronously.
 ```
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -302,6 +320,7 @@ Generate plan and execute synchronously.
 ## Error Responses
 
 ### 400 Bad Request
+
 Invalid request format or parameters.
 
 ```json
@@ -311,6 +330,7 @@ Invalid request format or parameters.
 ```
 
 ### 404 Not Found
+
 Resource not found.
 
 ```json
@@ -320,6 +340,7 @@ Resource not found.
 ```
 
 ### 429 Too Many Requests
+
 Queue is full.
 
 ```json
@@ -329,6 +350,7 @@ Queue is full.
 ```
 
 ### 500 Internal Server Error
+
 Server-side error.
 
 ```json
@@ -347,11 +369,13 @@ The system automatically classifies requests:
 | `conversation` | Question or guidance | Text response |
 
 **Pipeline examples:**
+
 - "calculate ndvi"
 - "detect field boundaries"
 - "run change detection"
 
 **Conversation examples:**
+
 - "what can we do next?"
 - "explain what NDVI means"
 - "help me understand this result"

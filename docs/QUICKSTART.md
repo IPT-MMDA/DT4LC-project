@@ -5,7 +5,7 @@ Get up and running with DT4LC in 5 minutes.
 ## Prerequisites
 
 - Python 3.10+
-- UV package manager (or pip)
+- [uv](https://github.com/astral-sh/uv) package manager (recommended) or pip
 - LLM provider (one of):
   - Gemini API key (cloud)
   - Groq API key (cloud)
@@ -14,6 +14,9 @@ Get up and running with DT4LC in 5 minutes.
 ## Installation
 
 ```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # Clone and navigate
 cd /path/to/DT4LC-project
 
@@ -22,7 +25,7 @@ uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-uv pip install -e ".[dev,ui,models,server,agents]"
+uv pip install -e ".[dev,server]"
 ```
 
 ## Configuration
@@ -56,6 +59,23 @@ echo "OLLAMA_MODEL=llama3.2" >> .env
 ```
 
 ## Run Server
+
+### Option A: Docker (Recommended)
+
+```bash
+# Build and start all services
+task docker:up:build
+
+# Or with Ollama for local LLM
+task docker:up:build:ollama
+
+# View logs
+task docker:logs
+
+# Application available at http://localhost
+```
+
+### Option B: Local Development
 
 ```bash
 # Start the API server
@@ -141,8 +161,9 @@ pytest tests/test_orchestrator.py -v
 ## Interactive API Docs
 
 Once server is running:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+
+- Swagger UI: <http://localhost:8000/docs>
+- ReDoc: <http://localhost:8000/redoc>
 
 ## Troubleshooting
 
@@ -155,7 +176,7 @@ Once server is running:
 ### "Module not found"
 
 ```bash
-uv pip install -e ".[dev,server,agents]"
+uv pip install -e ".[dev,server]"
 ```
 
 ### Port 8000 in use
