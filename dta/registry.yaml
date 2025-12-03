@@ -74,6 +74,9 @@ instances:
     inputs: [RasterPath]
     outputs: [Reconstruction]
     model_id: prithvi-eo-v1-100m
+    preprocessors:
+      - id: preprocessors/scale-to-hls
+        apply_to: RasterPath
     runner:
       type: python
       entrypoint: "${MODEL_PATH}/inference.py"
@@ -105,6 +108,21 @@ instances:
     runner:
       type: agent
       prompt_template: "prompts/analysis.md"
+
+  # =============================================================================
+  # Preprocessors - Reusable data transformations applied before model execution
+  # =============================================================================
+
+  - id: preprocessors/scale-to-hls
+    kind: preprocessor
+    description: |
+      Scales raster data to HLS (Harmonized Landsat Sentinel) format.
+      Converts 0-1 surface reflectance to 0-10000 HLS scale.
+      Useful for models trained on HLS data (e.g., Prithvi).
+    runner:
+      type: python
+      entrypoint: "dta/dti/preprocessors/scale_to_hls.py"
+      function: run
 
   # =============================================================================
   # Hosted Models (DT4LC Team) - Models hosted on external platforms

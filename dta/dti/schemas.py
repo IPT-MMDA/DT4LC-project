@@ -38,14 +38,22 @@ class Integration(BaseModel):  # type: ignore[misc]
     requires: list[str] = []  # required packages
 
 
+class PreprocessorRef(BaseModel):  # type: ignore[misc]
+    """Reference to a preprocessor to apply before execution."""
+
+    id: str  # Registry ID of the preprocessor (e.g., "preprocessors/scale-to-hls")
+    apply_to: str  # Input type to transform (e.g., "RasterPath")
+
+
 class RegistryItem(BaseModel):  # type: ignore[misc]
     id: str
-    kind: Literal["input", "algorithm", "model", "postprocess"]
+    kind: Literal["input", "algorithm", "model", "postprocess", "preprocessor"]
     keywords: list[str] = []
     inputs: list[str] = []
     outputs: list[str] = []
     runner: Runner | None = None  # Optional for hosted models
     description: str | None = None  # Optional description
+    preprocessors: list[PreprocessorRef] = []  # Preprocessors to apply before execution
     integration: Integration | None = None  # For hosted models (HuggingFace, GEE, etc.)
     metadata: dict[str, Any] = {}  # Additional metadata (team, author, hosting, etc.)
 

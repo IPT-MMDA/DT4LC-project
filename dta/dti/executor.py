@@ -85,6 +85,11 @@ STEP_TO_MODEL_MAP = {
     "models/delineate-anything": "delineate-anything-small",
 }
 
+# Logging
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class PipelineExecutor:
     """Executes pipeline plans by dispatching steps to registered runners.
@@ -327,6 +332,10 @@ class PipelineExecutor:
             output_dir_path.mkdir(parents=True, exist_ok=True)
             output_dir = str(output_dir_path)
 
+        # Apply registry-defined preprocessors
+        if item.preprocessors and output_dir:
+            inputs = self._apply_preprocessors(item, inputs, output_dir)
+
         # Build variable context for resolution
         var_context = {
             "MODEL_PATH": model_path,
@@ -475,6 +484,78 @@ class PipelineExecutor:
             return {k: self._resolve_value(v, context) for k, v in value.items()}
         else:
             return value  # bools, ints, floats, None
+
+    def _apply_preprocessors(self, item: RegistryItem, inputs: dict[str, Any], output_dir: str) -> dict[str, Any]:
+        """Apply registry-defined preprocessors to inputs.
+
+        Preprocessors are reusable data transformations defined in the registry.
+        Each preprocessor specifies which input type it transforms.
+
+        Args:
+            item: Registry item with preprocessors defined
+            inputs: Current input values
+            output_dir: Directory for preprocessor outputs
+
+        Returns:
+            Updated inputs dict with preprocessed values
+        """
+        from dta.config import ROOT_DIR
+
+        updated_inputs = inputs.copy()
+
+        for preproc_ref in item.preprocessors:
+            input_type = preproc_ref.apply_to
+            if input_type not in updated_inputs:
+                logger.debug(f"Preprocessor {preproc_ref.id}: input {input_type} not available, skipping")
+                continue
+
+            # Get preprocessor from registry
+            preproc_item = get_item(self.registry, preproc_ref.id)
+            if not preproc_item:
+                logger.warning(f"Preprocessor not found in registry: {preproc_ref.id}")
+                continue
+
+            if not preproc_item.runner or not preproc_item.runner.entrypoint:
+                logger.warning(f"Preprocessor {preproc_ref.id} has no runner/entrypoint")
+                continue
+
+            # Resolve and load preprocessor module
+            entrypoint = Path(preproc_item.runner.entrypoint)
+            if not entrypoint.is_absolute():
+                entrypoint = ROOT_DIR / entrypoint
+
+            if not entrypoint.exists():
+                logger.warning(f"Preprocessor entrypoint not found: {entrypoint}")
+                continue
+
+            try:
+                spec = importlib.util.spec_from_file_location(
+                    f"preprocessor_{preproc_ref.id.replace('/', '_')}", str(entrypoint)
+                )
+                if spec is None or spec.loader is None:
+                    raise ExecutionError(f"Failed to load preprocessor: {entrypoint}")
+
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[spec.name] = module
+                spec.loader.exec_module(module)
+
+                # Call preprocessor function
+                func_name = preproc_item.runner.function or "run"
+                if not hasattr(module, func_name):
+                    raise ExecutionError(f"Preprocessor {entrypoint} has no {func_name}() function")
+
+                func = getattr(module, func_name)
+                original_value = updated_inputs[input_type]
+                new_value = func(input_path=original_value, output_dir=output_dir)
+
+                updated_inputs[input_type] = new_value
+                logger.info(f"Preprocessor {preproc_ref.id} applied to {input_type}: {original_value} -> {new_value}")
+
+            except Exception as e:
+                logger.warning(f"Preprocessor {preproc_ref.id} failed: {e}, using original value")
+                continue
+
+        return updated_inputs
 
     def _collect_model_outputs(self, model_id: str | None, output_dir: str, inputs: dict[str, Any]) -> dict[str, Any]:
         """Collect outputs from a model that writes to output_dir.

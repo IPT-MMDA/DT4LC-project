@@ -168,6 +168,12 @@ def _looks_like_action(prompt: str) -> bool:
         "change",
         "statistics",
         "features",
+        "prithvi",
+        "reconstruction",
+        "reconstruct",
+        "mae",
+        "masked",
+        "autoencoder",
     ]
 
     prompt_lower = prompt.lower()
