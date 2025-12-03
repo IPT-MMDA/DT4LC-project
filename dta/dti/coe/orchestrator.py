@@ -5,9 +5,9 @@ from dta.dti.registry import load_registry
 from dta.dti.schemas import ChatRequest
 
 from .context_agent import analyze
-from .plan_validator import PlanError, validate
 from .intent_classifier import IntentType, classify_intent
-from .planner_agent import plan
+from .plan_validator import PlanError, validate
+from .planner import plan
 
 logger = logging.getLogger(__name__)
 

@@ -10,8 +10,7 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from dta.dti.coe.llm import LLMMessage, LLMRouter
-from dta.dti.coe.llm.config import create_router_from_env
+from dta.dti.coe.llm import LLMMessage, LLMRouter, get_llm_router
 
 if TYPE_CHECKING:
     from dta.dti.coe.context_agent import ContextUnderstanding
@@ -19,17 +18,6 @@ if TYPE_CHECKING:
     from dta.dti.executor import ExecutionPlan, PlanStep
 
 logger = logging.getLogger(__name__)
-
-# Global LLM router instance (lazy init)
-_router: LLMRouter | None = None
-
-
-def _get_router() -> LLMRouter:
-    """Get or create LLM router."""
-    global _router
-    if _router is None:
-        _router = create_router_from_env()
-    return _router
 
 
 def format_registry_for_llm(reg: Registry) -> str:
@@ -95,7 +83,7 @@ def plan_with_llm(
     from dta.dti.executor import ExecutionPlan, PlanStep
 
     if router is None:
-        router = _get_router()
+        router = get_llm_router()
 
     # Format registry for LLM
     registry_desc = format_registry_for_llm(reg)

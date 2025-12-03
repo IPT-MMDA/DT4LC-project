@@ -8,6 +8,19 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+# Re-export Attachment from domain schemas to avoid duplication
+from dta.dti.schemas import Attachment
+
+__all__ = [
+    "Attachment",
+    "ChatMessage",
+    "ChatRequest",
+    "CreateJobRequest",
+    "JobStatus",
+    "JobSubmitRequest",
+    "Plan",
+]
+
 Role = Literal["user", "assistant"]
 
 
@@ -22,16 +35,6 @@ class ChatRequest(BaseModel):
     """Request containing chat message history."""
 
     messages: list[ChatMessage]
-
-
-class Attachment(BaseModel):
-    """File attachment metadata."""
-
-    id: str
-    filename: str
-    path: str
-    mime_type: str = "image/tiff"
-    size_bytes: int | None = None
 
 
 class JobSubmitRequest(BaseModel):

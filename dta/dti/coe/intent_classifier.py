@@ -11,8 +11,7 @@ import logging
 import re
 from typing import Any
 
-from dta.dti.coe.llm import LLMMessage, LLMRouter
-from dta.dti.coe.llm.config import create_router_from_env
+from dta.dti.coe.llm import LLMMessage, get_llm_router
 from dta.dti.schemas import ChatRequest
 
 logger = logging.getLogger(__name__)
@@ -23,18 +22,6 @@ class IntentType(str, Enum):
 
     PIPELINE = "pipeline"  # Needs data processing
     CONVERSATION = "conversation"  # Needs helpful response
-
-
-# Lazy router initialization
-_router: LLMRouter | None = None
-
-
-def _get_router() -> LLMRouter:
-    """Lazy initialization of LLM router."""
-    global _router
-    if _router is None:
-        _router = create_router_from_env()
-    return _router
 
 
 SYSTEM_PROMPT = """You are an Intent Classifier for a geospatial Digital Twin system.
@@ -87,7 +74,7 @@ def classify_intent(req: ChatRequest) -> dict[str, Any]:
             - reason: Brief explanation of classification
             - response: Helpful response if conversation
     """
-    router = _get_router()
+    router = get_llm_router()
 
     # Build context about what's available
     context = req.prompt

@@ -8,6 +8,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from dta.dti.coe.llm import get_llm_router
+
 if TYPE_CHECKING:
     from dta.dti.coe.llm import LLMRouter
 
@@ -28,9 +30,7 @@ class InsightGenerator:
     def _get_router(self) -> LLMRouter:
         """Get or create LLM router."""
         if self.llm_router is None:
-            from dta.dti.coe.llm.config import create_router_from_env
-
-            self.llm_router = create_router_from_env()
+            self.llm_router = get_llm_router()
         return self.llm_router
 
     def generate_ndvi_insights(self, ndvi_data: dict[str, Any]) -> str:

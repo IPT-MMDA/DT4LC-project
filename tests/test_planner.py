@@ -15,7 +15,7 @@ from dta.dti.coe.llm_planner import (
     format_registry_for_llm,
     plan_with_llm,
 )
-from dta.dti.coe.planner_agent import plan, plan_template
+from dta.dti.coe.planner import plan, plan_template
 from dta.dti.registry import Registry
 from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, RegistryItem, Runner
 

@@ -21,6 +21,7 @@ import numpy as np
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import load_registry
+from dta.dti.schemas import Attachment as COEAttachment
 from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
@@ -385,7 +386,6 @@ class JobQueue:
             Result dictionary or raises exception
         """
         from dta.dti.executor import CancellationError
-        from dta.dti.schemas import Attachment as COEAttachment
 
         # Convert job attachments to COE format
         logger.debug(f"Job {job_id}: Starting processing with {len(job.attachments)} attachments")

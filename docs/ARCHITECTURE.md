@@ -25,8 +25,8 @@ DT4LC is a cognitive digital twin framework for geospatial analysis, combining:
 │  │ Context Orchestration Engine (COE)                          ││
 │  │  • Intent Classifier (routes pipeline vs conversation)      ││
 │  │  • Context Agent (understands user intent)                  ││
-│  │  • Planner Agent (builds execution pipeline)                ││
-│  │  • Decision Agent (validates plan)                          ││
+│  │  • Planner (builds execution pipeline)                      ││
+│  │  • Plan Validator (validates plan)                          ││
 │  └─────────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │ Digital Twin Instance (DTI)                                 ││
@@ -71,7 +71,8 @@ Extracts structured understanding from user requests:
 - Required inputs/outputs
 - Keywords and hints
 
-#### Planner Agent (`planner_agent.py`)
+#### Planner (`planner.py`)
+
 Generates execution plans using:
 - **Template planner**: Fast path for common patterns
 - **LLM planner**: Smart path for complex requests
@@ -156,7 +157,7 @@ FastAPI application with:
    ↓
 4. Plan Generation (template or LLM planner)
    ↓
-5. Plan Validation (decision agent)
+5. Plan Validation (plan validator)
    ↓
 6. Job Queuing (async processing)
    ↓
@@ -191,7 +192,7 @@ dta/
 │   │   ├── llm/                  # LLM providers (Gemini, Groq, Ollama)
 │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
 │   │   ├── context_agent.py      # Understands user intent
-│   │   ├── planner_agent.py      # Builds execution plans
+│   │   ├── planner.py            # Builds execution plans
 │   │   ├── plan_validator.py     # Validates plans
 │   │   └── orchestrator.py       # Main orchestration flow
 │   ├── algorithms/               # NDVI, Statistics, Change Detection

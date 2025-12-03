@@ -13,8 +13,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from dta.dti.coe.llm import LLMRouter
-from dta.dti.coe.llm.config import create_router_from_env
+from dta.dti.coe.llm import get_llm_router
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
 
@@ -39,22 +38,6 @@ class MissingInputError(ExecutionError):
 
 class CancellationError(Exception):
     """Raised when execution is cancelled."""
-
-
-# Lazy router initialization for agent summarization
-_router: LLMRouter | None = None
-
-
-def _get_router() -> LLMRouter:
-    """Lazy initialization of LLM router.
-
-    Returns:
-        Configured LLM router with fallback
-    """
-    global _router
-    if _router is None:
-        _router = create_router_from_env()
-    return _router
 
 
 class PipelineExecutor:
@@ -343,7 +326,7 @@ class PipelineExecutor:
             Dictionary with summary text
         """
         try:
-            router = _get_router()
+            router = get_llm_router()
 
             # Determine analysis type from artifact keys
             analysis_type = self._detect_analysis_type(inputs)
