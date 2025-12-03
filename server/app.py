@@ -4,7 +4,6 @@ import io
 import json
 import logging
 from pathlib import Path
-import tempfile
 from typing import Any
 
 from dotenv import load_dotenv
@@ -26,6 +25,7 @@ import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
 
+from dta.config import UPLOADS_PATH
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.metrics import get_metrics_collector
@@ -34,10 +34,14 @@ from dta.dti.registry import load_registry
 from dta.dti.schemas import ChatRequest as COEChatRequest
 
 from .jobs import JobStatus, get_job_queue
+from .model_routes import router as model_router
 from .schemas import ChatRequest, JobSubmitRequest
 
 app = FastAPI(title="DT4LC API", version="1.0.0")
 HEARTBEAT_SECS = 15
+
+# Register routers
+app.include_router(model_router)
 
 # CORS - allow all origins for MVP
 app.add_middleware(
@@ -48,9 +52,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Temp directory for uploaded files
-UPLOAD_DIR = Path(tempfile.gettempdir()) / "dt4lc_uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Upload directory from centralized config (resources/.cache/uploads/)
+UPLOAD_DIR = UPLOADS_PATH
 
 
 def sse_frame(payload: dict[str, Any]) -> bytes:

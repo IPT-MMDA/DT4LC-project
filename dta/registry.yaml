@@ -1,7 +1,7 @@
 version: "0.1"
 types:
  - NDVIMap
- - Features
+ - Reconstruction  # Prithvi MAE reconstruction outputs
  - RasterPath
  - RasterPathBefore
  - RasterPathAfter
@@ -63,18 +63,28 @@ instances:
       type: python
       entrypoint: "dta/dti/algorithms/change_detection.py"
 
-  - id: models/prithvi_features
+  - id: models/prithvi-reconstruction
     kind: model
-    keywords: [prithvi, features, hls, temporal, geotiff]
+    description: |
+      NASA/IBM Prithvi foundation model for satellite imagery analysis. Uses Masked
+      Autoencoder (MAE) to reconstruct HLS imagery, revealing learned spatial and
+      spectral patterns. Outputs RGB visualizations: original, masked, and predicted
+      (reconstructed) images.
+    keywords: [prithvi, reconstruction, mae, masked, autoencoder, predict, visualize, foundation, hls, geotiff, nasa, ibm]
     inputs: [RasterPath]
-    outputs: [Features]
+    outputs: [Reconstruction]
+    model_id: prithvi-eo-v1-100m
     runner:
       type: python
-      entrypoint: "dta/dti/models/third_party/prithvi_eo_v1_100m/inference.py"
-      env:
-        PRITHVI_DIR: "dta/dti/models/third_party/prithvi_eo_v1_100m"
-        PRITHVI_CONFIG: "dta/dti/models/third_party/prithvi_eo_v1_100m/config.json"
-        PRITHVI_WEIGHTS: "dta/dti/models/third_party/prithvi_eo_v1_100m/Prithvi_EO_V1_100M.pt"
+      entrypoint: "${MODEL_PATH}/inference.py"
+      function: main
+      args_map:
+        data_files: ["${RasterPath}"]
+        config_path: "${MODEL_PATH}/config.json"
+        checkpoint: "${MODEL_PATH}/Prithvi_EO_V1_100M.pt"
+        output_dir: "${OUTPUT_DIR}"
+        rgb_outputs: true
+        mask_ratio: 0.75
 
   - id: models/delineate-anything
     kind: model

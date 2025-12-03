@@ -40,6 +40,52 @@ class CancellationError(Exception):
     """Raised when execution is cancelled."""
 
 
+class ModelNotInstalledError(ExecutionError):
+    """Raised when a required ML model is not installed.
+
+    This error provides model info so the frontend can prompt
+    the user to download the model.
+    """
+
+    def __init__(
+        self,
+        step_id: str,
+        model_id: str,
+        model_name: str,
+        size_mb: int,
+        description: str,
+    ) -> None:
+        self.step_id = step_id
+        self.model_id = model_id
+        self.model_name = model_name
+        self.size_mb = size_mb
+        self.description = description
+        super().__init__(
+            f"Model '{model_name}' ({size_mb} MB) is required but not installed. Please download it first."
+        )
+
+    def to_dict(self) -> dict:
+        """Convert to dict for JSON serialization."""
+        return {
+            "error": "model_not_installed",
+            "model_required": {
+                "id": self.model_id,
+                "name": self.model_name,
+                "size_mb": self.size_mb,
+                "description": self.description,
+            },
+            "message": f"This analysis requires the {self.model_name} model ({self.size_mb} MB). "
+            f"Would you like to download it?",
+        }
+
+
+# Mapping from registry step IDs to model manager model IDs
+STEP_TO_MODEL_MAP = {
+    "models/prithvi-reconstruction": "prithvi-eo-v1-100m",
+    "models/delineate-anything": "delineate-anything-small",
+}
+
+
 class PipelineExecutor:
     """Executes pipeline plans by dispatching steps to registered runners.
 
@@ -158,7 +204,11 @@ class PipelineExecutor:
 
         Raises:
             ExecutionError: If runner type is unknown or execution fails
+            ModelNotInstalledError: If required model is not installed
         """
+        # Check if this step requires an ML model
+        self._check_model_availability(step, item)
+
         runner_type = item.runner.type
 
         if runner_type == "passthrough":
@@ -169,6 +219,37 @@ class PipelineExecutor:
             self._run_agent(step, item)
         else:
             raise ExecutionError(f"Unknown runner type: {runner_type}")
+
+    def _check_model_availability(self, step: PlanStep, item: RegistryItem) -> None:
+        """Check if required ML model is installed.
+
+        Args:
+            step: Step configuration
+            item: Registry item
+
+        Raises:
+            ModelNotInstalledError: If model is not installed
+        """
+        # Check if this step uses a model that needs to be downloaded
+        model_id = STEP_TO_MODEL_MAP.get(step.uses)
+        if not model_id:
+            return  # Not a model step, nothing to check
+
+        from dta.dti.models import AVAILABLE_MODELS, get_model_manager
+
+        manager = get_model_manager()
+
+        if not manager.is_model_available(model_id):
+            # Model not installed - raise error with model info
+            model_info = AVAILABLE_MODELS.get(model_id)
+            if model_info:
+                raise ModelNotInstalledError(
+                    step_id=step.uses,
+                    model_id=model_id,
+                    model_name=model_info.name,
+                    size_mb=model_info.size_mb,
+                    description=model_info.description,
+                )
 
     def _run_passthrough(self, step: PlanStep, item: RegistryItem) -> None:
         """Handle passthrough runners (e.g., input/file).
@@ -203,7 +284,7 @@ class PipelineExecutor:
         """Execute Python entrypoint.
 
         Loads the Python module specified in item.runner.entrypoint and calls
-        its main function or runs it as a script.
+        the specified function. Supports args_map for translating inputs.
 
         Args:
             step: Step configuration
@@ -215,9 +296,48 @@ class PipelineExecutor:
         if not item.runner.entrypoint:
             raise ExecutionError(f"Python runner {item.id} missing entrypoint")
 
-        entrypoint = Path(item.runner.entrypoint)
+        # Resolve ${MODEL_PATH} variable if this step has a model_id
+        model_path: str | None = None
+        model_id = STEP_TO_MODEL_MAP.get(step.uses)
+        if model_id:
+            from dta.dti.models import get_model_manager
+
+            manager = get_model_manager()
+            path = manager.get_model_path(model_id)
+            if not path:
+                raise ExecutionError(f"Model path not found for {model_id}")
+            model_path = str(path)  # Convert Path to str for string operations
+
+        # Collect inputs from artifacts first (needed for variable resolution)
+        inputs: dict[str, Any] = {}
+        for input_type in item.inputs:
+            if input_type in self.artifacts:
+                inputs[input_type] = self.artifacts[input_type]
+
+        # Create output directory for models
+        output_dir: str | None = None
+        if model_id:
+            from datetime import datetime
+            import uuid
+
+            from dta.config import TEMP_PATH
+
+            run_id = f"{model_id}_{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
+            output_dir_path = TEMP_PATH / f"{model_id}_outputs" / run_id
+            output_dir_path.mkdir(parents=True, exist_ok=True)
+            output_dir = str(output_dir_path)
+
+        # Build variable context for resolution
+        var_context = {
+            "MODEL_PATH": model_path,
+            "OUTPUT_DIR": output_dir,
+            **inputs,  # Input types like RasterPath
+        }
+
+        # Resolve entrypoint path
+        entrypoint_str = self._resolve_variables(item.runner.entrypoint, var_context)
+        entrypoint = Path(entrypoint_str)
         if not entrypoint.is_absolute():
-            # Relative to project root
             from dta.config import ROOT_DIR
 
             entrypoint = ROOT_DIR / entrypoint
@@ -229,21 +349,24 @@ class PipelineExecutor:
         old_env = {}
         for key, value in item.runner.env.items():
             old_env[key] = os.environ.get(key)
+            resolved = self._resolve_variables(value, var_context)
             # Resolve relative paths in env vars
-            if key.endswith(("_DIR", "_PATH")) and not Path(value).is_absolute():
+            if key.endswith(("_DIR", "_PATH")) and not Path(resolved).is_absolute():
                 from dta.config import ROOT_DIR
 
-                value = str(ROOT_DIR / value)
-            os.environ[key] = value
+                resolved = str(ROOT_DIR / resolved)
+            os.environ[key] = resolved
+
+        # Add model directory to sys.path for sibling imports (e.g., prithvi_mae.py)
+        model_dir_added = False
+        if model_path:
+            model_dir = str(Path(model_path))
+            if model_dir not in sys.path:
+                sys.path.insert(0, model_dir)
+                model_dir_added = True
 
         try:
-            # Collect inputs from artifacts
-            inputs: dict[str, Any] = {}
-            for input_type in item.inputs:
-                if input_type in self.artifacts:
-                    inputs[input_type] = self.artifacts[input_type]
-
-            # Load and execute module
+            # Load module
             spec = importlib.util.spec_from_file_location(f"runner_{item.id.replace('/', '_')}", str(entrypoint))
             if spec is None or spec.loader is None:
                 raise ExecutionError(f"Failed to load module: {entrypoint}")
@@ -252,15 +375,29 @@ class PipelineExecutor:
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
 
-            # Look for run() or main() function
-            if hasattr(module, "run"):
-                result = module.run(**inputs)
-            elif hasattr(module, "main"):
-                result = module.main(**inputs)
+            # Determine function to call and arguments
+            if item.runner.args_map:
+                # Use args_map - resolve all variables in the map
+                func_args = self._resolve_args_map(item.runner.args_map, var_context)
+                func_name = item.runner.function or "main"
+                if not hasattr(module, func_name):
+                    raise ExecutionError(f"Module {entrypoint} has no {func_name}() function")
+                func = getattr(module, func_name)
+                result = func(**func_args)
             else:
-                raise ExecutionError(f"Module {entrypoint} has no run() or main()")
+                # Legacy mode - pass inputs directly to run() or main()
+                if hasattr(module, "run"):
+                    result = module.run(**inputs)
+                elif hasattr(module, "main"):
+                    result = module.main(**inputs)
+                else:
+                    raise ExecutionError(f"Module {entrypoint} has no run() or main()")
 
             # Store outputs
+            if result is None and output_dir:
+                # For models that don't return anything, create output from output_dir
+                result = self._collect_model_outputs(model_id, output_dir, inputs)
+
             if len(item.outputs) == 1:
                 self.artifacts[item.outputs[0]] = result
             elif isinstance(result, dict):
@@ -277,6 +414,165 @@ class PipelineExecutor:
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+
+            # Remove model directory from sys.path
+            if model_dir_added and model_path:
+                try:
+                    sys.path.remove(str(Path(model_path)))
+                except ValueError:
+                    pass  # Already removed
+
+    def _resolve_variables(self, value: str, context: dict[str, Any]) -> str:
+        """Resolve ${VAR} placeholders in a string.
+
+        Args:
+            value: String with ${VAR} placeholders
+            context: Variable name -> value mapping
+
+        Returns:
+            Resolved string
+        """
+        import re
+
+        def replace(match: re.Match) -> str:
+            var_name = match.group(1)
+            if var_name in context and context[var_name] is not None:
+                return str(context[var_name])
+            return match.group(0)  # Keep original if not found
+
+        return re.sub(r"\$\{(\w+)\}", replace, value)
+
+    def _resolve_args_map(self, args_map: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        """Resolve variables in args_map recursively.
+
+        Args:
+            args_map: Argument mapping with ${VAR} placeholders
+            context: Variable name -> value mapping
+
+        Returns:
+            Resolved arguments dict
+        """
+        resolved = {}
+        for key, value in args_map.items():
+            resolved[key] = self._resolve_value(value, context)
+        return resolved
+
+    def _resolve_value(self, value: Any, context: dict[str, Any]) -> Any:
+        """Resolve a single value, handling strings, lists, and dicts.
+
+        Args:
+            value: Value to resolve
+            context: Variable context
+
+        Returns:
+            Resolved value
+        """
+        if isinstance(value, str):
+            return self._resolve_variables(value, context)
+        elif isinstance(value, list):
+            return [self._resolve_value(v, context) for v in value]
+        elif isinstance(value, dict):
+            return {k: self._resolve_value(v, context) for k, v in value.items()}
+        else:
+            return value  # bools, ints, floats, None
+
+    def _collect_model_outputs(self, model_id: str | None, output_dir: str, inputs: dict[str, Any]) -> dict[str, Any]:
+        """Collect outputs from a model that writes to output_dir.
+
+        Args:
+            model_id: Model identifier
+            output_dir: Directory where model wrote outputs
+            inputs: Original inputs
+
+        Returns:
+            Output dictionary with visualizations for frontend display
+        """
+        output_path = Path(output_dir)
+        output_files = list(output_path.glob("*.tiff")) + list(output_path.glob("*.tif"))
+
+        result: dict[str, Any] = {
+            "model": model_id or "unknown",
+            "output_dir": output_dir,
+            "output_files": [str(f) for f in output_files],
+            "input_file": inputs.get("RasterPath"),
+        }
+
+        # Convert TIFF outputs to base64 PNG for frontend visualization
+        visualizations = self._convert_tiffs_to_visualizations(output_files, model_id)
+        if visualizations:
+            result["visualizations"] = visualizations
+
+        return result
+
+    def _convert_tiffs_to_visualizations(self, tiff_files: list[Path], model_id: str | None) -> dict[str, str]:
+        """Convert TIFF files to base64 PNG images for frontend display.
+
+        Args:
+            tiff_files: List of TIFF file paths
+            model_id: Model identifier for labeling
+
+        Returns:
+            Dictionary mapping label -> base64 PNG string
+        """
+        import base64
+        import io
+
+        try:
+            import numpy as np
+            from PIL import Image
+            import rasterio
+        except ImportError:
+            logger.warning("rasterio or PIL not available for TIFF conversion")
+            return {}
+
+        visualizations: dict[str, str] = {}
+
+        for tiff_path in tiff_files:
+            try:
+                # Derive label from filename
+                # e.g., "original_rgb_t0.tiff" -> "original_rgb_t0"
+                label = tiff_path.stem
+
+                with rasterio.open(tiff_path) as src:
+                    # Read as RGB (first 3 bands or all if fewer)
+                    bands = min(3, src.count)
+                    data = src.read(list(range(1, bands + 1)))
+
+                    # Handle different data types
+                    if data.dtype == np.uint8:
+                        # Already 8-bit, use directly
+                        img_data = data
+                    else:
+                        # Normalize to 0-255 for other types
+                        data_min = np.nanmin(data)
+                        data_max = np.nanmax(data)
+                        if data_max > data_min:
+                            img_data = ((data - data_min) / (data_max - data_min) * 255).astype(np.uint8)
+                        else:
+                            img_data = np.zeros_like(data, dtype=np.uint8)
+
+                    # Transpose from (C, H, W) to (H, W, C) for PIL
+                    if img_data.shape[0] == 3:
+                        img_array = np.transpose(img_data, (1, 2, 0))
+                        img = Image.fromarray(img_array, mode="RGB")
+                    elif img_data.shape[0] == 1:
+                        img = Image.fromarray(img_data[0], mode="L")
+                    else:
+                        # Take first band as grayscale
+                        img = Image.fromarray(img_data[0], mode="L")
+
+                    # Convert to PNG base64
+                    buffer = io.BytesIO()
+                    img.save(buffer, format="PNG")
+                    buffer.seek(0)
+                    b64_str = base64.b64encode(buffer.read()).decode("utf-8")
+                    visualizations[label] = b64_str
+
+            except Exception as e:
+                logger.warning(f"Failed to convert {tiff_path} to PNG: {e}")
+                continue
+
+        return visualizations
 
     def _run_agent(self, step: PlanStep, item: RegistryItem) -> None:
         """Execute agent runner (LLM-based processing).

@@ -44,9 +44,9 @@ function createContextSummary(result?: JobResultData): string {
     parts.push(`[Field boundaries: ${result.fieldBoundaries.numFields} fields detected, total area ${(result.fieldBoundaries.totalAreaM2 / 10000).toFixed(2)} hectares]`);
   }
 
-  // Prithvi features
-  if (result.features) {
-    parts.push(`[Prithvi features: ${result.features.dimensions}D vector extracted using ${result.features.model}]`);
+  // Prithvi reconstruction
+  if (result.reconstruction) {
+    parts.push(`[Prithvi MAE reconstruction using ${result.reconstruction.model}]`);
   }
 
   // Include info about visualizations (without the actual images)
@@ -403,12 +403,69 @@ export const useChatStore = create<ChatStore>()(
     }),
     {
       name: 'dt4lc-chat-storage',
-      partialize: (state) => ({
-        sessions: state.sessions,
-        currentSessionId: state.currentSessionId,
-        messages: state.messages,
-        jobToSessionMap: state.jobToSessionMap,
-      }),
+      partialize: (state) => {
+        // Strip large binary data (base64 images) from messages before persisting
+        // This prevents localStorage quota issues with satellite imagery
+        const stripBinaryData = (messages: ChatMessage[]): ChatMessage[] => {
+          return messages.map((m) => {
+            const stripped = { ...m };
+
+            // Remove base64 previews from attachments (keep only metadata)
+            if (stripped.attachments) {
+              stripped.attachments = stripped.attachments.map((att) => ({
+                id: att.id,
+                filename: att.filename,
+                path: att.path,
+                // Omit preview_png_base64 - too large for localStorage
+              }));
+            }
+
+            // Remove base64 visualizations from result data (can be re-fetched from job)
+            if (stripped.resultData?.visualizations) {
+              stripped.resultData = {
+                ...stripped.resultData,
+                visualizations: stripped.resultData.visualizations.map((v) => ({
+                  type: v.type,
+                  label: v.label,
+                  // Omit base64 - too large for localStorage
+                  base64: '',
+                })),
+              };
+            }
+
+            return stripped;
+          });
+        };
+
+        // Strip binary data from both current messages and all sessions
+        const strippedSessions = state.sessions.map((session) => ({
+          ...session,
+          messages: stripBinaryData(session.messages),
+        }));
+
+        return {
+          sessions: strippedSessions,
+          currentSessionId: state.currentSessionId,
+          messages: stripBinaryData(state.messages),
+          jobToSessionMap: state.jobToSessionMap,
+        };
+      },
+      // Storage version for migrations
+      version: 2,
+      migrate: (persistedState: unknown, version: number) => {
+        // Version 2: Strip binary data from storage to fix quota issues
+        if (version < 2) {
+          // Clear old storage that might have base64 data
+          console.log('[ChatStore] Migrating from v1 to v2: clearing binary data');
+          return {
+            sessions: [],
+            currentSessionId: null,
+            messages: [],
+            jobToSessionMap: {},
+          };
+        }
+        return persistedState as ChatStore;
+      },
       // On rehydration, ensure current session is in the sessions array
       onRehydrateStorage: () => (state) => {
         if (!state) return;

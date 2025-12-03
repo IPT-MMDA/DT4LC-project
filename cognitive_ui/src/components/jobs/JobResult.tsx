@@ -31,8 +31,8 @@ export function JobResult({ result }: JobResultProps) {
   // Field Boundaries (Delineate-Anything)
   const fieldBoundaries = artifacts.FieldBoundaries;
 
-  // Prithvi Features
-  const features = artifacts.Features;
+  // Prithvi Reconstruction (MAE outputs)
+  const reconstruction = artifacts.Reconstruction;
 
   // AI summary is in agent_result
   const aiSummary = artifacts.agent_result?.summary;
@@ -142,65 +142,56 @@ export function JobResult({ result }: JobResultProps) {
         </div>
       )}
 
-      {/* Prithvi Features Results */}
-      {features && (
-        <div className="bg-indigo-50 dark:bg-indigo-950 rounded-lg border border-indigo-200 dark:border-indigo-800 p-6">
+      {/* Prithvi Reconstruction Results */}
+      {reconstruction && (
+        <div className="bg-violet-50 dark:bg-violet-950 rounded-lg border border-violet-200 dark:border-violet-800 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Cpu className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <Cpu className="w-5 h-5 text-violet-600 dark:text-violet-400" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Prithvi Feature Extraction
+              Prithvi MAE Reconstruction
             </h3>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-gray-900 rounded-lg p-4 border border-indigo-200 dark:border-indigo-800">
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">Feature Dimensions</p>
-              <p className="text-2xl font-bold text-indigo-800 dark:text-indigo-200">
-                {Array.isArray(features.features) ? features.features.length : 'N/A'}
-              </p>
-            </div>
-            <div className="bg-white dark:bg-gray-900 rounded-lg p-4 border border-indigo-200 dark:border-indigo-800">
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">Model</p>
-              <p className="text-lg font-medium text-indigo-800 dark:text-indigo-200">
-                {features.model || 'Prithvi'}
-              </p>
-            </div>
-            <div className="bg-white dark:bg-gray-900 rounded-lg p-4 border border-indigo-200 dark:border-indigo-800">
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">Version</p>
-              <p className="text-lg font-medium text-indigo-800 dark:text-indigo-200">
-                {features.version || 'v1.0'}
-              </p>
-            </div>
-          </div>
+          <p className="text-sm text-violet-700 dark:text-violet-300 mb-4">
+            NASA/IBM foundation model analysis using {reconstruction.model || 'prithvi-eo-v1-100m'}
+          </p>
 
-          {features.mode === 'stub' && (
-            <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-900 rounded-lg border border-yellow-200 dark:border-yellow-800">
-              <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                Running in stub mode - model weights not loaded.
-                Download weights to get actual feature extraction.
+          {/* Reconstruction Visualizations */}
+          {reconstruction.visualizations && Object.keys(reconstruction.visualizations).length > 0 && (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                Reconstruction Output
               </p>
-            </div>
-          )}
-
-          {Array.isArray(features.features) && features.features.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-2">
-                Feature Vector Preview (first 10 values)
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {features.features.slice(0, 10).map((val: number, i: number) => (
-                  <span
-                    key={i}
-                    className="px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 text-xs rounded font-mono"
-                  >
-                    {val.toFixed(4)}
-                  </span>
-                ))}
-                {features.features.length > 10 && (
-                  <span className="px-2 py-1 text-indigo-600 dark:text-indigo-400 text-xs">
-                    ...+{features.features.length - 10} more
-                  </span>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Object.entries(reconstruction.visualizations).map(([key, base64]) => {
+                  const labelMap: Record<string, string> = {
+                    original_rgb_t0: 'Original Image',
+                    masked_rgb_t0: 'Masked Image (75%)',
+                    predicted_rgb_t0: 'Reconstructed Image',
+                  };
+                  const label = labelMap[key] || key.replace(/_/g, ' ');
+                  return (
+                    <div key={key} className="rounded-lg overflow-hidden border border-violet-200 dark:border-violet-700">
+                      <div className="bg-violet-100 dark:bg-violet-900 px-3 py-2 flex items-center justify-between">
+                        <span className="text-xs font-medium text-violet-700 dark:text-violet-300">
+                          {label}
+                        </span>
+                        <button
+                          onClick={() => downloadBase64Image(base64 as string, `${key}.png`)}
+                          className="text-violet-500 hover:text-violet-700 dark:hover:text-violet-300"
+                          title="Download"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <img
+                        src={`data:image/png;base64,${base64}`}
+                        alt={label}
+                        className="w-full h-auto"
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

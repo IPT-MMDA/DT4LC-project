@@ -187,34 +187,12 @@ def get_model_registry() -> ModelRegistry:
 
 
 def _initialize_default_models() -> None:
-    """Initialize default models (Prithvi, Delineate-Anything, etc.)."""
+    """Initialize default models (Delineate-Anything, etc.).
+
+    Note: Prithvi model is now managed through ModelManager and downloaded
+    on-demand from HuggingFace. See dta/dti/models/model_manager.py.
+    """
     registry = get_model_registry()
-
-    # Register Prithvi model
-    try:
-        from .prithvi import PrithviModel
-
-        prithvi = PrithviModel()
-        registry.register(
-            prithvi,
-            metadata={
-                "display_name": "Prithvi EO Foundation Model",
-                "description": (
-                    "IBM/NASA foundation model for Earth observation. "
-                    "Extracts temporal features and embeddings from HLS satellite data "
-                    "using a Vision Transformer (ViT) architecture trained on "
-                    "Harmonized Landsat-Sentinel data."
-                ),
-                "author": "IBM Research & NASA",
-                "source_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-100M",
-                "gpu_required": False,  # Can run on CPU
-                "memory_mb": 1024,
-                "latency_ms": 5000,
-            },
-        )
-        logger.info("Registered Prithvi model")
-    except Exception as e:
-        logger.warning(f"Failed to register Prithvi model: {e}")
 
     # Register Delineate-Anything model
     try:

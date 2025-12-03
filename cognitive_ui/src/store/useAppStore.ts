@@ -91,8 +91,8 @@ function createContextSummary(result?: JobResultData): string {
     parts.push(`[Field boundaries: ${result.fieldBoundaries.numFields} fields, ${(result.fieldBoundaries.totalAreaM2 / 10000).toFixed(2)} hectares]`);
   }
 
-  if (result.features) {
-    parts.push(`[Prithvi features: ${result.features.dimensions}D vector]`);
+  if (result.reconstruction) {
+    parts.push(`[Prithvi reconstruction: ${result.reconstruction.model}]`);
   }
 
   return parts.join(' ');

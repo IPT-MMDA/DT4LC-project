@@ -64,9 +64,12 @@ services:
       - APERTUS_MODEL=${APERTUS_MODEL:-swiss-ai/Apertus-8B}
       - APERTUS_DEVICE=${APERTUS_DEVICE:-0}
       - APERTUS_DTYPE=${APERTUS_DTYPE:-bfloat16}
+      # Cache paths - all consolidated under resources/.cache/
+      - DT4LC_MODEL_CACHE=/app/resources/.cache/models
+      - DT4LC_UPLOADS_PATH=/app/resources/.cache/uploads
     volumes:
-      - ./resources:/app/resources:ro
-      - uploads_data:/tmp/dt4lc_uploads
+      # Mount resources with read-write for cache subdirectory
+      - ./resources:/app/resources
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
@@ -92,6 +95,4 @@ services:
 
 volumes:
   ollama_data:
-    driver: local
-  uploads_data:
     driver: local

@@ -71,11 +71,11 @@ export interface JobResultData {
     crs: string;
   };
 
-  // Features (for Prithvi)
-  features?: {
-    dimensions: number;
+  // Reconstruction (for Prithvi MAE)
+  reconstruction?: {
     model: string;
-    version: string;
+    inputFile: string;
+    outputDir: string;
   };
 }
 

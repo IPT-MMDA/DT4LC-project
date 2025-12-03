@@ -24,6 +24,8 @@ class ChatRequest(BaseModel):  # type: ignore[misc]
 class Runner(BaseModel):  # type: ignore[misc]
     type: Literal["python", "agent", "passthrough"]
     entrypoint: str | None = None
+    function: str | None = None  # Function name to call (default: run or main)
+    args_map: dict[str, Any] | None = None  # Map function args to values/variables
     env: dict[str, str] = {}
 
 

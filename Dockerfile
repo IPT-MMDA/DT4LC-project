@@ -41,8 +41,7 @@ RUN uv pip install --system -e ".[server]"
 COPY dta/ ./dta/
 COPY server/ ./server/
 
-# Create directories for uploads and cache
-RUN mkdir -p /tmp/dt4lc_uploads /app/.cache
+# Cache directories are created at runtime under resources/.cache/
 
 # Expose port
 EXPOSE 8000

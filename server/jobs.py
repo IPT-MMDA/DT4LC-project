@@ -484,7 +484,7 @@ class JobQueue:
             job_id: Job identifier
             worker_id: Worker identifier
         """
-        from dta.dti.executor import CancellationError
+        from dta.dti.executor import CancellationError, ModelNotInstalledError
 
         # Get job
         async with self._lock:
@@ -522,6 +522,16 @@ class JobQueue:
         except CancellationError:
             logger.info(f"Job {job_id} execution cancelled")
             # Status already set to CANCELLED, just return
+
+        except ModelNotInstalledError as e:
+            # Model not installed - mark as failed with special error info
+            async with self._lock:
+                job.status = JobStatus.FAILED
+                job.error = str(e)
+                job.result = e.to_dict()  # Include model info for frontend
+                job.completed_at = datetime.now()
+
+            logger.warning(f"Job {job_id} requires model '{e.model_id}' which is not installed")
 
         except Exception as e:
             # Mark failed

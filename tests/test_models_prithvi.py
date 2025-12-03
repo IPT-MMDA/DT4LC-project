@@ -11,15 +11,16 @@ import rasterio
 
 from dta.config import TEMP_PATH
 from dta.dti.coe.orchestrator import orchestrate
-from dta.dti.registry import get_item, load_registry
+from dta.dti.models import get_model_manager
 from dta.dti.schemas import Attachment, ChatRequest
 
-# ----- Resolve paths from registry so test never drifts -------------------
-REGISTRY = load_registry()
-PRITHVI_ITEM = get_item(REGISTRY, "models/prithvi_features")
-PRITHVI_DIR = Path(PRITHVI_ITEM.runner.env["PRITHVI_DIR"]).resolve()
+# ----- Resolve paths from ModelManager (models downloaded on-demand) ------
+MODEL_MANAGER = get_model_manager()
+PRITHVI_MODEL_ID = "prithvi-eo-v1-100m"
 CFG_JSON = "config.json"
 WEIGHTS = "Prithvi_EO_V1_100M.pt"  # or "Prithvi_100M.pt"
+
+# Example files (these would need to be downloaded separately or skipped)
 EXAMPLES = [
     "examples/HLS.L30.T13REN.2018013T172747.v2.0.B02.B03.B04.B05.B06.B07_cropped.tif",
     "examples/HLS.L30.T13REN.2018029T172738.v2.0.B02.B03.B04.B05.B06.B07_cropped.tif",
@@ -28,11 +29,31 @@ EXAMPLES = [
 
 
 def test_fullflow_prithvi_example_persist_to_temp() -> None:
-    # --- Pre-flight: resources present? -----------------------------------
-    need = ["inference.py", "prithvi_mae.py", WEIGHTS, CFG_JSON] + EXAMPLES
-    missing = [p for p in need if not (PRITHVI_DIR / p).exists()]
+    # --- Pre-flight: Check if model is available via ModelManager ---------
+    if not MODEL_MANAGER.is_model_available(PRITHVI_MODEL_ID):
+        pytest.skip(
+            f"Prithvi model not installed. Use the Models page in UI or "
+            f'run: python -c "from dta.dti.models import get_model_manager; '
+            f"get_model_manager().start_download('{PRITHVI_MODEL_ID}')\""
+        )
+
+    # Get model path from ModelManager
+    prithvi_path = MODEL_MANAGER.get_model_path(PRITHVI_MODEL_ID)
+    if prithvi_path is None:
+        pytest.skip("Prithvi model path not found after availability check")
+
+    prithvi_dir = Path(prithvi_path)
+
+    # Check required files
+    need = ["inference.py", "prithvi_mae.py", WEIGHTS, CFG_JSON]
+    missing = [p for p in need if not (prithvi_dir / p).exists()]
     if missing:
-        pytest.skip(f"Prithvi files missing. Run scripts/download_prithvi.py. Missing: {missing}")
+        pytest.skip(f"Prithvi files missing in {prithvi_dir}. Missing: {missing}")
+
+    # Examples are not downloaded by ModelManager (too large), skip if missing
+    example_missing = [e for e in EXAMPLES if not (prithvi_dir / e).exists()]
+    if example_missing:
+        pytest.skip(f"Example files not available. These are not downloaded by default: {example_missing}")
 
     try:
         import torch  # required at runtime
@@ -48,7 +69,7 @@ def test_fullflow_prithvi_example_persist_to_temp() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # --- 1) Simulate a user chat (attach TIFF; agent will PNG-preview it) --
-    tif0 = PRITHVI_DIR / EXAMPLES[0]
+    tif0 = prithvi_dir / EXAMPLES[0]
     req = ChatRequest(
         prompt="Generate temporal features with Prithvi 100M for the selected AOI.",
         attachments=[
@@ -70,29 +91,28 @@ def test_fullflow_prithvi_example_persist_to_temp() -> None:
     step_ids = [s["uses"] for s in plan["steps"]]
     assert any("models/prithvi_features" in s for s in step_ids), f"Plan missing prithvi step: {step_ids}"
 
-    # sanity: registry env points to our bundle
-    assert PRITHVI_ITEM.runner.env["PRITHVI_DIR"], "PRITHVI_DIR not set in registry"
-    assert (Path(PRITHVI_ITEM.runner.env["PRITHVI_DIR"]) / "inference.py").exists()
+    # sanity: model path exists and has inference.py
+    assert (prithvi_dir / "inference.py").exists(), f"inference.py not found in {prithvi_dir}"
 
     # --- 3) Execute downloaded inference.py directly ----------------------
-    entry = PRITHVI_DIR / "inference.py"
-    sys.path.insert(0, str(PRITHVI_DIR))  # import sibling prithvi_mae.py
+    entry = prithvi_dir / "inference.py"
+    sys.path.insert(0, str(prithvi_dir))  # import sibling prithvi_mae.py
     spec = importlib.util.spec_from_file_location("prithvi_infer", str(entry))
     module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     assert spec and spec.loader
     spec.loader.exec_module(module)  # type: ignore[union-attr]
 
-    data_files = [str(PRITHVI_DIR / e) for e in EXAMPLES]
+    data_files = [str(prithvi_dir / e) for e in EXAMPLES]
 
     # Provide envs (mirrors what your executor would do)
-    os.environ["PRITHVI_DIR"] = str(PRITHVI_DIR)
-    os.environ["PRITHVI_CONFIG"] = str(PRITHVI_DIR / CFG_JSON)
-    os.environ["PRITHVI_WEIGHTS"] = str(PRITHVI_DIR / WEIGHTS)
+    os.environ["PRITHVI_DIR"] = str(prithvi_dir)
+    os.environ["PRITHVI_CONFIG"] = str(prithvi_dir / CFG_JSON)
+    os.environ["PRITHVI_WEIGHTS"] = str(prithvi_dir / WEIGHTS)
 
     module.main(
         data_files=data_files,
-        config_path=str(PRITHVI_DIR / CFG_JSON),
-        checkpoint=str(PRITHVI_DIR / WEIGHTS),
+        config_path=str(prithvi_dir / CFG_JSON),
+        checkpoint=str(prithvi_dir / WEIGHTS),
         output_dir=str(out_dir),
         rgb_outputs=True,
         mask_ratio=0.75,
@@ -142,7 +162,7 @@ def test_fullflow_prithvi_example_persist_to_temp() -> None:
         "run_id": run_id,
         "out_dir": str(out_dir),
         "plan": plan,
-        "prithvi_dir": str(PRITHVI_DIR),
+        "prithvi_dir": str(prithvi_dir),
         "inputs": data_files,
         "outputs": [str(p) for p in produced],
         "raster_meta": metas,

@@ -149,14 +149,34 @@ export function parseJobResult(job: Job): JobResultData | undefined {
     }
   }
 
-  // Prithvi Features
-  const features = artifacts.Features;
-  if (features) {
-    resultData.features = {
-      dimensions: Array.isArray(features.features) ? features.features.length : 0,
-      model: features.model || 'prithvi',
-      version: features.version || 'v1.0',
+  // Prithvi Reconstruction (MAE outputs)
+  const reconstruction = artifacts.Reconstruction;
+  if (reconstruction) {
+    resultData.reconstruction = {
+      model: reconstruction.model || 'prithvi-eo-v1-100m',
+      inputFile: reconstruction.input_file || '',
+      outputDir: reconstruction.output_dir || '',
     };
+
+    // Add visualizations from reconstruction output
+    if (reconstruction.visualizations) {
+      resultData.visualizations = resultData.visualizations || [];
+      // Map visualization keys to user-friendly labels
+      const labelMap: Record<string, string> = {
+        original_rgb_t0: 'Original Image',
+        masked_rgb_t0: 'Masked Image (75%)',
+        predicted_rgb_t0: 'Reconstructed Image',
+      };
+      for (const [key, base64] of Object.entries(reconstruction.visualizations)) {
+        if (typeof base64 === 'string') {
+          resultData.visualizations.push({
+            type: key,
+            label: labelMap[key] || key.replace(/_/g, ' '),
+            base64: base64,
+          });
+        }
+      }
+    }
   }
 
   return resultData;
@@ -450,17 +470,17 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
             </div>
           )}
 
-          {/* Prithvi Features */}
-          {data.features && (
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-950 rounded-lg border border-indigo-200 dark:border-indigo-800">
+          {/* Prithvi Reconstruction */}
+          {data.reconstruction && (
+            <div className="p-3 bg-violet-50 dark:bg-violet-950 rounded-lg border border-violet-200 dark:border-violet-800">
               <div className="flex items-center gap-2 mb-2">
-                <Cpu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <h4 className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-                  Prithvi Features Extracted
+                <Cpu className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                <h4 className="text-sm font-medium text-violet-800 dark:text-violet-200">
+                  Prithvi MAE Reconstruction
                 </h4>
               </div>
-              <p className="text-sm text-indigo-700 dark:text-indigo-300">
-                {data.features.dimensions}-dimensional feature vector from {data.features.model} {data.features.version}
+              <p className="text-sm text-violet-700 dark:text-violet-300">
+                NASA/IBM foundation model analysis using {data.reconstruction.model}
               </p>
             </div>
           )}

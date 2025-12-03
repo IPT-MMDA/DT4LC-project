@@ -26,20 +26,20 @@ dist/
 .pytest_cache/
 htmlcov
 
-# Project-specific
+# Project cache - all runtime data consolidated here
+# This includes: models, uploads, temp files
 resources/.cache/
+
+# Legacy paths (no longer used but kept for safety)
 resources/tmp/
 resources/prithvi_eo_v1_100m/
+dta/dti/models/third_party/
+~/.cache/dt4lc/
+.cache/
+.temp/
 
 # Backups
 *.bak
-
-# Third-party models
-dta/dti/models/third_party/
-
-# Cache
-.cache/
-.temp/
 
 # Logs
 .logs/

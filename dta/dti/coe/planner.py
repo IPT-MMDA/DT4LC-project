@@ -134,7 +134,29 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
         return plan_obj
 
     # Standard single-file flow
-    # 1) ALWAYS start with data loader - check if we need any data inputs
+    # 1) First, determine the best matching algorithm/model via keywords
+    # We need this BEFORE deciding on data loader because the matched item
+    # determines whether we need inputs
+    kw_ranked = find_items_by_keywords(reg, ctx.hints.get("keywords", []))
+    keywords = ctx.hints.get("keywords", []) if ctx.hints else []
+    keywords_lower = [kw.lower() for kw in keywords]
+    goal_lower = (ctx.goal or "").lower()
+
+    # Find best matching algorithm/model
+    best_item = None
+    best_score = 0
+    for item in kw_ranked:
+        if item.kind in ("algorithm", "model"):
+            item_keywords = [k.lower() for k in (item.keywords or [])]
+            match_count = sum(1 for kw in item_keywords if kw in goal_lower or any(kw in uk for uk in keywords_lower))
+            id_name = item.id.split("/")[-1].lower()
+            if id_name in goal_lower:
+                match_count += 5
+            if match_count > best_score:
+                best_score = match_count
+                best_item = item
+
+    # 2) Check if we need a data loader
     needs_data_loader = False
     required_inputs = ctx.required_inputs or []
 
@@ -142,9 +164,13 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     for want in ctx.desired_outputs or []:
         for item in reg.instances:
             if want in item.outputs and item.inputs:
-                # This component needs inputs, so we need a data loader
                 needs_data_loader = True
                 break
+
+    # Also check if the best matched item needs inputs
+    if best_item and best_item.inputs:
+        needs_data_loader = True
+        logger.debug(f"Best matched item {best_item.id} requires inputs: {best_item.inputs}")
 
     # If we need data or have required inputs, add input/file loader
     if (
@@ -160,29 +186,8 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
                 logger.info("Added data loader step: input/file (waiting for user upload)")
                 break
 
-    # 2) choose a chain to reach desired outputs
-    kw_ranked = find_items_by_keywords(reg, ctx.hints.get("keywords", []))
-    keywords = ctx.hints.get("keywords", []) if ctx.hints else []
-    keywords_lower = [kw.lower() for kw in keywords]
-    goal_lower = (ctx.goal or "").lower()
+    # 3) Add the matched algorithm/model step
     added_step = False
-
-    # First, check for explicit model/component name mentions (strongest signal)
-    # e.g., "Prithvi", "ndvi" in goal or keywords
-    best_item = None
-    best_score = 0
-    for item in kw_ranked:
-        if item.kind in ("algorithm", "model"):
-            item_keywords = [k.lower() for k in (item.keywords or [])]
-            # Check how many of the item's keywords appear in user's context
-            match_count = sum(1 for kw in item_keywords if kw in goal_lower or any(kw in uk for uk in keywords_lower))
-            # Give extra weight if item ID fragment appears (e.g., "prithvi" in goal)
-            id_name = item.id.split("/")[-1].lower()
-            if id_name in goal_lower:
-                match_count += 5  # Strong signal for explicit component mention
-            if match_count > best_score:
-                best_score = match_count
-                best_item = item
 
     if best_item and best_score > 0:
         steps.append(PlanStep(uses=best_item.id))
