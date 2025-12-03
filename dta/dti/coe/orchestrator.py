@@ -5,7 +5,7 @@ from dta.dti.registry import load_registry
 from dta.dti.schemas import ChatRequest
 
 from .context_agent import analyze
-from .decision_agent import PlanError, validate
+from .plan_validator import PlanError, validate
 from .intent_classifier import IntentType, classify_intent
 from .planner_agent import plan
 

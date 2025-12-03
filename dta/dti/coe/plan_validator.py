@@ -29,7 +29,7 @@ def validate(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
             have_types.add(out)
 
         # minimal runner sanity
-        if it.runner.type == "python" and not it.runner.entrypoint:
+        if it.runner and it.runner.type == "python" and not it.runner.entrypoint:
             raise PlanError(f"{it.id} missing python entrypoint")
 
     return plan

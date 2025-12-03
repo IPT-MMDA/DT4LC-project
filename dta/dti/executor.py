@@ -23,6 +23,20 @@ class ExecutionError(Exception):
     """Raised when step execution fails."""
 
 
+class MissingInputError(ExecutionError):
+    """Raised when required input is missing.
+
+    This is a recoverable error - the system can prompt the user
+    to provide the missing input rather than failing completely.
+    """
+
+    def __init__(self, step_id: str, input_type: str, message: str | None = None) -> None:
+        self.step_id = step_id
+        self.input_type = input_type
+        default_msg = f"Missing required input '{input_type}' for step '{step_id}'"
+        super().__init__(message or default_msg)
+
+
 class CancellationError(Exception):
     """Raised when execution is cancelled."""
 
@@ -194,9 +208,10 @@ class PipelineExecutor:
             else:
                 # Input steps require file bindings to work
                 if step.uses.startswith("input/"):
-                    raise ExecutionError(
-                        f"No file provided for {step.uses}. "
-                        f"Please upload a file or ensure a previous file is available in the context."
+                    raise MissingInputError(
+                        step_id=step.uses,
+                        input_type=output_type,
+                        message=_get_friendly_missing_input_message(step.uses, output_type),
                     )
                 # For other passthrough steps, mark as pending
                 self.artifacts[output_type] = None
@@ -330,9 +345,16 @@ class PipelineExecutor:
         try:
             router = _get_router()
 
+            # Determine analysis type from artifact keys
+            analysis_type = self._detect_analysis_type(inputs)
+
             # Format inputs for LLM
             context = []
             for key, value in inputs.items():
+                # Skip large arrays (like ndvi_array) - just note they exist
+                if key.endswith("_array") or key == "ndvi_array":
+                    context.append(f"{key}: [array data available]")
+                    continue
                 # Truncate large values for context
                 value_str = str(value)
                 if len(value_str) > 500:
@@ -340,8 +362,9 @@ class PipelineExecutor:
                 context.append(f"{key}: {value_str}")
 
             prompt = (
-                "Summarize the following geospatial analysis results "
-                "in 2-3 sentences. Be concise and focus on key insights:\n\n" + "\n".join(context)
+                f"You just completed a {analysis_type} analysis. "
+                "Summarize the results in 2-3 sentences. Be concise and focus on key insights. "
+                "Do NOT ask questions - just summarize what the data shows:\n\n" + "\n".join(context)
             )
 
             # Use router with automatic fallback
@@ -366,3 +389,61 @@ class PipelineExecutor:
                 "summary": f"Analysis complete. Results available but summarization failed: {e}",
                 "inputs": inputs,
             }
+
+    def _detect_analysis_type(self, inputs: dict[str, Any]) -> str:
+        """Detect the type of analysis from artifact keys.
+
+        Args:
+            inputs: Dictionary of input artifacts
+
+        Returns:
+            Human-readable analysis type description
+        """
+        keys = set(inputs.keys())
+
+        # Check for specific analysis markers
+        if "ndvi_array" in keys or "NDVIMap" in keys:
+            return "NDVI (Normalized Difference Vegetation Index)"
+        if "change_array" in keys or "ChangeMap" in keys:
+            return "change detection"
+        if "FieldBoundaries" in keys or "boundaries" in keys:
+            return "field boundary detection"
+        if "Features" in keys or "embeddings" in keys:
+            return "Prithvi feature extraction"
+        if "Statistics" in keys or "statistics" in keys:
+            return "raster statistics"
+
+        # Generic fallback
+        return "geospatial"
+
+
+def _get_friendly_missing_input_message(step_id: str, input_type: str) -> str:
+    """Generate a user-friendly message for missing input.
+
+    Args:
+        step_id: The step that needs the input (e.g., "input/file")
+        input_type: The type of input needed (e.g., "RasterPath")
+
+    Returns:
+        User-friendly error message with guidance
+    """
+    messages = {
+        "input/file": ("I need a file to process this request. Please upload a GeoTIFF image and try again."),
+        "input/file-before": (
+            "I need a 'before' image for change detection. Please upload the earlier date GeoTIFF image."
+        ),
+        "input/file-after": (
+            "I need an 'after' image for change detection. Please upload the later date GeoTIFF image."
+        ),
+    }
+
+    if step_id in messages:
+        return messages[step_id]
+
+    # Fallback based on input type
+    if "Raster" in input_type or "Path" in input_type:
+        return (
+            f"I need a file to continue. Please upload a GeoTIFF image for the {step_id.replace('input/', '')} input."
+        )
+
+    return f"Missing required input for {step_id}. Please provide the necessary data and try again."

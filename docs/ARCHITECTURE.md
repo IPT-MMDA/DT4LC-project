@@ -77,7 +77,7 @@ Generates execution plans using:
 - **LLM planner**: Smart path for complex requests
 - Hybrid mode with confidence-based routing
 
-#### Decision Agent (`decision_agent.py`)
+#### Plan Validator (`plan_validator.py`)
 Validates generated plans against registry constraints.
 
 ### LLM Router (`dta/dti/coe/llm/`)
@@ -192,7 +192,7 @@ dta/
 │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
 │   │   ├── context_agent.py      # Understands user intent
 │   │   ├── planner_agent.py      # Builds execution plans
-│   │   ├── decision_agent.py     # Validates plans
+│   │   ├── plan_validator.py     # Validates plans
 │   │   └── orchestrator.py       # Main orchestration flow
 │   ├── algorithms/               # NDVI, Statistics, Change Detection
 │   ├── models/                   # Prithvi, Delineate-Anything

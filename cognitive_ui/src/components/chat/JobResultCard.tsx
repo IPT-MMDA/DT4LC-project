@@ -283,11 +283,13 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
   }
 
   // Full view with visualizations
-  // For conversational responses, render just the text (no job card)
+  // For conversational responses, render just the text ONCE (no job card)
   if (data?.conversational) {
     return (
-      <div className="text-base text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-        {data.summary}
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+        <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+          {data.summary}
+        </p>
       </div>
     );
   }

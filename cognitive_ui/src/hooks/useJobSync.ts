@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useChatStore } from '../store/useChatStore';
 import apiClient from '../api/client';
 import { parseJobResult } from '../components/chat/JobResultCard';
@@ -11,12 +10,10 @@ import type { Job } from '../types';
  * This handles the case where a page reload happens while jobs are running.
  */
 export function useJobSync() {
-  const queryClient = useQueryClient();
   const {
     messages,
     addJobResultMessage,
     updateMessageByJobId,
-    activeJobIds,
     untrackJob,
   } = useChatStore();
 
@@ -107,22 +104,9 @@ export function useJobSync() {
     checkPendingJobs();
   }, []); // Only run on mount
 
-  // Also periodically check active jobs
-  useEffect(() => {
-    if (activeJobIds.length === 0) return;
-
-    const interval = setInterval(async () => {
-      for (const jobId of activeJobIds) {
-        const completed = await syncJob(jobId);
-        if (completed) {
-          // Invalidate queries to refresh UI
-          queryClient.invalidateQueries({ queryKey: ['jobs'] });
-        }
-      }
-    }, 3000); // Check every 3 seconds
-
-    return () => clearInterval(interval);
-  }, [activeJobIds, syncJob, queryClient]);
+  // NOTE: Active jobs are already polled by ChatPage via useJob hook.
+  // We only need to sync on mount for jobs that completed while the page was closed.
+  // Removed the periodic sync to avoid duplicate addJobResultMessage calls.
 
   return { syncJob };
 }

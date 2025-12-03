@@ -39,12 +39,26 @@ def _calculate_ndvi_array(src: rasterio.DatasetReader) -> np.ndarray:
     if src.count < 2:
         raise ValueError(f"NDVI requires at least 2 bands, got {src.count}")
 
-    # HLS/Landsat-like: Red=Band 4, NIR=Band 5 (for 5+ bands)
-    # Otherwise: Red=Band 1, NIR=Band 2
-    if src.count >= 4:
+    # Band selection based on band count (heuristic for different sensors)
+    # 7+ bands: Landsat 8/9 (B1-B7 + QA) -> Red=4, NIR=5
+    # 6 bands: Sentinel-2 subset (B2,B3,B4,B8,B11,B12) -> Red=3, NIR=4
+    # 5 bands: Generic (B,G,R,NIR,SWIR) -> Red=3, NIR=4
+    # 4 bands: RGBN -> Red=1, NIR=4
+    # 2-3 bands: Simple R,NIR or R,G,NIR -> Red=1, NIR=2
+    if src.count >= 7:
+        # Landsat 8/9: Red=Band4 (SR_B4), NIR=Band5 (SR_B5)
         red_band = src.read(4, masked=True).astype(np.float32)
         nir_band = src.read(5, masked=True).astype(np.float32)
+    elif src.count >= 5:
+        # Sentinel-2 or similar: Red=Band3, NIR=Band4
+        red_band = src.read(3, masked=True).astype(np.float32)
+        nir_band = src.read(4, masked=True).astype(np.float32)
+    elif src.count == 4:
+        # RGBN format: Red=Band1, NIR=Band4
+        red_band = src.read(1, masked=True).astype(np.float32)
+        nir_band = src.read(4, masked=True).astype(np.float32)
     else:
+        # 2-3 bands: assume Red=Band1, NIR=Band2
         red_band = src.read(1, masked=True).astype(np.float32)
         nir_band = src.read(2, masked=True).astype(np.float32)
 
