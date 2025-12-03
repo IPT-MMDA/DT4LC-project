@@ -31,12 +31,7 @@ htmlcov
 resources/.cache/
 
 # Legacy paths (no longer used but kept for safety)
-resources/tmp/
-resources/prithvi_eo_v1_100m/
-dta/dti/models/third_party/
-~/.cache/dt4lc/
-.cache/
-.temp/
+resources/kahovka_data/*
 
 # Backups
 *.bak
