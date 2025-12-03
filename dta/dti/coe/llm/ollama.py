@@ -139,7 +139,7 @@ class OllamaProvider(BaseLLMProvider):
             raise Exception(f"Ollama generation failed: {e}") from e
 
     def is_available(self) -> bool:
-        """Check if Ollama is available and model is pulled."""
+        """Check if Ollama is running and the configured model is available."""
         try:
             # Check if Ollama is running
             version_url = urljoin(self.base_url, "/api/version")
@@ -156,7 +156,11 @@ class OllamaProvider(BaseLLMProvider):
 
             return self.model in model_names or any(self.model in name for name in model_names)
 
-        except Exception:
+        except requests.exceptions.RequestException:
+            # Network error, connection refused, timeout, etc.
+            return False
+        except (KeyError, ValueError):
+            # JSON parsing issues
             return False
 
     @property

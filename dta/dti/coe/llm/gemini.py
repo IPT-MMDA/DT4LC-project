@@ -83,12 +83,8 @@ class GeminiProvider(BaseLLMProvider):
                 # System messages prepended as text
                 contents.insert(0, msg.content)
             elif msg.role == "user":
-                if msg.images:
-                    # TODO: Handle image inputs
-                    # For now, just add text
-                    contents.append(msg.content)
-                else:
-                    contents.append(msg.content)
+                # Note: Image inputs not currently used in pipeline context
+                contents.append(msg.content)
             elif msg.role == "assistant":
                 # Gemini doesn't use assistant messages in the same way
                 # Skip for now or convert to user context
@@ -152,12 +148,9 @@ class GeminiProvider(BaseLLMProvider):
             raise Exception(f"Gemini generation failed: {e}") from e
 
     def is_available(self) -> bool:
-        """Check if Gemini is available."""
-        try:
-            api_key = self.config.get("api_key") or os.environ.get("GEMINI_API_KEY")
-            return api_key is not None and len(api_key) > 0
-        except Exception:
-            return False
+        """Check if Gemini is available based on API key presence."""
+        api_key = self.config.get("api_key") or os.environ.get("GEMINI_API_KEY")
+        return bool(api_key)
 
     @property
     def name(self) -> str:

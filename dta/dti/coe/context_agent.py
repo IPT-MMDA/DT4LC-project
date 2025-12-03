@@ -37,31 +37,40 @@ SYS = (
 
 
 def _tiff_to_png_bytes(tif_path: str) -> bytes:
-    # Minimal RGB preview from a multi-band GeoTIFF
-    # Prefer rasterio if available; else fallback to PIL
+    """Convert GeoTIFF to PNG preview image.
+
+    Uses rasterio for multi-band GeoTIFFs with proper band selection,
+    falls back to PIL for simple RGB conversion on any error.
+
+    Args:
+        tif_path: Path to GeoTIFF file
+
+    Returns:
+        PNG image as bytes
+    """
+    from PIL import Image
+
     try:
         with rasterio.open(tif_path) as src:
-            # Heuristic: use bands 3,2,1 (or 4,3,2) if available; else first 3
-            pick = [3, 2, 1] if src.count >= 3 else [1, 1, 1]
+            # Use bands 3,2,1 for RGB if available, otherwise use first band repeated
+            band_indices = [3, 2, 1] if src.count >= 3 else [1, 1, 1]
             bands = []
-            for b in pick:
-                b = min(b, src.count)
-                x = src.read(b).astype("float32")
-                # simple min-max to 0..255 for preview
-                lo, hi = np.nanpercentile(x, 2), np.nanpercentile(x, 98)
-                x = np.clip((x - lo) / max(1e-6, (hi - lo)), 0, 1) * 255
-                bands.append(x.astype("uint8"))
+            for band_num in band_indices:
+                actual_band = min(band_num, src.count)
+                data = src.read(actual_band).astype("float32")
+                # Percentile stretch to 0-255 for preview
+                lo, hi = np.nanpercentile(data, 2), np.nanpercentile(data, 98)
+                normalized = np.clip((data - lo) / max(1e-6, (hi - lo)), 0, 1) * 255
+                bands.append(normalized.astype("uint8"))
             rgb = np.dstack(bands)
-        from PIL import Image
 
         im = Image.fromarray(rgb)
         buf = io.BytesIO()
         im.save(buf, format="PNG")
         return buf.getvalue()
-    except Exception:
-        # Fallback: PIL-only, assumes 3-band compatible TIFF
-        from PIL import Image
 
+    except (rasterio.errors.RasterioIOError, OSError):
+        # Fallback: PIL-only for simple RGB TIFFs
         im = Image.open(tif_path).convert("RGB")
         buf = io.BytesIO()
         im.save(buf, format="PNG")
@@ -69,12 +78,17 @@ def _tiff_to_png_bytes(tif_path: str) -> bytes:
 
 
 def _image_part(att: Attachment) -> Any:
-    """Convert attachment to image part.
+    """Convert attachment to image part for multimodal LLM providers.
 
-    TODO: Implement multimodal support for LLM router.
-    For now, returns None as we handle text-only.
+    Note: Multimodal image analysis is not yet implemented.
+    Context understanding currently relies on text prompts and file metadata.
+
+    Args:
+        att: File attachment with path to image
+
+    Returns:
+        None (image content not currently used in context analysis)
     """
-    # TODO: Support images in router
     return None
 
 
@@ -96,9 +110,6 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
     # Build prompt with registry types and system instructions
     system_msg = f"{SYS}\n\n[REGISTRY_TYPES]={registry_types}"
     user_msg = req.prompt
-
-    # TODO: Handle image attachments for multimodal providers
-    # For now, just use text
 
     messages = [LLMMessage(role="system", content=system_msg), LLMMessage(role="user", content=user_msg)]
 

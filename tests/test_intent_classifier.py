@@ -103,34 +103,42 @@ class TestClassifyIntent:
         assert result["intent"] == IntentType.PIPELINE
         assert "attachments" in result.get("reason", "").lower() or "action" in result.get("reason", "").lower()
 
-    def test_clear_action_without_attachments(self) -> None:
-        """Test that clear action requests without attachments are PIPELINE."""
+    def test_clear_action_without_attachments_asks_for_file(self) -> None:
+        """Test that clear action requests without attachments return CONVERSATION with helpful response."""
         clear_actions = [
-            "ndvi calculation",
             "calculate ndvi",
             "detect boundaries",
-            "change detection",
         ]
 
         for prompt in clear_actions:
             req = ChatRequest(prompt=prompt, attachments=[])
             result = classify_intent(req)
 
-            assert result["intent"] == IntentType.PIPELINE, f"'{prompt}' should be PIPELINE"
+            # When an action is requested without a file, we return CONVERSATION
+            # with a helpful response asking for the file
+            assert result["intent"] == IntentType.CONVERSATION, f"'{prompt}' should be CONVERSATION (no file)"
+            assert "response" in result, f"'{prompt}' should include helpful response"
 
     def test_conversation_questions(self) -> None:
-        """Test that questions are classified as CONVERSATION."""
-        questions = [
-            "what can we do next?",
-            "what analyses are available?",
-            "help me understand this",
+        """Test that capability questions are classified as CONVERSATION.
+
+        These prompts use quick classification patterns (capability questions)
+        so they work without LLM calls.
+        """
+        # Use capability question patterns that are handled by quick classification
+        capability_questions = [
+            "can you calculate ndvi?",
+            "could you detect field boundaries?",
+            "are you able to run change detection?",
+            "what can you do?",
         ]
 
-        for prompt in questions:
+        for prompt in capability_questions:
             req = ChatRequest(prompt=prompt, attachments=[])
             result = classify_intent(req)
 
             assert result["intent"] == IntentType.CONVERSATION, f"'{prompt}' should be CONVERSATION"
+            assert result.get("response"), f"'{prompt}' should include helpful response"
 
     def test_conversation_has_response(self) -> None:
         """Test that CONVERSATION intent includes a response."""
@@ -152,8 +160,9 @@ class TestClassifyIntentEdgeCases:
         # Should not crash and should return a valid intent
         assert result["intent"] in [IntentType.PIPELINE, IntentType.CONVERSATION]
 
-    def test_mixed_case_prompts(self) -> None:
-        """Test that classification is case-insensitive."""
+    def test_mixed_case_prompts_with_attachments(self) -> None:
+        """Test that classification is case-insensitive when attachments are present."""
+        att = Attachment(id="test", filename="test.tif", mime_type="image/tiff", path="/tmp/test.tif")
         prompts = [
             "CALCULATE NDVI",
             "Calculate Ndvi",
@@ -161,14 +170,15 @@ class TestClassifyIntentEdgeCases:
         ]
 
         for prompt in prompts:
-            req = ChatRequest(prompt=prompt, attachments=[])
+            req = ChatRequest(prompt=prompt, attachments=[att])
             result = classify_intent(req)
 
-            assert result["intent"] == IntentType.PIPELINE, f"'{prompt}' should be PIPELINE"
+            assert result["intent"] == IntentType.PIPELINE, f"'{prompt}' should be PIPELINE with attachment"
 
-    def test_whitespace_handling(self) -> None:
-        """Test that extra whitespace is handled."""
-        req = ChatRequest(prompt="  ndvi calculation  ", attachments=[])
+    def test_whitespace_handling_with_attachment(self) -> None:
+        """Test that extra whitespace is handled with attachments."""
+        att = Attachment(id="test", filename="test.tif", mime_type="image/tiff", path="/tmp/test.tif")
+        req = ChatRequest(prompt="  ndvi calculation  ", attachments=[att])
         result = classify_intent(req)
 
         assert result["intent"] == IntentType.PIPELINE

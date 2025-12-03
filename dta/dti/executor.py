@@ -7,15 +7,21 @@ runners (python scripts, passthrough, agent calls) and managing artifact flow.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 import importlib.util
+import logging
 import os
 from pathlib import Path
 import sys
 from typing import Any
+import uuid
 
-from dta.dti.coe.llm import get_llm_router
+from dta.config import ROOT_DIR, TEMP_PATH
+from dta.dti.coe.llm import LLMMessage, get_llm_router
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionError(Exception):
@@ -84,11 +90,6 @@ STEP_TO_MODEL_MAP = {
     "models/prithvi-reconstruction": "prithvi-eo-v1-100m",
     "models/delineate-anything": "delineate-anything-small",
 }
-
-# Logging
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class PipelineExecutor:
@@ -322,11 +323,6 @@ class PipelineExecutor:
         # Create output directory for models
         output_dir: str | None = None
         if model_id:
-            from datetime import datetime
-            import uuid
-
-            from dta.config import TEMP_PATH
-
             run_id = f"{model_id}_{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
             output_dir_path = TEMP_PATH / f"{model_id}_outputs" / run_id
             output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -347,8 +343,6 @@ class PipelineExecutor:
         entrypoint_str = self._resolve_variables(item.runner.entrypoint, var_context)
         entrypoint = Path(entrypoint_str)
         if not entrypoint.is_absolute():
-            from dta.config import ROOT_DIR
-
             entrypoint = ROOT_DIR / entrypoint
 
         if not entrypoint.exists():
@@ -361,8 +355,6 @@ class PipelineExecutor:
             resolved = self._resolve_variables(value, var_context)
             # Resolve relative paths in env vars
             if key.endswith(("_DIR", "_PATH")) and not Path(resolved).is_absolute():
-                from dta.config import ROOT_DIR
-
                 resolved = str(ROOT_DIR / resolved)
             os.environ[key] = resolved
 
@@ -394,7 +386,8 @@ class PipelineExecutor:
                 func = getattr(module, func_name)
                 result = func(**func_args)
             else:
-                # Legacy mode - pass inputs directly to run() or main()
+                # Simple mode: call run() or main() with collected inputs
+                # Used for algorithms that don't require complex argument mapping
                 if hasattr(module, "run"):
                     result = module.run(**inputs)
                 elif hasattr(module, "main"):
@@ -499,8 +492,6 @@ class PipelineExecutor:
         Returns:
             Updated inputs dict with preprocessed values
         """
-        from dta.config import ROOT_DIR
-
         updated_inputs = inputs.copy()
 
         for preproc_ref in item.preprocessors:
@@ -678,8 +669,7 @@ class PipelineExecutor:
                 if input_type in self.artifacts:
                     inputs[input_type] = self.artifacts[input_type]
 
-        # For now, implement basic summarization
-        # TODO: Expand with different agent types based on item.id
+        # Route to appropriate agent handler based on registry item
         if item.id == "post-processing/agent-analysis":
             result = self._agent_summarize(inputs)
             # Store in outputs
@@ -728,8 +718,6 @@ class PipelineExecutor:
             )
 
             # Use router with automatic fallback
-            from dta.dti.coe.llm import LLMMessage
-
             response = router.generate(
                 messages=[
                     LLMMessage(role="user", content=prompt),

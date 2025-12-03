@@ -24,7 +24,7 @@ class TestRegistryLoading:
         """Test that registry contains all expected types."""
         registry = load_registry()
 
-        expected_types = ["RasterPath", "NDVIMap", "Statistics", "ChangeMap", "Features"]
+        expected_types = ["RasterPath", "NDVIMap", "Statistics", "ChangeMap", "Reconstruction"]
         for t in expected_types:
             assert t in registry.types, f"Missing type: {t}"
 
@@ -58,7 +58,7 @@ class TestRegistryLoading:
         models = [i for i in registry.instances if i.kind == "model"]
         model_ids = [m.id for m in models]
 
-        assert "models/prithvi_features" in model_ids
+        assert "models/prithvi-reconstruction" in model_ids
         assert "models/delineate-anything" in model_ids
 
 
@@ -105,7 +105,9 @@ class TestRegistryItemValidation:
         for item in registry.instances:
             assert item.id, "Item missing id"
             assert item.kind, f"Item {item.id} missing kind"
-            assert item.runner, f"Item {item.id} missing runner"
+            # Hosted models (with integration) don't require a runner
+            if not item.integration:
+                assert item.runner, f"Item {item.id} missing runner"
             assert isinstance(item.keywords, list), f"Item {item.id} keywords not a list"
             assert isinstance(item.inputs, list), f"Item {item.id} inputs not a list"
             assert isinstance(item.outputs, list), f"Item {item.id} outputs not a list"
@@ -115,7 +117,7 @@ class TestRegistryItemValidation:
         registry = load_registry()
 
         for item in registry.instances:
-            if item.runner.type == "python":
+            if item.runner and item.runner.type == "python":
                 assert item.runner.entrypoint, f"Item {item.id} missing entrypoint"
 
     def test_algorithm_entrypoints_exist(self) -> None:

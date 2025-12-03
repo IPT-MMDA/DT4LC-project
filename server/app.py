@@ -3,7 +3,9 @@ from collections.abc import AsyncIterator
 import io
 import json
 import logging
+import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 from dotenv import load_dotenv
@@ -43,10 +45,12 @@ HEARTBEAT_SECS = 15
 # Register routers
 app.include_router(model_router)
 
-# CORS - allow all origins for MVP
+# CORS configuration
+# In production, restrict to specific origins via CORS_ORIGINS environment variable
+cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,6 +61,14 @@ UPLOAD_DIR = UPLOADS_PATH
 
 
 def sse_frame(payload: dict[str, Any]) -> bytes:
+    """Format payload as Server-Sent Event frame.
+
+    Args:
+        payload: Data to encode as JSON
+
+    Returns:
+        Bytes with SSE format: "data: <json>\\n\\n"
+    """
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
 
 
