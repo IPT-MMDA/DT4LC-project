@@ -127,8 +127,6 @@ export const useChatStore = create<ChatStore>()(
 
       // Session management
       createNewSession: () => {
-        // Sessions are now auto-saved when messages are added,
-        // so we just need to create a new empty session
         const newSessionId = generateSessionId();
         set({
           currentSessionId: newSessionId,
@@ -142,8 +140,6 @@ export const useChatStore = create<ChatStore>()(
 
       loadSession: (sessionId: string) => {
         const state = get();
-
-        // Sessions are auto-saved when messages are added, so just load
         const session = state.sessions.find((s) => s.id === sessionId);
         if (session) {
           const tokenCount = session.messages.reduce(

@@ -56,6 +56,9 @@ Return ONLY valid JSON with this structure:
 For CONVERSATION responses, be helpful and suggest available analyses:
 - Field boundary detection (Delineate-Anything model)
 - NDVI calculation (vegetation health)
+- NDWI calculation (water body detection)
+- NDSI calculation (snow/ice detection)
+- LULC classification (land cover mapping)
 - Change detection (compare two images)
 - Statistics extraction
 - Prithvi feature extraction (foundation model embeddings)
@@ -149,6 +152,7 @@ def _looks_like_action(prompt: str) -> bool:
         True if prompt contains action keywords
     """
     action_keywords = [
+        # Generic action verbs
         "calculate",
         "compute",
         "detect",
@@ -157,23 +161,32 @@ def _looks_like_action(prompt: str) -> bool:
         "run",
         "process",
         "generate",
-        "create",
         "find",
         "identify",
         "measure",
+        # Domain-specific terms (what we actually support)
         "ndvi",
+        "ndsi",
         "vegetation",
+        "snow",
+        "ice",
+        "glacier",
         "boundary",
         "boundaries",
-        "change",
+        "change detection",
         "statistics",
-        "features",
         "prithvi",
         "reconstruction",
-        "reconstruct",
-        "mae",
-        "masked",
-        "autoencoder",
+        "delineate",
+        "field",
+        "parcel",
+        # LULC / NDWI
+        "lulc",
+        "land cover",
+        "land use",
+        "ndwi",
+        "water index",
+        "classify",
     ]
 
     prompt_lower = prompt.lower()
@@ -207,14 +220,34 @@ def _is_clear_action_request(prompt: str) -> bool:
     if any(prompt_lower.startswith(qw) for qw in question_words):
         return False
 
-    # Check for specific action patterns
+    # Check for specific action patterns - each pattern should be specific to supported algorithms
     action_patterns = [
-        r"^(calculate|compute|run|do|perform)\s+(ndvi|statistics|change\s*detection|field\s*detection)",
+        # Explicit algorithm requests
+        r"^(calculate|compute|run|do|perform)\s+(ndvi|ndsi|statistics|change\s*detection|field\s*detection)",
         r"^ndvi(\s+calculation|\s+analysis)?$",
+        r"^ndsi(\s+calculation|\s+analysis)?$",
+        # Field boundary detection
         r"^(detect|find|identify)\s+(field\s*)?(boundaries|parcels)",
-        r"^change\s*detection$",
-        r"^(extract|get)\s+(features|statistics)",
         r"^field\s*(boundary|boundaries)\s*(detection)?$",
+        r"^delineate\s+(fields?|parcels?|boundaries)",
+        # Snow/glacier analysis (matches both NDSI and Snow Classifier)
+        r"^(detect|find|map)\s+(snow|ice|glacier)",
+        r"^snow\s*(index|detection|mapping|classif\w*)?$",
+        r"^glacier\s*(detection|mapping|analysis)?$",
+        r"^(run|use)\s+snow\s*classifier$",
+        # LULC / Land cover classification
+        r"^(classify|classification)\s+(land\s*cover|land\s*use|lulc)",
+        r"^land\s*(cover|use)\s*(classif\w*|map\w*|analysis)?$",
+        r"^lulc(\s+classif\w*|\s+map\w*)?$",
+        # NDWI / Water detection
+        r"^(calculate|compute|run)\s+ndwi$",
+        r"^ndwi(\s+calculation|\s+analysis)?$",
+        r"^(detect|find|map)\s+(water|waterbody|water\s*body)",
+        r"^water\s*(index|detection|mapping)?$",
+        # Other algorithms
+        r"^change\s*detection$",
+        r"^(extract|get)\s+(statistics)",
+        r"^prithvi\s*(reconstruction|features?)?$",
     ]
 
     for pattern in action_patterns:
@@ -311,10 +344,37 @@ def _check_capability_question(prompt: str) -> str | None:
             "and standard deviation. Please upload a GeoTIFF image and I'll analyze it."
         )
 
+    if any(kw in prompt_lower for kw in ["snow", "ice", "glacier", "ndsi", "frozen"]):
+        return (
+            "Yes, I can analyze snow and ice coverage! I offer two methods:\n\n"
+            "• **NDSI** - Basic snow index using (Green - SWIR) / (Green + SWIR)\n"
+            "• **Snow Classifier** - Multi-criteria classification (more accurate, reduces false positives)\n\n"
+            "Please upload a GeoTIFF image with Green and SWIR bands (e.g., Sentinel-2 or Landsat)."
+        )
+
+    if any(kw in prompt_lower for kw in ["water", "ndwi", "water body", "waterbody"]):
+        return (
+            "Yes, I can detect water bodies using NDWI (Normalized Difference Water Index)! "
+            "NDWI = (Green - NIR) / (Green + NIR). Values > 0.3 typically indicate water. "
+            "Please upload a GeoTIFF image with Green and NIR bands."
+        )
+
+    if any(kw in prompt_lower for kw in ["land cover", "land use", "lulc", "classify"]):
+        return (
+            "Yes, I can classify land cover using spectral indices! The LULC classifier "
+            "identifies 6 classes: Water, Snow/Ice, Bare Soil, Sparse Vegetation, "
+            "Cropland/Grassland, and Dense Vegetation. Please upload a multispectral "
+            "GeoTIFF image (4+ bands with NIR)."
+        )
+
     # Generic capability response
     return (
         "Yes! Our geospatial Digital Twin system can perform several analyses:\n\n"
         "• **NDVI Calculation** - Analyze vegetation health\n"
+        "• **NDWI Calculation** - Water body detection\n"
+        "• **NDSI Calculation** - Basic snow/ice detection\n"
+        "• **Snow Classifier** - Multi-criteria snow classification (more robust)\n"
+        "• **LULC Classification** - Land cover mapping (Water, Vegetation, Soil, etc.)\n"
         "• **Field Boundary Detection** - Identify agricultural parcels\n"
         "• **Change Detection** - Compare before/after images\n"
         "• **Statistics Extraction** - Calculate raster statistics\n"
@@ -375,6 +435,14 @@ def _get_missing_file_response(prompt: str) -> str:
         return (
             "I'd be happy to calculate NDVI for you! Please upload a GeoTIFF image "
             "with NIR and Red bands, and I'll analyze the vegetation health."
+        )
+
+    if any(kw in prompt_lower for kw in ["ndsi", "snow", "ice", "glacier"]):
+        return (
+            "I'd be happy to analyze snow/ice coverage for you! I offer:\n"
+            "• **NDSI** - Basic snow index\n"
+            "• **Snow Classifier** - Multi-criteria (more robust)\n\n"
+            "Please upload a GeoTIFF image with Green and SWIR bands (e.g., Sentinel-2 or Landsat)."
         )
 
     if any(kw in prompt_lower for kw in ["boundary", "boundaries", "field", "parcel"]):

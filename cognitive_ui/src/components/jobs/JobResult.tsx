@@ -166,7 +166,7 @@ export function JobResult({ result }: JobResultProps) {
                 {Object.entries(reconstruction.visualizations).map(([key, base64]) => {
                   const labelMap: Record<string, string> = {
                     original_rgb_t0: 'Original Image',
-                    masked_rgb_t0: 'Masked Image (75%)',
+                    masked_rgb_t0: 'Masked Image',
                     predicted_rgb_t0: 'Reconstructed Image',
                   };
                   const label = labelMap[key] || key.replace(/_/g, ' ');

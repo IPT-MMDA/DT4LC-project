@@ -187,34 +187,15 @@ def get_model_registry() -> ModelRegistry:
 
 
 def _initialize_default_models() -> None:
-    """Initialize default models (Delineate-Anything, etc.).
+    """Initialize default models.
 
-    Note: Prithvi model is now managed through ModelManager and downloaded
-    on-demand from HuggingFace. See dta/dti/models/model_manager.py.
+    Note: Models (Prithvi, Delineate-Anything) are now managed through ModelManager
+    and downloaded on-demand. They are executed via the registry.yaml configuration
+    and the pipeline executor. See:
+    - dta/dti/models/model_manager.py (download management)
+    - dta/dti/models/third_party/ (inference wrappers)
+    - dta/registry.yaml (pipeline configuration)
     """
-    registry = get_model_registry()
-
-    # Register Delineate-Anything model
-    try:
-        from .delineate import DelineateAnythingModel
-
-        delineate = DelineateAnythingModel()
-        registry.register(
-            delineate,
-            metadata={
-                "display_name": "Delineate-Anything",
-                "description": (
-                    "YOLO-based agricultural field boundary detection model. "
-                    "Segments individual fields from satellite imagery and outputs "
-                    "GeoPackage files with polygon geometries and area statistics."
-                ),
-                "author": "IPT-MMDA",
-                "source_url": "https://github.com/IPT-MMDA/Delineate-Anything",
-                "gpu_required": True,  # Benefits from GPU
-                "memory_mb": 2048,
-                "latency_ms": 10000,
-            },
-        )
-        logger.info("Registered Delineate-Anything model")
-    except Exception as e:
-        logger.warning(f"Failed to register Delineate-Anything model: {e}")
+    # No default models to register - all models are managed via ModelManager
+    # and executed via registry.yaml configuration
+    pass

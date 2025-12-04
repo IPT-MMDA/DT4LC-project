@@ -1,6 +1,10 @@
 version: "0.1"
 types:
  - NDVIMap
+ - NDWIMap  # Water index output
+ - NDSIMap  # Snow index output
+ - SnowClassification  # Multi-criteria snow classification
+ - LULCMap  # Land use / land cover classification
  - Reconstruction  # Prithvi MAE reconstruction outputs
  - RasterPath
  - RasterPathBefore
@@ -38,6 +42,15 @@ instances:
 
   - id: algorithms/ndvi
     kind: algorithm
+    description: |
+      NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
+      Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
+      values indicate healthier vegetation. Useful for crop monitoring and land cover.
+    interpretation: |
+      NDVI ranges from -1 to 1. Values >0.6 indicate dense, healthy vegetation; 0.4-0.6
+      moderate vegetation cover; 0.2-0.4 sparse vegetation or senescent crops; <0.2 bare
+      soil or stressed vegetation; negative values indicate water, clouds, or snow.
+      Standard deviation reflects landscape heterogeneity.
     keywords: [ndvi, vegetation, index, health, greenness]
     inputs: [RasterPath]
     outputs: [NDVIMap]
@@ -45,9 +58,69 @@ instances:
       type: python
       entrypoint: "dta/dti/algorithms/ndvi.py"
 
+  - id: algorithms/ndwi
+    kind: algorithm
+    description: |
+      NDWI (Normalized Difference Water Index) for water body detection.
+      Computed as (Green - NIR) / (Green + NIR). Positive values indicate water.
+      Useful for mapping lakes, rivers, floods, and wetlands.
+    interpretation: |
+      NDWI ranges from -1 to 1. Values >0.3 indicate open water; 0.0-0.3 possible
+      water or wetland; <0.0 non-water surfaces (vegetation shows negative NDWI).
+      Water percentage indicates proportion of pixels classified as water.
+    keywords: [ndwi, water, index, lake, river, flood, wetland, aquatic, hydrology, moisture]
+    inputs: [RasterPath]
+    outputs: [NDWIMap]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/ndwi.py"
+
+  - id: algorithms/ndsi
+    kind: algorithm
+    description: |
+      NDSI (Normalized Difference Snow Index) for snow and glacier detection.
+      Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
+      indicate snow/ice coverage. Useful for glacier monitoring and snow mapping.
+    interpretation: |
+      NDSI ranges from -1 to 1. Values ≥0.4 indicate snow/ice cover; 0.2-0.4 mixed or
+      thin snow; <0.2 snow-free surfaces; negative values typically indicate vegetation.
+      Water bodies may show moderate positive NDSI and require additional masking.
+    keywords: [ndsi, snow, ice, glacier, frozen, winter, alpine, mountain, cryosphere, sentinel, landsat]
+    inputs: [RasterPath]
+    outputs: [NDSIMap]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/ndsi.py"
+
+  - id: algorithms/snow-classifier
+    kind: algorithm
+    description: |
+      Multi-criteria snow classification for robust snow detection. Combines
+      NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
+      false positives compared to basic NDSI thresholding. More accurate across
+      varying terrain and atmospheric conditions.
+    interpretation: |
+      Multi-criteria classification combining NDSI ≥0.4, NDVI ≤0.1, and NIR reflectance
+      >0.3. Snow coverage percentage represents proportion of pixels meeting all criteria.
+      This approach reduces commission errors from water bodies and shadows.
+    keywords: [snow-classifier, snow-classification, ice, glacier, frozen, winter, alpine, mountain, cryosphere, multi-criteria, robust]
+    inputs: [RasterPath]
+    outputs: [SnowClassification]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/snow_classifier.py"
+
   - id: algorithms/statistics
     kind: algorithm
-    keywords: [statistics, stats, distribution, histogram]
+    description: |
+      Comprehensive raster statistics including min, max, mean, standard deviation,
+      and percentiles for all bands. Generates histograms for data distribution analysis.
+    interpretation: |
+      Band statistics characterize spectral distribution. Standard deviation indicates
+      intra-scene variability; high values suggest heterogeneous land cover. Difference
+      between mean and median reveals distribution skewness. Percentiles help identify
+      outliers and inform histogram stretching for visualization.
+    keywords: [statistics, stats, distribution, histogram, percentiles, analysis]
     inputs: [RasterPath]
     outputs: [Statistics]
     runner:
@@ -56,12 +129,39 @@ instances:
 
   - id: algorithms/change-detection
     kind: algorithm
+    description: |
+      NDVI-based change detection comparing two time periods. Computes vegetation
+      change between before and after images, identifying areas of loss or gain.
+    interpretation: |
+      NDVI difference (after minus before) quantifies vegetation change. Negative values
+      indicate vegetation loss (disturbance, harvest, drought); positive values indicate
+      vegetation gain (growth, recovery). Magnitude reflects change intensity. Values
+      near zero (±0.05) typically represent stable or unchanged areas.
     keywords: [change, detection, difference, compare, comparison, temporal, before, after, loss, gain, vegetation]
     inputs: [RasterPathBefore, RasterPathAfter]
     outputs: [ChangeMap]
     runner:
       type: python
       entrypoint: "dta/dti/algorithms/change_detection.py"
+
+  - id: algorithms/lulc-classifier
+    kind: algorithm
+    description: |
+      Land Use / Land Cover (LULC) classification using spectral index thresholds.
+      Classifies pixels into Water, Snow/Ice, Bare Soil, Sparse Vegetation,
+      Cropland/Grassland, and Dense Vegetation using NDVI, NDWI, and NDSI indices.
+      Rule-based approach suitable for rapid assessment without training data.
+    interpretation: |
+      Classification based on spectral index thresholds: Water (NDWI>0.2 or NDVI<-0.1 or wet areas),
+      Snow/Ice (NDSI>0.4 with high brightness), Bare Soil (NDVI<0.15, NDWI<-0.1),
+      Sparse Vegetation (0.1≤NDVI<0.3), Cropland/Grassland (0.3≤NDVI<0.5),
+      Dense Vegetation (NDVI≥0.5). Dominant class indicates primary land cover type.
+    keywords: [lulc, land-use, land-cover, classification, classify, classes, water, soil, vegetation, cropland, forest, urban, mapping]
+    inputs: [RasterPath]
+    outputs: [LULCMap]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/lulc_classifier.py"
 
   - id: models/prithvi-reconstruction
     kind: model
@@ -70,6 +170,10 @@ instances:
       Autoencoder (MAE) to reconstruct HLS imagery, revealing learned spatial and
       spectral patterns. Outputs RGB visualizations: original, masked, and predicted
       (reconstructed) images.
+    interpretation: |
+      Masked Autoencoder reconstructs masked patches using learned representations.
+      Reconstruction quality indicates how well the model captures spatial-spectral patterns.
+      Compare predicted vs original RGB composites to assess feature preservation.
     keywords: [prithvi, reconstruction, mae, masked, autoencoder, predict, visualize, foundation, hls, geotiff, nasa, ibm]
     inputs: [RasterPath]
     outputs: [Reconstruction]
@@ -91,9 +195,18 @@ instances:
 
   - id: models/delineate-anything
     kind: model
+    description: |
+      Delineate-Anything field boundary detection using YOLO-based segmentation.
+      Auto-detects data source (Sentinel/Planet/Maxar) and configures appropriate
+      filtering thresholds. Outputs GeoPackage with field polygons.
+    interpretation: |
+      Field count and total area characterize agricultural parcelization. Mean field size
+      (total_area/num_fields) indicates farming scale: <1 ha suggests smallholder systems;
+      >10 ha indicates mechanized agriculture. Output GeoPackage preserves source CRS.
     keywords: [delineate, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, detect, farm, crop, plot, land, polygon, vector, outline, edges]
     inputs: [RasterPath]
     outputs: [FieldBoundaries]
+    model_id: delineate-anything-small
     runner:
       type: python
       entrypoint: "dta/dti/models/third_party/delineate_anything/inference.py"

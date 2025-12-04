@@ -21,10 +21,10 @@ class TestLooksLikeAction:
             "calculate ndvi",
             "compute statistics",
             "detect boundaries",
-            "extract features",
+            "extract statistics",
             "analyze vegetation",
             "run change detection",
-            "process the image",
+            "process the snow data",
             "generate statistics",
         ]
 
@@ -57,7 +57,8 @@ class TestIsClearActionRequest:
             "change detection",
             "run change detection",
             "field boundaries",
-            "extract features",
+            "extract statistics",
+            "prithvi reconstruction",
         ]
 
         for prompt in clear_actions:

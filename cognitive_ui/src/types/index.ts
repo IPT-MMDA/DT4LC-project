@@ -49,7 +49,7 @@ export interface JobResultData {
 
   // Statistics (numbers only, suitable for context)
   statistics?: {
-    type: 'ndvi' | 'change' | 'statistics' | 'features' | 'field_boundaries';
+    type: 'ndvi' | 'ndwi' | 'ndsi' | 'lulc' | 'snow' | 'change' | 'statistics' | 'features' | 'field_boundaries';
     values: Record<string, number | string>;
   };
 

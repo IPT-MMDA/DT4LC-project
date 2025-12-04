@@ -27,6 +27,9 @@ SYS = (
     "DOMAIN KNOWLEDGE - Match user intent to SINGLE output type:\n"
     '- "field boundaries", "parcels", "delineate", "agricultural plots" → ["FieldBoundaries"]\n'
     '- "vegetation health", "greenness", "ndvi" → ["NDVIMap"]\n'
+    '- "water index", "water detection", "ndwi" → ["NDWIMap"]\n'
+    '- "snow index", "ndsi", "snow detection" → ["NDSIMap"]\n'
+    '- "land cover", "land use", "lulc", "classify" → ["LULCMap"]\n'
     '- "statistics", "distribution", "histogram" → ["Statistics"]\n'
     '- "change detection", "compare images", "before/after" → ["ChangeMap"]\n'
     '- "prithvi", "features", "embeddings", "foundation model" → ["Features"]\n\n'

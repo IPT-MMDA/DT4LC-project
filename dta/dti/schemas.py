@@ -53,6 +53,7 @@ class RegistryItem(BaseModel):  # type: ignore[misc]
     outputs: list[str] = []
     runner: Runner | None = None  # Optional for hosted models
     description: str | None = None  # Optional description
+    interpretation: str | None = None  # Domain-specific interpretation guide for LLM analysis
     preprocessors: list[PreprocessorRef] = []  # Preprocessors to apply before execution
     integration: Integration | None = None  # For hosted models (HuggingFace, GEE, etc.)
     metadata: dict[str, Any] = {}  # Additional metadata (team, author, hosting, etc.)

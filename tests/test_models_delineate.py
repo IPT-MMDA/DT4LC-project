@@ -44,6 +44,16 @@ def _check_delineate_dependencies() -> tuple[bool, str]:
     return True, ""
 
 
+def _check_model_installed() -> tuple[bool, str]:
+    """Check if Delineate-Anything model is downloaded."""
+    from dta.dti.models import get_model_manager
+
+    manager = get_model_manager()
+    if not manager.is_model_available("delineate-anything-small"):
+        return False, "Delineate-Anything model not installed. Download via Models panel."
+    return True, ""
+
+
 class TestDelineateAnythingRegistry:
     """Test registry configuration for Delineate-Anything."""
 
@@ -189,13 +199,17 @@ class TestDelineateAnythingOrchestration:
 
 @pytest.mark.slow
 class TestDelineateAnythingExecution:
-    """Test actual model execution (requires dependencies installed)."""
+    """Test actual model execution (requires dependencies and model installed)."""
 
     @pytest.fixture(autouse=True)
     def check_dependencies(self) -> None:
-        """Skip tests if dependencies are not installed."""
+        """Skip tests if dependencies or model are not installed."""
         available, msg = _check_delineate_dependencies()
         if not available:
+            pytest.skip(msg)
+
+        installed, msg = _check_model_installed()
+        if not installed:
             pytest.skip(msg)
 
     @pytest.fixture
