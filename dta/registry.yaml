@@ -40,6 +40,10 @@ instances:
 
   - id: algorithms/ndvi
     kind: algorithm
+    description: |
+      NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
+      Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
+      values indicate healthier vegetation. Useful for crop monitoring and land cover.
     keywords: [ndvi, vegetation, index, health, greenness]
     inputs: [RasterPath]
     outputs: [NDVIMap]
@@ -76,7 +80,10 @@ instances:
 
   - id: algorithms/statistics
     kind: algorithm
-    keywords: [statistics, stats, distribution, histogram]
+    description: |
+      Comprehensive raster statistics including min, max, mean, standard deviation,
+      and percentiles for all bands. Generates histograms for data distribution analysis.
+    keywords: [statistics, stats, distribution, histogram, percentiles, analysis]
     inputs: [RasterPath]
     outputs: [Statistics]
     runner:

@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, CheckCircle, AlertCircle, Clock, Cpu, Map, ArrowUpDown, BarChart3, ExternalLink, Globe, Cloud, Download, Trash2, XCircle, Snowflake } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Clock, Cpu, Map, ArrowUpDown, BarChart3, ExternalLink, Download, Trash2, XCircle, Snowflake } from 'lucide-react';
 import apiClient from '../api/client';
 import { useMLModels, useDownloadModel, useDeleteModel, useCancelDownload, type MLModel } from '../api/hooks/useMLModels';
 
-interface ModelRequirement {
+interface HostedModel {
   model_id: string;
   name: string;
   description: string;
@@ -21,7 +21,7 @@ interface ModelRequirement {
 }
 
 interface ModelsResponse {
-  models: ModelRequirement[];
+  models: HostedModel[];
   count: number;
 }
 
@@ -43,7 +43,7 @@ const ALGORITHMS = [
     icon: Snowflake,
     color: 'blue',
     available: true,
-    keywords: ['snow', 'ice', 'glacier', 'ndsi', 'cryosphere'],
+    keywords: ['ndsi', 'snow', 'ice', 'glacier', 'cryosphere', 'alpine'],
   },
   {
     id: 'snow-classifier',
@@ -52,7 +52,7 @@ const ALGORITHMS = [
     icon: Snowflake,
     color: 'sky',
     available: true,
-    keywords: ['snow', 'classification', 'multi-criteria', 'robust'],
+    keywords: ['snow', 'ice', 'glacier', 'multi-criteria', 'robust'],
   },
   {
     id: 'change-detection',
@@ -70,7 +70,7 @@ const ALGORITHMS = [
     icon: BarChart3,
     color: 'cyan',
     available: true,
-    keywords: ['statistics', 'histogram', 'percentiles', 'analysis'],
+    keywords: ['statistics', 'histogram', 'percentiles', 'distribution'],
   },
 ];
 
@@ -104,32 +104,19 @@ function StatusBadge({ available, missing }: { available: boolean; missing?: str
   );
 }
 
-function HostedModelCard({ model }: { model: ModelRequirement }) {
-  const isGEE = model.integration_type === 'google-earth-engine';
-  const Icon = isGEE ? Globe : Cloud;
-  const color = isGEE ? 'emerald' : 'violet';
-
-  const colorClasses: Record<string, string> = {
-    emerald: 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800',
-    violet: 'bg-violet-50 dark:bg-violet-950 border-violet-200 dark:border-violet-800',
-  };
-  const iconColorClasses: Record<string, string> = {
-    emerald: 'text-emerald-600 dark:text-emerald-400',
-    violet: 'text-violet-600 dark:text-violet-400',
-  };
-
+function HostedModelCard({ model }: { model: HostedModel }) {
   const getHostingLabel = () => {
-    if (isGEE) return 'Google Earth Engine';
+    if (model.integration_type === 'google-earth-engine') return 'Google Earth Engine';
     if (model.hosting === 'huggingface') return 'HuggingFace Spaces';
     return model.hosting || 'External';
   };
 
   return (
-    <div className={`rounded-lg border p-6 ${colorClasses[color]}`}>
+    <div className="rounded-lg border p-6 bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-            <Icon className={`w-5 h-5 ${iconColorClasses[color]}`} />
+          <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900">
+            <Cpu className="w-5 h-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -161,17 +148,12 @@ function HostedModelCard({ model }: { model: ModelRequirement }) {
           className="inline-flex items-center gap-1 text-xs text-primary-600 dark:text-primary-400 hover:underline mb-3"
         >
           <ExternalLink className="w-3 h-3" />
-          {isGEE ? 'View on Earth Engine' : 'View on HuggingFace'}
+          View Source
         </a>
       )}
 
-      {/* Hosting and team badges */}
+      {/* Hosting badge */}
       <div className="flex flex-wrap gap-1.5 mb-2">
-        {model.team && (
-          <span className="px-2 py-0.5 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 text-xs rounded font-medium">
-            {model.team}
-          </span>
-        )}
         <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded font-medium">
           {getHostingLabel()}
         </span>
@@ -396,8 +378,8 @@ function MLModelCard({ model }: { model: MLModel }) {
   );
 }
 
-// ML Models section component
-function MLModelsSection() {
+// ML Models section component - displays both local and hosted models
+function MLModelsSection({ hostedModels }: { hostedModels: HostedModel[] }) {
   const { data, isLoading, error } = useMLModels();
 
   if (isLoading) {
@@ -419,12 +401,15 @@ function MLModelsSection() {
     );
   }
 
-  const models = data?.models || [];
+  const localModels = data?.models || [];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {models.map((model) => (
+      {localModels.map((model) => (
         <MLModelCard key={model.id} model={model} />
+      ))}
+      {hostedModels.map((model) => (
+        <HostedModelCard key={model.model_id} model={model} />
       ))}
     </div>
   );
@@ -463,33 +448,16 @@ export function ModelsPage() {
         </div>
       </div>
 
-      {/* Downloadable ML Models Section */}
+      {/* ML Models Section */}
       <div className="mb-10">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
           ML Models
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Third-party models that can be downloaded on-demand. Models run locally for best performance.
+          Machine learning models for advanced geospatial analysis.
         </p>
-        <MLModelsSection />
+        <MLModelsSection hostedModels={hostedModels} />
       </div>
-
-      {/* Hosted Models Section (DT4LC Team) */}
-      {hostedModels.length > 0 && (
-        <div className="mb-10">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            Hosted Models
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Models running on external platforms (HuggingFace Spaces, Google Earth Engine)
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {hostedModels.map((model: ModelRequirement) => (
-              <HostedModelCard key={model.model_id} model={model} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Usage Instructions */}
       <div className="mt-10 bg-gray-50 dark:bg-gray-950 rounded-lg border border-gray-200 dark:border-gray-800 p-6">

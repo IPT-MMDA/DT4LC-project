@@ -104,9 +104,8 @@ export function useJobSync() {
     checkPendingJobs();
   }, []); // Only run on mount
 
-  // NOTE: Active jobs are already polled by ChatPage via useJob hook.
-  // We only need to sync on mount for jobs that completed while the page was closed.
-  // Removed the periodic sync to avoid duplicate addJobResultMessage calls.
+  // Active jobs are polled by ChatPage via useJob hook.
+  // This hook only syncs on mount for jobs that completed while the page was closed.
 
   return { syncJob };
 }

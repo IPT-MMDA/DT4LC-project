@@ -104,7 +104,6 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       },
     };
 
-    // snow_classification is the key from the algorithm
     if (snowClassification.visualizations?.snow_classification) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
@@ -113,7 +112,6 @@ export function parseJobResult(job: Job): JobResultData | undefined {
         base64: snowClassification.visualizations.snow_classification,
       });
     }
-    // Also check criteria_analysis visualization
     if (snowClassification.visualizations?.criteria_analysis) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
