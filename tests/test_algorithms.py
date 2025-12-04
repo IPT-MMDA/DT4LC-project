@@ -141,6 +141,81 @@ class TestNDSIAlgorithm:
         assert callable(run)
 
 
+class TestSnowClassifierAlgorithm:
+    """Tests for snow classifier algorithm."""
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(),
+        reason="Kahovka data not available",
+    )
+    def test_snow_classifier_with_real_data(self) -> None:
+        """Test snow classifier with real data."""
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.snow_classifier import classify_snow
+
+        data_dir = ROOT_DIR / "resources/kahovka_data"
+        tif_files = list(data_dir.glob("*.tif")) + list(data_dir.glob("*.tiff"))
+
+        if not tif_files:
+            pytest.skip("No GeoTIFF files found")
+
+        result = classify_snow(str(tif_files[0]))
+
+        assert "snow_mask" in result
+        assert "ndsi" in result
+        assert "ndvi" in result
+        assert "brightness" in result
+        assert "metadata" in result
+        assert "statistics" in result
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(),
+        reason="Kahovka data not available",
+    )
+    def test_snow_classifier_statistics(self) -> None:
+        """Test that snow classifier statistics include all criteria info."""
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.snow_classifier import classify_snow
+
+        data_dir = ROOT_DIR / "resources/kahovka_data"
+        tif_files = list(data_dir.glob("*.tif"))
+
+        if not tif_files:
+            pytest.skip("No GeoTIFF files found")
+
+        result = classify_snow(str(tif_files[0]))
+        stats = result["statistics"]
+
+        # Basic stats
+        assert "snow_pixels" in stats
+        assert "non_snow_pixels" in stats
+        assert "snow_coverage_percent" in stats
+
+        # Criteria stats
+        assert "pixels_meeting_ndsi_threshold" in stats
+        assert "pixels_meeting_ndvi_criterion" in stats
+        assert "pixels_meeting_brightness_threshold" in stats
+
+        # Thresholds
+        assert "thresholds" in stats
+        assert stats["thresholds"]["ndsi"] == 0.4
+        assert stats["thresholds"]["ndvi_center"] == 0.1
+        assert stats["thresholds"]["brightness"] == 0.3
+
+    def test_snow_classifier_file_not_found(self) -> None:
+        """Test snow classifier raises error for non-existent file."""
+        from dta.dti.algorithms.snow_classifier import classify_snow
+
+        with pytest.raises(FileNotFoundError):
+            classify_snow("/nonexistent/path.tif")
+
+    def test_snow_classifier_run_function_exists(self) -> None:
+        """Test that run() function exists for registry integration."""
+        from dta.dti.algorithms.snow_classifier import run
+
+        assert callable(run)
+
+
 class TestStatisticsAlgorithm:
     """Tests for statistics algorithm."""
 
@@ -208,10 +283,11 @@ class TestAlgorithmEntrypoints:
 
     def test_all_algorithms_have_run_function(self) -> None:
         """Test that all algorithms have run() function."""
-        from dta.dti.algorithms import change_detection, ndsi, ndvi, statistics
+        from dta.dti.algorithms import change_detection, ndsi, ndvi, snow_classifier, statistics
 
         assert hasattr(ndvi, "run")
         assert hasattr(ndsi, "run")
+        assert hasattr(snow_classifier, "run")
         assert hasattr(statistics, "run")
         assert hasattr(change_detection, "run")
 
@@ -223,5 +299,6 @@ class TestAlgorithmEntrypoints:
 
         assert (algorithms_dir / "ndvi.py").exists()
         assert (algorithms_dir / "ndsi.py").exists()
+        assert (algorithms_dir / "snow_classifier.py").exists()
         assert (algorithms_dir / "statistics.py").exists()
         assert (algorithms_dir / "change_detection.py").exists()

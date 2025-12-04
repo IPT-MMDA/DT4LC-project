@@ -2,6 +2,7 @@ version: "0.1"
 types:
  - NDVIMap
  - NDSIMap  # Snow index output
+ - SnowClassification  # Multi-criteria snow classification
  - Reconstruction  # Prithvi MAE reconstruction outputs
  - RasterPath
  - RasterPathBefore
@@ -58,6 +59,20 @@ instances:
     runner:
       type: python
       entrypoint: "dta/dti/algorithms/ndsi.py"
+
+  - id: algorithms/snow-classifier
+    kind: algorithm
+    description: |
+      Multi-criteria snow classification for robust snow detection. Combines
+      NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
+      false positives compared to basic NDSI thresholding. More accurate across
+      varying terrain and atmospheric conditions.
+    keywords: [snow-classifier, snow-classification, ice, glacier, frozen, winter, alpine, mountain, cryosphere, multi-criteria, robust]
+    inputs: [RasterPath]
+    outputs: [SnowClassification]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/snow_classifier.py"
 
   - id: algorithms/statistics
     kind: algorithm

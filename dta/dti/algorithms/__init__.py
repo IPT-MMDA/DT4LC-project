@@ -7,6 +7,7 @@ and statistical analysis.
 
 from .ndsi import calculate_ndsi
 from .ndvi import calculate_ndvi, ndvi_change
+from .snow_classifier import classify_snow
 from .statistics import calculate_statistics
 
-__all__ = ["calculate_ndvi", "ndvi_change", "calculate_ndsi", "calculate_statistics"]
+__all__ = ["calculate_ndvi", "ndvi_change", "calculate_ndsi", "classify_snow", "calculate_statistics"]
