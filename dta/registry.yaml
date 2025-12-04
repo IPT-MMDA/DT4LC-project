@@ -152,8 +152,8 @@ instances:
       Cropland/Grassland, and Dense Vegetation using NDVI, NDWI, and NDSI indices.
       Rule-based approach suitable for rapid assessment without training data.
     interpretation: |
-      Classification based on spectral index thresholds: Water (NDWI>0.3 or NDVI<-0.1),
-      Snow/Ice (NDSI>0.4 with high brightness), Bare Soil (NDVI<0.1, NDWI<0),
+      Classification based on spectral index thresholds: Water (NDWI>0.2 or NDVI<-0.1 or wet areas),
+      Snow/Ice (NDSI>0.4 with high brightness), Bare Soil (NDVI<0.15, NDWI<-0.1),
       Sparse Vegetation (0.1≤NDVI<0.3), Cropland/Grassland (0.3≤NDVI<0.5),
       Dense Vegetation (NDVI≥0.5). Dominant class indicates primary land cover type.
     keywords: [lulc, land-use, land-cover, classification, classify, classes, water, soil, vegetation, cropland, forest, urban, mapping]

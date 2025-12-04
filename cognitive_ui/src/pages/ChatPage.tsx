@@ -166,10 +166,10 @@ export function ChatPage() {
   };
 
   const quickPrompts = [
-    'Extract field boundaries from my satellite image',
-    'Detect agricultural parcels in this area',
-    'Calculate NDVI for uploaded data',
-    'Analyze vegetation health and detect changes',
+    'Calculate NDVI for vegetation analysis',
+    'Run Prithvi reconstruction',
+    'Classify land cover',
+    'Detect snow and ice coverage',
   ];
 
   // Render a message based on its type

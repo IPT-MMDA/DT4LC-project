@@ -310,25 +310,43 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
         # Valid data mask
         valid_mask = np.isfinite(ndvi) & np.isfinite(ndwi)
 
-        # Apply classification rules (order matters - later rules override)
-        # Start with most common class
+        # Apply classification rules
+        # Priority order: Water/Snow first (most distinct), then vegetation classes
+        # This prevents misclassification of water as vegetation
+
+        # Initialize with default class
         classification[valid_mask] = 5  # Default: Cropland/Grassland
 
-        # Dense Vegetation: NDVI >= 0.5
-        classification[valid_mask & (ndvi >= 0.5)] = 6
+        # 1. WATER - Check first (highest priority for distinct features)
+        # NDWI > 0.2 captures most water bodies
+        # Also include very low NDVI (< -0.1) which indicates water
+        # Additional: low NIR reflectance is characteristic of water
+        water_mask = (
+            (ndwi > 0.2)  # Primary water indicator
+            | (ndvi < -0.1)  # Very negative NDVI indicates water
+            | ((ndwi > 0.0) & (ndvi < 0.0))  # Mixed signal - likely water/wet
+        )
+        classification[valid_mask & water_mask] = 1
 
-        # Sparse Vegetation: 0.1 <= NDVI < 0.3
-        classification[valid_mask & (ndvi >= 0.1) & (ndvi < 0.3)] = 4
-
-        # Bare Soil: NDVI < 0.1 and NDWI < 0
-        classification[valid_mask & (ndvi < 0.1) & (ndwi < 0)] = 3
-
-        # Water: NDWI > 0.3 or NDVI < -0.1
-        classification[valid_mask & ((ndwi > 0.3) | (ndvi < -0.1))] = 1
-
-        # Snow/Ice: NDSI > 0.4 and high brightness (if SWIR available)
+        # 2. SNOW/ICE - High NDSI with high brightness (if SWIR available)
         if has_swir:
-            classification[valid_mask & (ndsi > 0.4) & (brightness > 0.3)] = 2
+            snow_mask = (ndsi > 0.4) & (brightness > 0.3) & ~water_mask
+            classification[valid_mask & snow_mask] = 2
+
+        # 3. BARE SOIL - Low NDVI, negative NDWI (dry), not water
+        bare_soil_mask = (ndvi < 0.15) & (ndwi < -0.1) & ~water_mask
+        classification[valid_mask & bare_soil_mask] = 3
+
+        # 4. SPARSE VEGETATION - Low to moderate NDVI
+        sparse_veg_mask = (ndvi >= 0.1) & (ndvi < 0.3) & ~water_mask & ~bare_soil_mask
+        classification[valid_mask & sparse_veg_mask] = 4
+
+        # 5. CROPLAND/GRASSLAND - Moderate NDVI (default for valid non-water pixels)
+        # Already set as default, will remain for 0.3 <= NDVI < 0.5
+
+        # 6. DENSE VEGETATION - High NDVI
+        dense_veg_mask = (ndvi >= 0.5) & ~water_mask
+        classification[valid_mask & dense_veg_mask] = 6
 
         # No Data: invalid pixels
         classification[~valid_mask] = 0
