@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, CheckCircle, AlertCircle, Clock, Cpu, Map, ArrowUpDown, BarChart3, ExternalLink, Globe, Cloud, Download, Trash2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Clock, Cpu, Map, ArrowUpDown, BarChart3, ExternalLink, Globe, Cloud, Download, Trash2, XCircle, Snowflake } from 'lucide-react';
 import apiClient from '../api/client';
 import { useMLModels, useDownloadModel, useDeleteModel, useCancelDownload, type MLModel } from '../api/hooks/useMLModels';
 
@@ -25,7 +25,7 @@ interface ModelsResponse {
   count: number;
 }
 
-// Static algorithm info
+// Static algorithm info - synced with dta/registry.yaml
 const ALGORITHMS = [
   {
     id: 'ndvi',
@@ -35,6 +35,24 @@ const ALGORITHMS = [
     color: 'green',
     available: true,
     keywords: ['vegetation', 'health', 'greenness', 'ndvi'],
+  },
+  {
+    id: 'ndsi',
+    name: 'NDSI Snow Index',
+    description: 'Normalized Difference Snow Index for snow and glacier detection. Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically indicate snow/ice.',
+    icon: Snowflake,
+    color: 'blue',
+    available: true,
+    keywords: ['snow', 'ice', 'glacier', 'ndsi', 'cryosphere'],
+  },
+  {
+    id: 'snow-classifier',
+    name: 'Snow Classification',
+    description: 'Multi-criteria snow classification combining NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds for robust snow detection.',
+    icon: Snowflake,
+    color: 'sky',
+    available: true,
+    keywords: ['snow', 'classification', 'multi-criteria', 'robust'],
   },
   {
     id: 'change-detection',
@@ -180,11 +198,15 @@ function AlgorithmCard({ algorithm }: { algorithm: typeof ALGORITHMS[0] }) {
   const Icon = algorithm.icon;
   const colorClasses: Record<string, string> = {
     green: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
+    blue: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800',
+    sky: 'bg-sky-50 dark:bg-sky-950 border-sky-200 dark:border-sky-800',
     purple: 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800',
     cyan: 'bg-cyan-50 dark:bg-cyan-950 border-cyan-200 dark:border-cyan-800',
   };
   const iconColorClasses: Record<string, string> = {
     green: 'text-green-600 dark:text-green-400',
+    blue: 'text-blue-600 dark:text-blue-400',
+    sky: 'text-sky-600 dark:text-sky-400',
     purple: 'text-purple-600 dark:text-purple-400',
     cyan: 'text-cyan-600 dark:text-cyan-400',
   };
@@ -494,6 +516,8 @@ export function ModelsPage() {
               <li>- "Extract field boundaries from my satellite image" (Delineate-Anything)</li>
               <li>- "Detect agricultural parcels in this area" (Delineate-Anything)</li>
               <li>- "Calculate NDVI for my uploaded image" (NDVI Algorithm)</li>
+              <li>- "Detect snow and ice coverage in this image" (NDSI / Snow Classifier)</li>
+              <li>- "Analyze glacier extent in my satellite imagery" (Snow Classification)</li>
               <li>- "Analyze vegetation health and detect changes" (Change Detection)</li>
               <li>- "Get statistics for all bands in my raster" (Statistical Analysis)</li>
             </ul>

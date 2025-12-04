@@ -120,9 +120,14 @@ instances:
 
   - id: models/delineate-anything
     kind: model
+    description: |
+      Delineate-Anything field boundary detection using YOLO-based segmentation.
+      Auto-detects data source (Sentinel/Planet/Maxar) and configures appropriate
+      filtering thresholds. Outputs GeoPackage with field polygons.
     keywords: [delineate, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, detect, farm, crop, plot, land, polygon, vector, outline, edges]
     inputs: [RasterPath]
     outputs: [FieldBoundaries]
+    model_id: delineate-anything-small
     runner:
       type: python
       entrypoint: "dta/dti/models/third_party/delineate_anything/inference.py"

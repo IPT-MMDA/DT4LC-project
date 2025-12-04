@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install GDAL Python bindings matching system libgdal version
+RUN pip install gdal==$(gdal-config --version)
+
 # Install uv for fast package management
 RUN pip install uv
 

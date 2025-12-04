@@ -12,6 +12,7 @@ import {
   Grid3X3,
   Download,
   StopCircle,
+  Snowflake,
 } from 'lucide-react';
 import type { Job, JobResultData } from '../../types';
 import { useCancelJob } from '../../api/hooks/useJobs';
@@ -64,6 +65,62 @@ export function parseJobResult(job: Job): JobResultData | undefined {
           base64: ndviMap.visualizations.ndvi_map,
         },
       ];
+    }
+  }
+
+  // NDSI Map (Snow Index)
+  const ndsiMap = artifacts.NDSIMap;
+  if (ndsiMap) {
+    resultData.statistics = {
+      type: 'ndsi',
+      values: {
+        mean: ndsiMap.statistics?.mean?.toFixed(4) || 'N/A',
+        std: ndsiMap.statistics?.std?.toFixed(4) || 'N/A',
+        min: ndsiMap.statistics?.min?.toFixed(4) || 'N/A',
+        max: ndsiMap.statistics?.max?.toFixed(4) || 'N/A',
+        snow_coverage: ndsiMap.statistics?.snow_coverage_percent?.toFixed(2) + '%' || 'N/A',
+      },
+    };
+
+    if (ndsiMap.visualizations?.ndsi_map) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'ndsi_map',
+        label: 'NDSI Map',
+        base64: ndsiMap.visualizations.ndsi_map,
+      });
+    }
+  }
+
+  // Snow Classification
+  const snowClassification = artifacts.SnowClassification;
+  if (snowClassification) {
+    resultData.statistics = {
+      type: 'snow',
+      values: {
+        snow_pixels: snowClassification.statistics?.snow_pixels?.toString() || 'N/A',
+        total_pixels: snowClassification.statistics?.total_pixels?.toString() || 'N/A',
+        snow_coverage: snowClassification.statistics?.snow_coverage_percent?.toFixed(2) + '%' || 'N/A',
+      },
+    };
+
+    // snow_classification is the key from the algorithm
+    if (snowClassification.visualizations?.snow_classification) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'snow_classification',
+        label: 'Snow Classification',
+        base64: snowClassification.visualizations.snow_classification,
+      });
+    }
+    // Also check criteria_analysis visualization
+    if (snowClassification.visualizations?.criteria_analysis) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'criteria_analysis',
+        label: 'Criteria Analysis',
+        base64: snowClassification.visualizations.criteria_analysis,
+      });
     }
   }
 
@@ -207,6 +264,8 @@ function StatusBadge({ status }: { status: Job['status'] }) {
 function ResultTypeIcon({ type }: { type: string }) {
   const icons: Record<string, typeof Map> = {
     ndvi: Map,
+    ndsi: Snowflake,
+    snow: Snowflake,
     change: ArrowUpDown,
     statistics: BarChart3,
     features: Cpu,
