@@ -68,6 +68,38 @@ export function parseJobResult(job: Job): JobResultData | undefined {
     }
   }
 
+  // NDWI Map (Water Index)
+  const ndwiMap = artifacts.NDWIMap;
+  if (ndwiMap) {
+    resultData.statistics = {
+      type: 'ndwi',
+      values: {
+        mean: ndwiMap.statistics?.mean?.toFixed(4) || 'N/A',
+        std: ndwiMap.statistics?.std?.toFixed(4) || 'N/A',
+        min: ndwiMap.statistics?.min?.toFixed(4) || 'N/A',
+        max: ndwiMap.statistics?.max?.toFixed(4) || 'N/A',
+        water_coverage: ndwiMap.statistics?.water_percentage?.toFixed(2) + '%' || 'N/A',
+      },
+    };
+
+    if (ndwiMap.visualizations?.ndwi_map) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'ndwi_map',
+        label: 'NDWI Map',
+        base64: ndwiMap.visualizations.ndwi_map,
+      });
+    }
+    if (ndwiMap.visualizations?.water_mask) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'water_mask',
+        label: 'Water Detection',
+        base64: ndwiMap.visualizations.water_mask,
+      });
+    }
+  }
+
   // NDSI Map (Snow Index)
   const ndsiMap = artifacts.NDSIMap;
   if (ndsiMap) {
@@ -88,6 +120,40 @@ export function parseJobResult(job: Job): JobResultData | undefined {
         type: 'ndsi_map',
         label: 'NDSI Map',
         base64: ndsiMap.visualizations.ndsi_map,
+      });
+    }
+  }
+
+  // LULC Classification (Land Use / Land Cover)
+  const lulcMap = artifacts.LULCMap;
+  if (lulcMap) {
+    resultData.statistics = {
+      type: 'lulc',
+      values: {
+        dominant_class: lulcMap.statistics?.dominant_class || 'N/A',
+        valid_pixels: lulcMap.statistics?.valid_pixels?.toLocaleString() || 'N/A',
+      },
+    };
+
+    // Add class distribution
+    if (lulcMap.class_statistics) {
+      resultData.classification = lulcMap.class_statistics;
+    }
+
+    if (lulcMap.visualizations?.classification_map) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'lulc_map',
+        label: 'Land Cover Classification',
+        base64: lulcMap.visualizations.classification_map,
+      });
+    }
+    if (lulcMap.visualizations?.distribution_chart) {
+      resultData.visualizations = resultData.visualizations || [];
+      resultData.visualizations.push({
+        type: 'lulc_distribution',
+        label: 'Land Cover Distribution',
+        base64: lulcMap.visualizations.distribution_chart,
       });
     }
   }
