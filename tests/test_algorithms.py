@@ -70,6 +70,77 @@ class TestNDVIAlgorithm:
         assert callable(run)
 
 
+class TestNDSIAlgorithm:
+    """Tests for NDSI (snow index) algorithm."""
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(),
+        reason="Kahovka data not available",
+    )
+    def test_ndsi_calculation_with_real_data(self) -> None:
+        """Test NDSI algorithm with real data."""
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.ndsi import calculate_ndsi
+
+        data_dir = ROOT_DIR / "resources/kahovka_data"
+        tif_files = list(data_dir.glob("*.tif")) + list(data_dir.glob("*.tiff"))
+
+        if not tif_files:
+            pytest.skip("No GeoTIFF files found")
+
+        result = calculate_ndsi(str(tif_files[0]))
+
+        assert "ndsi_array" in result
+        assert "snow_mask" in result
+        assert "metadata" in result
+        assert "statistics" in result
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(),
+        reason="Kahovka data not available",
+    )
+    def test_ndsi_statistics_valid(self) -> None:
+        """Test that NDSI statistics are valid and include snow metrics."""
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.ndsi import calculate_ndsi
+
+        data_dir = ROOT_DIR / "resources/kahovka_data"
+        tif_files = list(data_dir.glob("*.tif"))
+
+        if not tif_files:
+            pytest.skip("No GeoTIFF files found")
+
+        result = calculate_ndsi(str(tif_files[0]))
+        stats = result["statistics"]
+
+        # Standard statistics
+        assert "min" in stats
+        assert "max" in stats
+        assert "mean" in stats
+        assert "std" in stats
+        assert stats["valid_pixels"] > 0
+
+        # Snow-specific statistics
+        assert "snow_threshold" in stats
+        assert stats["snow_threshold"] == 0.42
+        assert "snow_pixels" in stats
+        assert "non_snow_pixels" in stats
+        assert "snow_coverage_percent" in stats
+
+    def test_ndsi_file_not_found(self) -> None:
+        """Test NDSI raises error for non-existent file."""
+        from dta.dti.algorithms.ndsi import calculate_ndsi
+
+        with pytest.raises(FileNotFoundError):
+            calculate_ndsi("/nonexistent/path.tif")
+
+    def test_ndsi_run_function_exists(self) -> None:
+        """Test that run() function exists for registry integration."""
+        from dta.dti.algorithms.ndsi import run
+
+        assert callable(run)
+
+
 class TestStatisticsAlgorithm:
     """Tests for statistics algorithm."""
 
@@ -137,9 +208,10 @@ class TestAlgorithmEntrypoints:
 
     def test_all_algorithms_have_run_function(self) -> None:
         """Test that all algorithms have run() function."""
-        from dta.dti.algorithms import change_detection, ndvi, statistics
+        from dta.dti.algorithms import change_detection, ndsi, ndvi, statistics
 
         assert hasattr(ndvi, "run")
+        assert hasattr(ndsi, "run")
         assert hasattr(statistics, "run")
         assert hasattr(change_detection, "run")
 
@@ -150,5 +222,6 @@ class TestAlgorithmEntrypoints:
         algorithms_dir = ROOT_DIR / "dta/dti/algorithms"
 
         assert (algorithms_dir / "ndvi.py").exists()
+        assert (algorithms_dir / "ndsi.py").exists()
         assert (algorithms_dir / "statistics.py").exists()
         assert (algorithms_dir / "change_detection.py").exists()

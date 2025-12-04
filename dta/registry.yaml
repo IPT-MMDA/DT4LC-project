@@ -1,6 +1,7 @@
 version: "0.1"
 types:
  - NDVIMap
+ - NDSIMap  # Snow index output
  - Reconstruction  # Prithvi MAE reconstruction outputs
  - RasterPath
  - RasterPathBefore
@@ -44,6 +45,19 @@ instances:
     runner:
       type: python
       entrypoint: "dta/dti/algorithms/ndvi.py"
+
+  - id: algorithms/ndsi
+    kind: algorithm
+    description: |
+      NDSI (Normalized Difference Snow Index) for snow and glacier detection.
+      Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
+      indicate snow/ice coverage. Useful for glacier monitoring and snow mapping.
+    keywords: [ndsi, snow, ice, glacier, frozen, winter, alpine, mountain, cryosphere, sentinel, landsat]
+    inputs: [RasterPath]
+    outputs: [NDSIMap]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/ndsi.py"
 
   - id: algorithms/statistics
     kind: algorithm
