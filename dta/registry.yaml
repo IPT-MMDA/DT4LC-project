@@ -44,6 +44,11 @@ instances:
       NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
       Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
       values indicate healthier vegetation. Useful for crop monitoring and land cover.
+    interpretation: |
+      NDVI ranges from -1 to 1. Values >0.6 indicate dense, healthy vegetation; 0.4-0.6
+      moderate vegetation cover; 0.2-0.4 sparse vegetation or senescent crops; <0.2 bare
+      soil or stressed vegetation; negative values indicate water, clouds, or snow.
+      Standard deviation reflects landscape heterogeneity.
     keywords: [ndvi, vegetation, index, health, greenness]
     inputs: [RasterPath]
     outputs: [NDVIMap]
@@ -57,6 +62,10 @@ instances:
       NDSI (Normalized Difference Snow Index) for snow and glacier detection.
       Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
       indicate snow/ice coverage. Useful for glacier monitoring and snow mapping.
+    interpretation: |
+      NDSI ranges from -1 to 1. Values ≥0.4 indicate snow/ice cover; 0.2-0.4 mixed or
+      thin snow; <0.2 snow-free surfaces; negative values typically indicate vegetation.
+      Water bodies may show moderate positive NDSI and require additional masking.
     keywords: [ndsi, snow, ice, glacier, frozen, winter, alpine, mountain, cryosphere, sentinel, landsat]
     inputs: [RasterPath]
     outputs: [NDSIMap]
@@ -71,6 +80,10 @@ instances:
       NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
       false positives compared to basic NDSI thresholding. More accurate across
       varying terrain and atmospheric conditions.
+    interpretation: |
+      Multi-criteria classification combining NDSI ≥0.4, NDVI ≤0.1, and NIR reflectance
+      >0.3. Snow coverage percentage represents proportion of pixels meeting all criteria.
+      This approach reduces commission errors from water bodies and shadows.
     keywords: [snow-classifier, snow-classification, ice, glacier, frozen, winter, alpine, mountain, cryosphere, multi-criteria, robust]
     inputs: [RasterPath]
     outputs: [SnowClassification]
@@ -83,6 +96,11 @@ instances:
     description: |
       Comprehensive raster statistics including min, max, mean, standard deviation,
       and percentiles for all bands. Generates histograms for data distribution analysis.
+    interpretation: |
+      Band statistics characterize spectral distribution. Standard deviation indicates
+      intra-scene variability; high values suggest heterogeneous land cover. Difference
+      between mean and median reveals distribution skewness. Percentiles help identify
+      outliers and inform histogram stretching for visualization.
     keywords: [statistics, stats, distribution, histogram, percentiles, analysis]
     inputs: [RasterPath]
     outputs: [Statistics]
@@ -92,6 +110,14 @@ instances:
 
   - id: algorithms/change-detection
     kind: algorithm
+    description: |
+      NDVI-based change detection comparing two time periods. Computes vegetation
+      change between before and after images, identifying areas of loss or gain.
+    interpretation: |
+      NDVI difference (after minus before) quantifies vegetation change. Negative values
+      indicate vegetation loss (disturbance, harvest, drought); positive values indicate
+      vegetation gain (growth, recovery). Magnitude reflects change intensity. Values
+      near zero (±0.05) typically represent stable or unchanged areas.
     keywords: [change, detection, difference, compare, comparison, temporal, before, after, loss, gain, vegetation]
     inputs: [RasterPathBefore, RasterPathAfter]
     outputs: [ChangeMap]
@@ -106,6 +132,10 @@ instances:
       Autoencoder (MAE) to reconstruct HLS imagery, revealing learned spatial and
       spectral patterns. Outputs RGB visualizations: original, masked, and predicted
       (reconstructed) images.
+    interpretation: |
+      Masked Autoencoder reconstructs masked patches using learned representations.
+      Reconstruction quality indicates how well the model captures spatial-spectral patterns.
+      Compare predicted vs original RGB composites to assess feature preservation.
     keywords: [prithvi, reconstruction, mae, masked, autoencoder, predict, visualize, foundation, hls, geotiff, nasa, ibm]
     inputs: [RasterPath]
     outputs: [Reconstruction]
@@ -131,6 +161,10 @@ instances:
       Delineate-Anything field boundary detection using YOLO-based segmentation.
       Auto-detects data source (Sentinel/Planet/Maxar) and configures appropriate
       filtering thresholds. Outputs GeoPackage with field polygons.
+    interpretation: |
+      Field count and total area characterize agricultural parcelization. Mean field size
+      (total_area/num_fields) indicates farming scale: <1 ha suggests smallholder systems;
+      >10 ha indicates mechanized agriculture. Output GeoPackage preserves source CRS.
     keywords: [delineate, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, detect, farm, crop, plot, land, polygon, vector, outline, edges]
     inputs: [RasterPath]
     outputs: [FieldBoundaries]

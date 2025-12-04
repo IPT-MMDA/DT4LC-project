@@ -113,6 +113,7 @@ class PipelineExecutor:
         """
         self.registry = registry or load_registry()
         self.artifacts: dict[str, Any] = {}
+        self.executed_items: list[RegistryItem] = []  # Track executed registry items for interpretation
 
     def execute(
         self,
@@ -139,6 +140,7 @@ class PipelineExecutor:
             CancellationError: If execution is cancelled
         """
         self.artifacts = {}  # Reset for each execution
+        self.executed_items = []  # Reset executed items
         executed_steps: list[str] = []
 
         for idx, step in enumerate(plan.steps, start=1):
@@ -160,6 +162,7 @@ class PipelineExecutor:
                 item = get_item(self.registry, step.uses)
                 self._execute_step(step, item)
                 executed_steps.append(step.uses)
+                self.executed_items.append(item)  # Track for interpretation lookup
 
                 if on_progress:
                     on_progress(
@@ -682,15 +685,17 @@ class PipelineExecutor:
             raise ExecutionError(f"Unknown agent type: {item.id}")
 
     def _agent_summarize(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Use LLM to summarize analysis results.
+        """Use LLM with agentic interpretation to summarize analysis results.
 
-        Uses LLM router with automatic Gemini → Ollama fallback.
+        The LLM can request additional analysis tools (metrics, statistics) when
+        the available data is insufficient. This enables intelligent interpretation
+        of visual outputs like reconstructions.
 
         Args:
             inputs: Dictionary of input artifacts
 
         Returns:
-            Dictionary with summary text
+            Dictionary with summary text and any computed metrics
         """
         try:
             router = get_llm_router()
@@ -698,45 +703,311 @@ class PipelineExecutor:
             # Determine analysis type from artifact keys
             analysis_type = self._detect_analysis_type(inputs)
 
-            # Format inputs for LLM
-            context = []
-            for key, value in inputs.items():
-                # Skip large arrays (like ndvi_array) - just note they exist
-                if key.endswith("_array") or key == "ndvi_array":
-                    context.append(f"{key}: [array data available]")
-                    continue
-                # Truncate large values for context
-                value_str = str(value)
-                if len(value_str) > 500:
-                    value_str = value_str[:500] + "... (truncated)"
-                context.append(f"{key}: {value_str}")
+            # Get domain-specific interpretation guide from registry
+            interpretation_guide = self._get_interpretation_guide()
 
-            prompt = (
-                f"You just completed a {analysis_type} analysis. "
-                "Summarize the results in 2-3 sentences. Be concise and focus on key insights. "
-                "Do NOT ask questions - just summarize what the data shows:\n\n" + "\n".join(context)
+            # Build context description for LLM
+            context_description = self._build_context_description(inputs)
+
+            # Format any available statistics
+            stats_context = self._format_stats_for_llm(inputs)
+
+            # Determine if this is a visual-only output (no statistics)
+            has_statistics = stats_context != "No statistics available."
+
+            system_prompt = (
+                "You are an expert geospatial analyst interpreting satellite imagery analysis results.\n\n"
+                f"Domain knowledge:\n{interpretation_guide}\n\n"
+                "OUTPUT FORMAT:\n"
+                "- Write in plain text only (no markdown, no asterisks, no formatting)\n"
+                "- Structure your response in 3-5 sentences with specific numbers\n"
+                "- Be informative but concise\n\n"
+                "TOOLS: You can request analysis tools by responding with a JSON block:\n"
+                '```json\n{"tool": "tool_name", "args": {...}}\n```\n'
+                "Available tools:\n"
+                "- compute_image_similarity: Compare two images (args: image1_key, image2_key)\n"
+                "- analyze_spatial_patterns: Analyze texture/edges in an image (args: image_key)"
             )
 
-            # Use router with automatic fallback
-            response = router.generate(
-                messages=[
-                    LLMMessage(role="user", content=prompt),
-                ],
-                temperature=0.7,
-            )
+            # For visual outputs without statistics, encourage tool use
+            if not has_statistics and "Visualizations" in context_description:
+                user_prompt = (
+                    f"Analysis type: {analysis_type}\n\n"
+                    f"{context_description}\n\n"
+                    "No statistics are available - only visualizations. "
+                    "Use compute_image_similarity to compare original vs predicted images, "
+                    "then provide interpretation based on the metrics."
+                )
+            else:
+                user_prompt = (
+                    f"Analysis type: {analysis_type}\n\n"
+                    f"{context_description}\n\n"
+                    f"{stats_context}\n\n"
+                    "Provide your interpretation in plain text."
+                )
 
-            return {
-                "summary": response.text,
+            messages = [
+                LLMMessage(role="system", content=system_prompt),
+                LLMMessage(role="user", content=user_prompt),
+            ]
+
+            # Agentic loop: allow up to 2 tool calls
+            computed_metrics: dict[str, Any] = {}
+            max_iterations = 3
+            final_response = None
+
+            for _ in range(max_iterations):
+                response = router.generate(messages, temperature=0.5)
+
+                # Check if LLM requested a tool
+                tool_request = self._parse_tool_request(response.text)
+
+                if tool_request:
+                    # Execute the requested tool
+                    tool_result = self._execute_analysis_tool(tool_request, inputs)
+                    computed_metrics[tool_request["tool"]] = tool_result
+
+                    # Add tool result to conversation
+                    messages.append(LLMMessage(role="assistant", content=response.text))
+                    messages.append(
+                        LLMMessage(
+                            role="user",
+                            content=f"Tool result:\n```json\n{self._format_tool_result(tool_result)}\n```\n\n"
+                            "Now provide your interpretation based on all available data.",
+                        )
+                    )
+                else:
+                    # LLM provided final interpretation
+                    final_response = response
+                    break
+
+            if final_response is None:
+                final_response = response  # Use last response
+
+            # Clean summary text - remove any residual tool request JSON
+            summary_text = self._clean_summary_text(final_response.text)
+
+            result = {
+                "summary": summary_text,
                 "inputs": inputs,
-                "llm_provider": response.provider,  # Track which provider was used
+                "llm_provider": final_response.provider,
             }
+
+            if computed_metrics:
+                result["computed_metrics"] = computed_metrics
+
+            return result
 
         except Exception as e:
             # Graceful degradation if all LLMs fail
+            logger.exception("Agent summarization failed")
             return {
                 "summary": f"Analysis complete. Results available but summarization failed: {e}",
                 "inputs": inputs,
             }
+
+    def _build_context_description(self, inputs: dict[str, Any]) -> str:
+        """Build a description of available outputs for the LLM.
+
+        Args:
+            inputs: Dictionary of input artifacts
+
+        Returns:
+            Human-readable description of available data
+        """
+        lines = ["**Available outputs:**"]
+
+        for key, value in inputs.items():
+            if isinstance(value, dict):
+                # Describe dict contents
+                if "visualizations" in value:
+                    viz_keys = list(value["visualizations"].keys())
+                    lines.append(f"- {key}: Visualizations available: {viz_keys}")
+                elif "output_files" in value:
+                    files = [Path(f).name for f in value.get("output_files", [])]
+                    lines.append(f"- {key}: Output files: {files}")
+                elif "statistics" in value:
+                    lines.append(f"- {key}: Contains statistics")
+                else:
+                    lines.append(f"- {key}: Dictionary with keys {list(value.keys())}")
+            elif isinstance(value, str) and (value.endswith(".tif") or value.endswith(".tiff")):
+                lines.append(f"- {key}: Raster file ({Path(value).name})")
+            else:
+                lines.append(f"- {key}: {type(value).__name__}")
+
+        return "\n".join(lines)
+
+    def _parse_tool_request(self, response_text: str) -> dict[str, Any] | None:
+        """Parse a tool request from LLM response.
+
+        Args:
+            response_text: LLM response text
+
+        Returns:
+            Tool request dict or None if no tool requested
+        """
+        import json
+        import re
+
+        # Try 1: Look for JSON block with markdown code fence
+        json_pattern = r"```json\s*(\{[^`]+\})\s*```"
+        match = re.search(json_pattern, response_text, re.DOTALL)
+
+        if match:
+            try:
+                request = json.loads(match.group(1))
+                if "tool" in request:
+                    return request
+            except json.JSONDecodeError:
+                pass
+
+        # Try 2: Look for raw JSON with "tool" key (no markdown wrapper)
+        raw_json_pattern = r'\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\}\}'
+        match = re.search(raw_json_pattern, response_text)
+
+        if match:
+            try:
+                request = json.loads(match.group(0))
+                if "tool" in request:
+                    return request
+            except json.JSONDecodeError:
+                pass
+
+        return None
+
+    def _clean_summary_text(self, text: str) -> str:
+        """Remove tool request JSON and clean up the summary text.
+
+        Args:
+            text: Raw LLM response text
+
+        Returns:
+            Cleaned text with tool requests removed
+        """
+        import re
+
+        # Remove markdown-wrapped JSON blocks
+        text = re.sub(r"```json\s*\{[^`]+\}\s*```", "", text, flags=re.DOTALL)
+
+        # Remove raw JSON tool requests
+        text = re.sub(r'\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\}\}', "", text)
+
+        # Clean up extra whitespace
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        text = text.strip()
+
+        return text
+
+    def _execute_analysis_tool(self, tool_request: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
+        """Execute a requested analysis tool.
+
+        Args:
+            tool_request: Tool request with name and args
+            inputs: Current artifacts for context
+
+        Returns:
+            Tool execution result
+        """
+        from dta.dti.post_processing.analysis_tools import execute_tool
+
+        tool_name = tool_request.get("tool", "")
+        args = tool_request.get("args", {})
+
+        # Build context from inputs
+        context: dict[str, Any] = {}
+
+        # Extract visualizations and files from artifacts
+        for value in inputs.values():
+            if isinstance(value, dict):
+                if "visualizations" in value:
+                    context["visualizations"] = value["visualizations"]
+                if "output_files" in value:
+                    context["output_files"] = value["output_files"]
+
+        return execute_tool(tool_name, args, context)
+
+    def _format_tool_result(self, result: dict[str, Any]) -> str:
+        """Format tool result as JSON string for LLM.
+
+        Args:
+            result: Tool result dictionary
+
+        Returns:
+            Formatted JSON string
+        """
+        import json
+
+        # Format floats nicely
+        def format_value(v: Any) -> Any:
+            if isinstance(v, float):
+                return round(v, 6)
+            elif isinstance(v, dict):
+                return {k: format_value(val) for k, val in v.items()}
+            return v
+
+        formatted = {k: format_value(v) for k, v in result.items()}
+        return json.dumps(formatted, indent=2)
+
+    def _get_interpretation_guide(self) -> str:
+        """Get domain-specific interpretation guide from executed registry items.
+
+        Looks up interpretation from registry items that produced the artifacts,
+        falling back to a generic guide if none found.
+        """
+        # Collect interpretations from executed items (skip inputs/passthrough)
+        interpretations = []
+        for item in self.executed_items:
+            if item.interpretation and item.kind in ("algorithm", "model"):
+                interpretations.append(item.interpretation.strip())
+
+        if interpretations:
+            return "\n\n".join(interpretations)
+
+        # Fallback for legacy or missing interpretations
+        return "Interpret the statistics based on standard remote sensing analysis principles."
+
+    def _format_stats_for_llm(self, inputs: dict[str, Any]) -> str:
+        """Format statistics from inputs for LLM consumption.
+
+        Handles nested artifact structure like {"NDVIMap": {"statistics": {...}}}
+        """
+        lines = []
+        stats: dict[str, Any] = {}
+
+        # Search for statistics in nested artifact structure
+        # Inputs can be: {"NDVIMap": {"statistics": {...}}} or {"statistics": {...}}
+        for artifact_value in inputs.values():
+            if isinstance(artifact_value, dict):
+                # Check if this artifact contains statistics
+                if "statistics" in artifact_value:
+                    nested_stats = artifact_value["statistics"]
+                    if isinstance(nested_stats, dict):
+                        stats.update(nested_stats)
+                # Also check for Statistics (capitalized)
+                if "Statistics" in artifact_value:
+                    nested_stats = artifact_value["Statistics"]
+                    if isinstance(nested_stats, dict):
+                        stats.update(nested_stats)
+
+        # Also check top-level statistics
+        if "statistics" in inputs and isinstance(inputs["statistics"], dict):
+            stats.update(inputs["statistics"])
+        if "Statistics" in inputs and isinstance(inputs["Statistics"], dict):
+            stats.update(inputs["Statistics"])
+
+        if stats:
+            lines.append("**Statistics:**")
+            for stat_key, stat_value in stats.items():
+                if isinstance(stat_value, dict):
+                    continue  # Skip nested dicts
+                if isinstance(stat_value, float):
+                    lines.append(f"- {stat_key}: {stat_value:.4f}")
+                elif isinstance(stat_value, int):
+                    lines.append(f"- {stat_key}: {stat_value:,}")
+                else:
+                    lines.append(f"- {stat_key}: {stat_value}")
+
+        return "\n".join(lines) if lines else "No statistics available."
 
     def _detect_analysis_type(self, inputs: dict[str, Any]) -> str:
         """Detect the type of analysis from artifact keys.
@@ -752,12 +1023,18 @@ class PipelineExecutor:
         # Check for specific analysis markers
         if "ndvi_array" in keys or "NDVIMap" in keys:
             return "NDVI (Normalized Difference Vegetation Index)"
+        if "NDSIMap" in keys or "ndsi_array" in keys:
+            return "NDSI (Normalized Difference Snow Index)"
+        if "SnowClassification" in keys or "snow_mask" in keys:
+            return "Snow Classification"
         if "change_array" in keys or "ChangeMap" in keys:
             return "change detection"
         if "FieldBoundaries" in keys or "boundaries" in keys:
             return "field boundary detection"
         if "Features" in keys or "embeddings" in keys:
             return "Prithvi feature extraction"
+        if "Reconstruction" in keys:
+            return "Prithvi reconstruction"
         if "Statistics" in keys or "statistics" in keys:
             return "raster statistics"
 

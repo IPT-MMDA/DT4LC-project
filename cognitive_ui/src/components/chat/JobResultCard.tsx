@@ -219,7 +219,7 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       // Map visualization keys to user-friendly labels
       const labelMap: Record<string, string> = {
         original_rgb_t0: 'Original Image',
-        masked_rgb_t0: 'Masked Image (75%)',
+        masked_rgb_t0: 'Masked Image',
         predicted_rgb_t0: 'Reconstructed Image',
       };
       for (const [key, base64] of Object.entries(reconstruction.visualizations)) {
