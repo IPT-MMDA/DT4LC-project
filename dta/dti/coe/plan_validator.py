@@ -20,9 +20,12 @@ def validate(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
     have_types: set[str] = set()
     for step in plan.steps:
         it = get_item(reg, step.uses)
-        # check inputs are satisfied by previous outputs (or empty)
+        # check inputs are satisfied by previous outputs, binds, or empty
         for inp in it.inputs:
-            if inp not in have_types:
+            # Input is satisfied if:
+            # 1. A previous step produces this type (in have_types)
+            # 2. A literal value is provided in step.binds (e.g., IndexType="ndvi")
+            if inp not in have_types and inp not in step.binds:
                 raise PlanError(f"Step {it.id} requires {inp}, not available yet.")
         # accumulate outputs
         for out in it.outputs:
