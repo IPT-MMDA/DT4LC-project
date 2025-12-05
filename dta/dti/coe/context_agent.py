@@ -32,6 +32,9 @@ SYS = (
     '- "land cover", "land use", "lulc", "classify" → ["LULCMap"]\n'
     '- "statistics", "distribution", "histogram" → ["Statistics"]\n'
     '- "change detection", "compare images", "before/after" → ["ChangeMap"]\n'
+    '- "vegetation change", "ndvi change" → ["ChangeMap"] with hints.index_type="ndvi"\n'
+    '- "snow change", "ndsi change", "glacier change" → ["ChangeMap"] with hints.index_type="ndsi"\n'
+    '- "water change", "ndwi change", "flood detection" → ["ChangeMap"] with hints.index_type="ndwi"\n'
     '- "prithvi", "features", "embeddings", "foundation model" → ["Features"]\n\n'
     "IMPORTANT: Do NOT add multiple outputs unless user explicitly asks for multiple analyses.\n"
     '"Detect parcels" → ONLY ["FieldBoundaries"], NOT ["FieldBoundaries", "Features"]\n'

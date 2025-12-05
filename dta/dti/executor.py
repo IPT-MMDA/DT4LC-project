@@ -322,6 +322,10 @@ class PipelineExecutor:
         for input_type in item.inputs:
             if input_type in self.artifacts:
                 inputs[input_type] = self.artifacts[input_type]
+            elif input_type in step.binds:
+                # Support literal values passed in binds (e.g., IndexType="ndvi")
+                # This allows planners to pass optional parameters directly
+                inputs[input_type] = step.binds[input_type]
 
         # Create output directory for models
         output_dir: str | None = None

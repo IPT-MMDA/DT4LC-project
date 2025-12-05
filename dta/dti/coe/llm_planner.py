@@ -129,6 +129,12 @@ B) CHANGE DETECTION (requires explicit comparison request):
    Step 3: "algorithms/change-detection" - produces ChangeMap
    Last: "post-processing/agent-analysis"
 
+   NOTE: The change-detection algorithm handles index calculation internally!
+   - For vegetation change: use binds: {"IndexType": "ndvi"}
+   - For snow/ice/glacier change: use binds: {"IndexType": "ndsi"}
+   - For water/flood change: use binds: {"IndexType": "ndwi"}
+   DO NOT run separate NDVI/NDSI/NDWI algorithms before change-detection!
+
 COMPONENT PURPOSE (use to match user intent):
 - models/delineate-anything: Field boundaries, parcels, agricultural plots, segmentation
 - algorithms/ndvi: Vegetation index, greenness, plant health from spectral bands
@@ -140,6 +146,7 @@ Output format:
 {
   "steps": [
     {"uses": "component-id-here"},
+    {"uses": "component-id-with-params", "binds": {"ParamName": "value"}},
     ...
   ],
   "reasoning": "brief explanation matching user's specific request"
@@ -175,8 +182,8 @@ Generate a valid pipeline plan as JSON."""
         # Parse JSON response
         plan_data = _parse_plan_json(response.text)
 
-        # Convert to ExecutionPlan
-        steps = [PlanStep(uses=step["uses"]) for step in plan_data["steps"]]
+        # Convert to ExecutionPlan (include binds if present)
+        steps = [PlanStep(uses=step["uses"], binds=step.get("binds", {})) for step in plan_data["steps"]]
 
         # Validate plan
         _validate_plan(steps, reg)
@@ -296,6 +303,8 @@ def estimate_plan_confidence(ctx: ContextUnderstanding) -> float:
     # Known patterns boost confidence - including change detection and models
     known_patterns = [
         "ndvi",
+        "ndsi",
+        "ndwi",
         "statistics",
         "change",
         "compare",
@@ -306,6 +315,20 @@ def estimate_plan_confidence(ctx: ContextUnderstanding) -> float:
         "prithvi",  # Prithvi model - uses single file flow
         "features",  # Feature extraction - uses single file flow
         "temporal",  # Temporal features - single file, NOT change detection
+        # Snow/ice/water change detection keywords
+        "snow",
+        "ice",
+        "glacier",
+        "water",
+        "flood",
+        "vegetation",
+        "melt",
+        # Classification keywords
+        "classification",
+        "classifier",
+        "classify",
+        "lulc",
+        "land cover",
     ]
     if any(kw.lower() in [k.lower() for k in keywords] for kw in known_patterns):
         score += 0.4  # Increased from 0.3 - we have good templates for these

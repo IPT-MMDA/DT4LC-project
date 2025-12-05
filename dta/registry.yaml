@@ -9,6 +9,7 @@ types:
  - RasterPath
  - RasterPathBefore
  - RasterPathAfter
+ - IndexType  # Type of spectral index (ndvi, ndsi, ndwi)
  - Statistics
  - ChangeMap
  - FieldBoundaries
@@ -103,7 +104,7 @@ instances:
       Multi-criteria classification combining NDSI ≥0.4, NDVI ≤0.1, and NIR reflectance
       >0.3. Snow coverage percentage represents proportion of pixels meeting all criteria.
       This approach reduces commission errors from water bodies and shadows.
-    keywords: [snow-classifier, snow-classification, ice, glacier, frozen, winter, alpine, mountain, cryosphere, multi-criteria, robust]
+    keywords: [snow, classifier, classification, snow-classifier, snow-classification, ice, glacier, frozen, winter, alpine, mountain, cryosphere, multi-criteria, robust]
     inputs: [RasterPath]
     outputs: [SnowClassification]
     runner:
@@ -130,15 +131,17 @@ instances:
   - id: algorithms/change-detection
     kind: algorithm
     description: |
-      NDVI-based change detection comparing two time periods. Computes vegetation
-      change between before and after images, identifying areas of loss or gain.
+      Multi-index change detection comparing two time periods. Supports NDVI (vegetation),
+      NDSI (snow/ice), and NDWI (water) indices. Computes temporal change between before
+      and after images, identifying areas of loss or gain.
     interpretation: |
-      NDVI difference (after minus before) quantifies vegetation change. Negative values
-      indicate vegetation loss (disturbance, harvest, drought); positive values indicate
-      vegetation gain (growth, recovery). Magnitude reflects change intensity. Values
-      near zero (±0.05) typically represent stable or unchanged areas.
-    keywords: [change, detection, difference, compare, comparison, temporal, before, after, loss, gain, vegetation]
-    inputs: [RasterPathBefore, RasterPathAfter]
+      Index difference (after minus before) quantifies change. Negative values indicate
+      loss (vegetation decline, snow melt, water retreat); positive values indicate gain
+      (vegetation growth, snow accumulation, flooding). Default is NDVI for vegetation.
+      Use IndexType parameter to specify: "ndvi" for vegetation, "ndsi" for snow/ice,
+      "ndwi" for water bodies.
+    keywords: [change, detection, difference, compare, comparison, temporal, before, after, loss, gain, vegetation, snow, water, ndvi, ndsi, ndwi]
+    inputs: [RasterPathBefore, RasterPathAfter, IndexType]
     outputs: [ChangeMap]
     runner:
       type: python

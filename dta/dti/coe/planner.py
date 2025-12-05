@@ -75,6 +75,19 @@ def _is_change_detection_request(ctx: ContextUnderstanding) -> bool:
         "temporal comparison",
         "image difference",
         "temporal difference",
+        # Index-specific change detection
+        "ndvi change",
+        "ndsi change",
+        "ndwi change",
+        "vegetation change",
+        "snow change",
+        "water change",
+        "glacier change",
+        "ice change",
+        "glacier melt",
+        "snow melt",
+        "flood detection",
+        "flooding",
     ]
     has_strong_signal = any(kw in goal_lower or kw in keywords_lower for kw in strong_change_keywords)
 
@@ -86,6 +99,43 @@ def _is_change_detection_request(ctx: ContextUnderstanding) -> bool:
     wants_changemap = "ChangeMap" in (ctx.desired_outputs or [])
 
     return has_strong_signal or has_before_after or wants_changemap
+
+
+def _detect_index_type(ctx: ContextUnderstanding) -> str:
+    """Detect which index type to use for change detection.
+
+    Args:
+        ctx: Context understanding
+
+    Returns:
+        Index type string: "ndvi", "ndsi", or "ndwi"
+    """
+    keywords = ctx.hints.get("keywords", []) if ctx.hints else []
+    goal_lower = (ctx.goal or "").lower()
+    keywords_lower = " ".join(kw.lower() for kw in keywords)
+    combined = goal_lower + " " + keywords_lower
+
+    # Check for explicit index type in hints
+    if ctx.hints and ctx.hints.get("index_type"):
+        index_type = ctx.hints["index_type"].lower()
+        if index_type in ("ndvi", "ndsi", "ndwi"):
+            return index_type
+
+    # NDSI indicators (snow/ice)
+    ndsi_keywords = ["ndsi", "snow", "ice", "glacier", "frozen", "melt"]
+    if any(kw in combined for kw in ndsi_keywords):
+        logger.info("Detected NDSI change detection (snow/ice)")
+        return "ndsi"
+
+    # NDWI indicators (water)
+    ndwi_keywords = ["ndwi", "water", "flood", "lake", "river", "reservoir", "drought"]
+    if any(kw in combined for kw in ndwi_keywords):
+        logger.info("Detected NDWI change detection (water)")
+        return "ndwi"
+
+    # Default to NDVI (vegetation)
+    logger.info("Defaulting to NDVI change detection (vegetation)")
+    return "ndvi"
 
 
 def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
@@ -112,12 +162,16 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
         # Change detection flow: two input files + change detection algorithm
         logger.info("Detected change detection request - using dual-file input")
 
+        # Detect which index type to use
+        index_type = _detect_index_type(ctx)
+        logger.info(f"Using index type: {index_type}")
+
         # Add before/after input steps
         steps.append(PlanStep(uses="input/file-before", binds={}))
         steps.append(PlanStep(uses="input/file-after", binds={}))
 
-        # Add change detection algorithm
-        steps.append(PlanStep(uses="algorithms/change-detection"))
+        # Add change detection algorithm with index type
+        steps.append(PlanStep(uses="algorithms/change-detection", binds={"IndexType": index_type}))
 
         # Add post-processing
         for it in reg.instances:
@@ -130,7 +184,7 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
             steps=steps,
             outputs=["publish: chat"],
         )
-        logger.info(f"Change detection plan: {len(steps)} steps")
+        logger.info(f"Change detection plan: {len(steps)} steps, index_type={index_type}")
         return plan_obj
 
     # Standard single-file flow

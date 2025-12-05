@@ -1,7 +1,12 @@
-"""Change Detection Algorithm - NDVI-based vegetation change analysis.
+"""Change Detection Algorithm - Multi-index temporal change analysis.
 
 Compares two raster images from different time periods to detect
-vegetation changes using NDVI differencing.
+changes using spectral indices (NDVI, NDSI, NDWI).
+
+Supported indices:
+- NDVI: Vegetation change detection
+- NDSI: Snow/ice change detection
+- NDWI: Water body change detection
 """
 
 from __future__ import annotations
@@ -9,7 +14,7 @@ from __future__ import annotations
 import base64
 import io
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import rasterio
@@ -27,64 +32,197 @@ except ImportError:
     HAS_MATPLOTLIB = False
 
 
-def _calculate_ndvi_array(src: rasterio.DatasetReader) -> np.ndarray:
-    """Calculate NDVI array from rasterio dataset.
+# Index type definition
+IndexType = Literal["ndvi", "ndsi", "ndwi"]
+
+# Index-specific configurations
+INDEX_CONFIG = {
+    "ndvi": {
+        "name": "NDVI",
+        "full_name": "Normalized Difference Vegetation Index",
+        "subject": "Vegetation",
+        "loss_label": "Vegetation Loss",
+        "gain_label": "Vegetation Gain",
+        "colors": [
+            (0.8, 0.0, 0.0),  # Dark red - severe loss
+            (1.0, 0.4, 0.4),  # Light red - moderate loss
+            (1.0, 1.0, 1.0),  # White - stable
+            (0.4, 0.8, 0.4),  # Light green - moderate gain
+            (0.0, 0.6, 0.0),  # Dark green - strong gain
+        ],
+        "index_colors": [
+            (0.6, 0.3, 0.1),  # Brown - bare soil/water
+            (0.8, 0.6, 0.2),  # Tan - sparse vegetation
+            (1.0, 1.0, 0.4),  # Yellow - moderate vegetation
+            (0.6, 0.8, 0.2),  # Yellow-green
+            (0.2, 0.6, 0.2),  # Green - healthy vegetation
+            (0.0, 0.4, 0.0),  # Dark green - dense vegetation
+        ],
+        "vmin": -0.2,
+        "vmax": 0.8,
+    },
+    "ndsi": {
+        "name": "NDSI",
+        "full_name": "Normalized Difference Snow Index",
+        "subject": "Snow/Ice",
+        "loss_label": "Snow/Ice Loss",
+        "gain_label": "Snow/Ice Gain",
+        "colors": [
+            (0.6, 0.3, 0.1),  # Brown - severe loss (melting)
+            (0.8, 0.6, 0.4),  # Tan - moderate loss
+            (0.9, 0.9, 0.9),  # Light gray - stable
+            (0.7, 0.85, 1.0),  # Light blue - moderate gain
+            (0.3, 0.5, 0.9),  # Blue - strong gain (freezing)
+        ],
+        "index_colors": [
+            (0.4, 0.3, 0.2),  # Dark brown - no snow
+            (0.6, 0.5, 0.4),  # Brown
+            (0.8, 0.8, 0.8),  # Gray - mixed
+            (0.9, 0.95, 1.0),  # Very light blue
+            (0.7, 0.85, 1.0),  # Light blue - snow
+            (0.4, 0.6, 0.95),  # Blue - dense snow
+        ],
+        "vmin": -0.5,
+        "vmax": 1.0,
+    },
+    "ndwi": {
+        "name": "NDWI",
+        "full_name": "Normalized Difference Water Index",
+        "subject": "Water",
+        "loss_label": "Water Loss",
+        "gain_label": "Water Gain",
+        "colors": [
+            (0.7, 0.5, 0.3),  # Brown - severe loss (drying)
+            (0.85, 0.7, 0.5),  # Tan - moderate loss
+            (0.95, 0.95, 0.95),  # Near white - stable
+            (0.6, 0.8, 1.0),  # Light blue - moderate gain
+            (0.2, 0.5, 0.9),  # Blue - strong gain (flooding)
+        ],
+        "index_colors": [
+            (0.6, 0.4, 0.2),  # Brown - dry land
+            (0.8, 0.7, 0.5),  # Tan
+            (0.95, 0.95, 0.95),  # Near white
+            (0.6, 0.8, 1.0),  # Light blue
+            (0.2, 0.5, 0.9),  # Medium blue
+            (0.0, 0.2, 0.6),  # Dark blue - water
+        ],
+        "vmin": -0.5,
+        "vmax": 0.5,
+    },
+}
+
+
+def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int]:
+    """Get band indices for different sensors.
 
     Args:
         src: Open rasterio dataset
 
     Returns:
-        NDVI array with values in [-1, 1] range
+        Dictionary mapping band names to 1-based indices
     """
-    if src.count < 2:
-        raise ValueError(f"NDVI requires at least 2 bands, got {src.count}")
+    band_count = src.count
 
-    # Band selection based on band count (heuristic for different sensors)
-    # 7+ bands: Landsat 8/9 (B1-B7 + QA) -> Red=4, NIR=5
-    # 6 bands: Sentinel-2 subset (B2,B3,B4,B8,B11,B12) -> Red=3, NIR=4
-    # 5 bands: Generic (B,G,R,NIR,SWIR) -> Red=3, NIR=4
-    # 4 bands: RGBN -> Red=1, NIR=4
-    # 2-3 bands: Simple R,NIR or R,G,NIR -> Red=1, NIR=2
-    if src.count >= 7:
-        # Landsat 8/9: Red=Band4 (SR_B4), NIR=Band5 (SR_B5)
-        red_band = src.read(4, masked=True).astype(np.float32)
-        nir_band = src.read(5, masked=True).astype(np.float32)
-    elif src.count >= 5:
-        # Sentinel-2 or similar: Red=Band3, NIR=Band4
-        red_band = src.read(3, masked=True).astype(np.float32)
-        nir_band = src.read(4, masked=True).astype(np.float32)
-    elif src.count == 4:
-        # RGBN format: Red=Band1, NIR=Band4
-        red_band = src.read(1, masked=True).astype(np.float32)
-        nir_band = src.read(4, masked=True).astype(np.float32)
+    if band_count >= 7:
+        # Landsat 8/9: B2=Blue, B3=Green, B4=Red, B5=NIR, B6=SWIR1
+        return {"red": 4, "nir": 5, "green": 3, "swir": 6}
+    elif band_count >= 6:
+        # Sentinel-2 subset or similar
+        return {"red": 3, "nir": 4, "green": 2, "swir": 5}
+    elif band_count >= 5:
+        # Generic (B,G,R,NIR,SWIR)
+        return {"red": 3, "nir": 4, "green": 2, "swir": 5}
+    elif band_count == 4:
+        # RGBN format
+        return {"red": 1, "nir": 4, "green": 2, "swir": None}
     else:
-        # 2-3 bands: assume Red=Band1, NIR=Band2
-        red_band = src.read(1, masked=True).astype(np.float32)
-        nir_band = src.read(2, masked=True).astype(np.float32)
+        # 2-3 bands: assume Red=1, NIR=2
+        return {"red": 1, "nir": 2, "green": 1, "swir": None}
 
-    # NDVI = (NIR - Red) / (NIR + Red)
-    denominator = nir_band + red_band
-    ndvi = np.where(
-        denominator != 0,
-        (nir_band - red_band) / denominator,
-        np.nan,
-    )
 
-    # Handle masked arrays
-    if hasattr(ndvi, "filled"):
-        ndvi = ndvi.filled(np.nan)
+def _calculate_index_array(
+    src: rasterio.DatasetReader,
+    index_type: IndexType,
+) -> np.ndarray:
+    """Calculate spectral index array from rasterio dataset.
 
-    return ndvi
+    Args:
+        src: Open rasterio dataset
+        index_type: Type of index to calculate
+
+    Returns:
+        Index array with values in appropriate range
+    """
+    bands = _get_band_indices(src)
+
+    if index_type == "ndvi":
+        if src.count < 2:
+            raise ValueError(f"NDVI requires at least 2 bands, got {src.count}")
+
+        red_band = src.read(bands["red"], masked=True).astype(np.float32)
+        nir_band = src.read(bands["nir"], masked=True).astype(np.float32)
+
+        # Handle masked arrays
+        if hasattr(red_band, "filled"):
+            red_band = red_band.filled(np.nan)
+        if hasattr(nir_band, "filled"):
+            nir_band = nir_band.filled(np.nan)
+
+        # NDVI = (NIR - Red) / (NIR + Red)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            denominator = nir_band + red_band
+            index = np.where(denominator != 0, (nir_band - red_band) / denominator, np.nan)
+
+    elif index_type == "ndsi":
+        if src.count < 5 or bands["swir"] is None:
+            raise ValueError(f"NDSI requires SWIR band (5+ bands), got {src.count}")
+
+        green_band = src.read(bands["green"], masked=True).astype(np.float32)
+        swir_band = src.read(bands["swir"], masked=True).astype(np.float32)
+
+        if hasattr(green_band, "filled"):
+            green_band = green_band.filled(np.nan)
+        if hasattr(swir_band, "filled"):
+            swir_band = swir_band.filled(np.nan)
+
+        # NDSI = (Green - SWIR) / (Green + SWIR)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            denominator = green_band + swir_band
+            index = np.where(denominator != 0, (green_band - swir_band) / denominator, np.nan)
+
+    elif index_type == "ndwi":
+        if src.count < 4:
+            raise ValueError(f"NDWI requires at least 4 bands (with NIR), got {src.count}")
+
+        green_band = src.read(bands["green"], masked=True).astype(np.float32)
+        nir_band = src.read(bands["nir"], masked=True).astype(np.float32)
+
+        if hasattr(green_band, "filled"):
+            green_band = green_band.filled(np.nan)
+        if hasattr(nir_band, "filled"):
+            nir_band = nir_band.filled(np.nan)
+
+        # NDWI = (Green - NIR) / (Green + NIR)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            denominator = green_band + nir_band
+            index = np.where(denominator != 0, (green_band - nir_band) / denominator, np.nan)
+
+    else:
+        raise ValueError(f"Unknown index type: {index_type}")
+
+    return index
 
 
 def _create_change_visualization(
     change_array: np.ndarray,
-    title: str = "Vegetation Change",
+    index_type: IndexType,
+    title: str | None = None,
 ) -> str | None:
-    """Create a colored visualization of NDVI change.
+    """Create a colored visualization of index change.
 
     Args:
-        change_array: NDVI difference array
+        change_array: Index difference array
+        index_type: Type of index for colormap selection
         title: Title for the image
 
     Returns:
@@ -93,19 +231,16 @@ def _create_change_visualization(
     if not HAS_MATPLOTLIB:
         return None
 
-    # Create custom colormap: Red (loss) -> White (stable) -> Green (gain)
-    colors = [
-        (0.8, 0.0, 0.0),  # Dark red - severe loss
-        (1.0, 0.4, 0.4),  # Light red - moderate loss
-        (1.0, 1.0, 1.0),  # White - stable
-        (0.4, 0.8, 0.4),  # Light green - moderate gain
-        (0.0, 0.6, 0.0),  # Dark green - strong gain
-    ]
-    cmap = LinearSegmentedColormap.from_list("vegetation_change", colors, N=256)
+    config = INDEX_CONFIG[index_type]
+
+    if title is None:
+        title = f"{config['subject']} Change Detection"
+
+    cmap = LinearSegmentedColormap.from_list(f"{index_type}_change", config["colors"], N=256)
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    # Clip change values for better visualization (-0.5 to 0.5 range)
+    # Clip change values for better visualization
     vmin, vmax = -0.5, 0.5
     im = ax.imshow(change_array, cmap=cmap, vmin=vmin, vmax=vmax)
 
@@ -114,9 +249,9 @@ def _create_change_visualization(
 
     # Colorbar
     cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
-    cbar.set_label("NDVI Change", fontsize=10)
+    cbar.set_label(f"{config['name']} Change", fontsize=10)
     cbar.set_ticks([-0.5, -0.25, 0, 0.25, 0.5])
-    cbar.set_ticklabels(["Loss", "", "Stable", "", "Gain"])
+    cbar.set_ticklabels([config["loss_label"], "", "Stable", "", config["gain_label"]])
 
     # Save to bytes
     buf = io.BytesIO()
@@ -127,14 +262,16 @@ def _create_change_visualization(
     return base64.b64encode(buf.read()).decode("utf-8")
 
 
-def _create_ndvi_visualization(
-    ndvi_array: np.ndarray,
-    title: str = "NDVI",
+def _create_index_visualization(
+    index_array: np.ndarray,
+    index_type: IndexType,
+    title: str | None = None,
 ) -> str | None:
-    """Create a colored visualization of NDVI.
+    """Create a colored visualization of spectral index.
 
     Args:
-        ndvi_array: NDVI array
+        index_array: Index array
+        index_type: Type of index for colormap selection
         title: Title for the image
 
     Returns:
@@ -143,26 +280,22 @@ def _create_ndvi_visualization(
     if not HAS_MATPLOTLIB:
         return None
 
-    # NDVI colormap: Brown/Red (low) -> Yellow -> Green (high)
-    colors = [
-        (0.6, 0.3, 0.1),  # Brown - bare soil/water
-        (0.8, 0.6, 0.2),  # Tan - sparse vegetation
-        (1.0, 1.0, 0.4),  # Yellow - moderate vegetation
-        (0.6, 0.8, 0.2),  # Yellow-green
-        (0.2, 0.6, 0.2),  # Green - healthy vegetation
-        (0.0, 0.4, 0.0),  # Dark green - dense vegetation
-    ]
-    cmap = LinearSegmentedColormap.from_list("ndvi", colors, N=256)
+    config = INDEX_CONFIG[index_type]
+
+    if title is None:
+        title = config["name"]
+
+    cmap = LinearSegmentedColormap.from_list(index_type, config["index_colors"], N=256)
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    im = ax.imshow(ndvi_array, cmap=cmap, vmin=-0.2, vmax=0.8)
+    im = ax.imshow(index_array, cmap=cmap, vmin=config["vmin"], vmax=config["vmax"])
 
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
 
     cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
-    cbar.set_label("NDVI", fontsize=10)
+    cbar.set_label(config["name"], fontsize=10)
 
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
@@ -175,30 +308,32 @@ def _create_ndvi_visualization(
 def calculate_change(
     before_path: str,
     after_path: str,
+    index_type: IndexType = "ndvi",
 ) -> dict[str, Any]:
-    """Calculate vegetation change between two raster images.
+    """Calculate change between two raster images using spectral index.
 
-    Computes NDVI for both images and calculates the difference
-    (after - before). Positive values indicate vegetation gain,
-    negative values indicate vegetation loss.
+    Computes the specified index for both images and calculates the difference
+    (after - before). Positive values indicate gain, negative values indicate loss.
 
     Args:
         before_path: Path to the earlier date GeoTIFF
         after_path: Path to the later date GeoTIFF
+        index_type: Type of index to use ("ndvi", "ndsi", "ndwi")
 
     Returns:
         Dictionary containing:
-            - change_array: NDVI difference (after - before) as list
-            - ndvi_before: NDVI array for before image
-            - ndvi_after: NDVI array for after image
+            - change_array: Index difference (after - before) as list
+            - index_before: Index array for before image
+            - index_after: Index array for after image
             - statistics: Change statistics
             - classification: Pixel classification counts
             - metadata: Raster metadata
             - visualizations: Base64 PNG images (if matplotlib available)
+            - index_type: The index type used
 
     Raises:
         FileNotFoundError: If either raster file not found
-        ValueError: If rasters have different dimensions
+        ValueError: If rasters have different dimensions or invalid index type
     """
     before_path_obj = Path(before_path)
     after_path_obj = Path(after_path)
@@ -207,6 +342,12 @@ def calculate_change(
         raise FileNotFoundError(f"Before raster not found: {before_path}")
     if not after_path_obj.exists():
         raise FileNotFoundError(f"After raster not found: {after_path}")
+
+    # Validate index type
+    if index_type not in INDEX_CONFIG:
+        raise ValueError(f"Invalid index type: {index_type}. Must be one of: {list(INDEX_CONFIG.keys())}")
+
+    config = INDEX_CONFIG[index_type]
 
     # Open both rasters
     with rasterio.open(before_path) as src_before, rasterio.open(after_path) as src_after:
@@ -218,12 +359,12 @@ def calculate_change(
                 f"After: {src_after.width}x{src_after.height}"
             )
 
-        # Calculate NDVI for both
-        ndvi_before = _calculate_ndvi_array(src_before)
-        ndvi_after = _calculate_ndvi_array(src_after)
+        # Calculate index for both
+        index_before = _calculate_index_array(src_before, index_type)
+        index_after = _calculate_index_array(src_after, index_type)
 
         # Calculate change (after - before)
-        change = ndvi_after - ndvi_before
+        change = index_after - index_before
 
         # Statistics on valid pixels
         valid_mask = np.isfinite(change)
@@ -249,12 +390,14 @@ def calculate_change(
             strong_gain = np.sum(valid_change > 0.2)
 
             total = valid_change.size
+            subject = config["subject"].lower()
+
             classification = {
-                "severe_vegetation_loss": {
+                f"severe_{subject}_loss": {
                     "pixels": int(severe_loss),
                     "percentage": round(100 * severe_loss / total, 2),
                 },
-                "moderate_vegetation_loss": {
+                f"moderate_{subject}_loss": {
                     "pixels": int(moderate_loss),
                     "percentage": round(100 * moderate_loss / total, 2),
                 },
@@ -262,22 +405,22 @@ def calculate_change(
                     "pixels": int(stable),
                     "percentage": round(100 * stable / total, 2),
                 },
-                "moderate_vegetation_gain": {
+                f"moderate_{subject}_gain": {
                     "pixels": int(moderate_gain),
                     "percentage": round(100 * moderate_gain / total, 2),
                 },
-                "strong_vegetation_gain": {
+                f"strong_{subject}_gain": {
                     "pixels": int(strong_gain),
                     "percentage": round(100 * strong_gain / total, 2),
                 },
                 "total_valid_pixels": int(total),
             }
 
-        # NDVI statistics for each image
-        valid_before = ndvi_before[np.isfinite(ndvi_before)]
-        valid_after = ndvi_after[np.isfinite(ndvi_after)]
+        # Index statistics for each image
+        valid_before = index_before[np.isfinite(index_before)]
+        valid_after = index_after[np.isfinite(index_after)]
 
-        ndvi_stats = {
+        index_stats = {
             "before": {
                 "mean": float(np.nanmean(valid_before)) if valid_before.size > 0 else None,
                 "std": float(np.nanstd(valid_before)) if valid_before.size > 0 else None,
@@ -312,37 +455,61 @@ def calculate_change(
         if HAS_MATPLOTLIB:
             visualizations["change_map"] = _create_change_visualization(
                 change,
-                title="Vegetation Change Detection",
+                index_type,
+                title=f"{config['subject']} Change Detection",
             )
-            visualizations["ndvi_before"] = _create_ndvi_visualization(
-                ndvi_before,
-                title="NDVI - Before",
+            visualizations[f"{index_type}_before"] = _create_index_visualization(
+                index_before,
+                index_type,
+                title=f"{config['name']} - Before",
             )
-            visualizations["ndvi_after"] = _create_ndvi_visualization(
-                ndvi_after,
-                title="NDVI - After",
+            visualizations[f"{index_type}_after"] = _create_index_visualization(
+                index_after,
+                index_type,
+                title=f"{config['name']} - After",
             )
 
-        return {
+        # For backwards compatibility, also include ndvi_* keys if using NDVI
+        result = {
             "change_array": change.tolist(),
-            "ndvi_before": ndvi_before.tolist(),
-            "ndvi_after": ndvi_after.tolist(),
+            "index_before": index_before.tolist(),
+            "index_after": index_after.tolist(),
             "statistics": statistics,
-            "ndvi_statistics": ndvi_stats,
+            "index_statistics": index_stats,
             "classification": classification,
             "metadata": metadata,
             "visualizations": visualizations,
+            "index_type": index_type,
+            "index_name": config["name"],
         }
 
+        # Backwards compatibility for NDVI
+        if index_type == "ndvi":
+            result["ndvi_before"] = result["index_before"]
+            result["ndvi_after"] = result["index_after"]
+            result["ndvi_statistics"] = result["index_statistics"]
 
-def run(RasterPathBefore: str, RasterPathAfter: str) -> dict[str, Any]:
+        return result
+
+
+def run(
+    RasterPathBefore: str,
+    RasterPathAfter: str,
+    IndexType: str = "ndvi",
+) -> dict[str, Any]:
     """Registry-compatible change detection.
 
     Args:
         RasterPathBefore: Path to before image (registry type)
         RasterPathAfter: Path to after image (registry type)
+        IndexType: Type of index to use ("ndvi", "ndsi", "ndwi")
 
     Returns:
         Change detection result dictionary
     """
-    return calculate_change(RasterPathBefore, RasterPathAfter)
+    # Normalize index type
+    index_type = IndexType.lower() if IndexType else "ndvi"
+    if index_type not in INDEX_CONFIG:
+        index_type = "ndvi"  # Default fallback
+
+    return calculate_change(RasterPathBefore, RasterPathAfter, index_type)

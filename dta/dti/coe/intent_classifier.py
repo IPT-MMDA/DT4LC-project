@@ -187,6 +187,14 @@ def _looks_like_action(prompt: str) -> bool:
         "ndwi",
         "water index",
         "classify",
+        # Index-specific change detection
+        "snow change",
+        "water change",
+        "vegetation change",
+        "ndvi change",
+        "ndsi change",
+        "ndwi change",
+        "glacier change",
     ]
 
     prompt_lower = prompt.lower()
@@ -244,8 +252,13 @@ def _is_clear_action_request(prompt: str) -> bool:
         r"^ndwi(\s+calculation|\s+analysis)?$",
         r"^(detect|find|map)\s+(water|waterbody|water\s*body)",
         r"^water\s*(index|detection|mapping)?$",
-        # Other algorithms
+        # Change detection (multi-index)
         r"^change\s*detection$",
+        r"^(ndvi|ndsi|ndwi)\s*change(\s+detection)?$",
+        r"^(vegetation|snow|ice|glacier|water)\s*change(\s+detection)?$",
+        r"^(detect|compare)\s+(vegetation|snow|water)\s*(change|difference)s?$",
+        r"^(compare|detect)\s+.*(before|after).*$",
+        # Other algorithms
         r"^(extract|get)\s+(statistics)",
         r"^prithvi\s*(reconstruction|features?)?$",
     ]
