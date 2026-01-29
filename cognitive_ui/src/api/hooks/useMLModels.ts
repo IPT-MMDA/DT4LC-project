@@ -56,7 +56,7 @@ export function useMLModels() {
 
 export function useMLModel(modelId: string) {
   const queryClient = useQueryClient();
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const query = useQuery({
     queryKey: ['ml-models', modelId],

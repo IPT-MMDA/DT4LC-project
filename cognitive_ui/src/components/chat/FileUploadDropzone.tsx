@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, X, Loader2, AlertCircle, CheckCircle, Paperclip } from 'lucide-react';
-import { useUploadFile } from '../../api/hooks/useUpload';
+import { Upload, X, Loader2, AlertCircle, CheckCircle, Paperclip, Download, Database } from 'lucide-react';
+import { useUploadFile, useListFiles } from '../../api/hooks/useUpload';
 import { useAppStore } from '../../store/useAppStore';
 import { uploadLogger as logger } from '../../utils/logger';
 
@@ -20,8 +20,10 @@ interface UploadedFilePreview {
 export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropzoneProps) {
   const [dragActive, setDragActive] = useState(false);
   const [recentUpload, setRecentUpload] = useState<UploadedFilePreview | null>(null);
+  const [showAvailableFiles, setShowAvailableFiles] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadFile = useUploadFile();
+  const { data: availableFiles } = useListFiles();
   const { addAttachment, uploadedAttachments } = useAppStore();
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -186,19 +188,27 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
 
   // Full dropdown version with preview
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-lg p-4 w-80">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 shadow-lg p-4 w-80 max-h-[80vh] overflow-y-auto">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-          Upload GeoTIFF
+          {showAvailableFiles ? 'Available Files' : 'Upload GeoTIFF'}
         </h3>
-        {onClose && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            onClick={() => setShowAvailableFiles(!showAvailableFiles)}
+            className="text-xs text-primary-500 hover:text-primary-600"
           >
-            <X className="w-4 h-4" />
+            {showAvailableFiles ? 'Upload' : 'Browse'}
           </button>
-        )}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Current attachments */}
@@ -219,20 +229,70 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
         </div>
       )}
 
-      {/* Upload zone */}
-      <div
-        className={`rounded-lg border-2 border-dashed p-6 transition-colors ${
-          dragActive
-            ? 'border-primary-500 bg-primary-50 dark:bg-primary-950'
-            : uploadFile.isError
-            ? 'border-red-300 dark:border-red-700'
-            : 'border-gray-300 dark:border-gray-700'
-        }`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-      >
+      {/* Available files list */}
+      {showAvailableFiles && (
+        <div className="space-y-2">
+          {availableFiles && availableFiles.length > 0 ? (
+            <>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Select a file to add to chat:
+              </p>
+              {availableFiles.map((file) => (
+                <button
+                  key={file.id}
+                  onClick={() => {
+                    addAttachment({
+                      id: file.id,
+                      filename: file.filename,
+                      path: file.path,
+                      mime_type: 'image/tiff',
+                    });
+                    if (onClose) onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 bg-gray-50 dark:bg-gray-950 hover:bg-gray-100 dark:hover:bg-gray-900 rounded border border-gray-200 dark:border-gray-800 transition-colors"
+                >
+                  <div className="flex items-start gap-2">
+                    {file.source === 'export' ? (
+                      <Download className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <Upload className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {file.filename}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {file.size[0]} × {file.size[1]} px • {(file.size_bytes / (1024 * 1024)).toFixed(1)} MB
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </>
+          ) : (
+            <div className="text-center py-6 text-gray-400">
+              <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-xs">No files available</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Upload zone - only show when not browsing */}
+      {!showAvailableFiles && (
+        <div
+          className={`rounded-lg border-2 border-dashed p-6 transition-colors ${
+            dragActive
+              ? 'border-primary-500 bg-primary-50 dark:bg-primary-950'
+              : uploadFile.isError
+              ? 'border-red-300 dark:border-red-700'
+              : 'border-gray-300 dark:border-gray-700'
+          }`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
         <input
           ref={fileInputRef}
           type="file"
@@ -307,7 +367,8 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
             </>
           )}
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

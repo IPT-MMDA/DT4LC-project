@@ -45,3 +45,4 @@ cognitive_ui/dist/
 cognitive_ui/.vite/
 *.log
 npm-debug.log*
+docs/features/

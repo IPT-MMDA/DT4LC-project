@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 interface UploadResponse {
   id: string;
@@ -8,6 +8,24 @@ interface UploadResponse {
   crs: string | null;
   bounds: [number, number, number, number];
   preview_png_base64: string;
+}
+
+export interface GeoTIFFFile {
+  id: string;
+  filename: string;
+  path: string;
+  size: [number, number];
+  crs: string | null;
+  bounds: [number, number, number, number];
+  size_bytes: number;
+  source: 'upload' | 'export';
+  modified: number;
+}
+
+interface ListFilesResponse {
+  ok: boolean;
+  files: GeoTIFFFile[];
+  count: number;
 }
 
 export function useUploadFile() {
@@ -28,5 +46,23 @@ export function useUploadFile() {
 
       return response.json();
     },
+  });
+}
+
+export function useListFiles() {
+  return useQuery({
+    queryKey: ['files'],
+    queryFn: async (): Promise<GeoTIFFFile[]> => {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/v1/files`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch files');
+      }
+
+      const data: ListFilesResponse = await response.json();
+      return data.files;
+    },
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchOnWindowFocus: true,
   });
 }

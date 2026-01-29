@@ -33,6 +33,7 @@ server = [
     "pillow>=10.0.0",
     "rasterio>=1.4.3",
     "opencv-python>=4.10.0",
+    "matplotlib>=3.7.0",
     # ML models
     "pyyaml>=6.0.2",
     "einops>=0.8.1",
@@ -41,7 +42,12 @@ server = [
     "huggingface-hub>=0.25.0",
     # Geo processing
     "shapely>=2.0.0",
+    "pystac-client>=0.8.5",
+    "planetary-computer>=1.0.0",
     "geopandas>=1.0.0",
+    "mercantile>=1.2.0",
+    "earthengine-api>=0.1.300",
+    "google-auth>=2.0.0",
     # LLM agents
     "google-genai>=1.35.0,<2.0.0",
     # Utils
