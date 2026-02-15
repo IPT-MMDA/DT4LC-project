@@ -1,22 +1,21 @@
-import { useState, useRef } from 'react';
-import { Upload, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { useUploadFile } from '../api/hooks/useUpload';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, CheckCircle, AlertCircle, Loader2, Download, Database } from 'lucide-react';
+import { useUploadFile, useListFiles, GeoTIFFFile } from '../api/hooks/useUpload';
 import { useAppStore } from '../store/useAppStore';
 
-interface UploadedFile {
-  filename: string;
-  size: [number, number];
-  crs: string | null;
-  bounds: [number, number, number, number];
-  preview_png_base64: string;
-}
-
 export function DataPage() {
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadFile = useUploadFile();
-  const { addAttachment } = useAppStore();
+  const { data: allFiles, isLoading: isLoadingFiles, refetch: refetchFiles } = useListFiles();
+  const { addAttachment, uploadedAttachments } = useAppStore();
+
+  // Refetch files after successful upload
+  useEffect(() => {
+    if (uploadFile.isSuccess) {
+      refetchFiles();
+    }
+  }, [uploadFile.isSuccess, refetchFiles]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -56,7 +55,6 @@ export function DataPage() {
 
     try {
       const result = await uploadFile.mutateAsync(file);
-      setUploadedFiles((prev) => [...prev, result]);
 
       // Add to global attachments store for use in chat
       addAttachment({
@@ -74,8 +72,34 @@ export function DataPage() {
     fileInputRef.current?.click();
   };
 
-  const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  const addFileToChat = (file: GeoTIFFFile) => {
+    // Check if already attached
+    const alreadyAttached = uploadedAttachments.some(att => att.id === file.id);
+
+    if (alreadyAttached) {
+      alert(`"${file.filename}" is already attached to chat`);
+      return;
+    }
+
+    addAttachment({
+      id: file.id,
+      filename: file.filename,
+      path: file.path,
+      mime_type: 'image/tiff',
+    });
+
+    // Show success feedback
+    alert(`Added "${file.filename}" to chat. Go to Chat page to use it.`);
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleString();
   };
 
   return (
@@ -157,54 +181,66 @@ export function DataPage() {
         </div>
       </div>
 
-      {/* Uploaded Files */}
-      {uploadedFiles.length > 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Uploaded Files
-            </h2>
+      {/* Available Files */}
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Available Files
+          </h2>
+          <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''}
+              {isLoadingFiles ? 'Loading...' : `${allFiles?.length || 0} file${allFiles?.length !== 1 ? 's' : ''}`}
             </span>
+            <button
+              onClick={() => refetchFiles()}
+              className="text-sm text-primary-500 hover:text-primary-600"
+            >
+              Refresh
+            </button>
           </div>
+        </div>
 
+        {isLoadingFiles ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+          </div>
+        ) : allFiles && allFiles.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {uploadedFiles.map((file, index) => (
+            {allFiles.map((file) => (
               <div
-                key={index}
+                key={file.id}
                 className="bg-gray-50 dark:bg-gray-950 rounded-lg border border-gray-200 dark:border-gray-800 p-4 relative group"
               >
-                <button
-                  onClick={() => removeFile(index)}
-                  className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-                {/* Preview */}
-                {file.preview_png_base64 && (
-                  <div className="mb-3 rounded overflow-hidden bg-gray-200 dark:bg-gray-800">
-                    <img
-                      src={`data:image/png;base64,${file.preview_png_base64}`}
-                      alt={file.filename}
-                      className="w-full h-32 object-cover"
-                    />
-                  </div>
-                )}
+                {/* Source badge */}
+                <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                  {file.source === 'export' ? (
+                    <>
+                      <Download className="w-3 h-3 text-blue-500" />
+                      <span className="text-blue-600 dark:text-blue-400">Export</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3 h-3 text-green-500" />
+                      <span className="text-green-600 dark:text-green-400">Upload</span>
+                    </>
+                  )}
+                </div>
 
                 {/* File Info */}
-                <div className="space-y-2">
+                <div className="space-y-2 mt-6">
                   <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.filename}>
                         {file.filename}
                       </p>
                       <p className="text-xs text-gray-600 dark:text-gray-400">
                         {file.size[0]} × {file.size[1]} pixels
                       </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        {formatFileSize(file.size_bytes)}
+                      </p>
                     </div>
-                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 ml-2" />
+                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
                   </div>
 
                   {file.crs && (
@@ -224,12 +260,34 @@ export function DataPage() {
                       </span>
                     </div>
                   )}
+
+                  <div className="text-xs text-gray-500 dark:text-gray-500">
+                    {formatDate(file.modified)}
+                  </div>
+
+                  {/* Add to chat button */}
+                  <button
+                    onClick={() => addFileToChat(file)}
+                    className={`w-full mt-2 px-3 py-1.5 text-sm rounded transition-colors ${
+                      uploadedAttachments.some(att => att.id === file.id)
+                        ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300'
+                        : 'bg-primary-500 text-white hover:bg-primary-600'
+                    }`}
+                  >
+                    {uploadedAttachments.some(att => att.id === file.id) ? '✓ Attached' : 'Add to Chat'}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <Database className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>No files available</p>
+            <p className="text-sm mt-1">Upload a GeoTIFF or export a layer from the map</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

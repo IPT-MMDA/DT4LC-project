@@ -629,3 +629,24 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
   url = {https://github.com/IPT-MMDA/DT4LC-project}
 }
 ```
+# Build Backend
+docker build --network sagemaker -t dt4lc-backend .
+
+# Run Backend
+docker run -d --network sagemaker --name dt4lc-backend --env-file .env -v $(pwd)/resources:/app/resources dt4lc-backend
+
+# Build Frontend (after updating nginx.conf)
+docker build --network sagemaker -t dt4lc-frontend cognitive_ui
+
+# Run Frontend
+docker run -d --network sagemaker --name dt4# Build Backend
+docker build --network sagemaker -t dt4lc-backend .
+
+# Run Backend
+docker run -d --network sagemaker --name dt4lc-backend --env-file .env -v $(pwd)/resources:/app/resources dt4lc-backend
+
+# Build Frontend (after updating nginx.conf)
+docker build --network sagemaker -t dt4lc-frontend cognitive_ui
+
+# Run Frontend
+docker run -d --network sagemaker --name dt4
