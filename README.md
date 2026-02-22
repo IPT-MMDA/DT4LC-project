@@ -17,33 +17,33 @@ A cognitive digital twin framework for land cover change detection and vegetatio
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
-│                    http://localhost (port 80)                    │
+│                         Frontend (React)                        │
+│                    http://localhost (port 80)                   │
 └─────────────────────────────────────┬───────────────────────────┘
                                       │ /v1/* (nginx proxy)
                                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Backend (FastAPI)                            │
-│                    http://localhost:8000                         │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Context Orchestration Engine (COE)                          ││
-│  │  • Intent Classifier (routes pipeline vs conversation)      ││
-│  │  • Context Agent (understands user intent)                  ││
-│  │  • Planner Agent (builds execution pipeline)                ││
-│  │  • Decision Agent (validates plan)                          ││
-│  └─────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Digital Twin Instance (DTI)                                 ││
-│  │  • Pipeline Executor                                        ││
-│  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
-│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
-│  └─────────────────────────────────────────────────────────────┘│
+│                     Backend (FastAPI)                           │
+│                    http://localhost:8000                        │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Context Orchestration Engine (COE)                          │ │
+│ │  • Intent Classifier (routes pipeline vs conversation)      │ │
+│ │  • Context Agent (understands user intent)                  │ │
+│ │  • Planner Agent (builds execution pipeline)                │ │
+│ │  • Decision Agent (validates plan)                          │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Digital Twin Instance (DTI)                                 │ │
+│ │  • Pipeline Executor                                        │ │
+│ │  • Algorithm Registry (NDVI, Statistics, Change Detection)  │ │
+│ │  • Model Registry (Prithvi, Delineate-Anything)             │ │
+│ └─────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────┬───────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   LLM Providers (fallback chain)                 │
-│  Gemini (fast) → Groq (ultra-fast) → Ollama (local)             │
+│                   LLM Providers (fallback chain)                │
+│        Gemini (fast) → Groq (ultra-fast) → Ollama (local)       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
