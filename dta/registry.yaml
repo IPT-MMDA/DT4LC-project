@@ -3,6 +3,7 @@ types:
  - NDVIMap
  - NDWIMap  # Water index output
  - NDSIMap  # Snow index output
+ - EVIMap
  - SnowClassification  # Multi-criteria snow classification
  - LULCMap  # Land use / land cover classification
  - Reconstruction  # Prithvi MAE reconstruction outputs
@@ -58,6 +59,24 @@ instances:
     runner:
       type: python
       entrypoint: "dta/dti/algorithms/ndvi.py"
+
+  - id: algorithms/evi
+    kind: algorithm
+    description: |
+      EVI (Enhanced Vegetation Index) for vegetation health analysis.
+      Computed as 2.5 * (NIR - RED) / ((NIR + 6*RED - 7.5*BLUE) + 1). Values range from -1 to 1, where higher
+      values indicate healthier vegetation. Useful for crop monitoring and land cover.
+    interpretation: |
+      EVI ranges from -1 to 1. Values >0.6 indicate dense, healthy vegetation; 0.4-0.6
+      moderate vegetation cover; 0.2-0.4 sparse vegetation or senescent crops; <0.2 bare
+      soil or stressed vegetation; negative values indicate water, clouds, or snow.
+      Standard deviation reflects landscape heterogeneity.
+    keywords: [evi, vegetation, index, health, greenness]
+    inputs: [RasterPath]
+    outputs: [EVIMap]
+    runner:
+      type: python
+      entrypoint: "dta/dti/algorithms/evi.py"     
 
   - id: algorithms/ndwi
     kind: algorithm

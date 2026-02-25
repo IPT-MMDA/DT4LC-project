@@ -1,12 +1,13 @@
 """Change Detection Algorithm - Multi-index temporal change analysis.
 
 Compares two raster images from different time periods to detect
-changes using spectral indices (NDVI, NDSI, NDWI).
+changes using spectral indices (NDVI, NDSI, NDWI, EVI).
 
 Supported indices:
 - NDVI: Vegetation change detection
 - NDSI: Snow/ice change detection
 - NDWI: Water body change detection
+- EVI: Vegetation change detection
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ except ImportError:
 
 
 # Index type definition
-IndexType = Literal["ndvi", "ndsi", "ndwi"]
+IndexType = Literal["ndvi", "ndsi", "ndwi", "evi"]
 
 # Index-specific configurations
 INDEX_CONFIG = {
@@ -108,6 +109,30 @@ INDEX_CONFIG = {
         ],
         "vmin": -0.5,
         "vmax": 0.5,
+    },
+    "evi": {
+        "name": "EVI",
+        "full_name": "Enhanced Vegetation Index",
+        "subject": "Vegetation",
+        "loss_label": "Vegetation Loss",
+        "gain_label": "Vegetation Gain",
+        "colors": [
+            (0.8, 0.0, 0.0),  # Dark red - severe loss
+            (1.0, 0.4, 0.4),  # Light red - moderate loss
+            (1.0, 1.0, 1.0),  # White - stable
+            (0.4, 0.8, 0.4),  # Light green - moderate gain
+            (0.0, 0.6, 0.0),  # Dark green - strong gain
+        ],
+        "index_colors": [
+            (0.6, 0.3, 0.1),  # Brown - bare soil/water
+            (0.8, 0.6, 0.2),  # Tan - sparse vegetation
+            (1.0, 1.0, 0.4),  # Yellow - moderate vegetation
+            (0.6, 0.8, 0.2),  # Yellow-green
+            (0.2, 0.6, 0.2),  # Green - healthy vegetation
+            (0.0, 0.4, 0.0),  # Dark green - dense vegetation
+        ],
+        "vmin": -0.2,
+        "vmax": 0.8,
     },
 }
 
@@ -206,6 +231,26 @@ def _calculate_index_array(
         with np.errstate(divide="ignore", invalid="ignore"):
             denominator = green_band + nir_band
             index = np.where(denominator != 0, (green_band - nir_band) / denominator, np.nan)
+
+    elif index_type == "evi":
+        if src.count < 3:
+            raise ValueError(f"EVI requires at least 3 bands, got {src.count}")
+
+        green_band = src.read(bands["blue"], masked=True).astype(np.float32)
+        red_band = src.read(bands["red"], masked=True).astype(np.float32)
+        nir_band = src.read(bands["nir"], masked=True).astype(np.float32)
+
+        if hasattr(green_band, "filled"):
+            blue_band = green_band.filled(np.nan)
+        if hasattr(red_band, "filled"):
+            red_band = red_band.filled(np.nan)
+        if hasattr(nir_band, "filled"):
+            nir_band = nir_band.filled(np.nan)
+
+        # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            denominator = nir_band + 6*red_band - 7.5*blue_band + 1
+            index = np.where(denominator != 0, (2.5 * (nir_band - red_band)) / denominator, np.nan)
 
     else:
         raise ValueError(f"Unknown index type: {index_type}")
@@ -502,7 +547,7 @@ def run(
     Args:
         RasterPathBefore: Path to before image (registry type)
         RasterPathAfter: Path to after image (registry type)
-        IndexType: Type of index to use ("ndvi", "ndsi", "ndwi")
+        IndexType: Type of index to use ("ndvi", "ndsi", "ndwi", "evi")
 
     Returns:
         Change detection result dictionary
