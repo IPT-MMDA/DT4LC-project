@@ -16,10 +16,10 @@ from ..utils import UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["files"])
+router = APIRouter(prefix="/v1", tags=["files"])
 
 
-@router.post("/v1/upload")  # type: ignore[misc]
+@router.post("/upload")  # type: ignore[misc]
 async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
     # Basic checks
     if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
@@ -91,7 +91,7 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
 
 
-@router.get("/v1/files")  # type: ignore[misc]
+@router.get("/files")  # type: ignore[misc]
 async def list_files() -> JSONResponse:
     """List all available GeoTIFF files (uploaded and exported).
 
@@ -173,7 +173,7 @@ async def list_files() -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/v1/download")  # type: ignore[misc]
+@router.get("/download")  # type: ignore[misc]
 async def download_file(path: str) -> FileResponse:
     """Download a file from the server.
 

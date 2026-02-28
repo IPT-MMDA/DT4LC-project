@@ -12,16 +12,16 @@ from dta.dti.registry import load_registry
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["health"])
+router = APIRouter(prefix="/v1", tags=["health"])
 
 
-@router.get("/v1/health")  # type: ignore[misc]
+@router.get("/health")  # type: ignore[misc]
 async def health() -> dict[str, Any]:
     """Health check endpoint."""
     return {"ok": True, "service": "DT4LC", "version": "1.0.0"}
 
 
-@router.get("/v1/capabilities")  # type: ignore[misc]
+@router.get("/capabilities")  # type: ignore[misc]
 async def list_capabilities() -> JSONResponse:
     """List all available components from the registry.
 
@@ -41,7 +41,7 @@ async def list_capabilities() -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to load registry: {e}") from e
 
 
-@router.get("/v1/models")  # type: ignore[misc]
+@router.get("/models")  # type: ignore[misc]
 async def list_models() -> JSONResponse:
     """List all registered models from the model registry.
 
@@ -89,7 +89,7 @@ async def list_models() -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to load models: {e}") from e
 
 
-@router.get("/v1/metrics")  # type: ignore[misc]
+@router.get("/metrics")  # type: ignore[misc]
 async def get_metrics() -> JSONResponse:
     """Get system metrics including execution and LLM stats."""
     try:

@@ -13,10 +13,10 @@ from dta.dti.schemas import ChatRequest as COEChatRequest
 from ..schemas import ChatRequest
 from ..utils import sse_frame
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(prefix="/v1", tags=["chat"])
 
 
-@router.post("/v1/plan")  # type: ignore[misc]
+@router.post("/plan")  # type: ignore[misc]
 async def create_plan(req: ChatRequest) -> JSONResponse:
     """Generate an execution plan from a user prompt.
 
@@ -56,7 +56,7 @@ async def create_plan(req: ChatRequest) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Plan generation failed: {e}") from e
 
 
-@router.post("/v1/execute")  # type: ignore[misc]
+@router.post("/execute")  # type: ignore[misc]
 async def execute_plan(req: ChatRequest) -> JSONResponse:
     """Generate and execute a pipeline plan.
 
@@ -111,7 +111,7 @@ async def execute_plan(req: ChatRequest) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Execution failed: {e}") from e
 
 
-@router.post("/v1/chat")  # type: ignore[misc]
+@router.post("/chat")  # type: ignore[misc]
 async def chat(req: ChatRequest) -> StreamingResponse:
     """Legacy chat endpoint - redirects to execute endpoint.
 

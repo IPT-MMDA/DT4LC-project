@@ -10,7 +10,7 @@ from ..schemas import JobSubmitRequest
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["jobs"])
+router = APIRouter(prefix="/v1", tags=["jobs"])
 
 
 @router.on_event("startup")  # type: ignore[misc]
@@ -27,7 +27,7 @@ async def shutdown_event() -> None:
     await queue.stop()
 
 
-@router.post("/v1/jobs")  # type: ignore[misc]
+@router.post("/jobs")  # type: ignore[misc]
 async def submit_job(req: JobSubmitRequest) -> JSONResponse:
     """Submit a new async job.
 
@@ -56,7 +56,7 @@ async def submit_job(req: JobSubmitRequest) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Job submission failed: {e}") from e
 
 
-@router.get("/v1/jobs/{job_id}")  # type: ignore[misc]
+@router.get("/jobs/{job_id}")  # type: ignore[misc]
 async def get_job_status(job_id: str) -> JSONResponse:
     """Get job status and results.
 
@@ -79,7 +79,7 @@ async def get_job_status(job_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to get job: {e}") from e
 
 
-@router.post("/v1/jobs/{job_id}/cancel")  # type: ignore[misc]
+@router.post("/jobs/{job_id}/cancel")  # type: ignore[misc]
 async def cancel_job(job_id: str) -> JSONResponse:
     """Cancel a running or pending job."""
     try:
@@ -100,7 +100,7 @@ async def cancel_job(job_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to cancel job: {e}") from e
 
 
-@router.get("/v1/jobs")  # type: ignore[misc]
+@router.get("/jobs")  # type: ignore[misc]
 async def list_jobs(
     status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(20, ge=1, le=100, description="Maximum results"),
@@ -139,7 +139,7 @@ async def list_jobs(
         raise HTTPException(status_code=500, detail=f"Failed to list jobs: {e}") from e
 
 
-@router.get("/v1/queue/stats")  # type: ignore[misc]
+@router.get("/queue/stats")  # type: ignore[misc]
 async def get_queue_stats() -> JSONResponse:
     """Get job queue statistics."""
     try:
