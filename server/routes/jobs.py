@@ -1,4 +1,4 @@
-"""Async job queue endpoints and lifecycle events."""
+"""Async job queue endpoints."""
 
 import logging
 
@@ -11,20 +11,6 @@ from ..schemas import JobSubmitRequest
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["jobs"])
-
-
-@router.on_event("startup")  # type: ignore[misc]
-async def startup_event() -> None:
-    """Start job queue on app startup."""
-    queue = get_job_queue()
-    await queue.start()
-
-
-@router.on_event("shutdown")  # type: ignore[misc]
-async def shutdown_event() -> None:
-    """Stop job queue on app shutdown."""
-    queue = get_job_queue()
-    await queue.stop()
 
 
 @router.post("/jobs")  # type: ignore[misc]

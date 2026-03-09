@@ -5,6 +5,7 @@ import io
 import logging
 from pathlib import Path
 import tempfile
+import uuid
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -29,8 +30,6 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
         raise HTTPException(status_code=400, detail="Empty file.")
 
     # Save file to temp directory
-    import uuid
-
     file_id = str(uuid.uuid4())[:8]
     saved_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
     saved_path.write_bytes(raw)

@@ -3,22 +3,20 @@
 Creates the app, configures middleware, and registers all route modules.
 """
 
-import logging
+from contextlib import asynccontextmanager
 import os
 
 from dotenv import load_dotenv
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
-)
-
 load_dotenv()
+
+from .logging_config import configure_logging
+configure_logging()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .jobs import get_job_queue
 from .model_routes import router as model_router
 from .routes.chat import router as chat_router
 from .routes.files import router as files_router
@@ -27,7 +25,18 @@ from .routes.health import router as health_router
 from .routes.jobs import router as jobs_router
 from .routes.tiles import router as tiles_router
 
-app = FastAPI(title="DT4LC API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    queue = get_job_queue()
+    await queue.start()
+    try:
+        yield
+    finally:
+        await queue.stop()
+
+
+app = FastAPI(title="DT4LC API", version="1.0.0", lifespan=lifespan)
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
