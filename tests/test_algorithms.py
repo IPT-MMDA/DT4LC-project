@@ -69,6 +69,7 @@ class TestNDVIAlgorithm:
 
         assert callable(run)
 
+
 class TestEVIAlgorithm:
     """Tests for EVI algorithm."""
 

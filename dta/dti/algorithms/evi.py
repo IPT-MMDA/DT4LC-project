@@ -73,7 +73,7 @@ def calculate_evi(raster_path: str) -> dict[str, Any]:
     """Calculate EVI from a multispectral raster.
 
     Expects a raster with at least NIR and Red bands. Uses standard band
-    ordering: Red=Band 1 (or 4), NIR=Band 2 (or 5) depending on sensor.
+    ordering: Red=Band 1 (or 4), Blue=Band 2 (or 3), NIR=Band 2 (or 5) depending on sensor.
 
     Args:
         raster_path: Path to GeoTIFF with multispectral data
@@ -94,35 +94,30 @@ def calculate_evi(raster_path: str) -> dict[str, Any]:
         raise FileNotFoundError(f"Raster not found: {raster_path}")
 
     with rasterio.open(raster_path) as src:
-        if src.count < 2:
-            raise ValueError(f"EVI requires at least 2 bands, got {src.count}")
+        if src.count < 4:
+            raise ValueError(f"EVI requires at least 4 bands (with NIR), got {src.count}")
 
         # Band selection based on band count (heuristic for different sensors)
-        # 7+ bands: Landsat 8/9 (B1-B7 + QA) -> Red=4, NIR=5
+        # 7+ bands: Landsat 8/9 (B1-B7 + QA) -> Blue=2, Red=4, NIR=5
         # 6 bands: Sentinel-2 subset (B2,B3,B4,B8,B11,B12) -> Red=3, NIR=4
         # 5 bands: Generic (B,G,R,NIR,SWIR) -> Red=3, NIR=4
-        # 4 bands: RGBN -> Red=1, NIR=4
+        # 4 bands: RGBN -> Red=1, Blue=3, NIR=4
         # 2-3 bands: Simple R,NIR or R,G,NIR -> Red=1, NIR=2
         if src.count >= 7:
-            # Landsat 8/9: Red=Band4 (SR_B4), NIR=Band5 (SR_B5)
+            # Landsat 8/9: Blue=Band2 (SR_B2), Red=Band4 (SR_B4), NIR=Band5 (SR_B5)
             red_band = src.read(4, masked=True).astype(float)
             blue_band = src.read(2, masked=True).astype(float)
             nir_band = src.read(5, masked=True).astype(float)
         elif src.count >= 5:
-            # Sentinel-2 or similar: Red=Band3, NIR=Band4
+            # Sentinel-2 or similar: Blue=Band2, Red=Band3, NIR=Band4
             red_band = src.read(3, masked=True).astype(float)
             blue_band = src.read(2, masked=True).astype(float)
             nir_band = src.read(4, masked=True).astype(float)
-        elif src.count == 4:
-            # RGBN format: Red=Band1, NIR=Band4
+        else:
+            # RGBN format: Red=Band1, Blue=Band3, NIR=Band4
             red_band = src.read(1, masked=True).astype(float)
             blue_band = src.read(3, masked=True).astype(float)
             nir_band = src.read(4, masked=True).astype(float)
-        else:
-            # 2-3 bands: assume Red=Band1, NIR=Band2
-            red_band = src.read(1, masked=True).astype(float)
-            blue_band = src.read(3, masked=True).astype(float)
-            nir_band = src.read(2, masked=True).astype(float)
 
         # Calculate EVI: 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         denominator = nir_band + 6*red_band - 7.5*blue_band + 1
@@ -199,8 +194,8 @@ def evi_change(
     Raises:
         ValueError: If arrays have different shapes
     """
-    arr_before = evi_before["evi_array"]
-    arr_after = evi_after["evi_array"]
+    arr_before = np.array(evi_before["evi_array"])
+    arr_after = np.array(evi_after["evi_array"])
 
     if arr_before.shape != arr_after.shape:
         raise ValueError(f"EVI arrays must have same shape. Got {arr_before.shape} and {arr_after.shape}")
