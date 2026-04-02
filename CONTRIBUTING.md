@@ -1,32 +1,84 @@
-# Contributing to the Cognitive Digital Twin Project
+# Contributing to DT4LC
 
-Thank you for your interest in contributing to the Cognitive Digital Twin project. This document outlines the process for contributing to this research project.
-
-## Important Notice
-
-Please note that this project is released with a [Research Use License](LICENSE), which restricts modifications without explicit permission. However, we welcome suggestions, bug reports, and collaboration proposals.
+Thank you for your interest in contributing to DT4LC. This project is licensed under [AGPL-3.0](LICENSE), and we welcome contributions from the community.
 
 ## How to Contribute
 
-### Bug Reports and Feature Suggestions
+### Reporting Bugs
 
-If you encounter bugs or have suggestions for improvements:
+Open a [GitHub issue](https://github.com/IPT-MMDA/DT4LC-project/issues) with:
 
-1. Check if the issue has already been reported in the issue tracker
-2. If not, create a new issue with a descriptive title and detailed information:
-   - Steps to reproduce the bug
-   - Expected behavior
-   - Actual behavior
-   - Screenshots if applicable
-   - Any relevant system information
+- Steps to reproduce the problem
+- Expected vs actual behavior
+- System information (OS, Python version, Docker version if applicable)
 
-### Collaboration Proposals
+### Suggesting Features
 
-If you'd like to collaborate on research involving this software:
+Open a GitHub issue describing the feature, its use case, and how it fits the project.
 
-1. Contact the project maintainers directly
-2. Provide information about your research goals and how this project aligns with them
-3. Describe your proposed contributions or extensions
+### Submitting Code
+
+1. Fork the repository and create a branch from `dev`
+2. Make your changes following the code style below
+3. Add or update tests if applicable
+4. Open a pull request targeting `dev` (not `master`)
+
+Pull requests are reviewed by maintainers before merging.
+
+## Development Setup
+
+### Backend
+
+```bash
+git clone https://github.com/IPT-MMDA/DT4LC-project.git
+cd DT4LC-project
+cp .env.example .env        # configure LLM API keys
+uv sync --extra dev --extra server
+
+# Run backend
+uv run uvicorn server.app:app --reload --port 8000
+
+# Run tests
+uv run pytest tests/ -v
+
+# Lint, format, type check
+uv run ruff check .
+uv run ruff format .
+uv run mypy dta server
+```
+
+### Frontend
+
+```bash
+cd cognitive_ui
+npm install
+npm run dev                 # starts on http://localhost:5173
+```
+
+### Docker (full stack)
+
+```bash
+cp .env.example .env
+docker compose up -d        # backend :8000 + frontend :80
+```
+
+## Code Style
+
+- Python: [ruff](https://docs.astral.sh/ruff/) for linting/formatting, line length 119
+- Type annotations: [mypy](https://mypy-lang.org/) strict mode
+- Frontend: ESLint with TypeScript
+
+## Adding New Algorithms
+
+1. Create `dta/dti/algorithms/your_algo.py` with a `run()` function
+2. Register in `dta/registry.yaml` with inputs, outputs, and keywords
+3. Add tests in `tests/`
+
+See the [README](README.md#adding-new-algorithms) for detailed instructions.
+
+## Language
+
+The primary language for documentation and code is English. Internal communication (issues, PR discussions between team members) may occasionally be in Ukrainian.
 
 ### Pre-commit Setup
 
@@ -59,32 +111,4 @@ Hooks included:
 
 ## Code of Conduct
 
-### Our Pledge
-
-In the interest of fostering an open and welcoming environment, we as contributors and maintainers pledge to make participation in our project and our community a harassment-free experience for everyone, regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
-
-### Our Standards
-
-Examples of behavior that contributes to creating a positive environment include:
-
-- Using welcoming and inclusive language
-- Being respectful of differing viewpoints and experiences
-- Gracefully accepting constructive criticism
-- Focusing on what is best for the research community
-- Showing empathy towards other community members
-
-Examples of unacceptable behavior include:
-
-- The use of sexualized language or imagery and unwelcome sexual attention or advances
-- Trolling, insulting/derogatory comments, and personal or political attacks
-- Public or private harassment
-- Publishing others' private information without explicit permission
-- Other conduct which could reasonably be considered inappropriate in a professional setting
-
-### Attribution
-
-This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org/), version 2.1, available at https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
-
-## Contact
-
-For questions about contributing, please contact the project maintainers.
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it. Report unacceptable behavior to <chernyatevich.a@gmail.com>.
