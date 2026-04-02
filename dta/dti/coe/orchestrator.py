@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Any
 
 from dta.dti.registry import load_registry
@@ -86,6 +87,8 @@ def _inject_file_bindings(candidate: Any, attachments: list) -> None:
         # Single file input
         if step.uses == "input/file":
             if attachments[attachment_index].path:
+                if not Path(attachments[attachment_index].path).exists():
+                    logger.warning(f"Attachment file not found: {attachments[attachment_index].path}")
                 step.binds["RasterPath"] = attachments[attachment_index].path
                 logger.info(f"Injected RasterPath: {attachments[attachment_index].path}")
                 attachment_index += 1
@@ -95,6 +98,8 @@ def _inject_file_bindings(candidate: Any, attachments: list) -> None:
         # Before file for change detection
         elif step.uses == "input/file-before":
             if attachments[attachment_index].path:
+                if not Path(attachments[attachment_index].path).exists():
+                    logger.warning(f"Attachment file not found: {attachments[attachment_index].path}")
                 step.binds["RasterPathBefore"] = attachments[attachment_index].path
                 logger.info(f"Injected RasterPathBefore: {attachments[attachment_index].path}")
                 attachment_index += 1
@@ -104,6 +109,8 @@ def _inject_file_bindings(candidate: Any, attachments: list) -> None:
         # After file for change detection
         elif step.uses == "input/file-after":
             if attachment_index < len(attachments) and attachments[attachment_index].path:
+                if not Path(attachments[attachment_index].path).exists():
+                    logger.warning(f"Attachment file not found: {attachments[attachment_index].path}")
                 step.binds["RasterPathAfter"] = attachments[attachment_index].path
                 logger.info(f"Injected RasterPathAfter: {attachments[attachment_index].path}")
                 attachment_index += 1
