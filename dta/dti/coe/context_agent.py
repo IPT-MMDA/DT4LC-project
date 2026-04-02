@@ -1,4 +1,5 @@
 import io
+import logging
 from typing import Any
 
 import numpy as np
@@ -6,6 +7,8 @@ import rasterio
 
 from dta.dti.coe.llm import LLMMessage, get_llm_router
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
+
+logger = logging.getLogger(__name__)
 
 SYS = (
     "You are a Context Understanding Agent for a geospatial Digital Twin. "
@@ -126,10 +129,14 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
     import json
     import re
 
+    fallback = {"goal": req.prompt, "desired_outputs": [], "required_inputs": [], "hints": {"keywords": []}}
     m = re.search(r"\{.*\}", response.text, re.S)
-    data = (
-        json.loads(m.group(0))
-        if m
-        else {"goal": req.prompt, "desired_outputs": [], "required_inputs": [], "hints": {"keywords": []}}
-    )
+    if m:
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            logger.warning("Context agent returned malformed JSON, using fallback")
+            data = fallback
+    else:
+        data = fallback
     return ContextUnderstanding(**data)
