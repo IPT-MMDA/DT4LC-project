@@ -65,6 +65,13 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
       return;
     }
 
+    // Validate file size (200 MB limit, must match server MAX_UPLOAD_SIZE)
+    const MAX_FILE_SIZE = 200 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      alert('File is too large. Maximum size is 200 MB.');
+      return;
+    }
+
     try {
       const result = await uploadFile.mutateAsync(file);
 
