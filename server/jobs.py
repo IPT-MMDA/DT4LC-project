@@ -212,9 +212,9 @@ class JobQueue:
 
         async with self._lock:
             self._jobs[job_id] = job
+            # Add to queue inside lock so workers can't see job_id before job is registered
+            await self._queue.put(job_id)
 
-        # Add to queue
-        await self._queue.put(job_id)
         logger.info(f"Submitted job {job_id}: {prompt}")
 
         return job_id
