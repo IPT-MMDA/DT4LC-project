@@ -640,6 +640,7 @@ class ModelManager:
 
 # Global singleton instance
 _manager: ModelManager | None = None
+_manager_lock = threading.Lock()
 
 
 def get_model_manager() -> ModelManager:
@@ -650,7 +651,9 @@ def get_model_manager() -> ModelManager:
     """
     global _manager
     if _manager is None:
-        _manager = ModelManager()
+        with _manager_lock:
+            if _manager is None:
+                _manager = ModelManager()
     return _manager
 
 

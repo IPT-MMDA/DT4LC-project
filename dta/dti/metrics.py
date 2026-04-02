@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+import threading
 import time
 
 
@@ -200,6 +201,7 @@ class MetricsCollector:
 
 # Global metrics collector
 _metrics_collector: MetricsCollector | None = None
+_metrics_collector_lock = threading.Lock()
 
 
 def get_metrics_collector() -> MetricsCollector:
@@ -210,5 +212,7 @@ def get_metrics_collector() -> MetricsCollector:
     """
     global _metrics_collector
     if _metrics_collector is None:
-        _metrics_collector = MetricsCollector()
+        with _metrics_collector_lock:
+            if _metrics_collector is None:
+                _metrics_collector = MetricsCollector()
     return _metrics_collector
