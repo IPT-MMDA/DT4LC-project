@@ -78,7 +78,10 @@ class OllamaProvider(BaseLLMProvider):
         # Convert messages to Ollama format
         ollama_messages = []
         for msg in messages:
-            ollama_messages.append({"role": msg.role, "content": msg.content})
+            msg_dict: dict[str, Any] = {"role": msg.role, "content": msg.content}
+            if msg.images:
+                msg_dict["images"] = msg.images
+            ollama_messages.append(msg_dict)
 
         payload = {
             "model": self.model,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 from typing import Any
 
@@ -83,7 +84,10 @@ class GeminiProvider(BaseLLMProvider):
                 # System messages prepended as text
                 contents.insert(0, msg.content)
             elif msg.role == "user":
-                # Note: Image inputs not currently used in pipeline context
+                if msg.images:
+                    for b64_str in msg.images:
+                        raw = base64.b64decode(b64_str)
+                        contents.append(types.Part.from_bytes(data=raw, mime_type="image/png"))
                 contents.append(msg.content)
             elif msg.role == "assistant":
                 # Gemini doesn't use assistant messages in the same way
