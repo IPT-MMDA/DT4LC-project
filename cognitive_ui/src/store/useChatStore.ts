@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ChatMessage, ChatSession, JobResultData, Job, ContextItem } from '../types';
+import { getGeoTIFFOutputsFromJob } from '../utils/jobGeoTIFF';
 
 // Context management settings
 const MAX_CONTEXT_TOKENS = 4000;
@@ -253,6 +254,7 @@ export const useChatStore = create<ChatStore>()(
             timestamp: new Date().toISOString(),
             // Store result data for rendering (includes visualizations)
             resultData: resultData,
+            viewOnMapLayers: getGeoTIFFOutputsFromJob(job),
           };
           const newMessages = [...state.messages, message];
           const newTokenCount = newMessages.reduce(

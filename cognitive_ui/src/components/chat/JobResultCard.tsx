@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
   Clock,
@@ -16,11 +16,15 @@ import {
 } from 'lucide-react';
 import type { Job, JobResultData } from '../../types';
 import { useCancelJob } from '../../api/hooks/useJobs';
+import { useAppStore } from '../../store/useAppStore';
+import { getArtifactsFromJobResult, getGeoTIFFOutputsFromJob, type GeoTIFFOutput } from '../../utils/jobGeoTIFF';
 
 interface JobResultCardProps {
   job: Job;
   resultData?: JobResultData;
   compact?: boolean;
+  /** From chat store when `job.result` is not available — avoids re-deriving paths */
+  viewOnMapLayers?: GeoTIFFOutput[];
 }
 
 // Helper to parse job result into structured data
@@ -36,7 +40,7 @@ export function parseJobResult(job: Job): JobResultData | undefined {
   }
 
   const execution = job.result.execution;
-  const artifacts = execution?.artifacts || {};
+  const artifacts = getArtifactsFromJobResult(job.result) ?? (execution?.artifacts as Record<string, unknown> | undefined) ?? {};
   const resultData: JobResultData = {};
 
   // AI Summary
@@ -340,12 +344,41 @@ function ResultTypeIcon({ type }: { type: string }) {
   return <Icon className="w-4 h-4" />;
 }
 
-export function JobResultCard({ job, resultData, compact = false }: JobResultCardProps) {
+export function JobResultCard({
+  job,
+  resultData,
+  compact = false,
+  viewOnMapLayers: mapLayersProp,
+}: JobResultCardProps) {
   const isComplete = job.status === 'completed';
   const isFailed = job.status === 'failed';
   const isRunning = job.status === 'running';
   const isPending = job.status === 'pending';
   const canCancel = isRunning || isPending;
+
+  const navigate = useNavigate();
+  const addLayer = useAppStore((state) => state.addLayer);
+  const mapLayers = useAppStore((state) => state.mapLayers);
+  const geoTIFFOutputs =
+    mapLayersProp && mapLayersProp.length > 0 ? mapLayersProp : getGeoTIFFOutputsFromJob(job);
+  const hasGeoTIFFOutput = geoTIFFOutputs.length > 0;
+
+  const handleViewOnMap = () => {
+    geoTIFFOutputs.forEach(({ path, label, layerId }) => {
+      const exists = mapLayers.find((l) => l.id === layerId);
+      if (!exists) {
+        addLayer({
+          id: layerId,
+          name: label,
+          type: 'raster',
+          visible: true,
+          opacity: 0.7,
+          url: path,
+        });
+      }
+    });
+    navigate('/map');
+  };
 
   // Cancel job mutation
   const cancelJob = useCancelJob();
@@ -380,12 +413,25 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
             </span>
             <StatusBadge status={job.status} />
           </div>
-          <Link
-            to={`/jobs/${job.id}`}
-            className="text-primary-500 hover:text-primary-600 dark:hover:text-primary-400"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </Link>
+          <div className="flex items-center gap-1">
+            {hasGeoTIFFOutput && (
+              <button
+                onClick={handleViewOnMap}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-primary-600 dark:text-primary-400
+                         bg-primary-50 dark:bg-primary-950 rounded hover:bg-primary-100 dark:hover:bg-primary-900"
+                title="View on Map"
+              >
+                <Map className="w-3.5 h-3.5" />
+                View on Map
+              </button>
+            )}
+            <Link
+              to={`/jobs/${job.id}`}
+              className="text-primary-500 hover:text-primary-600 dark:hover:text-primary-400"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
 
         {isRunning && (
@@ -452,7 +498,16 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <StatusBadge status={job.status} />
+            {hasGeoTIFFOutput && (
+              <button
+                onClick={handleViewOnMap}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-primary-600 dark:text-primary-400
+                         bg-primary-50 dark:bg-primary-950 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900"
+              >
+                <Map className="w-4 h-4" />
+                View on Map
+              </button>
+            )}
             <Link
               to={`/jobs/${job.id}`}
               className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400
