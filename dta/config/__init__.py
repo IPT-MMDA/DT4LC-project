@@ -7,6 +7,7 @@ __all__ = [
     "TEMP_PATH",
     "MODELS_PATH",
     "UPLOADS_PATH",
+    "JOBS_DB_PATH",
 ]
 
 import os
@@ -40,6 +41,10 @@ MODELS_PATH.mkdir(parents=True, exist_ok=True)
 # Can be overridden via DT4LC_UPLOADS_PATH env var for Docker volumes
 UPLOADS_PATH = Path(os.environ.get("DT4LC_UPLOADS_PATH", str(CACHE_PATH / "uploads")))
 UPLOADS_PATH.mkdir(parents=True, exist_ok=True)
+
+# Job storage database - resources/.cache/jobs.db
+# Can be overridden via DT4LC_JOBS_DB env var for Docker volumes
+JOBS_DB_PATH = Path(os.environ.get("DT4LC_JOBS_DB", str(CACHE_PATH / "jobs.db")))
 
 # Deprecated: Keep for backwards compatibility but point to new location
 THIRD_PARTY_MODELS_PATH = MODELS_PATH

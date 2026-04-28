@@ -54,7 +54,7 @@ async def get_job_status(job_id: str) -> JSONResponse:
 
         if not job:
             # Log available jobs for debugging
-            available_jobs = list(queue._jobs.keys())
+            available_jobs = await queue.get_job_ids()
             logger.warning(f"Job {job_id} not found. Available jobs: {available_jobs}")
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
@@ -108,7 +108,7 @@ async def list_jobs(
                 ) from None
 
         jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset)
-        total = len(queue._jobs)
+        total = await queue.get_total_count()
 
         return JSONResponse(
             {
