@@ -36,7 +36,8 @@ def load_llm_config(config_path: Path | str | None = None) -> dict[str, Any]:
         return get_default_config()
 
     with config_path.open() as f:
-        return yaml.safe_load(f)
+        loaded: dict[str, Any] = yaml.safe_load(f)
+        return loaded
 
 
 def _is_provider_enabled(provider: str) -> bool:

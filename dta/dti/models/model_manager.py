@@ -559,8 +559,8 @@ class ModelManager:
                 if result.returncode != 0:
                     raise RuntimeError(f"Failed to install {pkg}: {result.stderr}")
                 logger.info(f"Successfully installed {pkg}")
-            except subprocess.TimeoutExpired:
-                raise RuntimeError(f"Timeout installing {pkg}")
+            except subprocess.TimeoutExpired as e:
+                raise RuntimeError(f"Timeout installing {pkg}") from e
 
     def _get_gdal_package_spec(self) -> str | None:
         """Get GDAL pip package spec matching system libgdal version.

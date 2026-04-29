@@ -233,7 +233,7 @@ def ndvi_change(
 
 
 # Convenience function for registry integration
-def run(RasterPath: str) -> dict[str, Any]:
+def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key
     """Registry-compatible NDVI calculation.
 
     Args:

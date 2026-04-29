@@ -66,7 +66,7 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
 
 
-def _inject_file_bindings(candidate: Any, attachments: list) -> None:
+def _inject_file_bindings(candidate: Any, attachments: list[Any]) -> None:
     """Inject file paths from attachments into input step bindings.
 
     Handles multiple attachment scenarios:

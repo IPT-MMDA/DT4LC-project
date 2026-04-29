@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from dta.dti.coe.llm import LLMMessage, LLMRouter, get_llm_router
 
 if TYPE_CHECKING:
-    from dta.dti.coe.context_agent import ContextUnderstanding
     from dta.dti.coe.registry import Registry
-    from dta.dti.executor import ExecutionPlan, PlanStep
+    from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ def format_registry_for_llm(reg: Registry) -> str:
     lines = ["# Available Pipeline Components\n"]
 
     # Group by kind, excluding hosted models (those with integration field)
-    by_kind: dict[str, list] = {}
+    by_kind: dict[str, list[Any]] = {}
     for item in reg.instances:
         # Skip hosted models - they can't be executed locally
         if item.integration is not None:
@@ -80,7 +79,7 @@ def plan_with_llm(
     Raises:
         Exception: If LLM fails or plan is invalid
     """
-    from dta.dti.executor import ExecutionPlan, PlanStep
+    from dta.dti.schemas import ExecutionPlan, PlanStep
 
     if router is None:
         router = get_llm_router()
@@ -202,7 +201,7 @@ Generate a valid pipeline plan as JSON."""
         raise Exception(f"LLM planner failed: {e}") from e
 
 
-def _parse_plan_json(text: str) -> dict:
+def _parse_plan_json(text: str) -> dict[str, Any]:
     """Parse JSON plan from LLM response.
 
     Handles markdown code blocks and extracts JSON.
@@ -232,7 +231,7 @@ def _parse_plan_json(text: str) -> dict:
         text = "\n".join(json_lines)
 
     try:
-        data = json.loads(text)
+        data: dict[str, Any] = json.loads(text)
 
         # Validate structure
         if "steps" not in data:

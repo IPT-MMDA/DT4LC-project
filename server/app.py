@@ -3,6 +3,7 @@
 Creates the app, configures middleware, and registers all route modules.
 """
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import os
 
@@ -10,25 +11,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from .logging_config import configure_logging
+from .logging_config import configure_logging  # noqa: E402  # must run after load_dotenv
 
 configure_logging()
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+# Imports below must follow load_dotenv() and configure_logging() so submodules see the
+# populated environment and root logger config when initialised at import time.
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from .jobs import get_job_queue
-from .model_routes import router as model_router
-from .routes.chat import router as chat_router
-from .routes.files import router as files_router
-from .routes.gee import router as gee_router
-from .routes.health import router as health_router
-from .routes.jobs import router as jobs_router
-from .routes.tiles import router as tiles_router
+from .jobs import get_job_queue  # noqa: E402
+from .model_routes import router as model_router  # noqa: E402
+from .routes.chat import router as chat_router  # noqa: E402
+from .routes.files import router as files_router  # noqa: E402
+from .routes.gee import router as gee_router  # noqa: E402
+from .routes.health import router as health_router  # noqa: E402
+from .routes.jobs import router as jobs_router  # noqa: E402
+from .routes.tiles import router as tiles_router  # noqa: E402
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     queue = get_job_queue()
     await queue.start()
     try:

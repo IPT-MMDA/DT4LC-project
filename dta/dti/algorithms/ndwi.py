@@ -97,7 +97,7 @@ def _create_water_mask_visualization(
 
     fig, ax = plt.subplots(figsize=(10, 8))
 
-    im = ax.imshow(water_mask.astype(float), cmap=cmap, vmin=0, vmax=1)
+    ax.imshow(water_mask.astype(float), cmap=cmap, vmin=0, vmax=1)
 
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
@@ -235,7 +235,7 @@ def calculate_ndwi(raster_path: str) -> dict[str, Any]:
         }
 
 
-def run(RasterPath: str) -> dict[str, Any]:
+def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key
     """Registry-compatible NDWI calculation.
 
     Args:

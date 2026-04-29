@@ -70,7 +70,7 @@ class ModelNotInstalledError(ExecutionError):
             f"Model '{model_name}' ({size_mb} MB) is required but not installed. Please download it first."
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dict for JSON serialization."""
         return {
             "error": "model_not_installed",
@@ -218,6 +218,8 @@ class PipelineExecutor:
         # Check if this step requires an ML model
         self._check_model_availability(step, item)
 
+        if item.runner is None:
+            raise ExecutionError(f"Registry item {item.id} has no runner configured")
         runner_type = item.runner.type
 
         if runner_type == "passthrough":
@@ -302,6 +304,7 @@ class PipelineExecutor:
         Raises:
             ExecutionError: If entrypoint not found or execution fails
         """
+        assert item.runner is not None  # checked by _execute_step
         if not item.runner.entrypoint:
             raise ExecutionError(f"Python runner {item.id} missing entrypoint")
 
@@ -356,7 +359,7 @@ class PipelineExecutor:
             raise ExecutionError(f"Entrypoint not found: {entrypoint}")
 
         # Set environment variables from runner config
-        old_env = {}
+        old_env: dict[str, str | None] = {}
         for key, value in item.runner.env.items():
             old_env[key] = os.environ.get(key)
             resolved = self._resolve_variables(value, var_context)
@@ -418,11 +421,11 @@ class PipelineExecutor:
 
         finally:
             # Restore environment
-            for key, value in old_env.items():
-                if value is None:
-                    os.environ.pop(key, None)
+            for env_key, env_value in old_env.items():
+                if env_value is None:
+                    os.environ.pop(env_key, None)
                 else:
-                    os.environ[key] = value
+                    os.environ[env_key] = env_value
 
             # Remove model directory from sys.path
             if model_dir_added and model_path:
@@ -443,13 +446,13 @@ class PipelineExecutor:
         """
         import re
 
-        def replace(match: re.Match) -> str:
+        def replace(match: re.Match[str]) -> str:
             var_name = match.group(1)
             if var_name in context and context[var_name] is not None:
                 return str(context[var_name])
             return match.group(0)  # Keep original if not found
 
-        return re.sub(r"\$\{(\w+)\}", replace, value)
+        return str(re.sub(r"\$\{(\w+)\}", replace, value))
 
     def _resolve_args_map(self, args_map: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         """Resolve variables in args_map recursively.
@@ -668,10 +671,11 @@ class PipelineExecutor:
         """
         # Collect inputs
         # If agent has no specific inputs, pass all available artifacts
+        inputs: dict[str, Any]
         if not item.inputs:
             inputs = dict(self.artifacts)  # Pass all artifacts to agent
         else:
-            inputs: dict[str, Any] = {}
+            inputs = {}
             for input_type in item.inputs:
                 if input_type in self.artifacts:
                     inputs[input_type] = self.artifacts[input_type]
@@ -859,7 +863,7 @@ class PipelineExecutor:
 
         if match:
             try:
-                request = json.loads(match.group(1))
+                request: dict[str, Any] = json.loads(match.group(1))
                 if "tool" in request:
                     return request
             except json.JSONDecodeError:

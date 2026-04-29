@@ -27,7 +27,12 @@ LANDSAT_BAND_MAPPING = {
 
 
 def fetch_landsat_composite(
-    bbox: list[float], start_date: str, end_date: str, bands: list[str] | None = None, cloud_cover_max: float = 20.0
+    bbox: list[float],
+    start_date: str,
+    end_date: str,
+    bands: list[str] | None = None,
+    cloud_cover_max: float = 20.0,
+    return_image: bool = False,
 ) -> dict[str, Any]:
     """Fetch Landsat 8/9 composite imagery for a bounding box.
 
@@ -69,7 +74,7 @@ def fetch_landsat_composite(
 
         # Apply scaling factors for Landsat Collection 2 Surface Reflectance
         # Scale factor: 0.0000275, Offset: -0.2
-        def apply_landsat_scaling(image):
+        def apply_landsat_scaling(image: Any) -> Any:
             optical_bands = image.select("SR_B.").multiply(0.0000275).add(-0.2)
             return image.addBands(optical_bands, None, True)
 
@@ -97,7 +102,7 @@ def fetch_landsat_composite(
         map_id = selected.getMapId(vis_params)
         tile_url = map_id["tile_fetcher"].url_format
 
-        return format_tile_response(
+        result = format_tile_response(
             tile_url,
             {
                 "image_count": count,
@@ -111,6 +116,9 @@ def fetch_landsat_composite(
                 "dataset": "Landsat 8/9",
             },
         )
+        if return_image:
+            result["image"] = selected
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching Landsat data: {e}")
@@ -118,7 +126,12 @@ def fetch_landsat_composite(
 
 
 def fetch_landsat_indices(
-    bbox: list[float], start_date: str, end_date: str, index_type: str = "ndvi", cloud_cover_max: float = 20.0
+    bbox: list[float],
+    start_date: str,
+    end_date: str,
+    index_type: str = "ndvi",
+    cloud_cover_max: float = 20.0,
+    return_image: bool = False,
 ) -> dict[str, Any]:
     """Fetch Landsat 8/9 spectral index (NDVI, NDWI, NDSI) for a bounding box.
 
@@ -152,14 +165,14 @@ def fetch_landsat_indices(
             return format_error_response("No images found matching the specified criteria")
 
         # Apply scaling factors
-        def apply_landsat_scaling(image):
+        def apply_landsat_scaling(image: Any) -> Any:
             optical_bands = image.select("SR_B.").multiply(0.0000275).add(-0.2)
             return image.addBands(optical_bands, None, True)
 
         collection = collection.map(apply_landsat_scaling)
 
         # Calculate spectral index
-        def calculate_landsat_index(image):
+        def calculate_landsat_index(image: Any) -> Any:
             return calculate_index(image, index_type, LANDSAT_BAND_MAPPING)
 
         # Apply index calculation and create median composite
@@ -173,7 +186,7 @@ def fetch_landsat_indices(
         map_id = index_composite.getMapId(vis_params)
         tile_url = map_id["tile_fetcher"].url_format
 
-        return format_tile_response(
+        result = format_tile_response(
             tile_url,
             {
                 "index_type": index_type,
@@ -187,6 +200,9 @@ def fetch_landsat_indices(
                 "dataset": "Landsat 8/9",
             },
         )
+        if return_image:
+            result["image"] = index_composite
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching Landsat index: {e}")

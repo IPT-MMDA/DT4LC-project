@@ -15,7 +15,7 @@ from __future__ import annotations
 import base64
 import io
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import rasterio
@@ -37,7 +37,7 @@ except ImportError:
 IndexType = Literal["ndvi", "ndsi", "ndwi", "evi"]
 
 # Index-specific configurations
-INDEX_CONFIG = {
+INDEX_CONFIG: dict[str, dict[str, Any]] = {
     "ndvi": {
         "name": "NDVI",
         "full_name": "Normalized Difference Vegetation Index",
@@ -137,7 +137,7 @@ INDEX_CONFIG = {
 }
 
 
-def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int]:
+def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int | None]:
     """Get band indices for different sensors.
 
     Args:
@@ -538,9 +538,9 @@ def calculate_change(
 
 
 def run(
-    RasterPathBefore: str,
-    RasterPathAfter: str,
-    IndexType: str = "ndvi",
+    RasterPathBefore: str,  # noqa: N803  # CamelCase mirrors registry input key
+    RasterPathAfter: str,  # noqa: N803  # CamelCase mirrors registry input key
+    IndexType: str = "ndvi",  # noqa: N803  # CamelCase mirrors registry input key
 ) -> dict[str, Any]:
     """Registry-compatible change detection.
 
@@ -553,8 +553,9 @@ def run(
         Change detection result dictionary
     """
     # Normalize index type
-    index_type = IndexType.lower() if IndexType else "ndvi"
-    if index_type not in INDEX_CONFIG:
-        index_type = "ndvi"  # Default fallback
+    index_type_str = IndexType.lower() if IndexType else "ndvi"
+    if index_type_str not in INDEX_CONFIG:
+        index_type_str = "ndvi"  # Default fallback
+    index_type: Literal["ndvi", "ndsi", "ndwi", "evi"] = cast(Literal["ndvi", "ndsi", "ndwi", "evi"], index_type_str)
 
     return calculate_change(RasterPathBefore, RasterPathAfter, index_type)

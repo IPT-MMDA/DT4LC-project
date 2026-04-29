@@ -196,7 +196,7 @@ def fetch_sentinel2_indices(
             return {"ok": False, "error": "No images found matching the specified criteria", "image_count": 0}
 
         # Calculate spectral index based on type
-        def calculate_index(image):
+        def calculate_index(image: Any) -> Any:
             if index_type == "ndvi":
                 # NDVI = (NIR - Red) / (NIR + Red)
                 return image.normalizedDifference(["B8", "B4"]).rename("index")

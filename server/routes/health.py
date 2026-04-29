@@ -101,7 +101,7 @@ async def get_metrics() -> JSONResponse:
                 "total_executions": stats.total_executions,
                 "successful_executions": stats.successful_executions,
                 "failed_executions": stats.failed_executions,
-                "average_duration_seconds": stats.average_duration_seconds,
+                "average_duration_seconds": stats.avg_execution_time,
                 "total_llm_calls": stats.total_llm_calls,
                 "total_llm_tokens": stats.total_llm_tokens,
                 "total_llm_cost": stats.total_llm_cost,

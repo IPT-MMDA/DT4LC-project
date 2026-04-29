@@ -177,7 +177,7 @@ async def list_files() -> JSONResponse:
                     continue
 
         # Sort by modification time (newest first)
-        files.sort(key=lambda x: x["modified"], reverse=True)
+        files.sort(key=lambda x: float(x["modified"]), reverse=True)  # type: ignore[arg-type]
 
         num_uploads = len([f for f in files if f["source"] == "upload"])
         num_exports = len([f for f in files if f["source"] == "export"])

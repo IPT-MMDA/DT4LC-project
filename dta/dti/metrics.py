@@ -66,8 +66,8 @@ class MetricsCollector:
         """Initialize metrics collector."""
         self.executions: dict[str, ExecutionMetrics] = {}
         self.llm_calls: list[LLMMetrics] = []
-        self._execution_counts = defaultdict(int)
-        self._llm_counts = defaultdict(int)
+        self._execution_counts: defaultdict[str, int] = defaultdict(int)
+        self._llm_counts: defaultdict[str, int] = defaultdict(int)
 
     def start_execution(self, plan_id: str, steps_total: int) -> None:
         """Record execution start.

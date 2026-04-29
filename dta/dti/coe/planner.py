@@ -117,7 +117,7 @@ def _detect_index_type(ctx: ContextUnderstanding) -> str:
 
     # Check for explicit index type in hints
     if ctx.hints and ctx.hints.get("index_type"):
-        index_type = ctx.hints["index_type"].lower()
+        index_type = str(ctx.hints["index_type"]).lower()
         if index_type in ("ndvi", "ndsi", "ndwi"):
             return index_type
 

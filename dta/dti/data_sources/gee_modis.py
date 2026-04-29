@@ -26,7 +26,12 @@ MODIS_BAND_MAPPING = {
 
 
 def fetch_modis_composite(
-    bbox: list[float], start_date: str, end_date: str, bands: list[str] | None = None, cloud_cover_max: float = 20.0
+    bbox: list[float],
+    start_date: str,
+    end_date: str,
+    bands: list[str] | None = None,
+    cloud_cover_max: float = 20.0,
+    return_image: bool = False,
 ) -> dict[str, Any]:
     """Fetch MODIS composite imagery for a bounding box.
 
@@ -102,7 +107,7 @@ def fetch_modis_composite(
         map_id = selected.getMapId(vis_params)
         tile_url = map_id["tile_fetcher"].url_format
 
-        return format_tile_response(
+        result = format_tile_response(
             tile_url,
             {
                 "image_count": count,
@@ -116,6 +121,9 @@ def fetch_modis_composite(
                 "dataset": "MODIS Terra/Aqua",
             },
         )
+        if return_image:
+            result["image"] = selected
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching MODIS data: {e}")
@@ -123,7 +131,12 @@ def fetch_modis_composite(
 
 
 def fetch_modis_indices(
-    bbox: list[float], start_date: str, end_date: str, index_type: str = "ndvi", cloud_cover_max: float = 20.0
+    bbox: list[float],
+    start_date: str,
+    end_date: str,
+    index_type: str = "ndvi",
+    cloud_cover_max: float = 20.0,
+    return_image: bool = False,
 ) -> dict[str, Any]:
     """Fetch MODIS spectral index (NDVI, NDWI) for a bounding box.
 
@@ -169,7 +182,7 @@ def fetch_modis_indices(
             return format_error_response("No images found matching the specified criteria")
 
         # Calculate spectral index
-        def calculate_modis_index(image):
+        def calculate_modis_index(image: Any) -> Any:
             return calculate_index(image, index_type, MODIS_BAND_MAPPING)
 
         # Apply index calculation and create median composite
@@ -183,7 +196,7 @@ def fetch_modis_indices(
         map_id = index_composite.getMapId(vis_params)
         tile_url = map_id["tile_fetcher"].url_format
 
-        return format_tile_response(
+        result = format_tile_response(
             tile_url,
             {
                 "index_type": index_type,
@@ -197,6 +210,9 @@ def fetch_modis_indices(
                 "dataset": "MODIS Terra/Aqua",
             },
         )
+        if return_image:
+            result["image"] = index_composite
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching MODIS index: {e}")

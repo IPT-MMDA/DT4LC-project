@@ -94,7 +94,7 @@ def bulk_fetch_data(
     dataset_name = dataset_names.get(dataset_id, dataset_id)
 
     # Function mapping for each dataset
-    fetch_functions = {
+    fetch_functions: dict[str, dict[str, Any]] = {
         "sentinel-2": {"composite": fetch_sentinel2_composite, "index": fetch_sentinel2_indices},
         "modis": {"composite": fetch_modis_composite, "index": fetch_modis_indices},
         "landsat-8": {"composite": fetch_landsat_composite, "index": fetch_landsat_indices},

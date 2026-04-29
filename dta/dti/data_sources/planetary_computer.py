@@ -167,12 +167,16 @@ def export_sentinel2_from_mpc(
                 window = window.round_lengths()
 
                 if window.width <= 0 or window.height <= 0:
-                    error_msg = f"Invalid window dimensions for {band_name}: {window.width}x{window.height}. Bbox: {bbox}, Source CRS: {src.crs}"
+                    error_msg = (
+                        f"Invalid window dimensions for {band_name}: {window.width}x{window.height}. "
+                        f"Bbox: {bbox}, Source CRS: {src.crs}"
+                    )
                     logger.error(error_msg)
                     raise ValueError(error_msg)
 
                 logger.info(
-                    f"Window for {band_name}: {window.width}x{window.height} at offset ({window.col_off}, {window.row_off})"
+                    f"Window for {band_name}: {window.width}x{window.height} "
+                    f"at offset ({window.col_off}, {window.row_off})"
                 )
 
                 # Read data for this window
@@ -191,7 +195,8 @@ def export_sentinel2_from_mpc(
                     new_width = int(width * scale_factor)
 
                     logger.info(
-                        f"Resampling {band_name} from {src.res[0]}m to {scale}m: {height}x{width} -> {new_height}x{new_width}"
+                        f"Resampling {band_name} from {src.res[0]}m to {scale}m: "
+                        f"{height}x{width} -> {new_height}x{new_width}"
                     )
 
                     # Create temporary dataset for resampling

@@ -50,7 +50,7 @@ def get_layer_metadata(layer_id: str) -> dict[str, Any] | None:
             return None
 
         with open(metadata_file) as f:
-            metadata = json.load(f)
+            metadata: dict[str, Any] = json.load(f)
         logger.info(f"Retrieved metadata for layer {layer_id}")
         return metadata
     except Exception as e:

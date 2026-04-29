@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/ml-models", tags=["models"])
 
 
-@router.get("")
+@router.get("")  # type: ignore[misc]
 async def list_models() -> JSONResponse:
     """List all available ML models with their current status.
 
@@ -44,7 +44,7 @@ async def list_models() -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to list models: {e}") from e
 
 
-@router.get("/{model_id}")
+@router.get("/{model_id}")  # type: ignore[misc]
 async def get_model(model_id: str) -> JSONResponse:
     """Get detailed information for a specific model.
 
@@ -68,7 +68,7 @@ async def get_model(model_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to get model: {e}") from e
 
 
-@router.post("/{model_id}/download")
+@router.post("/{model_id}/download")  # type: ignore[misc]
 async def start_download(model_id: str) -> JSONResponse:
     """Start downloading a model in the background.
 
@@ -119,7 +119,7 @@ async def start_download(model_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to start download: {e}") from e
 
 
-@router.post("/{model_id}/cancel")
+@router.post("/{model_id}/cancel")  # type: ignore[misc]
 async def cancel_download(model_id: str) -> JSONResponse:
     """Cancel an active download.
 
@@ -159,7 +159,7 @@ async def cancel_download(model_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to cancel download: {e}") from e
 
 
-@router.delete("/{model_id}")
+@router.delete("/{model_id}")  # type: ignore[misc]
 async def delete_model(model_id: str) -> JSONResponse:
     """Delete a downloaded model to free up space.
 

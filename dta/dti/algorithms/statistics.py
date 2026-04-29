@@ -114,7 +114,7 @@ def calculate_statistics(raster_path: str) -> dict[str, Any]:
 
 
 # Registry-compatible wrapper
-def run(RasterPath: str) -> dict[str, Any]:
+def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key
     """Registry-compatible statistics calculation.
 
     Args:
