@@ -49,7 +49,7 @@ affiliations:
     index: 2
   - name: Institute for Environmental Sciences, University of Geneva, Geneva, Switzerland
     index: 3
-date: 2 April 2026
+date: 29 April 2026
 bibliography: paper.bib
 ---
 
@@ -89,7 +89,7 @@ For example, a user request such as "detect changes in Kahovka" is classified as
 
 # Research Impact Statement
 
-DT4LC was developed as part of the DT4LC project (Grant 2023.01/0040) under the Ukrainian-Swiss Joint Research Programme funded by the Swiss National Science Foundation. The framework has been the subject of four peer-reviewed publications spanning the full research lifecycle. The dual-timescale digital twin concept and its positioning relative to existing Earth system DTs (DestinE, NASA ESDT, BioDT) were introduced in [@kussul2026dt4lc_springer]. The complete framework architecture, including modular Digital Twin Instances for vegetation dynamics, land use classification and climate forecasting, was presented in [@kussul2025ai] with pilot validation on post-flood vegetation recovery monitoring and annual forest dynamics assessment across Ukraine and Switzerland. Foundation model integration strategies, including adaptation of Prithvi and physics-informed neural networks, were evaluated in [@kussul2025idaacs]. The LLM-driven multi-agent cognitive interface --- the distinguishing software contribution of this submission --- was presented in [@chernyatevich2026igarss], demonstrating the system's ability to support both rapid anthropogenic impact assessment and long-term environmental monitoring through conversational interaction. The software is actively used by researchers at the National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute" and the University of Geneva.
+DT4LC was developed as part of the DT4LC project (Grant 2023.01/0040) under the Ukrainian-Swiss Joint Research Programme funded by the Swiss National Science Foundation. The framework has been the subject of four peer-reviewed publications spanning the full research lifecycle. The dual-timescale digital twin concept and its positioning relative to existing Earth system DTs (DestinE, NASA ESDT, BioDT) were introduced in [@kussul2026dt4lc_springer]. The complete framework architecture, including modular Digital Twin Instances for vegetation dynamics, land use classification and climate forecasting, was presented in [@kussul2025ai] with pilot validation on post-flood vegetation recovery monitoring and annual forest dynamics assessment across Ukraine and Switzerland. Foundation model integration strategies, including adaptation of Prithvi and physics-informed neural networks, were evaluated in [@kussul2025idaacs]. The LLM-driven multi-agent cognitive interface --- the distinguishing software contribution of this submission --- was presented in [@chernyatevich2026igarss], demonstrating the system's ability to support both rapid anthropogenic impact assessment and long-term environmental monitoring through conversational interaction. The software is actively used by researchers at the National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute" and the University of Geneva, with concrete applications to post-flood vegetation recovery monitoring in the Kahovka region and to annual forest dynamics assessment across Ukraine and Switzerland [@kussul2025ai]; a Sentinel-2 sample of the Kahovka case is bundled with the repository so that reviewers and new users can reproduce the change-detection workflow end-to-end.
 
 # AI Usage Disclosure
 
