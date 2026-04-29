@@ -120,7 +120,7 @@ def calculate_evi(raster_path: str) -> dict[str, Any]:
             nir_band = src.read(4, masked=True).astype(float)
 
         # Calculate EVI: 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
-        denominator = nir_band + 6*red_band - 7.5*blue_band + 1
+        denominator = nir_band + 6 * red_band - 7.5 * blue_band + 1
         evi = np.where(
             denominator != 0,
             (2.5 * (nir_band - red_band)) / denominator,

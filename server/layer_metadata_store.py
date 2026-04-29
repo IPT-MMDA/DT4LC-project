@@ -6,7 +6,6 @@ exported for AI analysis later.
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from dta.config import CACHE_PATH
@@ -50,7 +49,7 @@ def get_layer_metadata(layer_id: str) -> dict[str, Any] | None:
             logger.warning(f"Metadata not found for layer {layer_id}")
             return None
 
-        with open(metadata_file, "r") as f:
+        with open(metadata_file) as f:
             metadata = json.load(f)
         logger.info(f"Retrieved metadata for layer {layer_id}")
         return metadata
@@ -91,7 +90,7 @@ def list_all_layers() -> list[dict[str, Any]]:
         layers = []
         for metadata_file in METADATA_DIR.glob("*.json"):
             try:
-                with open(metadata_file, "r") as f:
+                with open(metadata_file) as f:
                     metadata = json.load(f)
                     layers.append(metadata)
             except Exception as e:

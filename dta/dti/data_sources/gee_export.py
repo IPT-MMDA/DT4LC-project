@@ -5,10 +5,10 @@ that can be used by AI agents for land cover analysis.
 """
 
 import logging
-import time
-import uuid
 from pathlib import Path
+import time
 from typing import Any
+import uuid
 
 import ee
 import requests
@@ -65,10 +65,7 @@ def export_gee_image_to_geotiff(
         # Select specific bands if provided
         export_image = image.select(bands) if bands else image
 
-        logger.info(
-            f"Exporting GEE image to GeoTIFF: {filename}, "
-            f"bands={bands}, scale={scale}m"
-        )
+        logger.info(f"Exporting GEE image to GeoTIFF: {filename}, bands={bands}, scale={scale}m")
 
         # Get download URL
         url = export_image.getDownloadURL(
@@ -165,10 +162,7 @@ def export_large_gee_image(
         # Select specific bands if provided
         export_image = image.select(bands) if bands else image
 
-        logger.info(
-            f"Starting async GEE export task: {filename}, "
-            f"bands={bands}, scale={scale}m"
-        )
+        logger.info(f"Starting async GEE export task: {filename}, bands={bands}, scale={scale}m")
 
         # Start batch export task to Google Drive
         task = ee.batch.Export.image.toDrive(
@@ -239,9 +233,7 @@ def check_export_task_status(task_id: str) -> dict[str, Any]:
         # Add output URL if completed
         if state == "completed":
             # Note: For Drive exports, users must manually download from their Drive
-            result["output_url"] = status.get(
-                "destination_uris", ["Manual download from Google Drive"]
-            )[0]
+            result["output_url"] = status.get("destination_uris", ["Manual download from Google Drive"])[0]
 
         logger.info(f"Task {task_id} status: {state} ({result.get('progress', 0):.1%})")
 
@@ -253,9 +245,7 @@ def check_export_task_status(task_id: str) -> dict[str, Any]:
         return {"status": "error", "error": error_msg}
 
 
-def estimate_export_size(
-    bbox: list[float], scale: int, num_bands: int = 3
-) -> dict[str, Any]:
+def estimate_export_size(bbox: list[float], scale: int, num_bands: int = 3) -> dict[str, Any]:
     """Estimate the export file size to determine if direct download is feasible.
 
     Args:
@@ -291,10 +281,7 @@ def estimate_export_size(
 
     can_use_direct = estimated_mb < 30  # Leave some margin
 
-    logger.info(
-        f"Export size estimate: {width_pixels}x{height_pixels} pixels "
-        f"({estimated_mb:.2f} MB)"
-    )
+    logger.info(f"Export size estimate: {width_pixels}x{height_pixels} pixels ({estimated_mb:.2f} MB)")
 
     return {
         "width_pixels": width_pixels,

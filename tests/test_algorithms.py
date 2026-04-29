@@ -131,6 +131,7 @@ class TestEVIAlgorithm:
 
         assert callable(run)
 
+
 class TestNDSIAlgorithm:
     """Tests for NDSI (snow index) algorithm."""
 

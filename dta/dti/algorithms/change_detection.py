@@ -249,7 +249,7 @@ def _calculate_index_array(
 
         # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         with np.errstate(divide="ignore", invalid="ignore"):
-            denominator = nir_band + 6*red_band - 7.5*blue_band + 1
+            denominator = nir_band + 6 * red_band - 7.5 * blue_band + 1
             index = np.where(denominator != 0, (2.5 * (nir_band - red_band)) / denominator, np.nan)
 
     else:

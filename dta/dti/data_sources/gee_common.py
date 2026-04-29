@@ -1,4 +1,5 @@
 """Common utilities for Google Earth Engine data fetching."""
+
 import logging
 import os
 from pathlib import Path
@@ -31,7 +32,7 @@ def initialize_gee() -> bool:
 
     try:
         # Get project ID from environment (required)
-        project_id = os.getenv('GEE_PROJECT_ID')
+        project_id = os.getenv("GEE_PROJECT_ID")
         if not project_id:
             logger.error(
                 "GEE_PROJECT_ID environment variable not set. "
@@ -41,11 +42,11 @@ def initialize_gee() -> bool:
             return False
 
         # Try service account authentication first
-        service_account_key = os.getenv('GEE_SERVICE_ACCOUNT_KEY')
+        service_account_key = os.getenv("GEE_SERVICE_ACCOUNT_KEY")
         if service_account_key and Path(service_account_key).exists():
             credentials = ee.ServiceAccountCredentials(
                 email=None,  # Will be read from key file
-                key_file=service_account_key
+                key_file=service_account_key,
             )
             ee.Initialize(credentials, project=project_id)
             logger.info(f"GEE initialized with service account (project: {project_id})")
@@ -75,11 +76,7 @@ def create_geometry(bbox: list[float]) -> ee.Geometry:
     return ee.Geometry.Rectangle(bbox)
 
 
-def apply_cloud_filter(
-    collection: ee.ImageCollection,
-    cloud_property: str,
-    max_cloud: float
-) -> ee.ImageCollection:
+def apply_cloud_filter(collection: ee.ImageCollection, cloud_property: str, max_cloud: float) -> ee.ImageCollection:
     """Apply cloud cover filter to image collection.
 
     Args:
@@ -93,11 +90,7 @@ def apply_cloud_filter(
     return collection.filter(ee.Filter.lt(cloud_property, max_cloud))
 
 
-def calculate_index(
-    image: ee.Image,
-    index_type: str,
-    band_mapping: dict[str, str]
-) -> ee.Image:
+def calculate_index(image: ee.Image, index_type: str, band_mapping: dict[str, str]) -> ee.Image:
     """Calculate spectral index from image.
 
     Args:
@@ -109,26 +102,17 @@ def calculate_index(
     Returns:
         Calculated index as single-band image named 'index'
     """
-    if index_type == 'ndvi':
+    if index_type == "ndvi":
         # NDVI = (NIR - Red) / (NIR + Red)
-        return image.normalizedDifference([
-            band_mapping['nir'],
-            band_mapping['red']
-        ]).rename('index')
+        return image.normalizedDifference([band_mapping["nir"], band_mapping["red"]]).rename("index")
 
-    elif index_type == 'ndwi':
+    elif index_type == "ndwi":
         # NDWI = (Green - NIR) / (Green + NIR)
-        return image.normalizedDifference([
-            band_mapping['green'],
-            band_mapping['nir']
-        ]).rename('index')
+        return image.normalizedDifference([band_mapping["green"], band_mapping["nir"]]).rename("index")
 
-    elif index_type == 'ndsi':
+    elif index_type == "ndsi":
         # NDSI = (Green - SWIR) / (Green + SWIR)
-        return image.normalizedDifference([
-            band_mapping['green'],
-            band_mapping['swir']
-        ]).rename('index')
+        return image.normalizedDifference([band_mapping["green"], band_mapping["swir"]]).rename("index")
 
     else:
         raise ValueError(f"Unknown index type: {index_type}")
@@ -143,32 +127,17 @@ def get_index_vis_params(index_type: str) -> dict[str, Any]:
     Returns:
         Dictionary with visualization parameters (min, max, palette)
     """
-    if index_type == 'ndvi':
-        return {
-            'min': -0.2,
-            'max': 0.8,
-            'palette': ['#d73027', '#fee08b', '#d9ef8b', '#66bd63', '#1a9850']
-        }
-    elif index_type == 'ndwi':
-        return {
-            'min': -0.3,
-            'max': 0.3,
-            'palette': ['#f7f7f7', '#c6dbef', '#6baed6', '#2171b5', '#08306b']
-        }
-    elif index_type == 'ndsi':
-        return {
-            'min': -0.2,
-            'max': 0.6,
-            'palette': ['#8c510a', '#d8b365', '#f6e8c3', '#c7eae5', '#5ab4ac', '#01665e']
-        }
+    if index_type == "ndvi":
+        return {"min": -0.2, "max": 0.8, "palette": ["#d73027", "#fee08b", "#d9ef8b", "#66bd63", "#1a9850"]}
+    elif index_type == "ndwi":
+        return {"min": -0.3, "max": 0.3, "palette": ["#f7f7f7", "#c6dbef", "#6baed6", "#2171b5", "#08306b"]}
+    elif index_type == "ndsi":
+        return {"min": -0.2, "max": 0.6, "palette": ["#8c510a", "#d8b365", "#f6e8c3", "#c7eae5", "#5ab4ac", "#01665e"]}
     else:
-        return {'min': -1, 'max': 1}
+        return {"min": -1, "max": 1}
 
 
-def format_tile_response(
-    tile_url: str,
-    metadata: dict[str, Any]
-) -> dict[str, Any]:
+def format_tile_response(tile_url: str, metadata: dict[str, Any]) -> dict[str, Any]:
     """Format standardized tile response.
 
     Args:
@@ -178,11 +147,7 @@ def format_tile_response(
     Returns:
         Standardized response dictionary
     """
-    return {
-        'ok': True,
-        'tile_url': tile_url,
-        **metadata
-    }
+    return {"ok": True, "tile_url": tile_url, **metadata}
 
 
 def format_error_response(error: str) -> dict[str, Any]:
@@ -194,7 +159,4 @@ def format_error_response(error: str) -> dict[str, Any]:
     Returns:
         Error response dictionary
     """
-    return {
-        'ok': False,
-        'error': error
-    }
+    return {"ok": False, "error": error}

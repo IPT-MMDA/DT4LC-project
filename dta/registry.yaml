@@ -76,7 +76,7 @@ instances:
     outputs: [EVIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/evi.py"     
+      entrypoint: "dta/dti/algorithms/evi.py"
 
   - id: algorithms/ndwi
     kind: algorithm

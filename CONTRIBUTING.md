@@ -28,6 +28,35 @@ If you'd like to collaborate on research involving this software:
 2. Provide information about your research goals and how this project aligns with them
 3. Describe your proposed contributions or extensions
 
+### Pre-commit Setup
+
+We use pre-commit hooks to ensure code quality before pushing changes. Make sure all hooks pass before submitting your work.
+
+Install and enable the hooks:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+To run manually on all files:
+
+```bash
+pre-commit run --all-files
+```
+
+Hooks included:
+
+- **ruff** – lints and auto-fixes Python and stub files (`--fix` enabled by default)
+- **ruff-format** – formats Python and stub files
+- **mypy** – static type checking using config from `pyproject.toml`, with stubs for `requests` and `PyYAML`
+- **trailing-whitespace** – removes trailing whitespace
+- **end-of-file-fixer** – ensures files end with a newline
+- **check-yaml** – validates YAML file syntax
+- **check-toml** – validates TOML file syntax
+- **check-merge-conflict** – detects unresolved merge conflict markers
+- **debug-statements** – flags leftover `pdb`, `breakpoint()`, and similar debug calls
+
 ## Code of Conduct
 
 ### Our Pledge
