@@ -52,6 +52,7 @@ server = [
     "google-auth>=2.0.0",
     # LLM agents
     "google-genai>=1.35.0,<2.0.0",
+    "anthropic>=0.40,<1.0",
     # Utils
     "numba>=0.60.0",
     "tqdm>=4.66.0",

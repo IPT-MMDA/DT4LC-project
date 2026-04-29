@@ -145,6 +145,16 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
                 "device": int(device) if device.isdigit() else device,
                 "dtype": dtype,
             }
+    elif provider == "anthropic":
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            models = _get_models_list("ANTHROPIC_MODELS", "claude-opus-4-7")
+            model = _get_next_model("anthropic", models)
+            return {"type": "anthropic", "model": model}
+    elif provider == "mistral":
+        if os.environ.get("MISTRAL_API_KEY"):
+            models = _get_models_list("MISTRAL_MODELS", "mistral-medium-latest")
+            model = _get_next_model("mistral", models)
+            return {"type": "mistral", "model": model}
     return None
 
 
