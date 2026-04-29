@@ -230,6 +230,7 @@ class TestLLMConfig:
         assert router is not None
         assert len(router.providers) > 0
 
+    @pytest.mark.llm
     def test_router_fallback_works(self) -> None:
         """Test that router successfully falls back when primary provider fails."""
         from dta.dti.coe.llm.config import create_router_from_env
@@ -244,6 +245,7 @@ class TestLLMConfig:
         assert response.provider in ["gemini", "ollama"]
 
 
+@pytest.mark.llm
 class TestOllamaContextAnalysis:
     """Tests for Ollama context analysis integration."""
 

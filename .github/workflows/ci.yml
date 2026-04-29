@@ -78,7 +78,7 @@ jobs:
         run: uv sync --extra dev --extra server
 
       - name: Run tests
-        run: uv run pytest tests/ -v --cov=dta --cov=server --cov-report=xml -m "not slow"
+        run: uv run pytest tests/ -v --cov=dta --cov=server --cov-report=xml -m "not slow and not llm"
         env:
           GEMINI_API_KEY: ""
           GROQ_API_KEY: ""

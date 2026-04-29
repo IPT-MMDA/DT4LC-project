@@ -77,6 +77,7 @@ class TestJobSubmission:
 class TestJobProcessing:
     """Tests for job processing."""
 
+    @pytest.mark.llm
     @pytest.mark.asyncio
     async def test_job_processing(self) -> None:
         """Test job processing through queue."""
@@ -158,8 +159,8 @@ class TestJobListing:
         await queue.start()
 
         try:
-            job1_id = await queue.submit_job("job 1")
-            job2_id = await queue.submit_job("job 2")
+            await queue.submit_job("job 1")
+            await queue.submit_job("job 2")
             job3_id = await queue.submit_job("job 3")
 
             jobs = await queue.list_jobs(limit=10)

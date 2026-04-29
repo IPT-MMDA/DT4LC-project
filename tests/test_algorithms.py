@@ -322,7 +322,7 @@ class TestChangeDetectionAlgorithm:
         from dta.dti.algorithms.change_detection import calculate_change
 
         data_dir = ROOT_DIR / "resources/kahovka_data"
-        tif_files = sorted(list(data_dir.glob("*.tif")))
+        tif_files = sorted(data_dir.glob("*.tif"))
 
         if len(tif_files) < 2:
             pytest.skip("Need at least 2 GeoTIFF files for change detection")
