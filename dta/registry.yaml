@@ -59,7 +59,7 @@ instances:
     outputs: [NDVIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/ndvi.py"
+      entrypoint: "dta.dti.algorithms.ndvi"
     triggers:
       keywords: [ndvi, vegetation, "vegetation health", "vegetation index", greenness]
       action_phrases:
@@ -102,7 +102,7 @@ instances:
     outputs: [EVIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/evi.py"
+      entrypoint: "dta.dti.algorithms.evi"
     triggers:
       keywords: [evi, "enhanced vegetation index", vegetation, greenness]
       action_phrases:
@@ -144,7 +144,7 @@ instances:
     outputs: [NDWIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/ndwi.py"
+      entrypoint: "dta.dti.algorithms.ndwi"
     triggers:
       keywords: [ndwi, water, "water index", "water body", waterbody, lake, river, flood]
       action_phrases:
@@ -188,7 +188,7 @@ instances:
     outputs: [NDSIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/ndsi.py"
+      entrypoint: "dta.dti.algorithms.ndsi"
     triggers:
       keywords: [ndsi, snow, ice, glacier, frozen, "snow index", "ice cover"]
       action_phrases:
@@ -236,7 +236,7 @@ instances:
     outputs: [SnowClassification]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/snow_classifier.py"
+      entrypoint: "dta.dti.algorithms.snow_classifier"
     triggers:
       keywords: ["snow classifier", "snow classification", "robust snow", "multi-criteria snow"]
       action_phrases:
@@ -271,7 +271,7 @@ instances:
     outputs: [Statistics]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/statistics.py"
+      entrypoint: "dta.dti.algorithms.statistics"
     triggers:
       keywords: [statistics, stats, distribution, histogram, percentiles]
       action_phrases:
@@ -307,7 +307,7 @@ instances:
     outputs: [ChangeMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/change_detection.py"
+      entrypoint: "dta.dti.algorithms.change_detection"
     triggers:
       keywords:
         - "change detection"
@@ -384,7 +384,7 @@ instances:
     outputs: [LULCMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/lulc_classifier.py"
+      entrypoint: "dta.dti.algorithms.lulc_classifier"
     triggers:
       keywords: [lulc, "land cover", "land use", "land-cover classes", classify]
       action_phrases:
@@ -518,7 +518,7 @@ instances:
       Useful for models trained on HLS data (e.g., Prithvi).
     runner:
       type: python
-      entrypoint: "dta/dti/preprocessors/scale_to_hls.py"
+      entrypoint: "dta.dti.preprocessors.scale_to_hls"
       function: run
 
   # =============================================================================

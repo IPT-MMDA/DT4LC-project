@@ -121,15 +121,24 @@ class TestRegistryItemValidation:
                 assert item.runner.entrypoint, f"Item {item.id} missing entrypoint"
 
     def test_algorithm_entrypoints_exist(self) -> None:
-        """Verify algorithm entrypoint files exist."""
+        """Verify algorithm entrypoints resolve — either as importable modules
+        (dotted path) or as on-disk files (filesystem path).
+        """
+        import importlib
+
         from dta.config import ROOT_DIR
 
         registry = load_registry()
 
         for item in registry.instances:
-            if item.kind == "algorithm" and item.runner.entrypoint:
-                entrypoint = ROOT_DIR / item.runner.entrypoint
-                assert entrypoint.exists(), f"Entrypoint not found: {entrypoint}"
+            if item.kind != "algorithm" or not (item.runner and item.runner.entrypoint):
+                continue
+            ep = item.runner.entrypoint
+            if ep.endswith(".py") or "/" in ep or "\\" in ep:
+                assert (ROOT_DIR / ep).exists(), f"Entrypoint file not found: {ep}"
+            else:
+                # Dotted module path — should be importable
+                importlib.import_module(ep)
 
 
 class TestMockRegistry:

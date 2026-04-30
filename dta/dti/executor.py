@@ -348,46 +348,54 @@ class PipelineExecutor:
             **inputs,  # Input types like RasterPath
         }
 
-        # Resolve entrypoint path
+        # Resolve entrypoint - supports two forms:
+        #   1. Dotted module path ("dta.dti.algorithms.ndvi") — bundled in-package
+        #      code; loaded via importlib.import_module (cached, no sys.path mutation).
+        #   2. Filesystem path ("dta/.../foo.py", "${MODEL_PATH}/inference.py") —
+        #      third-party / runtime-resolved plugins; loaded via spec_from_file_location.
         entrypoint_str = self._resolve_variables(item.runner.entrypoint, var_context)
-        entrypoint = Path(entrypoint_str)
-        if not entrypoint.is_absolute():
-            entrypoint = ROOT_DIR / entrypoint
+        is_filesystem_path = entrypoint_str.endswith(".py") or "/" in entrypoint_str or "\\" in entrypoint_str
 
-        if not entrypoint.exists():
-            raise ExecutionError(f"Entrypoint not found: {entrypoint}")
-
-        # Add the model directory to sys.path so the entrypoint can import
-        # siblings (e.g. Prithvi's inference.py imports prithvi_mae.py).
-        # This IS a process-global mutation, but each model has a unique
-        # cache directory and concurrent executions of the same model insert
-        # the same path — so threads don't clobber each other in practice.
-        # Removing this would require rewriting third-party model code to use
-        # relative imports; out of scope today.
         model_dir_added = False
-        if model_path:
-            model_dir = str(Path(model_path))
-            if model_dir not in sys.path:
-                sys.path.insert(0, model_dir)
-                model_dir_added = True
+        if is_filesystem_path:
+            entrypoint = Path(entrypoint_str)
+            if not entrypoint.is_absolute():
+                entrypoint = ROOT_DIR / entrypoint
+            if not entrypoint.exists():
+                raise ExecutionError(f"Entrypoint not found: {entrypoint}")
 
-        try:
-            # Load module
+            # Add the model directory to sys.path so the entrypoint can import
+            # siblings (e.g. Prithvi's inference.py imports prithvi_mae.py).
+            # Process-global mutation, but each model has a unique cache directory
+            # and concurrent executions of the same model insert the same path —
+            # so threads don't clobber each other in practice. Removing this would
+            # require rewriting third-party model code to use relative imports.
+            if model_path:
+                model_dir = str(Path(model_path))
+                if model_dir not in sys.path:
+                    sys.path.insert(0, model_dir)
+                    model_dir_added = True
+
             spec = importlib.util.spec_from_file_location(f"runner_{item.id.replace('/', '_')}", str(entrypoint))
             if spec is None or spec.loader is None:
                 raise ExecutionError(f"Failed to load module: {entrypoint}")
-
             module = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
+        else:
+            try:
+                module = importlib.import_module(entrypoint_str)
+            except ImportError as e:
+                raise ExecutionError(f"Failed to import module {entrypoint_str}: {e}") from e
 
+        try:
             # Determine function to call and arguments
             if item.runner.args_map:
                 # Use args_map - resolve all variables in the map
                 func_args = self._resolve_args_map(item.runner.args_map, var_context)
                 func_name = item.runner.function or "main"
                 if not hasattr(module, func_name):
-                    raise ExecutionError(f"Module {entrypoint} has no {func_name}() function")
+                    raise ExecutionError(f"Module {entrypoint_str} has no {func_name}() function")
                 func = getattr(module, func_name)
                 result = func(**func_args)
             else:
@@ -398,7 +406,7 @@ class PipelineExecutor:
                 elif hasattr(module, "main"):
                     result = module.main(**inputs)
                 else:
-                    raise ExecutionError(f"Module {entrypoint} has no run() or main()")
+                    raise ExecutionError(f"Module {entrypoint_str} has no run() or main()")
 
             # Store outputs
             if result is None and output_dir:
