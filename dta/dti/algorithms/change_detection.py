@@ -140,29 +140,12 @@ INDEX_CONFIG: dict[str, dict[str, Any]] = {
 def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int | None]:
     """Get band indices for different sensors.
 
-    Args:
-        src: Open rasterio dataset
-
-    Returns:
-        Dictionary mapping band names to 1-based indices
+    Delegates to :func:`dta.dti.raster.band_indices` so the per-index files
+    and change-detection share one source of truth for band layouts.
     """
-    band_count = src.count
+    from dta.dti.raster import band_indices
 
-    if band_count >= 7:
-        # Landsat 8/9: B2=Blue, B3=Green, B4=Red, B5=NIR, B6=SWIR1
-        return {"red": 4, "nir": 5, "green": 3, "swir": 6}
-    elif band_count >= 6:
-        # Sentinel-2 subset or similar
-        return {"red": 3, "nir": 4, "green": 2, "swir": 5}
-    elif band_count >= 5:
-        # Generic (B,G,R,NIR,SWIR)
-        return {"red": 3, "nir": 4, "green": 2, "swir": 5}
-    elif band_count == 4:
-        # RGBN format
-        return {"red": 1, "nir": 4, "green": 2, "swir": None}
-    else:
-        # 2-3 bands: assume Red=1, NIR=2
-        return {"red": 1, "nir": 2, "green": 1, "swir": None}
+    return band_indices(src)
 
 
 def _calculate_index_array(

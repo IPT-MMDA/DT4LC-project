@@ -110,6 +110,42 @@ def load_raster_as_rgb(
         )
 
 
+def band_indices(src: Any) -> dict[str, int | None]:
+    """Heuristic mapping from band-role names to 1-based band indices.
+
+    Single source of truth for "which band is red?" across spectral indices
+    and change detection. Returns ``None`` for roles the source doesn't carry
+    (e.g. SWIR on a 4-band RGBN image).
+
+    Layouts (selected by ``src.count``):
+
+    * 7+ bands: Landsat 8/9 surface-reflectance order
+      (B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1, B7 SWIR2).
+    * 5–6 bands: Sentinel-2 subset / generic ``(B, G, R, NIR, SWIR[, ...])``.
+    * 4 bands: assume ``RGBN`` ordering (R, G, B, NIR). No SWIR.
+    * 2–3 bands: assume ``red, NIR[, …]`` minimum. Most roles unavailable.
+
+    Args:
+        src: An open ``rasterio.DatasetReader``.
+
+    Returns:
+        Dict with keys ``red``, ``nir``, ``green``, ``blue``, ``swir`` and
+        1-based band-index values (or ``None`` if absent).
+    """
+    n = src.count
+    if n >= 7:
+        # Landsat 8/9: B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1
+        return {"red": 4, "nir": 5, "green": 3, "blue": 2, "swir": 6}
+    if n >= 5:
+        # Sentinel-2 subset / generic: B, G, R, NIR, SWIR (+ optional SWIR2)
+        return {"red": 3, "nir": 4, "green": 2, "blue": 1, "swir": 5}
+    if n == 4:
+        # RGBN format: R, G, B, NIR
+        return {"red": 1, "nir": 4, "green": 2, "blue": 3, "swir": None}
+    # 2-3 bands: minimal — assume red and NIR are present.
+    return {"red": 1, "nir": 2, "green": None, "blue": None, "swir": None}
+
+
 def validate_geotiff(raster_path: str | Path) -> tuple[bool, str]:
     """Validate that a file is a readable GeoTIFF.
 
