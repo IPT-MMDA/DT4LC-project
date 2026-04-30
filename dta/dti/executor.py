@@ -10,7 +10,6 @@ from collections.abc import Callable
 from datetime import datetime
 import importlib.util
 import logging
-import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -358,17 +357,13 @@ class PipelineExecutor:
         if not entrypoint.exists():
             raise ExecutionError(f"Entrypoint not found: {entrypoint}")
 
-        # Set environment variables from runner config
-        old_env: dict[str, str | None] = {}
-        for key, value in item.runner.env.items():
-            old_env[key] = os.environ.get(key)
-            resolved = self._resolve_variables(value, var_context)
-            # Resolve relative paths in env vars
-            if key.endswith(("_DIR", "_PATH")) and not Path(resolved).is_absolute():
-                resolved = str(ROOT_DIR / resolved)
-            os.environ[key] = resolved
-
-        # Add model directory to sys.path for sibling imports (e.g., prithvi_mae.py)
+        # Add the model directory to sys.path so the entrypoint can import
+        # siblings (e.g. Prithvi's inference.py imports prithvi_mae.py).
+        # This IS a process-global mutation, but each model has a unique
+        # cache directory and concurrent executions of the same model insert
+        # the same path — so threads don't clobber each other in practice.
+        # Removing this would require rewriting third-party model code to use
+        # relative imports; out of scope today.
         model_dir_added = False
         if model_path:
             model_dir = str(Path(model_path))
@@ -420,14 +415,9 @@ class PipelineExecutor:
                 raise ExecutionError(f"Cannot map result to outputs {item.outputs}. Expected dict or single output.")
 
         finally:
-            # Restore environment
-            for env_key, env_value in old_env.items():
-                if env_value is None:
-                    os.environ.pop(env_key, None)
-                else:
-                    os.environ[env_key] = env_value
-
-            # Remove model directory from sys.path
+            # Remove model directory from sys.path. (No env restore needed —
+            # algorithms now receive their config via runner.args_map kwargs,
+            # never through process-global os.environ.)
             if model_dir_added and model_path:
                 try:
                     sys.path.remove(str(Path(model_path)))

@@ -493,8 +493,9 @@ instances:
     runner:
       type: python
       entrypoint: "dta/dti/models/third_party/delineate_anything/inference.py"
-      env:
-        DELINEATE_MODEL: "small"
+      args_map:
+        RasterPath: "${RasterPath}"
+        delineate_model: "small"
 
   - id: post-processing/agent-analysis
     kind: postprocess
