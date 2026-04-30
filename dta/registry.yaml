@@ -357,9 +357,9 @@ instances:
         (before and after) and I'll analyze the differences.
       summary_template: "Comparing before/after imagery and computing temporal change"
     config:
-      # Maps free-text index names (matched against the user prompt) to the
+      # Maps free-text index keywords (matched against the user prompt) to the
       # IndexType bind value the executor passes to change_detection.run().
-      # Phase 3 will read this when it deletes planner._detect_index_type.
+      # Read by planner._detect_index_type to route prompts to the right index.
       default_index_type: ndvi
       index_keyword_map:
         ndvi: [ndvi, vegetation, "vegetation change"]

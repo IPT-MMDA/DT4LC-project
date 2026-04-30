@@ -3,8 +3,8 @@
 The frontend in ``cognitive_ui/src/types/index.ts`` declares strict TypeScript
 interfaces for the JSON it consumes. Any backend rename or removed key breaks
 the UI silently. These tests pin the load-bearing keys at the API boundary so
-the registry-driven refactor (Phases 1–6 of T-plan.md) cannot accidentally
-drop or rename a field the frontend depends on.
+backend refactors cannot accidentally drop or rename a field the frontend
+depends on.
 
 Scope: only the endpoints the frontend actually calls. Pipeline execution is
 not exercised here — that's covered in ``test_demos.py``. The "what can you

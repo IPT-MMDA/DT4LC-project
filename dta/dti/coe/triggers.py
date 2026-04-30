@@ -1,13 +1,9 @@
 """Registry-driven trigger index for intent classification.
 
-Phase 2 of the registry-as-source-of-truth refactor (see T-plan.md). This
-module derives the per-algorithm keyword/action-phrase sets and capability
-responses **from the registry's `triggers` and `user_guide` fields**, instead
-of hardcoding them in `intent_classifier.py`.
-
-Adding a new algorithm to the system after this phase = a single edit to
-`registry.yaml` (with `triggers.keywords`, `triggers.action_phrases`, and
-`user_guide.{capability,missing_file}_response` populated). No code change.
+Derives the per-algorithm keyword/action-phrase sets and capability response
+strings from each registry item's ``triggers`` and ``user_guide`` fields, so
+the intent classifier doesn't have to hardcode them. Adding a new algorithm
+= a single edit to ``registry.yaml``; no code change here.
 
 Generic English mechanics (action verbs, question framing) stay in code
 because they're properties of imperative-prompt grammar, not knowledge about

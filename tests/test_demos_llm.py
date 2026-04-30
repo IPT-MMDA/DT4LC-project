@@ -1,10 +1,9 @@
 """Demo-flow regression tests (Layer B) — full intent → plan path.
 
-These tests call ``orchestrate(...)`` with the exact prompts the team uses in
-the rehearsed demo and assert that the resulting plan reaches the right
-algorithm. The prompt-to-plan mapping is exactly what Phases 2–3 of T-plan.md
-rewire; if these tests pass before and after a phase, the demo's natural-
-language intent recognition still works.
+These tests call ``orchestrate(...)`` with the exact prompts used in the
+rehearsed demo flow and assert that the resulting plan reaches the right
+algorithm. They protect the natural-language intent recognition that
+the demos rely on across future refactors.
 
 Marked ``@pytest.mark.llm`` because parts of the orchestration path
 (``context_agent``, sometimes the LLM-based intent classifier) require a
@@ -13,7 +12,7 @@ Engineers run them locally with::
 
     pytest -m llm tests/test_demos_llm.py
 
-These are the **phrasing equivalences** the tests pin (from T-plan.md §Phase 0):
+The **phrasing equivalences** the tests pin:
 
 * "analyze vegetation changes"  ≡  "Analyze NDVI changes for these images"
   → both must reach the NDVI ChangeMap pipeline.
@@ -98,8 +97,8 @@ class TestIceCoverChangeMapping:
     """Demo 2.2: 'Analyze ice cover changes' must reach the NDSI pipeline.
 
     The user never types "NDSI" — the planner has to map "ice cover" →
-    NDSI / snow-classifier. Phase 3 of the refactor rewires this mapping
-    onto registry triggers; this test pins the demo behavior across that.
+    NDSI / snow-classifier. This pins the demo's natural-language routing
+    across future planner-internals refactors.
     """
 
     def test_ice_cover_picks_ndsi(self, synthetic_raster_pair: tuple[str, str]) -> None:

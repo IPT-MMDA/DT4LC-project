@@ -1,18 +1,17 @@
 """Intent Classifier — PIPELINE vs CONVERSATION routing.
 
-Phase 2 of the registry-as-source-of-truth refactor. The keyword lists,
-capability responses, and missing-file responses formerly hardcoded in this
-file now live on each registry item's ``triggers`` and ``user_guide`` fields,
-loaded through ``coe/triggers.py``. Adding a new algorithm = a single
-registry.yaml edit; no change to this file.
+The keyword lists, capability responses, and missing-file responses live on
+each registry item's ``triggers`` and ``user_guide`` fields, loaded through
+``coe/triggers.py``. Adding a new algorithm = a single registry.yaml edit;
+no change to this file.
 
-Routing logic kept identical to the pre-Phase-2 behavior for the demo flow:
+Routing logic:
 1. Capability question framing → CONVERSATION with per-item capability response.
 2. Attachments + action keyword → PIPELINE (fast path, no LLM call).
 3. Imperative action without attachments → CONVERSATION asking for the file.
 4. Clear action phrase (with or without attachments) → PIPELINE.
 5. Otherwise fall through to the LLM (system prompt also rendered from the
-   registry now, not hardcoded).
+   registry, not hardcoded).
 """
 
 from __future__ import annotations
@@ -113,17 +112,17 @@ def classify_intent(req: ChatRequest) -> dict[str, Any]:
     return {"intent": IntentType.PIPELINE, "reason": "Default fallback"}
 
 
-# --- Internal helpers retained as shims for backwards-compatible tests ---
-# tests/test_intent_classifier.py imports these names directly. Phase 2 keeps
-# their signatures and observable behavior; the hardcoded keyword/regex lists
-# they used to carry have moved to coe/triggers.py + the registry.
+# --- Internal helpers ---
+# tests/test_intent_classifier.py imports these names directly, so they
+# preserve their signatures and observable behavior. The keyword/regex lists
+# they used to carry now live on coe/triggers.py + the registry.
 
 
 def _looks_like_action(prompt: str) -> bool:
     """True if prompt contains a registered trigger keyword or generic action verb.
 
-    Phase 2: thin shim over the registry-driven TriggerIndex. The keyword set
-    is the union of every user-runnable item's ``triggers.keywords`` plus the
+    Thin shim over the registry-driven TriggerIndex. The keyword set is the
+    union of every user-runnable item's ``triggers.keywords`` plus the
     GENERIC_ACTION_VERBS constant.
     """
     return get_trigger_index().has_keyword(prompt)
@@ -132,10 +131,10 @@ def _looks_like_action(prompt: str) -> bool:
 def _is_clear_action_request(prompt: str) -> bool:
     """True if prompt is a clear, unambiguous action request.
 
-    Phase 2: thin shim over the registry-driven TriggerIndex. Matches against
-    each item's ``triggers.action_phrases`` and ``triggers.keywords``, with
-    the same suffix patterns ("calculation", "analysis", "detection",
-    "mapping", "classification") supported as before.
+    Thin shim over the registry-driven TriggerIndex. Matches against each
+    item's ``triggers.action_phrases`` and ``triggers.keywords``, with the
+    suffix patterns ("calculation", "analysis", "detection", "mapping",
+    "classification") supported.
     """
     return get_trigger_index().is_clear_action(prompt)
 

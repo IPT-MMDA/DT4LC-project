@@ -45,11 +45,10 @@ class PreprocessorRef(BaseModel):  # type: ignore[misc]
     apply_to: str  # Input type to transform (e.g., "RasterPath")
 
 
-# --- Registry-as-source-of-truth refactor (Phase 1) -----------------------
-# The next three models hold knowledge that today is hardcoded across
-# intent_classifier.py, planner.py, context_agent.py, and executor.py. Phase 1
-# only adds the schema fields and backfills the YAML; consumers move over to
-# them in Phases 2-6 (see T-plan.md).
+# --- Registry-driven extension models ---------------------------------
+# Per-item natural-language hooks, response templates, parameterized config,
+# and (reserved) plugin-source pointers — letting users extend the system by
+# editing registry.yaml rather than touching the orchestration code.
 
 
 class Triggers(BaseModel):  # type: ignore[misc]
@@ -67,7 +66,7 @@ class Triggers(BaseModel):  # type: ignore[misc]
 class UserGuide(BaseModel):  # type: ignore[misc]
     """Human-readable strings the system surfaces for this item.
 
-    Replaces the per-algorithm hardcoded English in intent_classifier.py
+    Used by the intent classifier to render per-algorithm responses
     (capability_response when the user asks "can you...?", missing_file_response
     when an action is requested without an upload).
     """
@@ -78,11 +77,11 @@ class UserGuide(BaseModel):  # type: ignore[misc]
 
 
 class Source(BaseModel):  # type: ignore[misc]
-    """Third-party plugin source (reserved for the Phase 6 plugin loader).
+    """Third-party plugin source (reserved for a future plugin loader).
 
     Indicates the algorithm/model isn't bundled in this repo and must be
     fetched/installed before its runner.entrypoint resolves. Currently
-    declarative-only; nothing reads this until Phase 6 lands.
+    declarative-only; no consumer wired in yet.
     """
 
     type: Literal["github", "huggingface", "local-path"] = "local-path"
@@ -104,14 +103,13 @@ class RegistryItem(BaseModel):  # type: ignore[misc]
     integration: Integration | None = None  # For hosted models (HuggingFace, GEE, etc.)
     metadata: dict[str, Any] = {}  # Additional metadata (team, author, hosting, etc.)
 
-    # Phase 1 additions — all consumed in later phases; Phase 1 only loads
-    # them so the YAML can be backfilled with system knowledge.
+    # Registry-driven extension fields. See Triggers / UserGuide / Source above.
     display_name: str | None = None  # human-readable label for UI / responses
-    triggers: Triggers | None = None  # natural-language hooks (Phase 2)
-    user_guide: UserGuide | None = None  # capability / missing-file responses (Phase 2)
-    config: dict[str, Any] = {}  # runner-consumed config block (Phase 4 spectral indices)
-    model_id: str | None = None  # model-manager id (replaces STEP_TO_MODEL_MAP, Phase 5)
-    source: Source | None = None  # third-party plugin source (reserved, Phase 6)
+    triggers: Triggers | None = None  # consumed by the intent classifier
+    user_guide: UserGuide | None = None  # capability / missing-file responses
+    config: dict[str, Any] = {}  # runner-consumed config block (formula, bands, colormap, ...)
+    model_id: str | None = None  # model-manager id for locally-managed models
+    source: Source | None = None  # third-party plugin source (reserved)
 
 
 class Registry(BaseModel):  # type: ignore[misc]

@@ -1,14 +1,12 @@
-"""Tests for the registry-driven TriggerIndex (Phase 2 of T-plan.md).
+"""Tests for the registry-driven TriggerIndex.
 
 The load-bearing capability: adding a new item to ``registry.yaml`` with
 populated ``triggers`` and ``user_guide`` fields must extend the classifier's
 recognised vocabulary **without any code edit**. These tests synthesise an
 in-memory ``Registry`` containing a fictional item and assert the classifier
 picks it up — both via the ``TriggerIndex`` directly and through the public
-``classify_intent`` entrypoint.
-
-If these tests pass before and after a Phase 2+ refactor, the
-"single source of truth" property is preserved.
+``classify_intent`` entrypoint. If these tests pass, the registry is the
+single source of truth for which prompts route where.
 """
 
 from __future__ import annotations

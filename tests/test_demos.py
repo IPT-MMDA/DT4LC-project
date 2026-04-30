@@ -38,7 +38,7 @@ class TestKahovkaVegetationChange:
 
     Pins the NDVI change-detection pipeline (input/file-before +
     input/file-after + algorithms/change-detection with IndexType=ndvi).
-    The Phase 4 spectral-index refactor must keep this output shape.
+    Future spectral-index refactors must keep this output shape.
     """
 
     def test_synthetic_pair_runs_change_detection(self, synthetic_raster_pair: tuple[str, str]) -> None:
@@ -163,11 +163,11 @@ class TestForestNdviChangeExplicit:
 
 
 class TestSpectralIndicesIndividually:
-    """Pins per-index calculation paths (the dedup target of Phase 4).
+    """Pins per-index calculation paths.
 
-    Phase 4 collapses ndvi.py / ndwi.py / ndsi.py / evi.py into one
-    parameterized module. These tests must keep working with byte-identical
-    output keys after the refactor.
+    A future refactor may collapse ndvi.py / ndwi.py / ndsi.py / evi.py into
+    one parameterized module — these tests must keep working with byte-
+    identical output keys across that change.
     """
 
     @pytest.mark.parametrize(
