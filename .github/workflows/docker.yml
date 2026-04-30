@@ -248,8 +248,6 @@ jobs:
             echo "docker pull ${FRONTEND_REF}"
             echo '```'
             echo ""
-            echo "Tagged variants on this release: \`${{ needs.prepare.outputs.version }}\`, major.minor (\`v0.3\`), and major (\`v0\`)."
-            echo ""
             echo "## Quick Deploy"
             echo ""
             echo "Download \`dt4lc-deploy-${{ needs.prepare.outputs.version }}.zip\` (attached below), then:"

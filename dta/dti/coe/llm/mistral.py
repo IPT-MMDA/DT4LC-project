@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from .base import BaseLLMProvider, LLMMessage, LLMResponse
+from .base import BaseLLMProvider, LLMMessage, LLMResponse, estimate_token_cost
 
 # Default model. mistral-medium-latest balances cost and quality for orchestration.
 DEFAULT_MISTRAL_MODEL = "mistral-medium-latest"
@@ -76,6 +76,11 @@ class MistralProvider(BaseLLMProvider):
     def name(self) -> str:
         """Provider name."""
         return "mistral"
+
+    @property
+    def supports_images(self) -> bool:
+        """Text-only at this provider — vision models like pixtral are out of scope."""
+        return False
 
     def is_available(self) -> bool:
         """Check if Mistral API key is configured."""
@@ -152,26 +157,8 @@ class MistralProvider(BaseLLMProvider):
             raise Exception(f"Mistral request failed: {e}") from e
 
     def estimate_cost(self, messages: list[LLMMessage]) -> float:
-        """Estimate request cost in USD.
-
-        Uses the per-Mtok pricing table for the configured model. Input
-        tokens are approximated at 4 chars/token; output is estimated at
-        25% of input.
-        """
+        """Estimate request cost in USD using the per-model pricing table."""
         prices = _PRICING_USD_PER_MTOK.get(self.model)
         if not prices:
             return 0.0
-        input_per_mtok, output_per_mtok = prices
-        input_chars = sum(len(m.content) for m in messages)
-        input_tokens = input_chars / 4
-        output_tokens = input_tokens * 0.25
-        input_cost = input_tokens / 1_000_000 * input_per_mtok
-        output_cost = output_tokens / 1_000_000 * output_per_mtok
-        return input_cost + output_cost
-
-    @property
-    def supports_images(self) -> bool:
-        """Some Mistral models support vision (e.g., pixtral); the chat
-        endpoint accepts image content in OpenAI format. This base provider
-        sends text only — extend for multimodal use cases."""
-        return False
+        return estimate_token_cost(messages, *prices)

@@ -111,10 +111,11 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     """Get configuration for a specific provider.
 
     Args:
-        provider: Provider name (gemini, groq, ollama)
+        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral)
 
     Returns:
-        Provider config dict or None if not available
+        Provider config dict or None if the provider is unknown or its
+        credentials/opt-in flag are missing.
     """
     if provider == "gemini":
         if os.environ.get("GEMINI_API_KEY"):
@@ -147,12 +148,18 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
             }
     elif provider == "anthropic":
         if os.environ.get("ANTHROPIC_API_KEY"):
-            models = _get_models_list("ANTHROPIC_MODELS", "claude-opus-4-7")
+            # Lazy import — keeps config.py light when ANTHROPIC_API_KEY isn't set,
+            # and gives the provider a single source of truth for its default model.
+            from .anthropic import DEFAULT_ANTHROPIC_MODEL
+
+            models = _get_models_list("ANTHROPIC_MODELS", DEFAULT_ANTHROPIC_MODEL)
             model = _get_next_model("anthropic", models)
             return {"type": "anthropic", "model": model}
     elif provider == "mistral":
         if os.environ.get("MISTRAL_API_KEY"):
-            models = _get_models_list("MISTRAL_MODELS", "mistral-medium-latest")
+            from .mistral import DEFAULT_MISTRAL_MODEL
+
+            models = _get_models_list("MISTRAL_MODELS", DEFAULT_MISTRAL_MODEL)
             model = _get_next_model("mistral", models)
             return {"type": "mistral", "model": model}
     return None

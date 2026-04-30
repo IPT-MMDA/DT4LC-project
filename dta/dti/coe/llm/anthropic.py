@@ -13,19 +13,17 @@ Setup:
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any
 
 import anthropic
 
-from .base import BaseLLMProvider, LLMMessage, LLMResponse
+from .base import BaseLLMProvider, LLMMessage, LLMResponse, estimate_token_cost
 
-logger = logging.getLogger(__name__)
-
-# Default model. Opus 4.7 is the most capable Claude model. Users can override
-# via ANTHROPIC_MODELS=claude-sonnet-4-6 for a cheaper/faster default.
-DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-7"
+# Default model. Sonnet 4.6 matches the project's "reasonable cheap default"
+# pattern (Gemini → flash, Groq → free-tier llama). Users who want maximum
+# capability can override via ANTHROPIC_MODELS=claude-opus-4-7.
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 # Models that reject sampling parameters (temperature/top_p/top_k) and the
 # legacy `thinking: {type: "enabled", budget_tokens: N}` shape. Sending them
@@ -75,8 +73,8 @@ class AnthropicProvider(BaseLLMProvider):
         """
         super().__init__(model, **config)
         self._client: anthropic.Anthropic | None = None
-        self.timeout: float = float(config.get("timeout", 60.0))
-        self.max_retries: int = int(config.get("max_retries", 2))
+        self.timeout = config.get("timeout", 60.0)
+        self.max_retries = config.get("max_retries", 2)
 
     @property
     def name(self) -> str:
@@ -185,10 +183,6 @@ class AnthropicProvider(BaseLLMProvider):
 
         try:
             response = client.messages.create(**req_kwargs)
-        except anthropic.AuthenticationError as e:
-            raise Exception(f"Anthropic authentication failed: {e}") from e
-        except anthropic.RateLimitError as e:
-            raise Exception(f"Anthropic rate limit hit: {e}") from e
         except anthropic.APIError as e:
             raise Exception(f"Anthropic generation failed: {e}") from e
 
@@ -196,45 +190,28 @@ class AnthropicProvider(BaseLLMProvider):
         # thinking/tool_use blocks; we only surface text here).
         text = "".join(b.text for b in response.content if b.type == "text")
 
-        usage = {
-            "prompt_tokens": response.usage.input_tokens,
-            "completion_tokens": response.usage.output_tokens,
-            "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
-        }
-
-        # Surface cache stats so callers can verify caching is working — if
-        # cache_read_input_tokens is consistently 0 across repeats, a silent
-        # invalidator is at work (see shared/prompt-caching.md).
-        metadata: dict[str, Any] = {"stop_reason": response.stop_reason}
-        cache_creation = getattr(response.usage, "cache_creation_input_tokens", None)
-        cache_read = getattr(response.usage, "cache_read_input_tokens", None)
-        if cache_creation is not None:
-            metadata["cache_creation_input_tokens"] = cache_creation
-        if cache_read is not None:
-            metadata["cache_read_input_tokens"] = cache_read
-
         return LLMResponse(
             text=text,
             model=response.model,
-            usage=usage,
+            usage={
+                "prompt_tokens": response.usage.input_tokens,
+                "completion_tokens": response.usage.output_tokens,
+                "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
+            },
             provider=self.name,
-            metadata=metadata,
+            # Cache stats let callers verify caching works — a consistently
+            # zero cache_read across repeats means a silent invalidator is at
+            # work (see Anthropic's prompt-caching docs).
+            metadata={
+                "stop_reason": response.stop_reason,
+                "cache_creation_input_tokens": response.usage.cache_creation_input_tokens,
+                "cache_read_input_tokens": response.usage.cache_read_input_tokens,
+            },
         )
 
     def estimate_cost(self, messages: list[LLMMessage]) -> float:
-        """Estimate request cost in USD.
-
-        Uses the per-Mtok pricing table for the configured model. Input
-        tokens are approximated at 4 chars/token; output is estimated at
-        25% of input.
-        """
+        """Estimate request cost in USD using the per-model pricing table."""
         prices = _PRICING_USD_PER_MTOK.get(self.model)
         if not prices:
             return 0.0
-        input_per_mtok, output_per_mtok = prices
-        input_chars = sum(len(m.content) for m in messages)
-        input_tokens = input_chars / 4
-        output_tokens = input_tokens * 0.25
-        input_cost = input_tokens / 1_000_000 * input_per_mtok
-        output_cost = output_tokens / 1_000_000 * output_per_mtok
-        return input_cost + output_cost
+        return estimate_token_cost(messages, *prices)
