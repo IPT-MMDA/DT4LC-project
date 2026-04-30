@@ -136,4 +136,6 @@ markers = [
     "asyncio: marks tests as async (using pytest-asyncio)",
     "slow: marks tests as slow (require model downloads or heavy computation)",
     "llm: marks tests that require LLM API access (skip with -m 'not llm')",
+    "gpu: marks tests that require a GPU and installed ML models",
+    "network: marks tests that hit external services (GEE, MPC) and need credentials",
 ]
