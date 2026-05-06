@@ -78,6 +78,7 @@ class TestGeminiProvider:
         assert cost > 0
         assert cost < 0.01
 
+    @pytest.mark.llm
     @pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
     def test_generation_real(self) -> None:
         """Test real Gemini generation (requires API key)."""

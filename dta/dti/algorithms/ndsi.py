@@ -26,19 +26,24 @@ def _config() -> dict[str, Any]:
 def calculate_ndsi(raster_path: str) -> dict[str, Any]:
     """Calculate NDSI from a multispectral raster.
 
-    Returns a dict with ``ndsi_array``, ``metadata``, ``statistics`` (extended
-    with ``snow_threshold``, ``snow_pixels``, ``snow_coverage_percent``),
-    ``visualizations``, and ``path``.
+    Returns a dict with ``ndsi_array``, ``snow_mask``, ``metadata``,
+    ``statistics`` (extended with ``snow_threshold``, ``snow_pixels``,
+    ``non_snow_pixels``, ``snow_coverage_percent``), ``visualizations``, and
+    ``path``.
     """
     result = _run_index(raster_path, _config())
     arr = np.asarray(result["ndsi_array"], dtype=float)
-    valid = arr[np.isfinite(arr)]
+    finite = np.isfinite(arr)
+    snow_mask = (finite & (arr >= SNOW_THRESHOLD)).astype(np.uint8)
+    result["snow_mask"] = snow_mask
+    valid = arr[finite]
     if valid.size > 0:
         snow_pixels = int(np.sum(valid >= SNOW_THRESHOLD))
         result["statistics"].update(
             {
                 "snow_threshold": SNOW_THRESHOLD,
                 "snow_pixels": snow_pixels,
+                "non_snow_pixels": int(valid.size - snow_pixels),
                 "snow_coverage_percent": float(snow_pixels / valid.size * 100),
             }
         )
