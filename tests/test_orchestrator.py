@@ -3,15 +3,16 @@
 Tests orchestration flow, data loader inclusion, plan execution order,
 and intent classification integration.
 
-Note: Some tests require LLM access (marked with @pytest.mark.llm).
-These will fail if no LLM provider is available or rate limited.
-Run with: pytest -m "not llm" to skip LLM-dependent tests.
+Tests that require LLM access are mocked to avoid CI failures.
+Tests marked @pytest.mark.llm require live LLM providers.
 """
+
+from unittest.mock import patch
 
 import pytest
 
-from dta.dti.coe.orchestrator import orchestrate
-from dta.dti.schemas import Attachment, ChatRequest
+from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate
+from dta.dti.schemas import Attachment, ChatRequest, ExecutionPlan, PlanStep
 
 
 # Fixture for a mock attachment
@@ -26,9 +27,34 @@ class TestOrchestratorIntentClassification:
 
     @pytest.mark.llm
     def test_pipeline_intent_returns_plan(self, mock_attachment: Attachment) -> None:
-        """Test that pipeline intent requests with attachments return a plan."""
-        req = ChatRequest(prompt="calculate ndvi", attachments=[mock_attachment])
-        result = orchestrate(req)
+        """Test that pipeline intent requests with attachments return a plan.
+
+        Mocks the LLM-dependent classify_intent to avoid needing API keys.
+        """
+        mock_plan = ExecutionPlan(
+            flow="ndvi",
+            steps=[
+                PlanStep(uses="input/file", binds={"RasterPath": "/tmp/test.tif"}),
+                PlanStep(uses="algorithms/ndvi", binds={}),
+            ],
+            outputs=["NDVIMap"],
+        )
+
+        with (
+            patch("dta.dti.coe.orchestrator.classify_intent") as mock_classify,
+            patch("dta.dti.coe.orchestrator.analyze"),
+            patch("dta.dti.coe.orchestrator.plan", return_value=mock_plan),
+            patch("dta.dti.coe.orchestrator.validate", return_value=mock_plan),
+        ):
+            from dta.dti.coe.intent_classifier import IntentType
+
+            mock_classify.return_value = {
+                "intent": IntentType.PIPELINE,
+                "reason": "Has attachments and action keywords",
+            }
+
+            req = ChatRequest(prompt="calculate ndvi", attachments=[mock_attachment])
+            result = orchestrate(req)
 
         assert result.get("ok"), f"Orchestration failed: {result.get('error')}"
         assert result.get("intent") == "pipeline", f"Expected pipeline intent, got: {result.get('intent')}"
@@ -37,8 +63,17 @@ class TestOrchestratorIntentClassification:
     @pytest.mark.llm
     def test_conversation_intent_returns_response(self) -> None:
         """Test that conversation intent requests return a response."""
-        req = ChatRequest(prompt="what can we do next?", attachments=[])
-        result = orchestrate(req)
+        with patch("dta.dti.coe.orchestrator.classify_intent") as mock_classify:
+            from dta.dti.coe.intent_classifier import IntentType
+
+            mock_classify.return_value = {
+                "intent": IntentType.CONVERSATION,
+                "reason": "Capability question",
+                "response": "I can help you with geospatial analysis!",
+            }
+
+            req = ChatRequest(prompt="what can we do next?", attachments=[])
+            result = orchestrate(req)
 
         assert result.get("ok"), f"Orchestration failed: {result.get('error')}"
         assert result.get("intent") == "conversation", f"Expected conversation intent, got: {result.get('intent')}"
@@ -52,6 +87,109 @@ class TestOrchestratorIntentClassification:
         assert result.get("ok"), f"Orchestration failed: {result.get('error')}"
         assert result.get("intent") == "conversation", "Action without file should be conversation"
         assert "response" in result, "Should include helpful response asking for file"
+
+
+class TestOrchestratorPlanValidationFailure:
+    """Tests for orchestrator when plan validation fails."""
+
+    def test_plan_validation_error(self, mock_attachment: Attachment) -> None:
+        """Test that PlanError is handled gracefully."""
+        from dta.dti.coe.plan_validator import PlanError
+
+        mock_plan = ExecutionPlan(
+            flow="test",
+            steps=[PlanStep(uses="input/file", binds={})],
+            outputs=["RasterPath"],
+        )
+
+        with (
+            patch("dta.dti.coe.orchestrator.classify_intent") as mock_classify,
+            patch("dta.dti.coe.orchestrator.analyze"),
+            patch("dta.dti.coe.orchestrator.plan", return_value=mock_plan),
+            patch("dta.dti.coe.orchestrator.validate", side_effect=PlanError("Invalid plan")),
+        ):
+            from dta.dti.coe.intent_classifier import IntentType
+
+            mock_classify.return_value = {
+                "intent": IntentType.PIPELINE,
+                "reason": "test",
+            }
+
+            req = ChatRequest(prompt="calculate ndvi", attachments=[mock_attachment])
+            result = orchestrate(req)
+
+        assert result.get("ok") is False
+        assert "error" in result
+        assert "candidate" in result
+
+
+class TestInjectFileBindings:
+    """Tests for _inject_file_bindings helper."""
+
+    def test_single_file_injection(self) -> None:
+        """Test single file path injection."""
+        plan = ExecutionPlan(
+            flow="test",
+            steps=[PlanStep(uses="input/file", binds={})],
+            outputs=["RasterPath"],
+        )
+        att = Attachment(id="t", filename="t.tif", mime_type="image/tiff", path="/tmp/t.tif")
+
+        _inject_file_bindings(plan, [att])
+
+        assert plan.steps[0].binds.get("RasterPath") == "/tmp/t.tif"
+
+    def test_dual_file_injection(self) -> None:
+        """Test before/after file injection for change detection."""
+        plan = ExecutionPlan(
+            flow="change",
+            steps=[
+                PlanStep(uses="input/file-before", binds={}),
+                PlanStep(uses="input/file-after", binds={}),
+                PlanStep(uses="algorithms/change-detection", binds={}),
+            ],
+            outputs=["ChangeMap"],
+        )
+        att1 = Attachment(id="t1", filename="before.tif", mime_type="image/tiff", path="/tmp/before.tif")
+        att2 = Attachment(id="t2", filename="after.tif", mime_type="image/tiff", path="/tmp/after.tif")
+
+        _inject_file_bindings(plan, [att1, att2])
+
+        assert plan.steps[0].binds.get("RasterPathBefore") == "/tmp/before.tif"
+        assert plan.steps[1].binds.get("RasterPathAfter") == "/tmp/after.tif"
+
+    def test_attachment_without_path_skips(self) -> None:
+        """Test that attachments without paths are skipped with warning."""
+        plan = ExecutionPlan(
+            flow="test",
+            steps=[PlanStep(uses="input/file", binds={})],
+            outputs=["RasterPath"],
+        )
+        att = Attachment(id="t", filename="t.tif", mime_type="image/tiff", path="")
+
+        _inject_file_bindings(plan, [att])
+
+        # Path is empty string (falsy), so RasterPath should NOT be set
+        assert "RasterPath" not in plan.steps[0].binds
+
+    def test_more_steps_than_attachments(self) -> None:
+        """Test graceful handling when more input steps than attachments."""
+        plan = ExecutionPlan(
+            flow="test",
+            steps=[
+                PlanStep(uses="input/file-before", binds={}),
+                PlanStep(uses="input/file-after", binds={}),
+            ],
+            outputs=["ChangeMap"],
+        )
+        att = Attachment(id="t", filename="before.tif", mime_type="image/tiff", path="/tmp/before.tif")
+
+        # Only one attachment for two input steps - should not crash
+        _inject_file_bindings(plan, [att])
+
+        assert plan.steps[0].binds.get("RasterPathBefore") == "/tmp/before.tif"
+        # Second step should not have binding
+        assert "RasterPathAfter" not in plan.steps[1].binds
 
 
 @pytest.mark.llm
