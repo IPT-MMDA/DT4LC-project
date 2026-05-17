@@ -120,30 +120,19 @@ def _tiff_to_png_bytes(tif_path: str) -> bytes:
         return buf.getvalue()
 
 
-def _image_part(att: Attachment) -> str | None:
-    """Convert attachment to base64 PNG thumbnail for multimodal LLM providers.
+def _image_part(att: Attachment) -> Any:
+    """Convert attachment to image part for multimodal LLM providers.
+
+    Note: Multimodal image analysis is not yet implemented.
+    Context understanding currently relies on text prompts and file metadata.
 
     Args:
         att: File attachment with path to image
 
     Returns:
-        Base64-encoded PNG string (512x512 max), or None if conversion fails
+        None (image content not currently used in context analysis)
     """
-    import base64
-
-    from PIL import Image
-
-    if att.path is None or not att.mime_type.startswith("image/"):
-        return None
-    try:
-        png_bytes = _tiff_to_png_bytes(att.path)
-        im = Image.open(io.BytesIO(png_bytes))
-        im.thumbnail((512, 512))
-        buf = io.BytesIO()
-        im.save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode()
-    except Exception:
-        return None
+    return None
 
 
 def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding:
@@ -168,18 +157,7 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
     system_msg = _build_sys_prompt(registry, registry_types)
     user_msg = req.prompt
 
-    vision_available = any(p.supports_images for p in router.providers)
-    image_b64_list: list[str] = []
-    if vision_available:
-        for att in req.attachments:
-            b64 = _image_part(att)
-            if b64 is not None:
-                image_b64_list.append(b64)
-
-    messages = [
-        LLMMessage(role="system", content=system_msg),
-        LLMMessage(role="user", content=user_msg, images=image_b64_list or None),
-    ]
+    messages = [LLMMessage(role="system", content=system_msg), LLMMessage(role="user", content=user_msg)]
 
     # Generate with router (will try Gemini, fallback to Ollama)
     response = router.generate(messages, temperature=0.3)  # Lower temp for structured output
