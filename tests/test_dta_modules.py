@@ -318,7 +318,6 @@ class TestLayerMetadataStore:
     """Tests for layer_metadata_store."""
 
     def test_save_and_get(self, tmp_path: Path) -> None:
-
         with patch("server.layer_metadata_store.METADATA_DIR", tmp_path):
             from server.layer_metadata_store import get_layer_metadata, save_layer_metadata
 
