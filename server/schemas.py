@@ -24,20 +24,20 @@ __all__ = [
 Role = Literal["user", "assistant"]
 
 
-class ChatMessage(BaseModel):
+class ChatMessage(BaseModel):  # type: ignore[misc]
     """Single message in a chat conversation."""
 
     role: Role
     content: str
 
 
-class ChatRequest(BaseModel):
+class ChatRequest(BaseModel):  # type: ignore[misc]
     """Request containing chat message history."""
 
     messages: list[ChatMessage]
 
 
-class JobSubmitRequest(BaseModel):
+class JobSubmitRequest(BaseModel):  # type: ignore[misc]
     """Request for submitting a new job."""
 
     prompt: str
@@ -46,7 +46,7 @@ class JobSubmitRequest(BaseModel):
     context: dict[str, Any] | None = None
 
 
-class Plan(BaseModel):
+class Plan(BaseModel):  # type: ignore[misc]
     """Execution plan for a pipeline of analysis steps."""
 
     tags: list[str] = []
@@ -56,13 +56,13 @@ class Plan(BaseModel):
     meta: dict[str, Any] = {}
 
 
-class CreateJobRequest(BaseModel):
+class CreateJobRequest(BaseModel):  # type: ignore[misc]
     """Request to create a job from a pre-defined plan."""
 
     plan: Plan
 
 
-class JobStatus(BaseModel):
+class JobStatus(BaseModel):  # type: ignore[misc]
     """Current status and results of a job."""
 
     id: str

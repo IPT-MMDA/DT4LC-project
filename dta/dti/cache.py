@@ -9,6 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import hashlib
 import json
+import threading
 import time
 from typing import Any
 
@@ -224,6 +225,7 @@ class ResultCache:
 
 # Global caches
 _result_cache: ResultCache | None = None
+_result_cache_lock = threading.Lock()
 
 
 def get_result_cache() -> ResultCache:
@@ -234,5 +236,7 @@ def get_result_cache() -> ResultCache:
     """
     global _result_cache
     if _result_cache is None:
-        _result_cache = ResultCache()
+        with _result_cache_lock:
+            if _result_cache is None:
+                _result_cache = ResultCache()
     return _result_cache

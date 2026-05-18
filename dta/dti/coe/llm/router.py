@@ -167,16 +167,20 @@ class LLMRouter:
             ... }
             >>> router = LLMRouter.from_config(config)
         """
+        from .anthropic import AnthropicProvider
         from .apertus import ApertusProvider
         from .gemini import GeminiProvider
         from .groq import GroqProvider
+        from .mistral import MistralProvider
         from .ollama import OllamaProvider
 
-        provider_map = {
+        provider_map: dict[str, type[BaseLLMProvider]] = {
             "gemini": GeminiProvider,
             "groq": GroqProvider,
             "ollama": OllamaProvider,
             "apertus": ApertusProvider,
+            "anthropic": AnthropicProvider,
+            "mistral": MistralProvider,
         }
 
         providers = []

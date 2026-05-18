@@ -4,7 +4,7 @@ Provides clear, specific error types for different failure modes.
 """
 
 
-class DTAException(Exception):
+class DTAException(Exception):  # noqa: N818  # historical name; subclasses use Error suffix
     """Base exception for all DTA errors."""
 
     pass

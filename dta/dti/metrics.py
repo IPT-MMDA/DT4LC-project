@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+import threading
 import time
 
 
@@ -65,8 +66,8 @@ class MetricsCollector:
         """Initialize metrics collector."""
         self.executions: dict[str, ExecutionMetrics] = {}
         self.llm_calls: list[LLMMetrics] = []
-        self._execution_counts = defaultdict(int)
-        self._llm_counts = defaultdict(int)
+        self._execution_counts: defaultdict[str, int] = defaultdict(int)
+        self._llm_counts: defaultdict[str, int] = defaultdict(int)
 
     def start_execution(self, plan_id: str, steps_total: int) -> None:
         """Record execution start.
@@ -200,6 +201,7 @@ class MetricsCollector:
 
 # Global metrics collector
 _metrics_collector: MetricsCollector | None = None
+_metrics_collector_lock = threading.Lock()
 
 
 def get_metrics_collector() -> MetricsCollector:
@@ -210,5 +212,7 @@ def get_metrics_collector() -> MetricsCollector:
     """
     global _metrics_collector
     if _metrics_collector is None:
-        _metrics_collector = MetricsCollector()
+        with _metrics_collector_lock:
+            if _metrics_collector is None:
+                _metrics_collector = MetricsCollector()
     return _metrics_collector

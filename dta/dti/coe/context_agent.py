@@ -1,13 +1,20 @@
 import io
+import logging
 from typing import Any
 
 import numpy as np
 import rasterio
 
 from dta.dti.coe.llm import LLMMessage, get_llm_router
-from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
+from dta.dti.registry import load_registry
+from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, Registry
 
-SYS = (
+logger = logging.getLogger(__name__)
+
+# Static portions of the system prompt — generic instruction format that
+# doesn't depend on which algorithms exist. The DOMAIN KNOWLEDGE bullet list
+# is rendered separately from the registry in `_render_domain_knowledge()`.
+_SYS_PREAMBLE = (
     "You are a Context Understanding Agent for a geospatial Digital Twin. "
     "Extract structured information from the user's request.\n\n"
     "Return ONLY valid JSON with this EXACT structure:\n"
@@ -25,21 +32,51 @@ SYS = (
     "- ONLY include outputs that the user EXPLICITLY requests\n"
     "- If unsure, use empty arrays []\n\n"
     "DOMAIN KNOWLEDGE - Match user intent to SINGLE output type:\n"
-    '- "field boundaries", "parcels", "delineate", "agricultural plots" → ["FieldBoundaries"]\n'
-    '- "vegetation health", "greenness", "ndvi" → ["NDVIMap"]\n'
-    '- "water index", "water detection", "ndwi" → ["NDWIMap"]\n'
-    '- "snow index", "ndsi", "snow detection" → ["NDSIMap"]\n'
-    '- "land cover", "land use", "lulc", "classify" → ["LULCMap"]\n'
-    '- "statistics", "distribution", "histogram" → ["Statistics"]\n'
-    '- "change detection", "compare images", "before/after" → ["ChangeMap"]\n'
-    '- "vegetation change", "ndvi change" → ["ChangeMap"] with hints.index_type="ndvi"\n'
-    '- "snow change", "ndsi change", "glacier change" → ["ChangeMap"] with hints.index_type="ndsi"\n'
-    '- "water change", "ndwi change", "flood detection" → ["ChangeMap"] with hints.index_type="ndwi"\n'
-    '- "prithvi", "features", "embeddings", "foundation model" → ["Features"]\n\n'
-    "IMPORTANT: Do NOT add multiple outputs unless user explicitly asks for multiple analyses.\n"
+)
+_SYS_EPILOGUE = (
+    "\n\nIMPORTANT: Do NOT add multiple outputs unless user explicitly asks for multiple analyses.\n"
     '"Detect parcels" → ONLY ["FieldBoundaries"], NOT ["FieldBoundaries", "Features"]\n'
     '"Calculate NDVI" → ONLY ["NDVIMap"], NOT ["NDVIMap", "Features"]'
 )
+
+
+def _render_domain_knowledge(registry: Registry) -> str:
+    """Render the DOMAIN KNOWLEDGE bullet list from registry triggers + outputs.
+
+    Each user-runnable item becomes one bullet of the form
+    ``- "kw1", "kw2", "kw3" → ["OutputType"]``. The change-detection item
+    additionally renders one bullet per ``config.index_keyword_map`` entry
+    so the LLM learns the per-index hint mapping.
+    """
+    lines: list[str] = []
+    for item in registry.instances:
+        if item.kind in ("input", "preprocessor", "postprocess"):
+            continue
+        if item.id == "algorithms/change-detection":
+            continue  # rendered specially below
+        if item.triggers is None or not item.outputs:
+            continue
+        # Take the first 4 keywords for prompt brevity; quote each.
+        kws = [f'"{k}"' for k in item.triggers.keywords[:4]]
+        outputs = "[" + ", ".join(f'"{o}"' for o in item.outputs[:1]) + "]"
+        lines.append(f"- {', '.join(kws)} → {outputs}")
+
+    # Change-detection: a base line + one per index_keyword_map entry.
+    cd_item = next((it for it in registry.instances if it.id == "algorithms/change-detection"), None)
+    if cd_item is not None:
+        if cd_item.triggers is not None:
+            base_kws = [f'"{k}"' for k in cd_item.triggers.keywords[:4]]
+            lines.append(f'- {", ".join(base_kws)} → ["ChangeMap"]')
+        index_map = (cd_item.config or {}).get("index_keyword_map", {})
+        for index_name, kws in index_map.items():
+            quoted = [f'"{k}"' for k in kws[:4]]
+            lines.append(f'- {", ".join(quoted)} → ["ChangeMap"] with hints.index_type="{index_name}"')
+    return "\n".join(lines)
+
+
+def _build_sys_prompt(registry: Registry, registry_types: list[str]) -> str:
+    """Compose the full system prompt: preamble + registry-rendered knowledge + epilogue."""
+    return f"{_SYS_PREAMBLE}{_render_domain_knowledge(registry)}{_SYS_EPILOGUE}\n\n[REGISTRY_TYPES]={registry_types}"
 
 
 def _tiff_to_png_bytes(tif_path: str) -> bytes:
@@ -113,8 +150,11 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
     """
     router = get_llm_router()
 
-    # Build prompt with registry types and system instructions
-    system_msg = f"{SYS}\n\n[REGISTRY_TYPES]={registry_types}"
+    # The SYS prompt's DOMAIN KNOWLEDGE block is derived from each registry
+    # item's triggers + outputs + (for change-detection) config — adding a
+    # new item to registry.yaml updates this prompt automatically.
+    registry = load_registry()
+    system_msg = _build_sys_prompt(registry, registry_types)
     user_msg = req.prompt
 
     messages = [LLMMessage(role="system", content=system_msg), LLMMessage(role="user", content=user_msg)]
@@ -126,10 +166,14 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
     import json
     import re
 
+    fallback = {"goal": req.prompt, "desired_outputs": [], "required_inputs": [], "hints": {"keywords": []}}
     m = re.search(r"\{.*\}", response.text, re.S)
-    data = (
-        json.loads(m.group(0))
-        if m
-        else {"goal": req.prompt, "desired_outputs": [], "required_inputs": [], "hints": {"keywords": []}}
-    )
+    if m:
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            logger.warning("Context agent returned malformed JSON, using fallback")
+            data = fallback
+    else:
+        data = fallback
     return ContextUnderstanding(**data)

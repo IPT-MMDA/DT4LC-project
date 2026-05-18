@@ -77,6 +77,7 @@ class TestJobSubmission:
 class TestJobProcessing:
     """Tests for job processing."""
 
+    @pytest.mark.llm
     @pytest.mark.asyncio
     async def test_job_processing(self) -> None:
         """Test job processing through queue."""

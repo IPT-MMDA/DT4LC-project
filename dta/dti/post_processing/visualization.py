@@ -253,19 +253,19 @@ class Visualizer:
 
 
 # Convenience functions
-def render_ndvi(ndvi_array: np.ndarray, metadata: dict | None = None) -> dict:
+def render_ndvi(ndvi_array: np.ndarray, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     """Quick NDVI rendering."""
     viz = Visualizer()
     return viz.render_ndvi_map(ndvi_array, metadata)
 
 
-def render_change(change_array: np.ndarray, metadata: dict | None = None) -> dict:
+def render_change(change_array: np.ndarray, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     """Quick change map rendering."""
     viz = Visualizer()
     return viz.render_change_map(change_array, metadata)
 
 
-def render_chart(stats: dict, chart_type: str = "bar") -> dict:
+def render_chart(stats: dict[str, Any], chart_type: str = "bar") -> dict[str, Any]:
     """Quick chart rendering."""
     viz = Visualizer()
     return viz.render_statistics_chart(stats, chart_type)

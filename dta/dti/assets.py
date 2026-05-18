@@ -144,7 +144,8 @@ class DataAssetManager:
         # Cache key
         cache_key = f"metadata:{asset_path}"
         if cache_key in self.cache:
-            return self.cache[cache_key]
+            cached: dict[str, Any] = self.cache[cache_key]
+            return cached
 
         try:
             with rasterio.open(asset_path) as src:

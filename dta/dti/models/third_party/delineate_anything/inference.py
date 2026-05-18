@@ -493,19 +493,18 @@ def delineate_fields(
     }
 
 
-def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803
+def run(RasterPath: str, delineate_model: str = "small") -> dict[str, Any]:  # noqa: N803
     """Registry-compatible entry point for field boundary detection.
 
     Args:
-        RasterPath: Path to input GeoTIFF (registry type name)
+        RasterPath: Path to input GeoTIFF (registry type name).
+        delineate_model: Model variant ("small" or "large"), passed via
+            the registry's ``args_map``.
 
     Returns:
-        Detection results dictionary
+        Detection results dictionary.
     """
-    # Get model variant from environment if set
-    model = os.environ.get("DELINEATE_MODEL", "small")
-
     return delineate_fields(
         raster_path=RasterPath,
-        model=model,
+        model=delineate_model,
     )

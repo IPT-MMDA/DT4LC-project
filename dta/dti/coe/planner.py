@@ -8,7 +8,7 @@ Intelligently chooses between:
 import logging
 
 from dta.dti.registry import find_items_by_keywords, find_items_producing
-from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep, Registry
+from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep, Registry, RegistryItem
 
 logger = logging.getLogger(__name__)
 
@@ -48,94 +48,83 @@ def plan(ctx: ContextUnderstanding, reg: Registry, use_llm: bool = True) -> Exec
     return plan_template(ctx, reg)
 
 
-def _is_change_detection_request(ctx: ContextUnderstanding) -> bool:
+def _get_change_detection_item(reg: Registry) -> RegistryItem | None:
+    """Return the change-detection registry item, or None if missing.
+
+    Test registries (e.g. test_planner.py) may omit it; callers must
+    tolerate None and fall back to "no change-detection signal".
+    """
+    for it in reg.instances:
+        if it.id == "algorithms/change-detection":
+            return it
+    return None
+
+
+def _is_change_detection_request(ctx: ContextUnderstanding, reg: Registry) -> bool:
     """Check if request is for change detection (comparing two images).
 
-    Only triggers for explicit change detection requests, not general vegetation analysis.
-    Requires specific keywords like "change detection", "compare", or "before/after".
-
-    Args:
-        ctx: Context understanding
-
-    Returns:
-        True if this is a change detection / comparison request
+    Trigger keywords come from ``algorithms/change-detection.triggers.keywords``
+    in the registry. Adding a new change-detection trigger phrase = a YAML edit;
+    no code change. Two structural signals stay in code (they're not item-
+    specific knowledge): "before AND after" co-occurrence, and the user
+    explicitly requesting ChangeMap as a desired output.
     """
+    item = _get_change_detection_item(reg)
+    triggers_kw: list[str] = []
+    if item is not None and item.triggers is not None:
+        triggers_kw = [k.lower() for k in item.triggers.keywords]
+
     keywords = ctx.hints.get("keywords", []) if ctx.hints else []
     goal_lower = (ctx.goal or "").lower()
     keywords_lower = " ".join(kw.lower() for kw in keywords)
 
-    # Explicit change detection keywords - require strong signals
-    # Note: "difference" alone is too weak (matches "normalized difference vegetation index")
-    # Use "image difference", "temporal difference", etc. for specificity
-    strong_change_keywords = [
-        "change detection",
-        "detect changes",
-        "compare images",
-        "image comparison",
-        "temporal comparison",
-        "image difference",
-        "temporal difference",
-        # Index-specific change detection
-        "ndvi change",
-        "ndsi change",
-        "ndwi change",
-        "vegetation change",
-        "snow change",
-        "water change",
-        "glacier change",
-        "ice change",
-        "glacier melt",
-        "snow melt",
-        "flood detection",
-        "flooding",
-    ]
-    has_strong_signal = any(kw in goal_lower or kw in keywords_lower for kw in strong_change_keywords)
+    has_strong_signal = any(kw in goal_lower or kw in keywords_lower for kw in triggers_kw)
 
-    # Combination signals: "before" AND "after" together suggest comparison
-    has_before_after = "before" in goal_lower and "after" in goal_lower
-    has_before_after = has_before_after or ("before" in keywords_lower and "after" in keywords_lower)
-
-    # Check if explicitly requesting ChangeMap output
+    # Structural signals — generic, not algorithm-specific:
+    # "before" + "after" co-occurrence, or explicit ChangeMap desired output.
+    has_before_after = ("before" in goal_lower and "after" in goal_lower) or (
+        "before" in keywords_lower and "after" in keywords_lower
+    )
     wants_changemap = "ChangeMap" in (ctx.desired_outputs or [])
 
     return has_strong_signal or has_before_after or wants_changemap
 
 
-def _detect_index_type(ctx: ContextUnderstanding) -> str:
+def _detect_index_type(ctx: ContextUnderstanding, reg: Registry) -> str:
     """Detect which index type to use for change detection.
 
-    Args:
-        ctx: Context understanding
+    Keyword sets per index come from
+    ``algorithms/change-detection.config.index_keyword_map`` in the registry.
+    Adding a new index = a YAML edit to that map; no code change.
 
-    Returns:
-        Index type string: "ndvi", "ndsi", or "ndwi"
+    Resolution order:
+        1. Explicit hint ``ctx.hints["index_type"]`` if it's a known map key.
+        2. First map key whose keyword set hits the goal/keywords blob.
+        3. ``config["default_index_type"]`` (or "ndvi" if unset).
     """
+    item = _get_change_detection_item(reg)
+    config = item.config if item is not None else {}
+    index_map: dict[str, list[str]] = config.get("index_keyword_map", {})
+    default_index = str(config.get("default_index_type", "ndvi"))
+
+    # Explicit hint wins, but only if it names a known index in the map.
+    if ctx.hints and ctx.hints.get("index_type"):
+        index_type = str(ctx.hints["index_type"]).lower()
+        if index_type in index_map:
+            return index_type
+
     keywords = ctx.hints.get("keywords", []) if ctx.hints else []
     goal_lower = (ctx.goal or "").lower()
     keywords_lower = " ".join(kw.lower() for kw in keywords)
     combined = goal_lower + " " + keywords_lower
 
-    # Check for explicit index type in hints
-    if ctx.hints and ctx.hints.get("index_type"):
-        index_type = ctx.hints["index_type"].lower()
-        if index_type in ("ndvi", "ndsi", "ndwi"):
-            return index_type
+    for index_name, kws in index_map.items():
+        if any(kw.lower() in combined for kw in kws):
+            logger.info(f"Detected {index_name.upper()} change detection from registry triggers")
+            return index_name
 
-    # NDSI indicators (snow/ice)
-    ndsi_keywords = ["ndsi", "snow", "ice", "glacier", "frozen", "melt"]
-    if any(kw in combined for kw in ndsi_keywords):
-        logger.info("Detected NDSI change detection (snow/ice)")
-        return "ndsi"
-
-    # NDWI indicators (water)
-    ndwi_keywords = ["ndwi", "water", "flood", "lake", "river", "reservoir", "drought"]
-    if any(kw in combined for kw in ndwi_keywords):
-        logger.info("Detected NDWI change detection (water)")
-        return "ndwi"
-
-    # Default to NDVI (vegetation)
-    logger.info("Defaulting to NDVI change detection (vegetation)")
-    return "ndvi"
+    logger.info(f"Defaulting to {default_index.upper()} change detection (registry default)")
+    return default_index
 
 
 def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
@@ -156,14 +145,14 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     steps: list[PlanStep] = []
 
     # Check if this is a change detection request (needs two files)
-    is_change_detection = _is_change_detection_request(ctx)
+    is_change_detection = _is_change_detection_request(ctx, reg)
 
     if is_change_detection:
         # Change detection flow: two input files + change detection algorithm
         logger.info("Detected change detection request - using dual-file input")
 
         # Detect which index type to use
-        index_type = _detect_index_type(ctx)
+        index_type = _detect_index_type(ctx, reg)
         logger.info(f"Using index type: {index_type}")
 
         # Add before/after input steps

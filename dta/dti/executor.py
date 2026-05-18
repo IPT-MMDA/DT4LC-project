@@ -10,7 +10,6 @@ from collections.abc import Callable
 from datetime import datetime
 import importlib.util
 import logging
-import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -70,7 +69,7 @@ class ModelNotInstalledError(ExecutionError):
             f"Model '{model_name}' ({size_mb} MB) is required but not installed. Please download it first."
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dict for JSON serialization."""
         return {
             "error": "model_not_installed",
@@ -218,6 +217,8 @@ class PipelineExecutor:
         # Check if this step requires an ML model
         self._check_model_availability(step, item)
 
+        if item.runner is None:
+            raise ExecutionError(f"Registry item {item.id} has no runner configured")
         runner_type = item.runner.type
 
         if runner_type == "passthrough":
@@ -302,6 +303,7 @@ class PipelineExecutor:
         Raises:
             ExecutionError: If entrypoint not found or execution fails
         """
+        assert item.runner is not None  # checked by _execute_step
         if not item.runner.entrypoint:
             raise ExecutionError(f"Python runner {item.id} missing entrypoint")
 
@@ -346,50 +348,54 @@ class PipelineExecutor:
             **inputs,  # Input types like RasterPath
         }
 
-        # Resolve entrypoint path
+        # Resolve entrypoint - supports two forms:
+        #   1. Dotted module path ("dta.dti.algorithms.ndvi") — bundled in-package
+        #      code; loaded via importlib.import_module (cached, no sys.path mutation).
+        #   2. Filesystem path ("dta/.../foo.py", "${MODEL_PATH}/inference.py") —
+        #      third-party / runtime-resolved plugins; loaded via spec_from_file_location.
         entrypoint_str = self._resolve_variables(item.runner.entrypoint, var_context)
-        entrypoint = Path(entrypoint_str)
-        if not entrypoint.is_absolute():
-            entrypoint = ROOT_DIR / entrypoint
+        is_filesystem_path = entrypoint_str.endswith(".py") or "/" in entrypoint_str or "\\" in entrypoint_str
 
-        if not entrypoint.exists():
-            raise ExecutionError(f"Entrypoint not found: {entrypoint}")
-
-        # Set environment variables from runner config
-        old_env = {}
-        for key, value in item.runner.env.items():
-            old_env[key] = os.environ.get(key)
-            resolved = self._resolve_variables(value, var_context)
-            # Resolve relative paths in env vars
-            if key.endswith(("_DIR", "_PATH")) and not Path(resolved).is_absolute():
-                resolved = str(ROOT_DIR / resolved)
-            os.environ[key] = resolved
-
-        # Add model directory to sys.path for sibling imports (e.g., prithvi_mae.py)
         model_dir_added = False
-        if model_path:
-            model_dir = str(Path(model_path))
-            if model_dir not in sys.path:
-                sys.path.insert(0, model_dir)
-                model_dir_added = True
+        if is_filesystem_path:
+            entrypoint = Path(entrypoint_str)
+            if not entrypoint.is_absolute():
+                entrypoint = ROOT_DIR / entrypoint
+            if not entrypoint.exists():
+                raise ExecutionError(f"Entrypoint not found: {entrypoint}")
 
-        try:
-            # Load module
+            # Add the model directory to sys.path so the entrypoint can import
+            # siblings (e.g. Prithvi's inference.py imports prithvi_mae.py).
+            # Process-global mutation, but each model has a unique cache directory
+            # and concurrent executions of the same model insert the same path —
+            # so threads don't clobber each other in practice. Removing this would
+            # require rewriting third-party model code to use relative imports.
+            if model_path:
+                model_dir = str(Path(model_path))
+                if model_dir not in sys.path:
+                    sys.path.insert(0, model_dir)
+                    model_dir_added = True
+
             spec = importlib.util.spec_from_file_location(f"runner_{item.id.replace('/', '_')}", str(entrypoint))
             if spec is None or spec.loader is None:
                 raise ExecutionError(f"Failed to load module: {entrypoint}")
-
             module = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = module
             spec.loader.exec_module(module)
+        else:
+            try:
+                module = importlib.import_module(entrypoint_str)
+            except ImportError as e:
+                raise ExecutionError(f"Failed to import module {entrypoint_str}: {e}") from e
 
+        try:
             # Determine function to call and arguments
             if item.runner.args_map:
                 # Use args_map - resolve all variables in the map
                 func_args = self._resolve_args_map(item.runner.args_map, var_context)
                 func_name = item.runner.function or "main"
                 if not hasattr(module, func_name):
-                    raise ExecutionError(f"Module {entrypoint} has no {func_name}() function")
+                    raise ExecutionError(f"Module {entrypoint_str} has no {func_name}() function")
                 func = getattr(module, func_name)
                 result = func(**func_args)
             else:
@@ -400,7 +406,7 @@ class PipelineExecutor:
                 elif hasattr(module, "main"):
                     result = module.main(**inputs)
                 else:
-                    raise ExecutionError(f"Module {entrypoint} has no run() or main()")
+                    raise ExecutionError(f"Module {entrypoint_str} has no run() or main()")
 
             # Store outputs
             if result is None and output_dir:
@@ -417,14 +423,9 @@ class PipelineExecutor:
                 raise ExecutionError(f"Cannot map result to outputs {item.outputs}. Expected dict or single output.")
 
         finally:
-            # Restore environment
-            for key, value in old_env.items():
-                if value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = value
-
-            # Remove model directory from sys.path
+            # Remove model directory from sys.path. (No env restore needed —
+            # algorithms now receive their config via runner.args_map kwargs,
+            # never through process-global os.environ.)
             if model_dir_added and model_path:
                 try:
                     sys.path.remove(str(Path(model_path)))
@@ -443,13 +444,13 @@ class PipelineExecutor:
         """
         import re
 
-        def replace(match: re.Match) -> str:
+        def replace(match: re.Match[str]) -> str:
             var_name = match.group(1)
             if var_name in context and context[var_name] is not None:
                 return str(context[var_name])
             return match.group(0)  # Keep original if not found
 
-        return re.sub(r"\$\{(\w+)\}", replace, value)
+        return str(re.sub(r"\$\{(\w+)\}", replace, value))
 
     def _resolve_args_map(self, args_map: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         """Resolve variables in args_map recursively.
@@ -668,10 +669,11 @@ class PipelineExecutor:
         """
         # Collect inputs
         # If agent has no specific inputs, pass all available artifacts
+        inputs: dict[str, Any]
         if not item.inputs:
             inputs = dict(self.artifacts)  # Pass all artifacts to agent
         else:
-            inputs: dict[str, Any] = {}
+            inputs = {}
             for input_type in item.inputs:
                 if input_type in self.artifacts:
                     inputs[input_type] = self.artifacts[input_type]
@@ -859,7 +861,7 @@ class PipelineExecutor:
 
         if match:
             try:
-                request = json.loads(match.group(1))
+                request: dict[str, Any] = json.loads(match.group(1))
                 if "tool" in request:
                     return request
             except json.JSONDecodeError:

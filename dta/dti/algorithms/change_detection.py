@@ -15,7 +15,7 @@ from __future__ import annotations
 import base64
 import io
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import rasterio
@@ -37,7 +37,7 @@ except ImportError:
 IndexType = Literal["ndvi", "ndsi", "ndwi", "evi"]
 
 # Index-specific configurations
-INDEX_CONFIG = {
+INDEX_CONFIG: dict[str, dict[str, Any]] = {
     "ndvi": {
         "name": "NDVI",
         "full_name": "Normalized Difference Vegetation Index",
@@ -137,32 +137,15 @@ INDEX_CONFIG = {
 }
 
 
-def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int]:
+def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int | None]:
     """Get band indices for different sensors.
 
-    Args:
-        src: Open rasterio dataset
-
-    Returns:
-        Dictionary mapping band names to 1-based indices
+    Delegates to :func:`dta.dti.raster.band_indices` so the per-index files
+    and change-detection share one source of truth for band layouts.
     """
-    band_count = src.count
+    from dta.dti.raster import band_indices
 
-    if band_count >= 7:
-        # Landsat 8/9: B2=Blue, B3=Green, B4=Red, B5=NIR, B6=SWIR1
-        return {"red": 4, "nir": 5, "green": 3, "swir": 6}
-    elif band_count >= 6:
-        # Sentinel-2 subset or similar
-        return {"red": 3, "nir": 4, "green": 2, "swir": 5}
-    elif band_count >= 5:
-        # Generic (B,G,R,NIR,SWIR)
-        return {"red": 3, "nir": 4, "green": 2, "swir": 5}
-    elif band_count == 4:
-        # RGBN format
-        return {"red": 1, "nir": 4, "green": 2, "swir": None}
-    else:
-        # 2-3 bands: assume Red=1, NIR=2
-        return {"red": 1, "nir": 2, "green": 1, "swir": None}
+    return band_indices(src)
 
 
 def _calculate_index_array(
@@ -249,7 +232,7 @@ def _calculate_index_array(
 
         # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         with np.errstate(divide="ignore", invalid="ignore"):
-            denominator = nir_band + 6*red_band - 7.5*blue_band + 1
+            denominator = nir_band + 6 * red_band - 7.5 * blue_band + 1
             index = np.where(denominator != 0, (2.5 * (nir_band - red_band)) / denominator, np.nan)
 
     else:
@@ -538,9 +521,9 @@ def calculate_change(
 
 
 def run(
-    RasterPathBefore: str,
-    RasterPathAfter: str,
-    IndexType: str = "ndvi",
+    RasterPathBefore: str,  # noqa: N803  # CamelCase mirrors registry input key
+    RasterPathAfter: str,  # noqa: N803  # CamelCase mirrors registry input key
+    IndexType: str = "ndvi",  # noqa: N803  # CamelCase mirrors registry input key
 ) -> dict[str, Any]:
     """Registry-compatible change detection.
 
@@ -553,8 +536,9 @@ def run(
         Change detection result dictionary
     """
     # Normalize index type
-    index_type = IndexType.lower() if IndexType else "ndvi"
-    if index_type not in INDEX_CONFIG:
-        index_type = "ndvi"  # Default fallback
+    index_type_str = IndexType.lower() if IndexType else "ndvi"
+    if index_type_str not in INDEX_CONFIG:
+        index_type_str = "ndvi"  # Default fallback
+    index_type: Literal["ndvi", "ndsi", "ndwi", "evi"] = cast(Literal["ndvi", "ndsi", "ndwi", "evi"], index_type_str)
 
     return calculate_change(RasterPathBefore, RasterPathAfter, index_type)

@@ -156,7 +156,7 @@ def _create_lulc_visualization(
 
     fig, ax = plt.subplots(figsize=(12, 10))
 
-    im = ax.imshow(classification, cmap=cmap, vmin=0, vmax=6, interpolation="nearest")
+    ax.imshow(classification, cmap=cmap, vmin=0, vmax=6, interpolation="nearest")
 
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
@@ -438,7 +438,7 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
         }
 
 
-def run(RasterPath: str) -> dict[str, Any]:
+def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key
     """Registry-compatible LULC classification.
 
     Args:

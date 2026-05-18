@@ -10,6 +10,9 @@ from dta.config import UPLOADS_PATH
 # Upload directory from centralized config (resources/.cache/uploads/)
 UPLOAD_DIR = UPLOADS_PATH
 
+# Maximum file upload size (200 MB)
+MAX_UPLOAD_SIZE = 200 * 1024 * 1024
+
 
 def sse_frame(payload: dict[str, Any]) -> bytes:
     """Format payload as Server-Sent Event frame.

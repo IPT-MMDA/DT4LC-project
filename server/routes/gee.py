@@ -48,7 +48,7 @@ async def fetch_sentinel2_data(
 
         # Fetch data based on type
         if data_type == "rgb":
-            result = fetch_sentinel2_composite(bbox, start_date, end_date, cloud_cover_max)
+            result = fetch_sentinel2_composite(bbox, start_date, end_date, cloud_cover_max=cloud_cover_max)
         elif data_type in ["ndvi", "ndwi", "ndsi"]:
             result = fetch_sentinel2_indices(bbox, start_date, end_date, data_type, cloud_cover_max)
         else:
@@ -175,7 +175,7 @@ async def fetch_landsat_data(
 
 
 @router.post("/bulk-fetch")  # type: ignore[misc]
-async def bulk_fetch_datasets(request: dict) -> JSONResponse:
+async def bulk_fetch_datasets(request: dict[str, Any]) -> JSONResponse:
     """Bulk fetch multiple bands and indices for pre/post periods.
 
     Request body should contain:

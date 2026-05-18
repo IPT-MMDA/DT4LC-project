@@ -118,3 +118,21 @@ class BaseLLMProvider(ABC):
             Estimated cost in USD (0.0 for local models)
         """
         return 0.0
+
+
+def estimate_token_cost(
+    messages: list[LLMMessage],
+    input_per_mtok: float,
+    output_per_mtok: float,
+) -> float:
+    """Estimate request cost in USD from per-Mtok pricing.
+
+    Approximates input tokens at 4 chars/token and output at 25% of input
+    length. Shared by providers with simple per-model pricing tables
+    (Anthropic, Mistral). Providers with model-tier branching (Gemini)
+    keep their own implementation.
+    """
+    input_chars = sum(len(m.content) for m in messages)
+    input_tokens = input_chars / 4
+    output_tokens = input_tokens * 0.25
+    return input_tokens / 1_000_000 * input_per_mtok + output_tokens / 1_000_000 * output_per_mtok

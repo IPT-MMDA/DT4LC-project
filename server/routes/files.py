@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
 
-from ..utils import UPLOAD_DIR
+from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,25 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
     # Basic checks
     if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
         raise HTTPException(status_code=400, detail="Please upload a .tif/.tiff GeoTIFF.")
-    raw = await file.read()
+
+    # Check Content-Length header first (fast reject before reading body)
+    if file.size is not None and file.size > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB."
+        )
+
+    # Read in chunks to enforce size limit without trusting Content-Length
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):  # 1 MB chunks
+        total += len(chunk)
+        if total > MAX_UPLOAD_SIZE:
+            raise HTTPException(
+                status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB."
+            )
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file.")
 
@@ -159,7 +177,7 @@ async def list_files() -> JSONResponse:
                     continue
 
         # Sort by modification time (newest first)
-        files.sort(key=lambda x: x["modified"], reverse=True)
+        files.sort(key=lambda x: float(x["modified"]), reverse=True)  # type: ignore[arg-type]
 
         num_uploads = len([f for f in files if f["source"] == "upload"])
         num_exports = len([f for f in files if f["source"] == "export"])

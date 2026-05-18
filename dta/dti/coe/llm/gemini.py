@@ -118,8 +118,8 @@ class GeminiProvider(BaseLLMProvider):
                     future = executor.submit(client.models.generate_content, **gen_kwargs)
                     try:
                         return future.result(timeout=self.timeout)
-                    except concurrent.futures.TimeoutError:
-                        raise TimeoutError(f"Gemini request timed out after {self.timeout}s")
+                    except concurrent.futures.TimeoutError as e:
+                        raise TimeoutError(f"Gemini request timed out after {self.timeout}s") from e
 
             response = _generate_with_timeout()
 
