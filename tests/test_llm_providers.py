@@ -213,7 +213,7 @@ class TestAnthropicProvider:
             cache_read_input_tokens=0,
         )
         fake_client = MagicMock()
-        fake_client.messages.create.side_effect = lambda **kw: (captured.update(kw) or fake_response)
+        fake_client.messages.create.side_effect = lambda **kw: captured.update(kw) or fake_response
         provider._client = fake_client
 
         messages = [
