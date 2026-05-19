@@ -35,14 +35,28 @@ export function ChatPage() {
     getContextForBackend,
   } = useChatStore();
 
-  // Use app store for attachments (not persisted)
-  const { uploadedAttachments, clearAttachments, removeAttachment } = useAppStore();
+  // Use app store for attachments and cross-page state
+  const { uploadedAttachments, clearAttachments, removeAttachment, pendingAnalysis, setPendingAnalysis } = useAppStore();
 
   const submitJob = useSubmitJob();
   const cancelJob = useCancelJob();
 
   // Sync pending jobs on mount and periodically
   useJobSync();
+
+  // Handle pending analysis from Map page
+  useEffect(() => {
+    if (pendingAnalysis) {
+      if (pendingAnalysis.bbox) {
+        const bboxStr = pendingAnalysis.bbox.map(v => v.toFixed(4)).join(', ');
+        setInput((prev) => prev ? `${prev}\nAnalyze region: [${bboxStr}]` : `Analyze region: [${bboxStr}]`);
+      } else if (pendingAnalysis.message) {
+        const message = pendingAnalysis.message;
+        setInput((prev) => prev ? `${prev}\n${message}` : message);
+      }
+      setPendingAnalysis(null);
+    }
+  }, [pendingAnalysis, setPendingAnalysis]);
 
   // Handle loading session from URL query param (e.g., from Jobs page)
   useEffect(() => {
