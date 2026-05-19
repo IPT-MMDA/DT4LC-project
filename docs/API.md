@@ -16,13 +16,52 @@ Currently no authentication required (local development only).
 
 Health check endpoint.
 
-**Response:**
+**Query Parameters:**
+
+| Parameter  | Type    | Default | Description                                                     |
+|------------|---------|---------|----------------------------------------------------------------|
+| `detailed` | boolean | false   | Return extended diagnostics (restricted to localhost requests) |
+
+**Response (simple):**
 
 ```json
 {
   "ok": true,
   "service": "DT4LC",
   "version": "1.0.0"
+}
+```
+
+**Response (`?detailed=true`, localhost only — returns 403 from remote):**
+
+```json
+{
+  "ok": true,
+  "service": "DT4LC",
+  "version": "1.0.0",
+  "llm_providers": [
+    { "name": "gemini", "model": "gemini-2.5-flash", "available": true },
+    { "name": "groq",   "model": "llama-3.3-70b-versatile", "available": true },
+    { "name": "ollama", "model": "llama3.2", "available": true }
+  ],
+  "gee": {
+    "initialized": false,
+    "service_account_configured": false
+  },
+  "models": {
+    "total": 3,
+    "available": 2,
+    "models": [
+      { "id": "prithvi:v1.0", "available": true },
+      { "id": "algorithms/ndvi", "available": true }
+    ]
+  },
+  "disk": {
+    "uploads": { "bytes": 1048576, "human": "1.0 MB" },
+    "cache":   { "bytes": 5242880, "human": "5.0 MB" },
+    "models":  { "bytes": 0,       "human": "0.0 B"  },
+    "exports": { "bytes": 0,       "human": "0.0 B"  }
+  }
 }
 ```
 

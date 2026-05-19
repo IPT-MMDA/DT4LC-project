@@ -71,3 +71,54 @@ class JobStatus(BaseModel):  # type: ignore[misc]
     message: str | None = None
     result: dict[str, Any] | None = None
     error: str | None = None
+
+
+# Health endpoint response schemas
+
+
+class LLMProviderStatus(BaseModel):  # type: ignore[misc]
+    name: str | None = None
+    model: str | None = None
+    available: bool | None = None
+    error: str | None = None
+
+
+class GEEStatus(BaseModel):  # type: ignore[misc]
+    initialized: bool
+    service_account_configured: bool
+    error: str | None = None
+
+
+class ModelEntry(BaseModel):  # type: ignore[misc]
+    id: str
+    available: bool
+
+
+class ModelsInfo(BaseModel):  # type: ignore[misc]
+    total: int = 0
+    available: int = 0
+    models: list[ModelEntry] = []
+    error: str | None = None
+
+
+class DiskEntry(BaseModel):  # type: ignore[misc]
+    bytes: int
+    human: str
+
+
+class DiskUsage(BaseModel):  # type: ignore[misc]
+    uploads: DiskEntry | None = None
+    cache: DiskEntry | None = None
+    models: DiskEntry | None = None
+    exports: DiskEntry | None = None
+    error: str | None = None
+
+
+class HealthResponse(BaseModel):  # type: ignore[misc]
+    ok: bool = True
+    service: str = "DT4LC"
+    version: str = "1.0.0"
+    llm_providers: list[LLMProviderStatus] | None = None
+    gee: GEEStatus | None = None
+    models: ModelsInfo | None = None
+    disk: DiskUsage | None = None
