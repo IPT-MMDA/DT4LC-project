@@ -24,6 +24,7 @@ def mock_attachment() -> Attachment:
 class TestOrchestratorIntentClassification:
     """Tests for orchestrator intent classification."""
 
+    @pytest.mark.llm
     def test_pipeline_intent_returns_plan(self, mock_attachment: Attachment) -> None:
         """Test that pipeline intent requests with attachments return a plan."""
         req = ChatRequest(prompt="calculate ndvi", attachments=[mock_attachment])
@@ -33,6 +34,7 @@ class TestOrchestratorIntentClassification:
         assert result.get("intent") == "pipeline", f"Expected pipeline intent, got: {result.get('intent')}"
         assert "plan" in result, "Pipeline intent should include a plan"
 
+    @pytest.mark.llm
     def test_conversation_intent_returns_response(self) -> None:
         """Test that conversation intent requests return a response."""
         req = ChatRequest(prompt="what can we do next?", attachments=[])

@@ -67,6 +67,9 @@ services:
       # Cache paths - all consolidated under resources/.cache/
       - DT4LC_MODEL_CACHE=/app/resources/.cache/models
       - DT4LC_UPLOADS_PATH=/app/resources/.cache/uploads
+      # Job storage backend (memory or sqlite)
+      - JOB_STORAGE=${JOB_STORAGE:-sqlite}
+      - DT4LC_JOBS_DB=/app/resources/.cache/jobs.db
     volumes:
       # Mount resources with read-write for cache subdirectory
       - ./resources:/app/resources

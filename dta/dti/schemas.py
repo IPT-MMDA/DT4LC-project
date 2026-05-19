@@ -45,6 +45,51 @@ class PreprocessorRef(BaseModel):  # type: ignore[misc]
     apply_to: str  # Input type to transform (e.g., "RasterPath")
 
 
+# --- Registry-driven extension models ---------------------------------
+# Per-item natural-language hooks, response templates, parameterized config,
+# and (reserved) plugin-source pointers — letting users extend the system by
+# editing registry.yaml rather than touching the orchestration code.
+
+
+class Triggers(BaseModel):  # type: ignore[misc]
+    """Natural-language hooks driving intent classification and planning.
+
+    Loaded into the intent classifier's keyword/action-phrase index at
+    startup. Adding a new algorithm = filling these on its registry item;
+    no edit to intent_classifier.py needed.
+    """
+
+    keywords: list[str] = []  # nouns/topics: "ndvi", "vegetation", "glacier change"
+    action_phrases: list[str] = []  # imperatives: "calculate ndvi", "detect boundaries"
+
+
+class UserGuide(BaseModel):  # type: ignore[misc]
+    """Human-readable strings the system surfaces for this item.
+
+    Used by the intent classifier to render per-algorithm responses
+    (capability_response when the user asks "can you...?", missing_file_response
+    when an action is requested without an upload).
+    """
+
+    capability_response: str | None = None
+    missing_file_response: str | None = None
+    summary_template: str | None = None  # one-line template used post-execution
+
+
+class Source(BaseModel):  # type: ignore[misc]
+    """Third-party plugin source (reserved for a future plugin loader).
+
+    Indicates the algorithm/model isn't bundled in this repo and must be
+    fetched/installed before its runner.entrypoint resolves. Currently
+    declarative-only; no consumer wired in yet.
+    """
+
+    type: Literal["github", "huggingface", "local-path"] = "local-path"
+    repo: str | None = None
+    ref: str | None = None
+    install: str | None = None
+
+
 class RegistryItem(BaseModel):  # type: ignore[misc]
     id: str
     kind: Literal["input", "algorithm", "model", "postprocess", "preprocessor"]
@@ -57,6 +102,14 @@ class RegistryItem(BaseModel):  # type: ignore[misc]
     preprocessors: list[PreprocessorRef] = []  # Preprocessors to apply before execution
     integration: Integration | None = None  # For hosted models (HuggingFace, GEE, etc.)
     metadata: dict[str, Any] = {}  # Additional metadata (team, author, hosting, etc.)
+
+    # Registry-driven extension fields. See Triggers / UserGuide / Source above.
+    display_name: str | None = None  # human-readable label for UI / responses
+    triggers: Triggers | None = None  # consumed by the intent classifier
+    user_guide: UserGuide | None = None  # capability / missing-file responses
+    config: dict[str, Any] = {}  # runner-consumed config block (formula, bands, colormap, ...)
+    model_id: str | None = None  # model-manager id for locally-managed models
+    source: Source | None = None  # third-party plugin source (reserved)
 
 
 class Registry(BaseModel):  # type: ignore[misc]

@@ -35,7 +35,11 @@ def setup_logging(level: str = "INFO", format_type: str = "standard") -> None:
             "formatters": {
                 "json": {
                     "class": "logging.Formatter",
-                    "format": '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s", "module": "%(module)s", "function": "%(funcName)s", "line": %(lineno)d}',
+                    "format": (
+                        '{"timestamp": "%(asctime)s", "level": "%(levelname)s", '
+                        '"logger": "%(name)s", "message": "%(message)s", '
+                        '"module": "%(module)s", "function": "%(funcName)s", "line": %(lineno)d}'
+                    ),
                     "datefmt": "%Y-%m-%d %H:%M:%S",
                 }
             },

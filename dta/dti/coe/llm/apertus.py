@@ -26,7 +26,7 @@ _pipeline = None
 _torch = None
 
 
-def _get_pipeline():
+def _get_pipeline() -> tuple[Any, Any]:
     """Lazy load the transformers pipeline."""
     global _pipeline, _torch
     if _pipeline is None:
@@ -135,7 +135,7 @@ class ApertusProvider(BaseLLMProvider):
         self._load_model()
 
         # Build prompt from messages
-        prompt_parts = []
+        prompt_parts: list[str] = []
         for msg in messages:
             if msg.role == "system":
                 prompt_parts.insert(0, f"System: {msg.content}\n")
@@ -146,6 +146,7 @@ class ApertusProvider(BaseLLMProvider):
 
         prompt = "".join(prompt_parts) + "Assistant:"
 
+        assert self._text_pipeline is not None  # populated by _load_model
         # Generation parameters
         gen_kwargs = {
             "max_new_tokens": max_tokens or 512,

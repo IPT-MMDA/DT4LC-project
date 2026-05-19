@@ -1,0 +1,190 @@
+cff-version: 1.2.0
+title: "DT4LC: Digital Twin for Land Cover"
+message: >-
+  If you use this software, please cite it using the metadata from this file
+  and the preferred-citation below.
+type: software
+version: 0.4.0
+date-released: "2026-05-06"
+authors:
+  - given-names: Anton
+    family-names: Cherniatevych
+    email: chernyatevich.a@gmail.com
+    affiliation: >-
+      Department of Mathematical Modelling and Data Analysis,
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0009-0003-5292-6067"
+  - given-names: Volodymyr
+    family-names: Malyniak
+    affiliation: >-
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0009-0008-0840-4276"
+  - given-names: Sofiia
+    family-names: Drozd
+    affiliation: >-
+      Department of Mathematical Modelling and Data Analysis,
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0000-0002-5149-5520"
+  - given-names: Nataliia
+    family-names: Kussul
+    affiliation: "University of Maryland, College Park, MD, USA"
+    orcid: "https://orcid.org/0000-0002-9704-9702"
+  - given-names: Andrii
+    family-names: Shelestov
+    affiliation: >-
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0000-0001-9256-4097"
+  - given-names: Yevhenii
+    family-names: Salii
+    affiliation: >-
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0009-0006-0395-8099"
+  - given-names: Oleksandr
+    family-names: Yavorskyi
+    affiliation: >-
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0009-0001-5175-3825"
+  - given-names: Andrii
+    family-names: Kolotii
+    affiliation: >-
+      National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+    orcid: "https://orcid.org/0000-0002-6972-4483"
+  - given-names: Gregory
+    family-names: Giuliani
+    affiliation: "University of Geneva, Switzerland"
+    orcid: "https://orcid.org/0000-0002-1825-8865"
+  - given-names: Charlotte
+    family-names: Poussin
+    affiliation: "University of Geneva, Switzerland"
+repository-code: "https://github.com/IPT-MMDA/DT4LC-project"
+url: "https://mmda.ipt.kpi.ua/"
+abstract: >-
+  A cognitive digital twin framework for land cover change detection
+  and vegetation analysis using satellite imagery, machine learning,
+  and LLM-powered orchestration. Developed at the Department of
+  Mathematical Modelling and Data Analysis, Igor Sikorsky Kyiv
+  Polytechnic Institute.
+keywords:
+  - digital-twin
+  - land-cover
+  - change-detection
+  - remote-sensing
+  - satellite-imagery
+  - machine-learning
+  - NDVI
+  - geospatial
+  - foundation-models
+license: AGPL-3.0
+references:
+  - type: article
+    title: >-
+      AI-Powered Digital Twin Framework for Land Use Change
+      in Disaster Affected Regions
+    authors:
+      - given-names: Nataliia
+        family-names: Kussul
+      - given-names: Gregory
+        family-names: Giuliani
+      - given-names: Andrii
+        family-names: Shelestov
+      - given-names: Anton
+        family-names: Cherniatevych
+      - given-names: Sofiia
+        family-names: Drozd
+      - given-names: Andrii
+        family-names: Kolotii
+      - given-names: Yevhenii
+        family-names: Salii
+      - given-names: Oleksandr
+        family-names: Yavorskyi
+      - given-names: Volodymyr
+        family-names: Malyniak
+      - given-names: Charlotte
+        family-names: Poussin
+    journal: >-
+      IEEE Journal of Selected Topics in Applied Earth Observations
+      and Remote Sensing
+    volume: 18
+    year: 2025
+    start: 27473
+    doi: "10.1109/JSTARS.2025.3623870"
+  - type: conference-paper
+    title: >-
+      Foundation Model Integration in a Multi-Instance Digital Twin
+      System for Land Use Change
+    authors:
+      - given-names: Nataliia
+        family-names: Kussul
+      - given-names: Andrii
+        family-names: Shelestov
+      - given-names: Gregory
+        family-names: Giuliani
+      - given-names: Sofiia
+        family-names: Drozd
+      - given-names: Andrii
+        family-names: Kolotii
+      - given-names: Yevhenii
+        family-names: Salii
+      - given-names: Anton
+        family-names: Cherniatevych
+      - given-names: Oleksandr
+        family-names: Yavorskyi
+      - given-names: Volodymyr
+        family-names: Malyniak
+      - given-names: Charlotte
+        family-names: Poussin
+    collection-title: >-
+      2025 IEEE 13th International Conference on Intelligent Data
+      Acquisition and Advanced Computing Systems (IDAACS)
+    year: 2025
+    doi: "10.1109/IDAACS68557.2025.11322175"
+  - type: book-section
+    title: "Digital Twins for Land Use Change"
+    authors:
+      - given-names: Nataliia
+        family-names: Kussul
+      - given-names: Gregory
+        family-names: Giuliani
+      - given-names: Andrii
+        family-names: Shelestov
+      - given-names: Sofiia
+        family-names: Drozd
+      - given-names: Andrii
+        family-names: Kolotii
+      - given-names: Yevhenii
+        family-names: Salii
+      - given-names: Anton
+        family-names: Cherniatevych
+      - given-names: Oleksandr
+        family-names: Yavorskyi
+      - given-names: Volodymyr
+        family-names: Malyniak
+      - given-names: Charlotte
+        family-names: Poussin
+    collection-title: "System Analysis and Data Mining"
+    volume: 609
+    start: 371
+    end: 389
+    year: 2026
+    doi: "10.1007/978-3-031-97529-5_22"
+  - type: conference-paper
+    title: >-
+      LLM-Driven Multi-Agent Cognitive User Interface for Land Cover
+      Change Digital Twin System
+    authors:
+      - given-names: Anton
+        family-names: Cherniatevych
+      - given-names: Sofiia
+        family-names: Drozd
+      - given-names: Nataliia
+        family-names: Kussul
+      - given-names: Andrii
+        family-names: Shelestov
+      - given-names: Gregory
+        family-names: Giuliani
+      - given-names: Charlotte
+        family-names: Poussin
+    collection-title: >-
+      IGARSS 2026 -- IEEE International Geoscience and Remote
+      Sensing Symposium
+    year: 2026

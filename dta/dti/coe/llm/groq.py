@@ -146,10 +146,10 @@ class GroqProvider(BaseLLMProvider):
                     },
                 )
 
-        except httpx.TimeoutException:
-            raise Exception(f"Groq request timed out after {self.timeout}s")
+        except httpx.TimeoutException as e:
+            raise Exception(f"Groq request timed out after {self.timeout}s") from e
         except httpx.RequestError as e:
-            raise Exception(f"Groq request failed: {e}")
+            raise Exception(f"Groq request failed: {e}") from e
 
     def estimate_cost(self, messages: list[LLMMessage]) -> float:
         """Estimate cost - Groq free tier has no per-token cost.

@@ -70,6 +70,68 @@ class TestNDVIAlgorithm:
         assert callable(run)
 
 
+class TestEVIAlgorithm:
+    """Tests for EVI algorithm."""
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(),
+        reason="Kahovka data not available",
+    )
+    def test_evi_calculation_with_real_data(self) -> None:
+        """Test EVI algorithm with real data."""
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.evi import calculate_evi
+
+        data_dir = ROOT_DIR / "resources/kahovka_data"
+        tif_files = list(data_dir.glob("*.tif")) + list(data_dir.glob("*.tiff"))
+
+        if not tif_files:
+            pytest.skip("No GeoTIFF files found")
+
+        result = calculate_evi(str(tif_files[0]))
+
+        assert "evi_array" in result
+        assert "metadata" in result
+        assert "statistics" in result
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(),
+        reason="Kahovka data not available",
+    )
+    def test_evi_statistics_valid(self) -> None:
+        """Test that EVI statistics are valid."""
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.evi import calculate_evi
+
+        data_dir = ROOT_DIR / "resources/kahovka_data"
+        tif_files = list(data_dir.glob("*.tif"))
+
+        if not tif_files:
+            pytest.skip("No GeoTIFF files found")
+
+        result = calculate_evi(str(tif_files[0]))
+        stats = result["statistics"]
+
+        assert "min" in stats
+        assert "max" in stats
+        assert "mean" in stats
+        assert "std" in stats
+        assert stats["valid_pixels"] > 0
+
+    def test_evi_file_not_found(self) -> None:
+        """Test EVI raises error for non-existent file."""
+        from dta.dti.algorithms.evi import calculate_evi
+
+        with pytest.raises(FileNotFoundError):
+            calculate_evi("/nonexistent/path.tif")
+
+    def test_evi_run_function_exists(self) -> None:
+        """Test that run() function exists for registry integration."""
+        from dta.dti.algorithms.evi import run
+
+        assert callable(run)
+
+
 class TestNDSIAlgorithm:
     """Tests for NDSI (snow index) algorithm."""
 
@@ -260,7 +322,7 @@ class TestChangeDetectionAlgorithm:
         from dta.dti.algorithms.change_detection import calculate_change
 
         data_dir = ROOT_DIR / "resources/kahovka_data"
-        tif_files = sorted(list(data_dir.glob("*.tif")))
+        tif_files = sorted(data_dir.glob("*.tif"))
 
         if len(tif_files) < 2:
             pytest.skip("Need at least 2 GeoTIFF files for change detection")
