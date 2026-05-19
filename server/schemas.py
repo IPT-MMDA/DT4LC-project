@@ -25,6 +25,7 @@ __all__ = [
     "Plan",
 ]
 
+
 class ErrorCode(str, Enum):
     """Standardized error codes for API responses."""
 

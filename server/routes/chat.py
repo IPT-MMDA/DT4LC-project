@@ -169,14 +169,16 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         try:
             # Convert to COE request
             if not req.messages:
-                yield sse_frame({
-                    "ok": False,
-                    "error": {
-                        "code": "bad_request",
-                        "message": "No messages provided",
-                        "details": {},
+                yield sse_frame(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "bad_request",
+                            "message": "No messages provided",
+                            "details": {},
+                        },
                     }
-                })
+                )
                 yield sse_frame({"done": True})
                 return
 
@@ -196,7 +198,7 @@ async def chat(req: ChatRequest) -> StreamingResponse:
                             "code": "planning_failed",
                             "message": orch_result.get("error", "Planning failed"),
                             "details": {"candidate": orch_result.get("candidate")},
-                        }
+                        },
                     }
                 )
                 yield sse_frame({"done": True})
@@ -222,14 +224,16 @@ async def chat(req: ChatRequest) -> StreamingResponse:
             yield sse_frame({"done": True})
 
         except Exception as e:
-            yield sse_frame({
-                "ok": False,
-                "error": {
-                    "code": "internal_error",
-                    "message": str(e),
-                    "details": {},
+            yield sse_frame(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "internal_error",
+                        "message": str(e),
+                        "details": {},
+                    },
                 }
-            })
+            )
             yield sse_frame({"done": True})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
