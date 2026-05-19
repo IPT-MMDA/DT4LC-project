@@ -40,6 +40,15 @@ class MissingInputError(ExecutionError):
         default_msg = f"Missing required input '{input_type}' for step '{step_id}'"
         super().__init__(message or default_msg)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for JSON serialization."""
+        return {
+            "error": "missing_input",
+            "message": str(self),
+            "step_id": self.step_id,
+            "input_type": self.input_type,
+        }
+
 
 class CancellationError(Exception):
     """Raised when execution is cancelled."""

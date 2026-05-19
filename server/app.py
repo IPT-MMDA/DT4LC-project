@@ -40,7 +40,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await queue.stop()
 
 
-app = FastAPI(title="DT4LC API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="DT4LC API",
+    description="API for Digital Twin for Land Cover (DT4LC)",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 app.add_middleware(

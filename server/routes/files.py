@@ -5,9 +5,10 @@ import io
 import logging
 from pathlib import Path
 import tempfile
+from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 import numpy as np
 from PIL import Image
@@ -21,31 +22,89 @@ router = APIRouter(prefix="/v1", tags=["files"])
 
 
 @router.post("/upload")  # type: ignore[misc]
-async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
+async def upload_geotiff(file: Annotated[UploadFile, File(...)]) -> JSONResponse:
+    """Upload a GeoTIFF file for analysis.
+
+    Args:
+        file: The GeoTIFF file to upload (.tif or .tiff).
+
+    Returns:
+        JSON response with file ID, path, and metadata including a preview.
+    """
     # Basic checks
     if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
-        raise HTTPException(status_code=400, detail="Please upload a .tif/.tiff GeoTIFF.")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "bad_request",
+                    "message": "Please upload a .tif/.tiff GeoTIFF.",
+                    "details": {"filename": file.filename},
+                },
+            },
+        )
 
     # Check Content-Length header first (fast reject before reading body)
     if file.size is not None and file.size > MAX_UPLOAD_SIZE:
-        raise HTTPException(
-            status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB."
+        return JSONResponse(
+            status_code=413,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "file_too_large",
+                    "message": f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB.",
+                    "details": {"size": file.size, "max_size": MAX_UPLOAD_SIZE},
+                },
+            },
         )
 
     # Read in chunks to enforce size limit without trusting Content-Length
     chunks: list[bytes] = []
     total = 0
-    while chunk := await file.read(1024 * 1024):  # 1 MB chunks
-        total += len(chunk)
-        if total > MAX_UPLOAD_SIZE:
-            raise HTTPException(
-                status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB."
-            )
-        chunks.append(chunk)
+    try:
+        while chunk := await file.read(1024 * 1024):  # 1 MB chunks
+            total += len(chunk)
+            if total > MAX_UPLOAD_SIZE:
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "ok": False,
+                        "error": {
+                            "code": "file_too_large",
+                            "message": f"File too large. Maximum size is {MAX_UPLOAD_SIZE // (1024 * 1024)} MB.",
+                            "details": {"total_read": total, "max_size": MAX_UPLOAD_SIZE},
+                        },
+                    },
+                )
+            chunks.append(chunk)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Failed to read upload stream: {e}",
+                    "details": {},
+                },
+            },
+        )
+
     raw = b"".join(chunks)
 
     if not raw:
-        raise HTTPException(status_code=400, detail="Empty file.")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "bad_request",
+                    "message": "Empty file.",
+                    "details": {},
+                },
+            },
+        )
 
     # Save file to temp directory
     file_id = str(uuid.uuid4())[:8]
@@ -66,7 +125,17 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
             data = band1.astype("float64").filled(np.nan)
             finite = np.isfinite(data)
             if not finite.any():
-                raise HTTPException(status_code=400, detail="All pixels are nodata.")
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "ok": False,
+                        "error": {
+                            "code": "bad_request",
+                            "message": "All pixels are nodata.",
+                            "details": {},
+                        },
+                    },
+                )
 
             # percentiles on finite pixels only
             p2, p98 = np.percentile(data[finite], [2, 98])
@@ -92,6 +161,7 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
 
         return JSONResponse(
             {
+                "ok": True,
                 "id": file_id,
                 "filename": file.filename,
                 "path": str(saved_path),  # File path for use in execution
@@ -105,7 +175,17 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
         # Clean up saved file on error
         if saved_path.exists():
             saved_path.unlink()
-        raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "bad_request",
+                    "message": f"Failed to read GeoTIFF: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.get("/files")  # type: ignore[misc]
@@ -187,11 +267,21 @@ async def list_files() -> JSONResponse:
 
     except Exception as e:
         logger.exception("Failed to list files")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": str(e),
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.get("/download")  # type: ignore[misc]
-async def download_file(path: str) -> FileResponse:
+async def download_file(path: str) -> FileResponse | JSONResponse:
     """Download a file from the server.
 
     Used for downloading generated outputs like GeoPackage files.
@@ -202,44 +292,77 @@ async def download_file(path: str) -> FileResponse:
     Returns:
         File response with appropriate content type
     """
-    file_path = Path(path)
+    try:
+        file_path = Path(path)
 
-    # Security: Only allow downloads from specific directories
-    allowed_dirs = [
-        Path(tempfile.gettempdir()) / "dt4lc_delineate",
-        UPLOAD_DIR,
-        Path(tempfile.gettempdir()),
-    ]
+        # Security: Only allow downloads from specific directories
+        allowed_dirs = [
+            Path(tempfile.gettempdir()) / "dt4lc_delineate",
+            UPLOAD_DIR,
+            Path(tempfile.gettempdir()),
+        ]
 
-    # Check if path is under an allowed directory
-    is_allowed = False
-    for allowed_dir in allowed_dirs:
-        try:
-            file_path.resolve().relative_to(allowed_dir.resolve())
-            is_allowed = True
-            break
-        except ValueError:
-            continue
+        # Check if path is under an allowed directory
+        is_allowed = False
+        for allowed_dir in allowed_dirs:
+            try:
+                file_path.resolve().relative_to(allowed_dir.resolve())
+                is_allowed = True
+                break
+            except ValueError:
+                continue
 
-    if not is_allowed:
-        raise HTTPException(status_code=403, detail="Access denied: path not in allowed directories")
+        if not is_allowed:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "unauthorized",
+                        "message": "Access denied: path not in allowed directories",
+                        "details": {"path": path},
+                    },
+                },
+            )
 
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+        if not file_path.exists():
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "not_found",
+                        "message": f"File not found: {path}",
+                        "details": {"path": path},
+                    },
+                },
+            )
 
-    # Determine content type based on extension
-    suffix = file_path.suffix.lower()
-    content_types = {
-        ".gpkg": "application/geopackage+sqlite3",
-        ".tif": "image/tiff",
-        ".tiff": "image/tiff",
-        ".png": "image/png",
-        ".json": "application/json",
-    }
-    media_type = content_types.get(suffix, "application/octet-stream")
+        # Determine content type based on extension
+        suffix = file_path.suffix.lower()
+        content_types = {
+            ".gpkg": "application/geopackage+sqlite3",
+            ".tif": "image/tiff",
+            ".tiff": "image/tiff",
+            ".png": "image/png",
+            ".json": "application/json",
+        }
+        media_type = content_types.get(suffix, "application/octet-stream")
 
-    return FileResponse(
-        path=str(file_path),
-        media_type=media_type,
-        filename=file_path.name,
-    )
+        return FileResponse(
+            path=str(file_path),
+            media_type=media_type,
+            filename=file_path.name,
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": str(e),
+                    "details": {},
+                },
+            },
+        )

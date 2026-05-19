@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from ..jobs import JobStatus, get_job_queue
@@ -33,13 +33,43 @@ async def submit_job(req: JobSubmitRequest) -> JSONResponse:
 
         job = await queue.get_job(job_id)
         if not job:
-            raise HTTPException(status_code=500, detail="Job creation failed")
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "internal_error",
+                        "message": "Job creation failed",
+                        "details": {},
+                    },
+                },
+            )
 
         return JSONResponse(job.to_dict(), status_code=202)
     except RuntimeError as e:
-        raise HTTPException(status_code=429, detail=str(e)) from e
+        return JSONResponse(
+            status_code=429,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "bad_request",
+                    "message": str(e),
+                    "details": {"type": "RuntimeError"},
+                },
+            },
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Job submission failed: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Job submission failed: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.get("/jobs/{job_id}")  # type: ignore[misc]
@@ -56,13 +86,31 @@ async def get_job_status(job_id: str) -> JSONResponse:
             # Log available jobs for debugging
             available_jobs = await queue.get_job_ids()
             logger.warning(f"Job {job_id} not found. Available jobs: {available_jobs}")
-            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "not_found",
+                        "message": f"Job {job_id} not found",
+                        "details": {"available_job_ids": available_jobs},
+                    },
+                },
+            )
 
         return JSONResponse(job.to_dict())
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get job: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Failed to get job: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.post("/jobs/{job_id}/cancel")  # type: ignore[misc]
@@ -75,15 +123,43 @@ async def cancel_job(job_id: str) -> JSONResponse:
         if not cancelled:
             job = await queue.get_job(job_id)
             if not job:
-                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-            raise HTTPException(status_code=400, detail=f"Job {job_id} cannot be cancelled (already finished)")
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "ok": False,
+                        "error": {
+                            "code": "not_found",
+                            "message": f"Job {job_id} not found",
+                            "details": {},
+                        },
+                    },
+                )
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "bad_request",
+                        "message": f"Job {job_id} cannot be cancelled (already finished)",
+                        "details": {"state": job.status.value},
+                    },
+                },
+            )
 
         job = await queue.get_job(job_id)
         return JSONResponse(job.to_dict() if job else {"id": job_id, "cancelled": True})
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Failed to cancel job: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.get("/jobs")  # type: ignore[misc]
@@ -102,10 +178,18 @@ async def list_jobs(
             try:
                 status_filter = JobStatus(status)
             except ValueError:
-                raise HTTPException(
+                return JSONResponse(
                     status_code=400,
-                    detail=f"Invalid status: {status}. Must be one of: {', '.join(s.value for s in JobStatus)}",
-                ) from None
+                    content={
+                        "ok": False,
+                        "error": {
+                            "code": "validation_error",
+                            "message": f"Invalid status: {status}. \
+                                        Must be one of: {', '.join(s.value for s in JobStatus)}",
+                            "details": {"provided_status": status, "allowed_statuses": [s.value for s in JobStatus]},
+                        },
+                    },
+                )
 
         jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset)
         total = await queue.get_total_count()
@@ -118,11 +202,19 @@ async def list_jobs(
                 "offset": offset,
             }
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Failed to list jobs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list jobs: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Failed to list jobs: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.get("/queue/stats")  # type: ignore[misc]
@@ -133,4 +225,14 @@ async def get_queue_stats() -> JSONResponse:
         stats = queue.get_stats()
         return JSONResponse(stats)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Failed to get stats: {e}",
+                    "details": {},
+                },
+            },
+        )
