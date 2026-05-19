@@ -24,6 +24,11 @@ export interface DrawnRegion {
 const MAX_CONTEXT_TOKENS = 4000; // Safe limit for small LLM instances
 const CHARS_PER_TOKEN = 4; // Rough estimate
 
+export interface PendingAnalysis {
+  bbox?: [number, number, number, number];
+  message?: string;
+}
+
 interface AppStore {
   // UI State
   sidebarCollapsed: boolean;
@@ -59,6 +64,9 @@ interface AppStore {
   // Context Management
   contextTokenCount: number;
   maxContextTokens: number;
+
+  // Pending Analysis (cross-page state for Map -> Chat navigation)
+  pendingAnalysis: PendingAnalysis | null;
 
   // Actions
   toggleSidebar: () => void;
@@ -109,6 +117,9 @@ interface AppStore {
   // Job Tracking
   trackJob: (jobId: string) => void;
   untrackJob: (jobId: string) => void;
+
+  // Pending Analysis
+  setPendingAnalysis: (analysis: PendingAnalysis | null) => void;
 
   // Context Management
   getContextForLLM: () => ContextItem[];
@@ -197,6 +208,7 @@ export const useAppStore = create<AppStore>()(
       activeJobIds: [],
       contextTokenCount: 0,
       maxContextTokens: MAX_CONTEXT_TOKENS,
+      pendingAnalysis: null,
 
   // UI Actions
   toggleSidebar: () =>
@@ -398,6 +410,10 @@ export const useAppStore = create<AppStore>()(
     set((state) => ({
       activeJobIds: state.activeJobIds.filter((id) => id !== jobId),
     })),
+
+  // Pending Analysis
+  setPendingAnalysis: (analysis) =>
+    set({ pendingAnalysis: analysis }),
 
   // Context Management
   getContextForLLM: () => {

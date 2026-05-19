@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from dta.dti.coe.orchestrator import orchestrate
@@ -27,7 +27,17 @@ async def create_plan(req: ChatRequest) -> JSONResponse:
         # Convert server ChatRequest to COE ChatRequest
         # For now, use the last message as prompt
         if not req.messages:
-            raise HTTPException(status_code=400, detail="No messages provided")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "bad_request",
+                        "message": "No messages provided",
+                        "details": {},
+                    },
+                },
+            )
 
         prompt = req.messages[-1].content
         coe_req = COEChatRequest(prompt=prompt, attachments=[])
@@ -40,8 +50,11 @@ async def create_plan(req: ChatRequest) -> JSONResponse:
                 status_code=400,
                 content={
                     "ok": False,
-                    "error": result.get("error", "Plan generation failed"),
-                    "candidate": result.get("candidate"),
+                    "error": {
+                        "code": "planning_failed",
+                        "message": result.get("error", "Plan generation failed"),
+                        "details": {"candidate": result.get("candidate")},
+                    },
                 },
             )
 
@@ -53,7 +66,17 @@ async def create_plan(req: ChatRequest) -> JSONResponse:
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Plan generation failed: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "internal_error",
+                    "message": f"Plan generation failed: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.post("/execute")  # type: ignore[misc]
@@ -65,7 +88,17 @@ async def execute_plan(req: ChatRequest) -> JSONResponse:
     try:
         # Convert server ChatRequest to COE ChatRequest
         if not req.messages:
-            raise HTTPException(status_code=400, detail="No messages provided")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": {
+                        "code": "bad_request",
+                        "message": "No messages provided",
+                        "details": {},
+                    },
+                },
+            )
 
         prompt = req.messages[-1].content
         coe_req = COEChatRequest(prompt=prompt, attachments=[])
@@ -78,8 +111,11 @@ async def execute_plan(req: ChatRequest) -> JSONResponse:
                 status_code=400,
                 content={
                     "ok": False,
-                    "error": orch_result.get("error", "Plan generation failed"),
-                    "candidate": orch_result.get("candidate"),
+                    "error": {
+                        "code": "planning_failed",
+                        "message": orch_result.get("error", "Plan generation failed"),
+                        "details": {"candidate": orch_result.get("candidate")},
+                    },
                 },
             )
 
@@ -108,7 +144,17 @@ async def execute_plan(req: ChatRequest) -> JSONResponse:
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Execution failed: {e}") from e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "execution_failed",
+                    "message": f"Execution failed: {e}",
+                    "details": {},
+                },
+            },
+        )
 
 
 @router.post("/chat")  # type: ignore[misc]
@@ -123,7 +169,16 @@ async def chat(req: ChatRequest) -> StreamingResponse:
         try:
             # Convert to COE request
             if not req.messages:
-                yield sse_frame({"error": "No messages provided"})
+                yield sse_frame(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "bad_request",
+                            "message": "No messages provided",
+                            "details": {},
+                        },
+                    }
+                )
                 yield sse_frame({"done": True})
                 return
 
@@ -138,8 +193,12 @@ async def chat(req: ChatRequest) -> StreamingResponse:
             if not orch_result.get("ok"):
                 yield sse_frame(
                     {
-                        "error": orch_result.get("error", "Planning failed"),
-                        "candidate": orch_result.get("candidate"),
+                        "ok": False,
+                        "error": {
+                            "code": "planning_failed",
+                            "message": orch_result.get("error", "Planning failed"),
+                            "details": {"candidate": orch_result.get("candidate")},
+                        },
                     }
                 )
                 yield sse_frame({"done": True})
@@ -165,7 +224,16 @@ async def chat(req: ChatRequest) -> StreamingResponse:
             yield sse_frame({"done": True})
 
         except Exception as e:
-            yield sse_frame({"error": str(e)})
+            yield sse_frame(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "internal_error",
+                        "message": str(e),
+                        "details": {},
+                    },
+                }
+            )
             yield sse_frame({"done": True})
 
     return StreamingResponse(gen(), media_type="text/event-stream")

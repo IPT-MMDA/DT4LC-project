@@ -33,9 +33,25 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem('token');
     }
 
-    const errorMessage = error.response?.data
-      ? (error.response.data as any).detail || 'An error occurred'
-      : error.message;
+    const data = error.response?.data as any;
+    let errorMessage = 'An error occurred';
+
+    if (data) {
+      if (data.error && data.error.message) {
+        // New standardized format: {"ok": false, "error": {"message": "..."}}
+        errorMessage = data.error.message;
+      } else if (data.detail) {
+        // FastAPI default or legacy format: {"detail": "..."}
+        errorMessage = Array.isArray(data.detail) 
+          ? data.detail[0]?.msg || JSON.stringify(data.detail)
+          : data.detail;
+      } else if (data.error && typeof data.error === 'string') {
+        // Simple legacy format: {"error": "..."}
+        errorMessage = data.error;
+      }
+    } else {
+      errorMessage = error.message;
+    }
 
     return Promise.reject(new Error(errorMessage));
   }
