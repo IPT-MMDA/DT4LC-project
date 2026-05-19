@@ -184,7 +184,8 @@ async def list_jobs(
                         "ok": False,
                         "error": {
                             "code": "validation_error",
-                            "message": f"Invalid status: {status}. Must be one of: {', '.join(s.value for s in JobStatus)}",
+                            "message": f"Invalid status: {status}. \
+                                        Must be one of: {', '.join(s.value for s in JobStatus)}",
                             "details": {"provided_status": status, "allowed_statuses": [s.value for s in JobStatus]},
                         },
                     },

@@ -5,6 +5,7 @@ import io
 import logging
 from pathlib import Path
 import tempfile
+from typing import Annotated
 import uuid
 
 from fastapi import APIRouter, File, UploadFile
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/v1", tags=["files"])
 
 
 @router.post("/upload")  # type: ignore[misc]
-async def upload_geotiff(file: UploadFile = File(...)) -> JSONResponse:
+async def upload_geotiff(file: Annotated[UploadFile, File(...)]) -> JSONResponse:
     """Upload a GeoTIFF file for analysis.
 
     Args:
