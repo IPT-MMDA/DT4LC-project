@@ -1,6 +1,11 @@
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, BarChart3, TrendingUp, Map, Download, ArrowUpDown, Grid3X3, Cpu } from 'lucide-react';
+import type { Job } from '../../types';
+import { useAppStore } from '../../store/useAppStore';
+import { getArtifactsFromJobResult, getGeoTIFFOutputsFromJob } from '../../utils/jobGeoTIFF';
 
 interface JobResultProps {
+  job?: Job;
   result: any;
 }
 
@@ -12,12 +17,41 @@ function downloadBase64Image(base64: string, filename: string) {
   link.click();
 }
 
-export function JobResult({ result }: JobResultProps) {
+export function JobResult({ job, result }: JobResultProps) {
   if (!result) return null;
 
-  // Parse the actual backend structure
+  const navigate = useNavigate();
+  const addLayer = useAppStore((state) => state.addLayer);
+  const mapLayers = useAppStore((state) => state.mapLayers);
+  const jobForMap: Job = {
+    id: job?.id && job.id.length > 0 ? job.id : 'job',
+    status: job?.status ?? 'completed',
+    progress: job?.progress ?? 1,
+    result,
+  };
+  const geoTIFFOutputs = getGeoTIFFOutputsFromJob(jobForMap);
+  const hasGeoTIFFOutput = geoTIFFOutputs.length > 0;
+
+  const handleViewOnMap = () => {
+    geoTIFFOutputs.forEach(({ path, label, layerId }) => {
+      const exists = mapLayers.find((l) => l.id === layerId);
+      if (!exists) {
+        addLayer({
+          id: layerId,
+          name: label,
+          type: 'raster',
+          visible: true,
+          opacity: 0.7,
+          url: path,
+        });
+      }
+    });
+    navigate('/map');
+  };
+
+  // Parse the actual backend structure (execution.artifacts or flat result.artifacts)
   const execution = result.execution;
-  const artifacts = execution?.artifacts || {};
+  const artifacts = getArtifactsFromJobResult(result) ?? (execution?.artifacts as Record<string, unknown> | undefined) ?? {};
 
   // Statistics can be at top level or nested
   const statistics = artifacts.Statistics || artifacts.statistics;
@@ -40,18 +74,34 @@ export function JobResult({ result }: JobResultProps) {
   return (
     <div className="space-y-6">
       {/* Execution Status */}
-      {execution && (
+      {(execution || hasGeoTIFFOutput) && (
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Execution Complete
-            </h3>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Execution Complete
+                </h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {execution
+                  ? `Pipeline executed successfully in ${execution.duration_seconds?.toFixed(2) ?? 'N/A'} seconds`
+                  : 'Results are ready.'}
+              </p>
+            </div>
+            {hasGeoTIFFOutput && (
+              <button
+                onClick={handleViewOnMap}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400
+                         bg-primary-50 dark:bg-primary-950 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900
+                         border border-primary-200 dark:border-primary-800"
+              >
+                <Map className="w-4 h-4" />
+                View on Map
+              </button>
+            )}
           </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Pipeline executed successfully in{' '}
-            {execution.duration_seconds?.toFixed(2) || 'N/A'} seconds
-          </p>
         </div>
       )}
 
@@ -376,16 +426,30 @@ export function JobResult({ result }: JobResultProps) {
                 NDVI Analysis
               </h3>
             </div>
-            {ndviMap.visualizations.ndvi_map && (
-              <button
-                onClick={() => downloadBase64Image(ndviMap.visualizations.ndvi_map, 'ndvi_map.png')}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400
-                           bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                <Download className="w-4 h-4" />
-                Download
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {hasGeoTIFFOutput && (
+                <button
+                  type="button"
+                  onClick={handleViewOnMap}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary-600 dark:text-primary-400
+                           bg-primary-50 dark:bg-primary-950 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900
+                           border border-primary-200 dark:border-primary-800"
+                >
+                  <Map className="w-4 h-4" />
+                  View on Map
+                </button>
+              )}
+              {ndviMap.visualizations.ndvi_map && (
+                <button
+                  onClick={() => downloadBase64Image(ndviMap.visualizations.ndvi_map, 'ndvi_map.png')}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400
+                             bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                >
+                  <Download className="w-4 h-4" />
+                  Download
+                </button>
+              )}
+            </div>
           </div>
 
           {ndviMap.visualizations.ndvi_map && (

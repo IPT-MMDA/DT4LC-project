@@ -10,7 +10,69 @@ import { FileUploadDropzone } from '../components/chat/FileUploadDropzone';
 import { ImagePreviewModal } from '../components/chat/ImagePreviewModal';
 import { useJobSync } from '../hooks/useJobSync';
 import { chatLogger as logger } from '../utils/logger';
-import type { ChatMessage } from '../types';
+import { getGeoTIFFOutputsFromJob } from '../utils/jobGeoTIFF';
+import type { ChatMessage, Job } from '../types';
+
+/** Old saved chats may have `viewOnMapJobResult` instead of `viewOnMapLayers`. */
+function layersForMapMessage(message: ChatMessage & { viewOnMapJobResult?: Job['result'] }) {
+  if (message.viewOnMapLayers?.length) return message.viewOnMapLayers;
+  if (message.viewOnMapJobResult) {
+    return getGeoTIFFOutputsFromJob({
+      id: message.jobId!,
+      status: 'completed',
+      progress: 1,
+      result: message.viewOnMapJobResult,
+    });
+  }
+  return [];
+}
+
+function JobResultChatItem({
+  message,
+  currentJob,
+}: {
+  message: ChatMessage;
+  currentJob: Job | undefined;
+}) {
+  if (message.type !== 'job_result' || !message.jobId) return null;
+
+  const resultData =
+    message.resultData || (currentJob?.id === message.jobId ? parseJobResult(currentJob) : undefined);
+
+  const viewOnMapLayers = layersForMapMessage(message as ChatMessage & { viewOnMapJobResult?: Job['result'] });
+
+  const jobForCard: Job = {
+    id: message.jobId,
+    status: 'completed',
+    progress: 1,
+    result: currentJob?.id === message.jobId ? currentJob.result : undefined,
+  };
+
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[90%]">
+        {resultData ? (
+          <JobResultCard
+            job={jobForCard}
+            resultData={resultData}
+            compact={false}
+            viewOnMapLayers={viewOnMapLayers}
+          />
+        ) : (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">{message.content}</p>
+            <Link
+              to={`/jobs/${message.jobId}`}
+              className="mt-2 inline-flex items-center gap-1 text-sm text-primary-500 hover:text-primary-600"
+            >
+              View job details
+            </Link>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function ChatPage() {
   const [input, setInput] = useState('');
@@ -176,34 +238,10 @@ export function ChatPage() {
   const renderMessage = (message: ChatMessage, index: number) => {
     const isUser = message.role === 'user';
 
-    // Job result messages get special treatment
     if (message.type === 'job_result' && message.jobId) {
-      // Use stored resultData from the message, or try to get from currentJob
-      const resultData = message.resultData || (currentJob?.id === message.jobId ? parseJobResult(currentJob) : undefined);
-
       return (
-        <div key={index} className="flex justify-start">
-          <div className="max-w-[90%]">
-            {resultData ? (
-              <JobResultCard
-                job={{ id: message.jobId, status: 'completed', progress: 1 }}
-                resultData={resultData}
-                compact={false}
-              />
-            ) : (
-              <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {message.content}
-                </p>
-                <Link
-                  to={`/jobs/${message.jobId}`}
-                  className="mt-2 inline-flex items-center gap-1 text-sm text-primary-500 hover:text-primary-600"
-                >
-                  View job details
-                </Link>
-              </div>
-            )}
-          </div>
+        <div key={index}>
+          <JobResultChatItem message={message} currentJob={currentJob} />
         </div>
       );
     }
