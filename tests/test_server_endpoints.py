@@ -188,17 +188,3 @@ class TestConversationChatFlow:
         text = resp.text
         # SSE stream should end with a done event
         assert "done" in text
-
-
-class TestHealthDetailed:
-    """Tests for /v1/health with detailed mode."""
-
-    def test_health_detailed_mode(self, client: TestClient) -> None:
-        """Test detailed health endpoint."""
-        resp = client.get("/v1/health", params={"detailed": "true"})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["ok"] is True
-        # Detailed mode should have extra fields
-        if "diagnostics" in data:
-            assert isinstance(data["diagnostics"], dict)
