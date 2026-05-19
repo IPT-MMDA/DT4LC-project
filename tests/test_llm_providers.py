@@ -1,16 +1,15 @@
-"""Tests for LLM provider infrastructure.
-
-Tests LLM providers (Gemini, Ollama), router, and configuration.
-"""
+"""Tests for LLM providers using mocks."""
 
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from dta.dti.coe.llm import LLMMessage, LLMResponse, LLMRouter
+from dta.dti.coe.llm.apertus import ApertusProvider
 from dta.dti.coe.llm.base import BaseLLMProvider
 from dta.dti.coe.llm.gemini import GeminiProvider
+from dta.dti.coe.llm.groq import GroqProvider
 from dta.dti.coe.llm.ollama import OllamaProvider
 
 
@@ -119,6 +118,8 @@ class TestOllamaProvider:
 
 class TestAnthropicProvider:
     """Tests for Anthropic Claude LLM provider."""
+
+    pytest.importorskip("anthropic")
 
     def test_initialization(self) -> None:
         """Test Anthropic provider can be initialized with default model."""
@@ -316,6 +317,7 @@ class TestLLMRouter:
 
     def test_from_config(self) -> None:
         """Test router creation from config dict."""
+        pytest.importorskip("anthropic")
         config = {
             "providers": [
                 {"type": "gemini", "model": "gemini-2.0-flash-exp"},
@@ -407,6 +409,7 @@ class TestLLMConfig:
 
     def test_create_router_from_env(self) -> None:
         """Test router creation from environment."""
+        pytest.importorskip("anthropic")
         from dta.dti.coe.llm.config import create_router_from_env
 
         router = create_router_from_env()
@@ -417,6 +420,7 @@ class TestLLMConfig:
     def test_anthropic_in_config_when_key_and_order_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Setting ANTHROPIC_API_KEY + adding 'anthropic' to LLM_PROVIDER_ORDER
         produces an anthropic entry in the default config."""
+        pytest.importorskip("anthropic")
         from dta.dti.coe.llm.config import get_default_config
 
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
@@ -536,3 +540,61 @@ class TestOllamaContextAnalysis:
         ollama_providers = [p for p in router.providers if p.name == "ollama"]
         if ollama_providers:
             assert ollama_providers[0].is_available(), "Ollama configured but not available"
+
+
+def test_apertus_generate() -> None:
+    pytest.importorskip("transformers")
+    provider = ApertusProvider(api_key="fake", api_url="http://fake")
+    messages = [LLMMessage(role="user", content="hello")]
+
+    fake_pipeline = MagicMock()
+    fake_pipeline.return_value = [{"generated_text": "User: hello\nAssistant: world"}]
+    fake_pipeline.tokenizer = MagicMock()
+    fake_pipeline.tokenizer.eos_token_id = 0
+
+    with patch("dta.dti.coe.llm.apertus._get_pipeline", return_value=(lambda *a, **kw: fake_pipeline, MagicMock())):
+        provider._loaded = True
+        provider._text_pipeline = fake_pipeline
+        res = provider.generate(messages)
+
+    assert res.provider == "apertus"
+
+
+def test_apertus_generate_error() -> None:
+    pytest.importorskip("transformers")
+    provider = ApertusProvider(api_key="fake")
+    messages = [LLMMessage(role="user", content="hello")]
+
+    fake_pipeline = MagicMock()
+    fake_pipeline.side_effect = Exception("Network error")
+    fake_pipeline.tokenizer = MagicMock()
+    fake_pipeline.tokenizer.eos_token_id = 0
+
+    provider._loaded = True
+    provider._text_pipeline = fake_pipeline
+
+    with pytest.raises(Exception, match="Network error"):
+        provider.generate(messages)
+
+
+def test_groq_generate() -> None:
+    provider = GroqProvider(api_key="fake")
+    messages = [LLMMessage(role="user", content="hello")]
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "world"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+    }
+
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_client.post.return_value = mock_response
+
+    with patch("dta.dti.coe.llm.groq.httpx.Client", return_value=mock_client):
+        res = provider.generate(messages)
+
+    assert res.text == "world"
+    assert res.provider == "groq"
