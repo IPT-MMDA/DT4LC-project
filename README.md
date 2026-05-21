@@ -617,7 +617,7 @@ This project is licensed under the Research Use License - see the [LICENSE](LICE
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the code of conduct, branching strategy, how to claim issues, and the pull request process.
 
 ## Citation
 
