@@ -40,7 +40,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await queue.stop()
 
 
-app = FastAPI(title="DT4LC API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="DT4LC API",
+    version="1.0.0",
+    description=(
+        "REST API for the Digital Twin for Land Cover (DT4LC): async geospatial jobs, "
+        "LLM-powered chat and planning, file uploads, map tiles, Google Earth Engine data, "
+        "and ML model management."
+    ),
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "health", "description": "Health, capabilities, registry, and metrics"},
+        {"name": "chat", "description": "COE planning, execution, and streaming chat"},
+        {"name": "jobs", "description": "Async analysis job queue"},
+        {"name": "files", "description": "GeoTIFF upload, listing, and download"},
+        {"name": "tiles", "description": "XYZ map tiles from GeoTIFF files"},
+        {"name": "gee", "description": "Google Earth Engine data fetch and layer export"},
+        {"name": "models", "description": "ML model download and cache management"},
+    ],
+)
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
