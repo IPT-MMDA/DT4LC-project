@@ -562,6 +562,8 @@ Test change detection:
 
 ## Development
 
+See [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for environment setup, project layout, tests, adding algorithms, COE flow, and git workflow.
+
 ### Task Commands
 
 All development commands are available via [Task](https://taskfile.dev/):
