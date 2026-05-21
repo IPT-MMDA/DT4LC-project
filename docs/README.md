@@ -26,5 +26,5 @@ See the project [README.md](../README.md) for:
 
 ## Additional Resources
 
-- **Swagger UI**: http://localhost:8000/docs (when server is running)
-- **ReDoc**: http://localhost:8000/redoc (when server is running)
+- **Swagger UI**: http://localhost/docs (Docker) or http://localhost:8000/docs (backend only)
+- **ReDoc**: http://localhost/redoc (Docker) or http://localhost:8000/redoc (backend only)

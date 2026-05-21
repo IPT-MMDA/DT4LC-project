@@ -2,24 +2,40 @@
 
 from datetime import datetime
 import logging
-from typing import Any
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, HTTPException, Query
+
+from server.schemas import (
+    BulkFetchRequest,
+    BulkFetchResponse,
+    DatasetListResponse,
+    GEEDatesResponse,
+    GEEExportResponse,
+    GEEFetchResponse,
+    GEELayerIdResponse,
+    GEELayersListResponse,
+    PersistLayerRequest,
+    PersistLayerResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/gee", tags=["gee"])
 
 
-@router.post("/sentinel2")  # type: ignore[misc]
+@router.post(
+    "/sentinel2",
+    response_model=GEEFetchResponse,
+    summary="Fetch Sentinel-2 tiles",
+)
 async def fetch_sentinel2_data(
-    bbox: list[float],
-    start_date: str,
-    end_date: str,
+    bbox: Annotated[list[float], Body(description="Bounding box [minX, minY, maxX, maxY] WGS84")],
+    start_date: Annotated[str, Body(description="Start date YYYY-MM-DD")],
+    end_date: Annotated[str, Body(description="End date YYYY-MM-DD")],
     data_type: str = Query("rgb", description="Data type: rgb, ndvi, ndwi, or ndsi"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
-) -> JSONResponse:
+) -> GEEFetchResponse:
     """Fetch Sentinel-2 data from Google Earth Engine.
 
     Args:
@@ -57,7 +73,7 @@ async def fetch_sentinel2_data(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return JSONResponse(result)
+        return GEEFetchResponse.model_validate(result)
 
     except HTTPException:
         raise
@@ -66,14 +82,18 @@ async def fetch_sentinel2_data(
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}") from e
 
 
-@router.post("/modis")  # type: ignore[misc]
+@router.post(
+    "/modis",
+    response_model=GEEFetchResponse,
+    summary="Fetch MODIS tiles",
+)
 async def fetch_modis_data(
-    bbox: list[float],
-    start_date: str,
-    end_date: str,
+    bbox: Annotated[list[float], Body(description="Bounding box [minX, minY, maxX, maxY] WGS84")],
+    start_date: Annotated[str, Body(description="Start date YYYY-MM-DD")],
+    end_date: Annotated[str, Body(description="End date YYYY-MM-DD")],
     data_type: str = Query("rgb", description="Data type: rgb, ndvi, ndwi"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
-) -> JSONResponse:
+) -> GEEFetchResponse:
     """Fetch MODIS Terra/Aqua data from Google Earth Engine.
 
     Args:
@@ -111,7 +131,7 @@ async def fetch_modis_data(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return JSONResponse(result)
+        return GEEFetchResponse.model_validate(result)
 
     except HTTPException:
         raise
@@ -120,14 +140,18 @@ async def fetch_modis_data(
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}") from e
 
 
-@router.post("/landsat")  # type: ignore[misc]
+@router.post(
+    "/landsat",
+    response_model=GEEFetchResponse,
+    summary="Fetch Landsat tiles",
+)
 async def fetch_landsat_data(
-    bbox: list[float],
-    start_date: str,
-    end_date: str,
+    bbox: Annotated[list[float], Body(description="Bounding box [minX, minY, maxX, maxY] WGS84")],
+    start_date: Annotated[str, Body(description="Start date YYYY-MM-DD")],
+    end_date: Annotated[str, Body(description="End date YYYY-MM-DD")],
     data_type: str = Query("rgb", description="Data type: rgb, ndvi, ndwi, ndsi"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
-) -> JSONResponse:
+) -> GEEFetchResponse:
     """Fetch Landsat 8/9 data from Google Earth Engine.
 
     Args:
@@ -165,7 +189,7 @@ async def fetch_landsat_data(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return JSONResponse(result)
+        return GEEFetchResponse.model_validate(result)
 
     except HTTPException:
         raise
@@ -174,41 +198,28 @@ async def fetch_landsat_data(
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}") from e
 
 
-@router.post("/bulk-fetch")  # type: ignore[misc]
-async def bulk_fetch_datasets(request: dict[str, Any]) -> JSONResponse:
-    """Bulk fetch multiple bands and indices for pre/post periods.
-
-    Request body should contain:
-        bbox: Bounding box as [minX, minY, maxX, maxY] (WGS84)
-        dataset_id: Dataset ID ('sentinel-2', 'modis', 'landsat-8')
-        bands: List of band IDs to fetch
-        indices: List of indices to fetch ('ndvi', 'ndwi', 'ndsi')
-        pre_start: Pre-period start date YYYY-MM-DD
-        pre_end: Pre-period end date YYYY-MM-DD
-        post_start: Post-period start date YYYY-MM-DD (optional if use_now=True)
-        post_end: Post-period end date YYYY-MM-DD (optional if use_now=True)
-        cloud_cover_max: Maximum cloud cover percentage (0-100)
-        use_now: If True, calculate post period as last 7 days
-
-    Returns:
-        JSON with list of layer metadata for bulk import
-    """
+@router.post(
+    "/bulk-fetch",
+    response_model=BulkFetchResponse,
+    summary="Bulk fetch GEE layers",
+)
+async def bulk_fetch_datasets(request: BulkFetchRequest) -> BulkFetchResponse:
+    """Bulk fetch bands and indices for pre/post periods."""
     try:
         from datetime import datetime, timedelta
 
         from dta.dti.data_sources.gee_bulk_fetch import bulk_fetch_data
 
-        # Extract parameters from request body
-        bbox = request.get("bbox", [])
-        dataset_id = request.get("dataset_id", "")
-        bands = request.get("bands", [])
-        indices = request.get("indices", [])
-        pre_start = request.get("pre_start", "")
-        pre_end = request.get("pre_end", "")
-        post_start = request.get("post_start")
-        post_end = request.get("post_end")
-        cloud_cover_max = request.get("cloud_cover_max", 20.0)
-        use_now = request.get("use_now", False)
+        bbox = request.bbox
+        dataset_id = request.dataset_id
+        bands = request.bands
+        indices = request.indices
+        pre_start = request.pre_start
+        pre_end = request.pre_end
+        post_start = request.post_start
+        post_end = request.post_end
+        cloud_cover_max = request.cloud_cover_max
+        use_now = request.use_now
 
         # Validate bbox
         if len(bbox) != 4:
@@ -262,7 +273,7 @@ async def bulk_fetch_datasets(request: dict[str, Any]) -> JSONResponse:
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return JSONResponse(result)
+        return BulkFetchResponse.model_validate(result)
 
     except HTTPException:
         raise
@@ -271,13 +282,13 @@ async def bulk_fetch_datasets(request: dict[str, Any]) -> JSONResponse:
         raise HTTPException(status_code=500, detail=f"Failed to bulk fetch data: {str(e)}") from e
 
 
-@router.get("/datasets")  # type: ignore[misc]
-async def list_available_datasets() -> JSONResponse:
-    """List all available GEE datasets with metadata.
-
-    Returns:
-        JSON with dataset configurations
-    """
+@router.get(
+    "/datasets",
+    response_model=DatasetListResponse,
+    summary="List GEE datasets",
+)
+async def list_available_datasets() -> DatasetListResponse:
+    """List available GEE datasets and supported bands/indices."""
     datasets = {
         "sentinel-2": {
             "id": "sentinel-2",
@@ -311,58 +322,41 @@ async def list_available_datasets() -> JSONResponse:
         },
     }
 
-    return JSONResponse({"ok": True, "datasets": datasets})
+    return DatasetListResponse(datasets=datasets)
 
 
-@router.post("/layers/persist")  # type: ignore[misc]
-async def persist_layer_metadata(request: dict[str, Any]) -> JSONResponse:
-    """Persist layer metadata for future export and chat context.
-
-    Request body should contain:
-        layer_id: Unique layer identifier
-        layer_name: Display name of the layer
-        dataset_id: Dataset ID ('sentinel-2', 'modis', 'landsat-8')
-        bands: List of band IDs
-        indices: List of spectral indices
-        period: Period label ('pre' or 'post')
-        bbox: Bounding box [minX, minY, maxX, maxY]
-        start_date: Start date YYYY-MM-DD
-        end_date: End date YYYY-MM-DD
-        tile_url: GEE tile URL for visualization
-        cloud_cover_max: Maximum cloud cover percentage
-
-    Returns:
-        JSON with success status
-    """
+@router.post(
+    "/layers/persist",
+    response_model=PersistLayerResponse,
+    summary="Persist layer metadata",
+)
+async def persist_layer_metadata(request: PersistLayerRequest) -> PersistLayerResponse:
+    """Save GEE layer metadata for later export to GeoTIFF."""
     try:
         from datetime import datetime
 
         from server.layer_metadata_store import save_layer_metadata
 
-        # Extract fields from request
-        layer_id = request.get("layer_id")
-        if not layer_id:
-            raise HTTPException(status_code=400, detail="layer_id is required")
-
+        layer_id = request.layer_id
         metadata = {
             "layer_id": layer_id,
-            "layer_name": request.get("layer_name", ""),
-            "dataset_id": request.get("dataset_id", ""),
-            "bands": request.get("bands", []),
-            "indices": request.get("indices", []),
-            "period": request.get("period", ""),
-            "bbox": request.get("bbox", []),
-            "start_date": request.get("start_date", ""),
-            "end_date": request.get("end_date", ""),
-            "tile_url": request.get("tile_url", ""),
-            "cloud_cover_max": request.get("cloud_cover_max", 20.0),
+            "layer_name": request.layer_name,
+            "dataset_id": request.dataset_id,
+            "bands": request.bands,
+            "indices": request.indices,
+            "period": request.period,
+            "bbox": request.bbox,
+            "start_date": request.start_date,
+            "end_date": request.end_date,
+            "tile_url": request.tile_url,
+            "cloud_cover_max": request.cloud_cover_max,
             "created_at": datetime.now().isoformat(),
         }
 
         logger.info(f"Persisting layer metadata: {layer_id}")
         save_layer_metadata(layer_id, metadata)
 
-        return JSONResponse({"ok": True, "layer_id": layer_id})
+        return PersistLayerResponse(layer_id=layer_id)
 
     except HTTPException:
         raise
@@ -371,14 +365,18 @@ async def persist_layer_metadata(request: dict[str, Any]) -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/layers/{layer_id}/export")  # type: ignore[misc]
+@router.post(
+    "/layers/{layer_id}/export",
+    response_model=GEEExportResponse,
+    summary="Export layer to GeoTIFF",
+)
 async def export_layer_for_analysis(
     layer_id: str,
     scale: int = Query(10, description="Resolution in meters"),
     format: str = Query("geotiff", description="Export format"),
     source: str = Query("auto", description="Data source: gee, microsoft, or auto"),
-    name: str = Query(None, description="Custom export name (optional)"),
-) -> JSONResponse:
+    name: str | None = Query(None, description="Custom export name (optional)"),
+) -> GEEExportResponse:
     """Export a layer to GeoTIFF for AI analysis.
 
     This retrieves layer metadata and exports from the chosen source:
@@ -544,13 +542,12 @@ async def export_layer_for_analysis(
 
             # Check if region is too large for GEE direct download
             if not size_estimate["can_use_direct_download"]:
-                return JSONResponse(
-                    {
-                        "ok": False,
-                        "error": f"Region too large for GEE ({size_estimate['estimated_size_mb']:.1f} MB). "
-                        f"Please use 'Microsoft' as data source for large regions, "
-                        "or reduce resolution (30m, 100m, 250m).",
-                    }
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Region too large for GEE ({size_estimate['estimated_size_mb']:.1f} MB). "
+                        "Use source=microsoft or lower resolution."
+                    ),
                 )
 
             # Direct download for small regions
@@ -568,13 +565,13 @@ async def export_layer_for_analysis(
 
         logger.info(f"Successfully exported layer {layer_id} to {export_result['file_path']}")
 
-        return JSONResponse(
+        return GEEExportResponse.model_validate(
             {
                 "ok": True,
                 "status": "completed",
                 "attachment": attachment,
                 "size_mb": export_result["size_bytes"] / (1024 * 1024),
-                "source": chosen_source,  # Include source information for UI
+                "source": chosen_source,
             }
         )
 
@@ -585,34 +582,31 @@ async def export_layer_for_analysis(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/layers")  # type: ignore[misc]
-async def list_persisted_layers() -> JSONResponse:
-    """List all persisted GEE layers.
-
-    Returns:
-        JSON with list of layer metadata
-    """
+@router.get(
+    "/layers",
+    response_model=GEELayersListResponse,
+    summary="List persisted layers",
+)
+async def list_persisted_layers() -> GEELayersListResponse:
+    """List persisted GEE layer metadata."""
     try:
         from server.layer_metadata_store import list_all_layers
 
         layers = list_all_layers()
-        return JSONResponse({"ok": True, "layers": layers, "count": len(layers)})
+        return GEELayersListResponse(layers=layers, count=len(layers))
 
     except Exception as e:
         logger.error(f"Failed to list layers: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/layers/{layer_id}")  # type: ignore[misc]
-async def delete_persisted_layer(layer_id: str) -> JSONResponse:
-    """Delete persisted layer metadata.
-
-    Args:
-        layer_id: Layer ID to delete
-
-    Returns:
-        JSON with success status
-    """
+@router.delete(
+    "/layers/{layer_id}",
+    response_model=GEELayerIdResponse,
+    summary="Delete persisted layer",
+)
+async def delete_persisted_layer(layer_id: str) -> GEELayerIdResponse:
+    """Delete persisted layer metadata by ID."""
     try:
         from server.layer_metadata_store import delete_layer_metadata
 
@@ -620,7 +614,7 @@ async def delete_persisted_layer(layer_id: str) -> JSONResponse:
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Layer {layer_id} not found")
 
-        return JSONResponse({"ok": True, "layer_id": layer_id})
+        return GEELayerIdResponse(layer_id=layer_id)
 
     except HTTPException:
         raise
@@ -629,13 +623,17 @@ async def delete_persisted_layer(layer_id: str) -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/dates")  # type: ignore[misc]
+@router.get(
+    "/dates",
+    response_model=GEEDatesResponse,
+    summary="Sentinel-2 acquisition dates",
+)
 async def get_sentinel2_dates(
     bbox: list[float] = Query(..., description="Bounding box [minX, minY, maxX, maxY]"),  # noqa: B008
     start_date: str = Query(..., description="Start date YYYY-MM-DD"),
     end_date: str = Query(..., description="End date YYYY-MM-DD"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
-) -> JSONResponse:
+) -> GEEDatesResponse:
     """Get available Sentinel-2 acquisition dates for a bounding box.
 
     Args:
@@ -659,7 +657,7 @@ async def get_sentinel2_dates(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return JSONResponse(result)
+        return GEEDatesResponse.model_validate(result)
 
     except HTTPException:
         raise

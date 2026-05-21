@@ -160,10 +160,14 @@ pytest tests/test_orchestrator.py -v
 
 ## Interactive API Docs
 
-Once server is running:
+Once the stack is running:
 
-- Swagger UI: <http://localhost:8000/docs>
-- ReDoc: <http://localhost:8000/redoc>
+| Setup | Swagger UI | ReDoc |
+|-------|--------------|-------|
+| **Docker Compose** (port 80) | <http://localhost/docs> | <http://localhost/redoc> |
+| **Backend only** (port 8000) | <http://localhost:8000/docs> | <http://localhost:8000/redoc> |
+
+OpenAPI schema: `/openapi.json` (proxied at `http://localhost/openapi.json` in Docker).
 
 ## Troubleshooting
 

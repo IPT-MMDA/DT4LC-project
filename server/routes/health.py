@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
 
 from dta.config import CACHE_PATH, MODELS_PATH, UPLOADS_PATH
 from dta.dti.coe.llm.config import get_default_config
@@ -15,13 +14,16 @@ from dta.dti.metrics import get_metrics_collector
 from dta.dti.models.registry import get_model_registry
 from dta.dti.registry import load_registry
 from server.schemas import (
+    CapabilitiesResponse,
     DiskEntry,
     DiskUsage,
     GEEStatus,
     HealthResponse,
     LLMProviderStatus,
+    MetricsResponse,
     ModelEntry,
     ModelsInfo,
+    RegistryModelsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,7 +125,7 @@ def _collect_disk_usage() -> DiskUsage:
         return DiskUsage(error=str(exc))
 
 
-@router.get("/health", response_model=HealthResponse)  # type: ignore[misc]
+@router.get("/health", response_model=HealthResponse, summary="Health check")
 async def health(
     request: Request,
     detailed: bool = Query(False, description="Return extended diagnostics (localhost only)"),
@@ -148,33 +150,32 @@ async def health(
     )
 
 
-@router.get("/capabilities")  # type: ignore[misc]
-async def list_capabilities() -> JSONResponse:
-    """List all available components from the registry.
-
-    Returns models, algorithms, and other registered components.
-    """
+@router.get(
+    "/capabilities",
+    response_model=CapabilitiesResponse,
+    summary="List registry capabilities",
+)
+async def list_capabilities() -> CapabilitiesResponse:
+    """List algorithms, models, and components from ``registry.yaml``."""
     try:
         registry = load_registry()
-        return JSONResponse(
-            {
-                "version": registry.version,
-                "types": registry.types,
-                "instances": [item.model_dump() for item in registry.instances],
-                "count": len(registry.instances),
-            }
+        return CapabilitiesResponse(
+            version=registry.version,
+            types=registry.types,
+            instances=[item.model_dump() for item in registry.instances],
+            count=len(registry.instances),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load registry: {e}") from e
 
 
-@router.get("/models")  # type: ignore[misc]
-async def list_models() -> JSONResponse:
-    """List all registered models from the model registry.
-
-    Returns model information including requirements, availability,
-    descriptions, author info, and source URLs.
-    """
+@router.get(
+    "/models",
+    response_model=RegistryModelsResponse,
+    summary="List ML models",
+)
+async def list_models() -> RegistryModelsResponse:
+    """List installable ML models with requirements and hosted integrations."""
     try:
         registry = get_model_registry()
         models = []
@@ -211,29 +212,31 @@ async def list_models() -> JSONResponse:
         except Exception as e:
             logger.warning(f"Failed to load hosted models from YAML registry: {e}")
 
-        return JSONResponse({"models": models, "count": len(models)})
+        return RegistryModelsResponse(models=models, count=len(models))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load models: {e}") from e
 
 
-@router.get("/metrics")  # type: ignore[misc]
-async def get_metrics() -> JSONResponse:
-    """Get system metrics including execution and LLM stats."""
+@router.get(
+    "/metrics",
+    response_model=MetricsResponse,
+    summary="System metrics",
+)
+async def get_metrics() -> MetricsResponse:
+    """Return execution and LLM usage metrics."""
     try:
         collector = get_metrics_collector()
         stats = collector.get_stats()
 
-        return JSONResponse(
-            {
-                "total_executions": stats.total_executions,
-                "successful_executions": stats.successful_executions,
-                "failed_executions": stats.failed_executions,
-                "average_duration_seconds": stats.avg_execution_time,
-                "total_llm_calls": stats.total_llm_calls,
-                "total_llm_tokens": stats.total_llm_tokens,
-                "total_llm_cost": stats.total_llm_cost,
-                "llm_by_provider": stats.llm_by_provider,
-            }
+        return MetricsResponse(
+            total_executions=stats.total_executions,
+            successful_executions=stats.successful_executions,
+            failed_executions=stats.failed_executions,
+            average_duration_seconds=stats.avg_execution_time,
+            total_llm_calls=stats.total_llm_calls,
+            total_llm_tokens=stats.total_llm_tokens,
+            total_llm_cost=stats.total_llm_cost,
+            llm_by_provider=stats.llm_by_provider,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {e}") from e
