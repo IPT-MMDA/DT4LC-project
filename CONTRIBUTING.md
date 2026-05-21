@@ -27,6 +27,8 @@ Pull requests are reviewed by maintainers before merging.
 
 ## Development Setup
 
+Full guide: [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) (environment, structure, tests, algorithms, COE, git).
+
 ### Backend
 
 ```bash
@@ -74,7 +76,7 @@ docker compose up -d        # backend :8000 + frontend :80
 2. Register in `dta/registry.yaml` with inputs, outputs, and keywords
 3. Add tests in `tests/`
 
-See the [README](README.md#adding-new-algorithms) for detailed instructions.
+See [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md#adding-a-new-algorithm) for the step-by-step tutorial.
 
 ## Language
 

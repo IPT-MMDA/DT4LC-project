@@ -4,6 +4,7 @@ Documentation for the Digital Twin for Land Cover (DT4LC) project.
 
 ## Quick Links
 
+- [Developer Guide](DEVELOPER_GUIDE.md) - Setup, tests, algorithms, COE, git
 - [Quick Start Guide](QUICKSTART.md) - Get up and running in 5 minutes
 - [API Reference](API.md) - Complete REST API documentation
 - [Architecture](ARCHITECTURE.md) - System design and components
