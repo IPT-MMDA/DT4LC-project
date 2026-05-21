@@ -197,9 +197,7 @@ class TestPlanEndpoint:
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        data = resp.json()
-        assert data["ok"] is False
-        assert "test fail" in data["error"]
+        assert "test fail" in resp.json()["detail"]
 
 
 class TestExecuteEndpoint:
@@ -218,8 +216,7 @@ class TestExecuteEndpoint:
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        data = resp.json()
-        assert data["ok"] is False
+        assert "plan failed" in resp.json()["detail"]
 
     def test_execute_success(self, client: TestClient) -> None:
         mock_plan = {
@@ -420,7 +417,7 @@ class TestLayerEndpoints:
 
     def test_persist_layer_missing_id(self, client: TestClient) -> None:
         resp = client.post("/v1/gee/layers/persist", json={})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_persist_layer_success(self, client: TestClient) -> None:
         with patch("server.layer_metadata_store.save_layer_metadata"):

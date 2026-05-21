@@ -20,21 +20,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/tiles", tags=["tiles"])
 
 
-@router.get("/{z}/{x}/{y}")  # type: ignore[misc]
+@router.get(
+    "/{z}/{x}/{y}",
+    summary="GeoTIFF map tile",
+    response_description="256×256 PNG tile",
+)
 async def get_tile(
-    z: int, x: int, y: int, path: str = Query(..., description="Path to GeoTIFF file")
+    z: int,
+    x: int,
+    y: int,
+    path: str = Query(..., description="Server path to the GeoTIFF file"),
 ) -> StreamingResponse:
-    """Serve GeoTIFF as map tiles in XYZ format.
-
-    Args:
-        z: Zoom level
-        x: Tile X coordinate
-        y: Tile Y coordinate
-        path: Path to the GeoTIFF file
-
-    Returns:
-        PNG image tile
-    """
+    """Serve a GeoTIFF as an XYZ map tile (PNG)."""
     try:
         # Get tile bounds in Web Mercator (EPSG:3857)
         tile = mercantile.Tile(x, y, z)

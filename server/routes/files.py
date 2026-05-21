@@ -5,14 +5,16 @@ import io
 import logging
 from pathlib import Path
 import tempfile
+from typing import Annotated
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
 
+from ..schemas import FileInfo, FileListResponse, UploadResponse
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
@@ -20,8 +22,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["files"])
 
 
-@router.post("/upload")  # type: ignore[misc]
-async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
+@router.post(
+    "/upload",
+    response_model=UploadResponse,
+    summary="Upload GeoTIFF",
+)
+async def upload_geotiff(
+    file: Annotated[UploadFile, File(description="GeoTIFF raster (.tif or .tiff)")],
+) -> UploadResponse:
+    """Upload a GeoTIFF, store it on the server, and return metadata plus a PNG preview."""
     # Basic checks
     if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
         raise HTTPException(status_code=400, detail="Please upload a .tif/.tiff GeoTIFF.")
@@ -90,16 +99,14 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
             img.save(buf, format="PNG")
             b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
-        return JSONResponse(
-            {
-                "id": file_id,
-                "filename": file.filename,
-                "path": str(saved_path),  # File path for use in execution
-                "size": [int(w), int(h)],
-                "crs": crs,
-                "bounds": [bounds.left, bounds.bottom, bounds.right, bounds.top],
-                "preview_png_base64": b64,  # data:image/png;base64,<this>
-            }
+        return UploadResponse(
+            id=file_id,
+            filename=file.filename,
+            path=str(saved_path),
+            size=[int(w), int(h)],
+            crs=crs,
+            bounds=[bounds.left, bounds.bottom, bounds.right, bounds.top],
+            preview_png_base64=b64,
         )
     except Exception as e:
         # Clean up saved file on error
@@ -108,19 +115,19 @@ async def upload_geotiff(file: UploadFile = File) -> JSONResponse:
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
 
 
-@router.get("/files")  # type: ignore[misc]
-async def list_files() -> JSONResponse:
-    """List all available GeoTIFF files (uploaded and exported).
-
-    Returns:
-        JSON with list of files from both uploads and exports directories
-    """
+@router.get(
+    "/files",
+    response_model=FileListResponse,
+    summary="List GeoTIFF files",
+)
+async def list_files() -> FileListResponse:
+    """List uploaded and GEE-exported GeoTIFF files on the server."""
     try:
         import rasterio
 
         from dta.config import CACHE_PATH
 
-        files = []
+        files: list[FileInfo] = []
 
         # Scan uploads directory
         upload_files = list(UPLOAD_DIR.glob("*.tif")) + list(UPLOAD_DIR.glob("*.tiff"))
@@ -132,17 +139,17 @@ async def list_files() -> JSONResponse:
                     width, height = src.width, src.height
 
                     files.append(
-                        {
-                            "id": file_path.stem,
-                            "filename": file_path.name,
-                            "path": str(file_path),
-                            "size": [width, height],
-                            "crs": crs,
-                            "bounds": [bounds.left, bounds.bottom, bounds.right, bounds.top],
-                            "size_bytes": file_path.stat().st_size,
-                            "source": "upload",
-                            "modified": file_path.stat().st_mtime,
-                        }
+                        FileInfo(
+                            id=file_path.stem,
+                            filename=file_path.name,
+                            path=str(file_path),
+                            size=[width, height],
+                            crs=crs,
+                            bounds=[bounds.left, bounds.bottom, bounds.right, bounds.top],
+                            size_bytes=file_path.stat().st_size,
+                            source="upload",
+                            modified=file_path.stat().st_mtime,
+                        )
                     )
             except Exception as e:
                 logger.warning(f"Failed to read file {file_path}: {e}")
@@ -160,48 +167,45 @@ async def list_files() -> JSONResponse:
                         width, height = src.width, src.height
 
                         files.append(
-                            {
-                                "id": file_path.stem,
-                                "filename": file_path.name,
-                                "path": str(file_path),
-                                "size": [width, height],
-                                "crs": crs,
-                                "bounds": [bounds.left, bounds.bottom, bounds.right, bounds.top],
-                                "size_bytes": file_path.stat().st_size,
-                                "source": "export",
-                                "modified": file_path.stat().st_mtime,
-                            }
+                            FileInfo(
+                                id=file_path.stem,
+                                filename=file_path.name,
+                                path=str(file_path),
+                                size=[width, height],
+                                crs=crs,
+                                bounds=[bounds.left, bounds.bottom, bounds.right, bounds.top],
+                                size_bytes=file_path.stat().st_size,
+                                source="export",
+                                modified=file_path.stat().st_mtime,
+                            )
                         )
                 except Exception as e:
                     logger.warning(f"Failed to read file {file_path}: {e}")
                     continue
 
         # Sort by modification time (newest first)
-        files.sort(key=lambda x: float(x["modified"]), reverse=True)  # type: ignore[arg-type]
+        files.sort(key=lambda x: x.modified, reverse=True)
 
-        num_uploads = len([f for f in files if f["source"] == "upload"])
-        num_exports = len([f for f in files if f["source"] == "export"])
+        num_uploads = len([f for f in files if f.source == "upload"])
+        num_exports = len([f for f in files if f.source == "export"])
         logger.info(f"Listed {len(files)} files ({num_uploads} uploads, {num_exports} exports)")
 
-        return JSONResponse({"ok": True, "files": files, "count": len(files)})
+        return FileListResponse(files=files, count=len(files))
 
     except Exception as e:
         logger.exception("Failed to list files")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/download")  # type: ignore[misc]
-async def download_file(path: str) -> FileResponse:
-    """Download a file from the server.
-
-    Used for downloading generated outputs like GeoPackage files.
-
-    Args:
-        path: Path to the file to download
-
-    Returns:
-        File response with appropriate content type
-    """
+@router.get(
+    "/download",
+    summary="Download file by path",
+    response_description="Binary file (GeoTIFF, GeoPackage, PNG, etc.)",
+)
+async def download_file(
+    path: str = Query(..., description="Absolute or allowed-relative path to the file on the server"),
+) -> FileResponse:
+    """Download a generated or uploaded file (GeoPackage, GeoTIFF, PNG, JSON)."""
     file_path = Path(path)
 
     # Security: Only allow downloads from specific directories
