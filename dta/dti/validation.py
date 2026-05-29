@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from dta.dti.registry import Registry
-    from dta.dti.schemas import ExecutionPlan, PlanStep
+    from dta.dti.schemas import ExecutionPlan, PlanStep, Registry
 
 from .exceptions import ResourceError, ValidationError
 
@@ -127,9 +126,9 @@ class PlanValidator:
         from dta.dti.registry import get_item
 
         # Resource limits (configurable)
-        MAX_STEPS = 50
-        MAX_ESTIMATED_TIME = 600  # 10 minutes
-        MAX_MEMORY_MB = 4096  # 4GB
+        MAX_STEPS = 50  # noqa: N806  # local constant convention
+        MAX_ESTIMATED_TIME = 600  # noqa: N806  # 10 minutes
+        MAX_MEMORY_MB = 4096  # noqa: N806  # 4GB
 
         if len(plan.steps) > MAX_STEPS:
             raise ResourceError(f"Plan has {len(plan.steps)} steps, exceeds limit of {MAX_STEPS}")

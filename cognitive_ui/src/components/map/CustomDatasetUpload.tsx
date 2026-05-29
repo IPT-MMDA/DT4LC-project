@@ -57,6 +57,13 @@ export function CustomDatasetUpload() {
 
       if (!state.file) return;
 
+      // Validate file size (200 MB limit, must match server MAX_UPLOAD_SIZE)
+      const MAX_FILE_SIZE = 200 * 1024 * 1024;
+      if (state.file.size > MAX_FILE_SIZE) {
+        setState((prev) => ({ ...prev, error: 'File is too large. Maximum size is 200 MB.' }));
+        return;
+      }
+
       setState((prev) => ({ ...prev, uploading: true, error: null }));
 
       try {

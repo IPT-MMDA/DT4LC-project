@@ -41,9 +41,9 @@ def _make_json_serializable(obj: Any) -> Any:
         return obj.tolist()
     elif isinstance(obj, dict):
         return {k: _make_json_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
+    elif isinstance(obj, list | tuple):
         return [_make_json_serializable(item) for item in obj]
-    elif isinstance(obj, (np.integer, np.floating)):
+    elif isinstance(obj, np.integer | np.floating):
         val = float(obj)
         # Handle NaN and Inf values (not JSON compliant)
         if np.isnan(val):
@@ -141,7 +141,7 @@ class JobQueue:
 
         self._jobs: OrderedDict[str, Job] = OrderedDict()
         self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=max_queue_size)
-        self._workers: list[asyncio.Task] = []
+        self._workers: list[asyncio.Task[None]] = []
         self._running = False
         self._lock = asyncio.Lock()
 
@@ -212,9 +212,9 @@ class JobQueue:
 
         async with self._lock:
             self._jobs[job_id] = job
+            # Add to queue inside lock so workers can't see job_id before job is registered
+            await self._queue.put(job_id)
 
-        # Add to queue
-        await self._queue.put(job_id)
         logger.info(f"Submitted job {job_id}: {prompt}")
 
         return job_id
@@ -314,7 +314,7 @@ class JobQueue:
             Statistics dictionary
         """
         total = len(self._jobs)
-        by_status = {}
+        by_status: dict[str, int] = {}
 
         for job in self._jobs.values():
             status = job.status.value
@@ -406,9 +406,8 @@ class JobQueue:
                 logger.warning(f"Job {job_id}: Attachment missing path: {att.get('filename', 'unknown')}")
 
         # If no current attachments, check context for previous attachments
-        logger.debug(
-            f"Job {job_id}: {len(coe_attachments)} direct attachments with paths, context={'present' if job.context else 'None'}"
-        )
+        ctx_state = "present" if job.context else "None"
+        logger.debug(f"Job {job_id}: {len(coe_attachments)} direct attachments with paths, context={ctx_state}")
         if not coe_attachments and job.context:
             context_attachments = job.context.get("previous_attachments", [])
             logger.debug(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
@@ -441,7 +440,9 @@ class JobQueue:
             raise RuntimeError(plan_result.get("error", "Planning failed"))
 
         # Check for cancellation after planning
-        if job.status == JobStatus.CANCELLED:
+        # mypy can't see that job.status may have been mutated by another coroutine
+        # (the cancel endpoint) during the await above, so it thinks the comparison is dead.
+        if job.status == JobStatus.CANCELLED:  # type: ignore[comparison-overlap]
             raise CancellationError("Job cancelled after planning")
 
         # Handle conversational intent - no pipeline execution needed

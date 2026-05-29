@@ -1,28 +1,28 @@
 """Google Earth Engine integration for Landsat 8/9 data fetching."""
+
 import logging
 from typing import Any
 
 import ee
 
 from .gee_common import (
-    initialize_gee,
-    create_geometry,
-    apply_cloud_filter,
     calculate_index,
-    get_index_vis_params,
-    format_tile_response,
+    create_geometry,
     format_error_response,
+    format_tile_response,
+    get_index_vis_params,
+    initialize_gee,
 )
 
 logger = logging.getLogger(__name__)
 
 # Landsat 8/9 band mapping for indices
 LANDSAT_BAND_MAPPING = {
-    'blue': 'SR_B2',   # Band 2: 450-515nm
-    'green': 'SR_B3',  # Band 3: 525-600nm
-    'red': 'SR_B4',    # Band 4: 630-680nm
-    'nir': 'SR_B5',    # Band 5: 845-885nm
-    'swir': 'SR_B6',   # Band 6: 1560-1660nm (SWIR1)
+    "blue": "SR_B2",  # Band 2: 450-515nm
+    "green": "SR_B3",  # Band 3: 525-600nm
+    "red": "SR_B4",  # Band 4: 630-680nm
+    "nir": "SR_B5",  # Band 5: 845-885nm
+    "swir": "SR_B6",  # Band 6: 1560-1660nm (SWIR1)
 }
 
 
@@ -31,7 +31,8 @@ def fetch_landsat_composite(
     start_date: str,
     end_date: str,
     bands: list[str] | None = None,
-    cloud_cover_max: float = 20.0
+    cloud_cover_max: float = 20.0,
+    return_image: bool = False,
 ) -> dict[str, Any]:
     """Fetch Landsat 8/9 composite imagery for a bounding box.
 
@@ -51,17 +52,17 @@ def fetch_landsat_composite(
     try:
         # Default to RGB bands if not specified
         if bands is None:
-            bands = ['SR_B4', 'SR_B3', 'SR_B2']  # R, G, B
+            bands = ["SR_B4", "SR_B3", "SR_B2"]  # R, G, B
 
         # Create geometry from bbox
         geometry = create_geometry(bbox)
 
         # Load Landsat 8 Collection 2 Tier 1 Level-2 (Surface Reflectance)
         collection = (
-            ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+            ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
             .filterBounds(geometry)
             .filterDate(start_date, end_date)
-            .filter(ee.Filter.lt('CLOUD_COVER', cloud_cover_max))
+            .filter(ee.Filter.lt("CLOUD_COVER", cloud_cover_max))
         )
 
         # Get collection size
@@ -69,14 +70,12 @@ def fetch_landsat_composite(
         logger.info(f"Found {count} Landsat 8/9 images matching criteria")
 
         if count == 0:
-            return format_error_response(
-                'No images found matching the specified criteria'
-            )
+            return format_error_response("No images found matching the specified criteria")
 
         # Apply scaling factors for Landsat Collection 2 Surface Reflectance
         # Scale factor: 0.0000275, Offset: -0.2
-        def apply_landsat_scaling(image):
-            optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+        def apply_landsat_scaling(image: Any) -> Any:
+            optical_bands = image.select("SR_B.").multiply(0.0000275).add(-0.2)
             return image.addBands(optical_bands, None, True)
 
         # Apply scaling and create median composite
@@ -92,32 +91,34 @@ def fetch_landsat_composite(
         # Generate visualization parameters
         if len(bands) >= 3:
             vis_bands = bands[:3]
-            vis_params = {
-                'min': 0,
-                'max': 3000,
-                'bands': vis_bands
-            }
+            vis_params = {"min": 0, "max": 3000, "bands": vis_bands}
         else:
             vis_params = {
-                'min': 0,
-                'max': 3000,
+                "min": 0,
+                "max": 3000,
             }
 
         # Get tile URL for MapLibre
         map_id = selected.getMapId(vis_params)
-        tile_url = map_id['tile_fetcher'].url_format
+        tile_url = map_id["tile_fetcher"].url_format
 
-        return format_tile_response(tile_url, {
-            'image_count': count,
-            'bbox': bbox,
-            'start_date': start_date,
-            'end_date': end_date,
-            'cloud_cover_max': cloud_cover_max,
-            'bands': bands,
-            'vis_params': vis_params,
-            'data_type': 'composite',
-            'dataset': 'Landsat 8/9'
-        })
+        result = format_tile_response(
+            tile_url,
+            {
+                "image_count": count,
+                "bbox": bbox,
+                "start_date": start_date,
+                "end_date": end_date,
+                "cloud_cover_max": cloud_cover_max,
+                "bands": bands,
+                "vis_params": vis_params,
+                "data_type": "composite",
+                "dataset": "Landsat 8/9",
+            },
+        )
+        if return_image:
+            result["image"] = selected
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching Landsat data: {e}")
@@ -128,8 +129,9 @@ def fetch_landsat_indices(
     bbox: list[float],
     start_date: str,
     end_date: str,
-    index_type: str = 'ndvi',
-    cloud_cover_max: float = 20.0
+    index_type: str = "ndvi",
+    cloud_cover_max: float = 20.0,
+    return_image: bool = False,
 ) -> dict[str, Any]:
     """Fetch Landsat 8/9 spectral index (NDVI, NDWI, NDSI) for a bounding box.
 
@@ -152,27 +154,25 @@ def fetch_landsat_indices(
 
         # Load Landsat collection
         collection = (
-            ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+            ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
             .filterBounds(geometry)
             .filterDate(start_date, end_date)
-            .filter(ee.Filter.lt('CLOUD_COVER', cloud_cover_max))
+            .filter(ee.Filter.lt("CLOUD_COVER", cloud_cover_max))
         )
 
         count = collection.size().getInfo()
         if count == 0:
-            return format_error_response(
-                'No images found matching the specified criteria'
-            )
+            return format_error_response("No images found matching the specified criteria")
 
         # Apply scaling factors
-        def apply_landsat_scaling(image):
-            optical_bands = image.select('SR_B.').multiply(0.0000275).add(-0.2)
+        def apply_landsat_scaling(image: Any) -> Any:
+            optical_bands = image.select("SR_B.").multiply(0.0000275).add(-0.2)
             return image.addBands(optical_bands, None, True)
 
         collection = collection.map(apply_landsat_scaling)
 
         # Calculate spectral index
-        def calculate_landsat_index(image):
+        def calculate_landsat_index(image: Any) -> Any:
             return calculate_index(image, index_type, LANDSAT_BAND_MAPPING)
 
         # Apply index calculation and create median composite
@@ -184,19 +184,25 @@ def fetch_landsat_indices(
 
         # Get tile URL
         map_id = index_composite.getMapId(vis_params)
-        tile_url = map_id['tile_fetcher'].url_format
+        tile_url = map_id["tile_fetcher"].url_format
 
-        return format_tile_response(tile_url, {
-            'index_type': index_type,
-            'image_count': count,
-            'bbox': bbox,
-            'start_date': start_date,
-            'end_date': end_date,
-            'cloud_cover_max': cloud_cover_max,
-            'vis_params': vis_params,
-            'data_type': 'index',
-            'dataset': 'Landsat 8/9'
-        })
+        result = format_tile_response(
+            tile_url,
+            {
+                "index_type": index_type,
+                "image_count": count,
+                "bbox": bbox,
+                "start_date": start_date,
+                "end_date": end_date,
+                "cloud_cover_max": cloud_cover_max,
+                "vis_params": vis_params,
+                "data_type": "index",
+                "dataset": "Landsat 8/9",
+            },
+        )
+        if return_image:
+            result["image"] = index_composite
+        return result
 
     except Exception as e:
         logger.error(f"Error fetching Landsat index: {e}")

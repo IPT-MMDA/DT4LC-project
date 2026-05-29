@@ -1,22 +1,18 @@
 """Bulk fetching logic for multiple datasets across pre/post periods."""
+
+from datetime import datetime
 import logging
 from typing import Any
-from datetime import datetime
 
-from .gee_sentinel2 import fetch_sentinel2_composite, fetch_sentinel2_indices
-from .gee_modis import fetch_modis_composite, fetch_modis_indices
 from .gee_landsat import fetch_landsat_composite, fetch_landsat_indices
+from .gee_modis import fetch_modis_composite, fetch_modis_indices
+from .gee_sentinel2 import fetch_sentinel2_composite, fetch_sentinel2_indices
 
 logger = logging.getLogger(__name__)
 
 
 def generate_layer_name(
-    dataset: str,
-    bands: list[str] | None,
-    index_type: str | None,
-    start_date: str,
-    end_date: str,
-    period: str
+    dataset: str, bands: list[str] | None, index_type: str | None, start_date: str, end_date: str, period: str
 ) -> str:
     """Generate descriptive layer name for bulk import.
 
@@ -37,19 +33,14 @@ def generate_layer_name(
 
     elif bands and len(bands) > 0:
         # For bands: "Sentinel-2 - B4,B3,B2 (2024-01-01 to 2024-01-31) - Pre"
-        band_str = ','.join(bands) if len(bands) <= 4 else f"{len(bands)} bands"
+        band_str = ",".join(bands) if len(bands) <= 4 else f"{len(bands)} bands"
         return f"{dataset} - {band_str} ({start_date} to {end_date}) - {period}"
 
     else:
         return f"{dataset} ({start_date} to {end_date}) - {period}"
 
 
-def generate_layer_id(
-    dataset_id: str,
-    bands: list[str] | None,
-    index_type: str | None,
-    period: str
-) -> str:
+def generate_layer_id(dataset_id: str, bands: list[str] | None, index_type: str | None, period: str) -> str:
     """Generate unique layer ID.
 
     Args:
@@ -66,7 +57,7 @@ def generate_layer_id(
     if index_type:
         return f"gee-{dataset_id}-{index_type}-{period}-{timestamp}"
     elif bands:
-        band_hash = '-'.join(sorted(bands))
+        band_hash = "-".join(sorted(bands))
         return f"gee-{dataset_id}-{band_hash}-{period}-{timestamp}"
     else:
         return f"gee-{dataset_id}-{period}-{timestamp}"
@@ -79,7 +70,7 @@ def bulk_fetch_data(
     indices: list[str],
     pre_period: dict[str, str],
     post_period: dict[str, str],
-    cloud_cover_max: float
+    cloud_cover_max: float,
 ) -> dict[str, Any]:
     """Fetch multiple bands and indices for both pre/post periods.
 
@@ -99,40 +90,23 @@ def bulk_fetch_data(
     errors = []
 
     # Dataset name mapping for display
-    dataset_names = {
-        'sentinel-2': 'Sentinel-2',
-        'modis': 'MODIS Terra/Aqua',
-        'landsat-8': 'Landsat 8/9'
-    }
+    dataset_names = {"sentinel-2": "Sentinel-2", "modis": "MODIS Terra/Aqua", "landsat-8": "Landsat 8/9"}
     dataset_name = dataset_names.get(dataset_id, dataset_id)
 
     # Function mapping for each dataset
-    fetch_functions = {
-        'sentinel-2': {
-            'composite': fetch_sentinel2_composite,
-            'index': fetch_sentinel2_indices
-        },
-        'modis': {
-            'composite': fetch_modis_composite,
-            'index': fetch_modis_indices
-        },
-        'landsat-8': {
-            'composite': fetch_landsat_composite,
-            'index': fetch_landsat_indices
-        }
+    fetch_functions: dict[str, dict[str, Any]] = {
+        "sentinel-2": {"composite": fetch_sentinel2_composite, "index": fetch_sentinel2_indices},
+        "modis": {"composite": fetch_modis_composite, "index": fetch_modis_indices},
+        "landsat-8": {"composite": fetch_landsat_composite, "index": fetch_landsat_indices},
     }
 
     if dataset_id not in fetch_functions:
-        return {
-            'ok': False,
-            'error': f"Unknown dataset: {dataset_id}",
-            'layers': []
-        }
+        return {"ok": False, "error": f"Unknown dataset: {dataset_id}", "layers": []}
 
     funcs = fetch_functions[dataset_id]
 
     # Process both periods
-    for period_name, period_dates in [('Pre', pre_period), ('Post', post_period)]:
+    for period_name, period_dates in [("Pre", pre_period), ("Post", post_period)]:
         period_lower = period_name.lower()
 
         # Fetch band composite if bands are selected
@@ -140,41 +114,33 @@ def bulk_fetch_data(
             try:
                 logger.info(f"Fetching {dataset_name} composite for {period_name} period: {bands}")
 
-                result = funcs['composite'](
+                result = funcs["composite"](
                     bbox=bbox,
-                    start_date=period_dates['start'],
-                    end_date=period_dates['end'],
+                    start_date=period_dates["start"],
+                    end_date=period_dates["end"],
                     bands=bands,
-                    cloud_cover_max=cloud_cover_max
+                    cloud_cover_max=cloud_cover_max,
                 )
 
-                if result.get('ok'):
+                if result.get("ok"):
                     layer_name = generate_layer_name(
-                        dataset_name,
-                        bands,
-                        None,
-                        period_dates['start'],
-                        period_dates['end'],
-                        period_name
+                        dataset_name, bands, None, period_dates["start"], period_dates["end"], period_name
                     )
 
-                    layer_id = generate_layer_id(
-                        dataset_id,
-                        bands,
-                        None,
-                        period_lower
-                    )
+                    layer_id = generate_layer_id(dataset_id, bands, None, period_lower)
 
-                    layers.append({
-                        'tile_url': result['tile_url'],
-                        'layer_name': layer_name,
-                        'layer_id': layer_id,
-                        'period': period_lower,
-                        'data_type': 'bands',
-                        'bands': bands,
-                        'image_count': result.get('image_count', 0),
-                        'vis_params': result.get('vis_params', {})
-                    })
+                    layers.append(
+                        {
+                            "tile_url": result["tile_url"],
+                            "layer_name": layer_name,
+                            "layer_id": layer_id,
+                            "period": period_lower,
+                            "data_type": "bands",
+                            "bands": bands,
+                            "image_count": result.get("image_count", 0),
+                            "vis_params": result.get("vis_params", {}),
+                        }
+                    )
                 else:
                     error_msg = f"{dataset_name} composite ({period_name}): {result.get('error', 'Unknown error')}"
                     errors.append(error_msg)
@@ -190,43 +156,37 @@ def bulk_fetch_data(
             try:
                 logger.info(f"Fetching {dataset_name} {index_type.upper()} for {period_name} period")
 
-                result = funcs['index'](
+                result = funcs["index"](
                     bbox=bbox,
-                    start_date=period_dates['start'],
-                    end_date=period_dates['end'],
+                    start_date=period_dates["start"],
+                    end_date=period_dates["end"],
                     index_type=index_type,
-                    cloud_cover_max=cloud_cover_max
+                    cloud_cover_max=cloud_cover_max,
                 )
 
-                if result.get('ok'):
+                if result.get("ok"):
                     layer_name = generate_layer_name(
-                        dataset_name,
-                        None,
-                        index_type,
-                        period_dates['start'],
-                        period_dates['end'],
-                        period_name
+                        dataset_name, None, index_type, period_dates["start"], period_dates["end"], period_name
                     )
 
-                    layer_id = generate_layer_id(
-                        dataset_id,
-                        None,
-                        index_type,
-                        period_lower
-                    )
+                    layer_id = generate_layer_id(dataset_id, None, index_type, period_lower)
 
-                    layers.append({
-                        'tile_url': result['tile_url'],
-                        'layer_name': layer_name,
-                        'layer_id': layer_id,
-                        'period': period_lower,
-                        'data_type': index_type,
-                        'index_type': index_type,
-                        'image_count': result.get('image_count', 0),
-                        'vis_params': result.get('vis_params', {})
-                    })
+                    layers.append(
+                        {
+                            "tile_url": result["tile_url"],
+                            "layer_name": layer_name,
+                            "layer_id": layer_id,
+                            "period": period_lower,
+                            "data_type": index_type,
+                            "index_type": index_type,
+                            "image_count": result.get("image_count", 0),
+                            "vis_params": result.get("vis_params", {}),
+                        }
+                    )
                 else:
-                    error_msg = f"{dataset_name} {index_type.upper()} ({period_name}): {result.get('error', 'Unknown error')}"
+                    error_msg = (
+                        f"{dataset_name} {index_type.upper()} ({period_name}): {result.get('error', 'Unknown error')}"
+                    )
                     errors.append(error_msg)
                     logger.error(error_msg)
 
@@ -238,15 +198,10 @@ def bulk_fetch_data(
     # Return results
     if len(layers) == 0:
         return {
-            'ok': False,
-            'error': 'No layers could be fetched. ' + '; '.join(errors),
-            'layers': [],
-            'errors': errors
+            "ok": False,
+            "error": "No layers could be fetched. " + "; ".join(errors),
+            "layers": [],
+            "errors": errors,
         }
 
-    return {
-        'ok': True,
-        'layers': layers,
-        'total_layers': len(layers),
-        'errors': errors if errors else None
-    }
+    return {"ok": True, "layers": layers, "total_layers": len(layers), "errors": errors if errors else None}

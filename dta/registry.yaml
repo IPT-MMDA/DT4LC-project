@@ -3,6 +3,7 @@ types:
  - NDVIMap
  - NDWIMap  # Water index output
  - NDSIMap  # Snow index output
+ - EVIMap
  - SnowClassification  # Multi-criteria snow classification
  - LULCMap  # Land use / land cover classification
  - Reconstruction  # Prithvi MAE reconstruction outputs
@@ -43,6 +44,7 @@ instances:
 
   - id: algorithms/ndvi
     kind: algorithm
+    display_name: "NDVI Calculation"
     description: |
       NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
       Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
@@ -57,10 +59,78 @@ instances:
     outputs: [NDVIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/ndvi.py"
+      entrypoint: "dta.dti.algorithms.ndvi"
+    triggers:
+      keywords: [ndvi, vegetation, "vegetation health", "vegetation index", greenness]
+      action_phrases:
+        - "calculate ndvi"
+        - "compute ndvi"
+        - "run ndvi"
+        - "perform ndvi"
+        - "ndvi calculation"
+        - "ndvi analysis"
+    user_guide:
+      capability_response: |
+        Yes, I can calculate NDVI (Normalized Difference Vegetation Index) to analyze
+        vegetation health from satellite imagery. Please upload a GeoTIFF image with
+        NIR and Red bands, and I'll process it for you.
+      missing_file_response: |
+        I'd be happy to calculate NDVI for you! Please upload a GeoTIFF image
+        with NIR and Red bands, and I'll analyze the vegetation health.
+      summary_template: "Analyzing vegetation health using NDVI"
+    config:
+      formula: ndvi
+      required_bands: [red, nir]
+      colormap: ndvi
+      vmin: -0.2
+      vmax: 0.8
+
+  - id: algorithms/evi
+    kind: algorithm
+    display_name: "EVI Calculation"
+    description: |
+      EVI (Enhanced Vegetation Index) for vegetation health analysis.
+      Computed as 2.5 * (NIR - RED) / ((NIR + 6*RED - 7.5*BLUE) + 1). Values range from -1 to 1, where higher
+      values indicate healthier vegetation. Useful for crop monitoring and land cover.
+    interpretation: |
+      EVI ranges from -1 to 1. Values >0.6 indicate dense, healthy vegetation; 0.4-0.6
+      moderate vegetation cover; 0.2-0.4 sparse vegetation or senescent crops; <0.2 bare
+      soil or stressed vegetation; negative values indicate water, clouds, or snow.
+      Standard deviation reflects landscape heterogeneity.
+    keywords: [evi, vegetation, index, health, greenness]
+    inputs: [RasterPath]
+    outputs: [EVIMap]
+    runner:
+      type: python
+      entrypoint: "dta.dti.algorithms.evi"
+    triggers:
+      keywords: [evi, "enhanced vegetation index", vegetation, greenness]
+      action_phrases:
+        - "calculate evi"
+        - "compute evi"
+        - "run evi"
+        - "perform evi"
+        - "evi calculation"
+        - "evi analysis"
+    user_guide:
+      capability_response: |
+        Yes, I can calculate EVI (Enhanced Vegetation Index), which improves on NDVI in
+        high-biomass regions by reducing soil-background and atmospheric influence.
+        Please upload a GeoTIFF image with Blue, Red, and NIR bands.
+      missing_file_response: |
+        I'd be happy to calculate EVI for you! Please upload a GeoTIFF image with
+        Blue, Red, and NIR bands and I'll analyze the vegetation health.
+      summary_template: "Analyzing vegetation health using EVI"
+    config:
+      formula: evi
+      required_bands: [blue, red, nir]
+      colormap: ndvi
+      vmin: -0.2
+      vmax: 0.8
 
   - id: algorithms/ndwi
     kind: algorithm
+    display_name: "NDWI Calculation"
     description: |
       NDWI (Normalized Difference Water Index) for water body detection.
       Computed as (Green - NIR) / (Green + NIR). Positive values indicate water.
@@ -74,10 +144,37 @@ instances:
     outputs: [NDWIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/ndwi.py"
+      entrypoint: "dta.dti.algorithms.ndwi"
+    triggers:
+      keywords: [ndwi, water, "water index", "water body", waterbody, lake, river, flood]
+      action_phrases:
+        - "calculate ndwi"
+        - "compute ndwi"
+        - "run ndwi"
+        - "ndwi calculation"
+        - "ndwi analysis"
+        - "detect water"
+        - "find water"
+        - "map water"
+    user_guide:
+      capability_response: |
+        Yes, I can detect water bodies using NDWI (Normalized Difference Water Index)!
+        NDWI = (Green - NIR) / (Green + NIR). Values > 0.3 typically indicate water.
+        Please upload a GeoTIFF image with Green and NIR bands.
+      missing_file_response: |
+        I'd be happy to detect water bodies for you! Please upload a GeoTIFF image
+        with Green and NIR bands, and I'll compute NDWI.
+      summary_template: "Detecting water bodies using NDWI"
+    config:
+      formula: ndwi
+      required_bands: [green, nir]
+      colormap: ndwi
+      vmin: -0.5
+      vmax: 0.5
 
   - id: algorithms/ndsi
     kind: algorithm
+    display_name: "NDSI Calculation"
     description: |
       NDSI (Normalized Difference Snow Index) for snow and glacier detection.
       Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
@@ -91,10 +188,40 @@ instances:
     outputs: [NDSIMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/ndsi.py"
+      entrypoint: "dta.dti.algorithms.ndsi"
+    triggers:
+      keywords: [ndsi, snow, ice, glacier, frozen, "snow index", "ice cover"]
+      action_phrases:
+        - "calculate ndsi"
+        - "compute ndsi"
+        - "ndsi calculation"
+        - "ndsi analysis"
+        - "detect snow"
+        - "find snow"
+        - "map snow"
+        - "snow detection"
+        - "snow mapping"
+        - "glacier detection"
+        - "glacier mapping"
+    user_guide:
+      capability_response: |
+        Yes, I can analyze snow and ice coverage using NDSI (Normalized Difference Snow Index),
+        a basic snow index using (Green - SWIR) / (Green + SWIR). Please upload a GeoTIFF image
+        with Green and SWIR bands (e.g., Sentinel-2 or Landsat).
+      missing_file_response: |
+        I'd be happy to compute NDSI for you. Please upload a GeoTIFF image with
+        Green and SWIR bands (e.g., Sentinel-2 or Landsat).
+      summary_template: "Analyzing snow/ice coverage using NDSI"
+    config:
+      formula: ndsi
+      required_bands: [green, swir]
+      colormap: ndsi
+      vmin: -0.5
+      vmax: 1.0
 
   - id: algorithms/snow-classifier
     kind: algorithm
+    display_name: "Snow Classifier (multi-criteria)"
     description: |
       Multi-criteria snow classification for robust snow detection. Combines
       NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
@@ -109,10 +236,28 @@ instances:
     outputs: [SnowClassification]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/snow_classifier.py"
+      entrypoint: "dta.dti.algorithms.snow_classifier"
+    triggers:
+      keywords: ["snow classifier", "snow classification", "robust snow", "multi-criteria snow"]
+      action_phrases:
+        - "run snow classifier"
+        - "use snow classifier"
+        - "classify snow"
+        - "snow classification"
+    user_guide:
+      capability_response: |
+        Yes, I can run a multi-criteria Snow Classifier that combines NDSI (≥0.4), NDVI
+        (≤0.1), and NIR brightness (>0.3) to reduce false positives from water bodies
+        and shadows compared to basic NDSI thresholding. Please upload a GeoTIFF image
+        with Green, Red, NIR, and SWIR bands (e.g., Sentinel-2 or Landsat).
+      missing_file_response: |
+        I'd be happy to run the multi-criteria Snow Classifier. Please upload a
+        GeoTIFF image with Green, Red, NIR, and SWIR bands (e.g., Sentinel-2 or Landsat).
+      summary_template: "Classifying snow/ice coverage with multi-criteria thresholds"
 
   - id: algorithms/statistics
     kind: algorithm
+    display_name: "Raster Statistics"
     description: |
       Comprehensive raster statistics including min, max, mean, standard deviation,
       and percentiles for all bands. Generates histograms for data distribution analysis.
@@ -126,10 +271,27 @@ instances:
     outputs: [Statistics]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/statistics.py"
+      entrypoint: "dta.dti.algorithms.statistics"
+    triggers:
+      keywords: [statistics, stats, distribution, histogram, percentiles]
+      action_phrases:
+        - "extract statistics"
+        - "get statistics"
+        - "compute statistics"
+        - "calculate statistics"
+        - "raster statistics"
+    user_guide:
+      capability_response: |
+        Yes, I can calculate statistics from your raster data including min, max, mean,
+        and standard deviation. Please upload a GeoTIFF image and I'll analyze it.
+      missing_file_response: |
+        I can calculate statistics for you! Please upload a GeoTIFF image and I'll
+        compute the raster statistics.
+      summary_template: "Computing raster statistics"
 
   - id: algorithms/change-detection
     kind: algorithm
+    display_name: "Change Detection (multi-index)"
     description: |
       Multi-index change detection comparing two time periods. Supports NDVI (vegetation),
       NDSI (snow/ice), and NDWI (water) indices. Computes temporal change between before
@@ -145,10 +307,68 @@ instances:
     outputs: [ChangeMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/change_detection.py"
+      entrypoint: "dta.dti.algorithms.change_detection"
+    triggers:
+      keywords:
+        - "change detection"
+        - "detect changes"
+        - "compare images"
+        - "image comparison"
+        - "temporal comparison"
+        - "image difference"
+        - "temporal difference"
+        - "ndvi change"
+        - "ndsi change"
+        - "ndwi change"
+        - "vegetation change"
+        - "vegetation changes"
+        - "snow change"
+        - "ice change"
+        - "ice cover change"
+        - "ice cover changes"
+        - "water change"
+        - "glacier change"
+        - "glacier melt"
+        - "snow melt"
+        - "flood detection"
+        - "flooding"
+        - "before"
+        - "after"
+      action_phrases:
+        - "change detection"
+        - "ndvi change"
+        - "ndsi change"
+        - "ndwi change"
+        - "vegetation change"
+        - "snow change"
+        - "ice change"
+        - "water change"
+        - "glacier change"
+        - "analyze vegetation changes"
+        - "analyze ndvi changes"
+        - "analyze ice cover changes"
+    user_guide:
+      capability_response: |
+        Yes, I can perform change detection to compare two images and identify
+        vegetation, snow/ice, or water changes over time. Please upload two GeoTIFF
+        images (before and after) and I'll analyze the differences.
+      missing_file_response: |
+        I can perform change detection! Please upload two GeoTIFF images
+        (before and after) and I'll analyze the differences.
+      summary_template: "Comparing before/after imagery and computing temporal change"
+    config:
+      # Maps free-text index keywords (matched against the user prompt) to the
+      # IndexType bind value the executor passes to change_detection.run().
+      # Read by planner._detect_index_type to route prompts to the right index.
+      default_index_type: ndvi
+      index_keyword_map:
+        ndvi: [ndvi, vegetation, "vegetation change"]
+        ndsi: [ndsi, snow, ice, glacier, frozen, melt, "ice cover", "ice cover change"]
+        ndwi: [ndwi, water, flood, lake, river, reservoir, drought]
 
   - id: algorithms/lulc-classifier
     kind: algorithm
+    display_name: "Land Use / Land Cover (LULC) Classification"
     description: |
       Land Use / Land Cover (LULC) classification using spectral index thresholds.
       Classifies pixels into Water, Snow/Ice, Bare Soil, Sparse Vegetation,
@@ -164,10 +384,32 @@ instances:
     outputs: [LULCMap]
     runner:
       type: python
-      entrypoint: "dta/dti/algorithms/lulc_classifier.py"
+      entrypoint: "dta.dti.algorithms.lulc_classifier"
+    triggers:
+      keywords: [lulc, "land cover", "land use", "land-cover classes", classify]
+      action_phrases:
+        - "classify land cover"
+        - "classify land use"
+        - "classify lulc"
+        - "land cover classification"
+        - "land use classification"
+        - "lulc classification"
+        - "analyze land-cover classes"
+        - "analyze land cover classes"
+    user_guide:
+      capability_response: |
+        Yes, I can classify land cover using spectral indices! The LULC classifier
+        identifies 6 classes: Water, Snow/Ice, Bare Soil, Sparse Vegetation,
+        Cropland/Grassland, and Dense Vegetation. Please upload a multispectral
+        GeoTIFF image (4+ bands with NIR).
+      missing_file_response: |
+        I'd be happy to classify land cover for you! Please upload a multispectral
+        GeoTIFF image (4+ bands with NIR) and I'll identify the 6 LULC classes.
+      summary_template: "Classifying land cover into 6 classes"
 
   - id: models/prithvi-reconstruction
     kind: model
+    display_name: "Prithvi MAE Reconstruction"
     description: |
       NASA/IBM Prithvi foundation model for satellite imagery analysis. Uses Masked
       Autoencoder (MAE) to reconstruct HLS imagery, revealing learned spatial and
@@ -181,6 +423,23 @@ instances:
     inputs: [RasterPath]
     outputs: [Reconstruction]
     model_id: prithvi-eo-v1-100m
+    triggers:
+      keywords: [prithvi, reconstruction, mae, "masked autoencoder", "foundation model", embedding, embeddings, features]
+      action_phrases:
+        - "reconstruct image"
+        - "reconstruct this image"
+        - "prithvi reconstruction"
+        - "run prithvi"
+        - "extract prithvi features"
+    user_guide:
+      capability_response: |
+        Yes, I can run NASA/IBM's Prithvi foundation model on your imagery. It uses a
+        Masked Autoencoder to reconstruct HLS imagery, revealing learned spatial and
+        spectral patterns. Please upload a GeoTIFF image to get started.
+      missing_file_response: |
+        I can run Prithvi reconstruction for you! Please upload a GeoTIFF image and
+        I'll generate the masked-autoencoder reconstruction.
+      summary_template: "Running Prithvi MAE reconstruction"
     preprocessors:
       - id: preprocessors/scale-to-hls
         apply_to: RasterPath
@@ -198,6 +457,7 @@ instances:
 
   - id: models/delineate-anything
     kind: model
+    display_name: "Field Boundary Detection (Delineate-Anything)"
     description: |
       Delineate-Anything field boundary detection using YOLO-based segmentation.
       Auto-detects data source (Sentinel/Planet/Maxar) and configures appropriate
@@ -210,11 +470,32 @@ instances:
     inputs: [RasterPath]
     outputs: [FieldBoundaries]
     model_id: delineate-anything-small
+    triggers:
+      keywords: [delineate, field, fields, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
+      action_phrases:
+        - "detect field boundaries"
+        - "find field boundaries"
+        - "identify field boundaries"
+        - "field boundary detection"
+        - "field boundaries detection"
+        - "delineate fields"
+        - "delineate parcels"
+        - "delineate boundaries"
+    user_guide:
+      capability_response: |
+        Yes, I can detect field boundaries using the Delineate-Anything model.
+        This will identify agricultural parcels in your satellite image.
+        Please upload a GeoTIFF image and I'll detect the field boundaries for you.
+      missing_file_response: |
+        I can detect field boundaries for you! Please upload a GeoTIFF satellite image
+        and I'll identify the agricultural parcels.
+      summary_template: "Detecting agricultural field boundaries"
     runner:
       type: python
       entrypoint: "dta/dti/models/third_party/delineate_anything/inference.py"
-      env:
-        DELINEATE_MODEL: "small"
+      args_map:
+        RasterPath: "${RasterPath}"
+        delineate_model: "small"
 
   - id: post-processing/agent-analysis
     kind: postprocess
@@ -237,7 +518,7 @@ instances:
       Useful for models trained on HLS data (e.g., Prithvi).
     runner:
       type: python
-      entrypoint: "dta/dti/preprocessors/scale_to_hls.py"
+      entrypoint: "dta.dti.preprocessors.scale_to_hls"
       function: run
 
   # =============================================================================

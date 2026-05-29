@@ -6,16 +6,14 @@ from Microsoft Planetary Computer with no size limits.
 
 import logging
 import time
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import planetary_computer as pc
 import pystac_client
 import rasterio
-from rasterio.io import MemoryFile
-from rasterio.warp import calculate_default_transform, reproject, Resampling, transform_bounds
-from rasterio.windows import Window, from_bounds
+from rasterio.warp import Resampling, reproject, transform_bounds
+from rasterio.windows import from_bounds
 
 from dta.config import CACHE_PATH
 
@@ -31,19 +29,19 @@ STAC_API_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
 # Band name mapping: GEE -> Planetary Computer
 # GEE uses B1-B12, Planetary Computer uses B01-B12 with leading zeros
 BAND_NAME_MAPPING = {
-    'B1': 'B01',
-    'B2': 'B02',
-    'B3': 'B03',
-    'B4': 'B04',
-    'B5': 'B05',
-    'B6': 'B06',
-    'B7': 'B07',
-    'B8': 'B08',
-    'B8A': 'B8A',
-    'B9': 'B09',
-    'B10': 'B10',
-    'B11': 'B11',
-    'B12': 'B12',
+    "B1": "B01",
+    "B2": "B02",
+    "B3": "B03",
+    "B4": "B04",
+    "B5": "B05",
+    "B6": "B06",
+    "B7": "B07",
+    "B8": "B08",
+    "B8A": "B8A",
+    "B9": "B09",
+    "B10": "B10",
+    "B11": "B11",
+    "B12": "B12",
 }
 
 
@@ -120,20 +118,20 @@ def export_sentinel2_from_mpc(
             return {"status": "failed", "error": error_msg}
 
         # 3. Use most recent scene with least cloud cover
-        items_sorted = sorted(items, key=lambda x: (
-            -x.datetime.timestamp(),  # Most recent first
-            x.properties.get("eo:cloud_cover", 100)  # Least cloudy
-        ))
+        items_sorted = sorted(
+            items,
+            key=lambda x: (
+                -x.datetime.timestamp(),  # Most recent first
+                x.properties.get("eo:cloud_cover", 100),  # Least cloudy
+            ),
+        )
         item = items_sorted[0]
 
         scene_date = item.datetime.strftime("%Y-%m-%d")
         cloud_cover = item.properties.get("eo:cloud_cover", 0)
         scene_id = item.id
 
-        logger.info(
-            f"Selected scene: {scene_id}, date={scene_date}, "
-            f"cloud_cover={cloud_cover:.1f}%"
-        )
+        logger.info(f"Selected scene: {scene_id}, date={scene_date}, cloud_cover={cloud_cover:.1f}%")
 
         # 4. Normalize band names (GEE -> Planetary Computer format)
         normalized_bands = [normalize_band_name(b) for b in bands]
@@ -160,11 +158,7 @@ def export_sentinel2_from_mpc(
             with rasterio.open(band_url) as src:
                 # Transform bbox from EPSG:4326 to the source CRS
                 # bbox is [minX, minY, maxX, maxY] in WGS84
-                bbox_in_src_crs = transform_bounds(
-                    'EPSG:4326',
-                    src.crs,
-                    bbox[0], bbox[1], bbox[2], bbox[3]
-                )
+                bbox_in_src_crs = transform_bounds("EPSG:4326", src.crs, bbox[0], bbox[1], bbox[2], bbox[3])
 
                 # Calculate window for the transformed bbox
                 window = from_bounds(*bbox_in_src_crs, transform=src.transform)
@@ -173,11 +167,17 @@ def export_sentinel2_from_mpc(
                 window = window.round_lengths()
 
                 if window.width <= 0 or window.height <= 0:
-                    error_msg = f"Invalid window dimensions for {band_name}: {window.width}x{window.height}. Bbox: {bbox}, Source CRS: {src.crs}"
+                    error_msg = (
+                        f"Invalid window dimensions for {band_name}: {window.width}x{window.height}. "
+                        f"Bbox: {bbox}, Source CRS: {src.crs}"
+                    )
                     logger.error(error_msg)
                     raise ValueError(error_msg)
 
-                logger.info(f"Window for {band_name}: {window.width}x{window.height} at offset ({window.col_off}, {window.row_off})")
+                logger.info(
+                    f"Window for {band_name}: {window.width}x{window.height} "
+                    f"at offset ({window.col_off}, {window.row_off})"
+                )
 
                 # Read data for this window
                 data = src.read(1, window=window)
@@ -194,15 +194,17 @@ def export_sentinel2_from_mpc(
                     new_height = int(height * scale_factor)
                     new_width = int(width * scale_factor)
 
-                    logger.info(f"Resampling {band_name} from {src.res[0]}m to {scale}m: {height}x{width} -> {new_height}x{new_width}")
+                    logger.info(
+                        f"Resampling {band_name} from {src.res[0]}m to {scale}m: "
+                        f"{height}x{width} -> {new_height}x{new_width}"
+                    )
 
                     # Create temporary dataset for resampling
                     data_resampled = np.empty((new_height, new_width), dtype=data.dtype)
 
                     # Calculate destination transform (same origin, different pixel size)
                     dst_transform = window_transform * window_transform.scale(
-                        (width / new_width),
-                        (height / new_height)
+                        (width / new_width), (height / new_height)
                     )
 
                     # Resample
@@ -213,7 +215,7 @@ def export_sentinel2_from_mpc(
                         src_crs=window_crs,
                         dst_transform=dst_transform,
                         dst_crs=window_crs,
-                        resampling=Resampling.bilinear
+                        resampling=Resampling.bilinear,
                     )
 
                     data = data_resampled
@@ -228,17 +230,17 @@ def export_sentinel2_from_mpc(
 
                     # Create output profile
                     output_profile = {
-                        'driver': 'GTiff',
-                        'dtype': data.dtype,
-                        'width': data.shape[1],
-                        'height': data.shape[0],
-                        'count': len(normalized_bands),
-                        'crs': output_crs,
-                        'transform': output_transform,
-                        'compress': 'lzw',
-                        'tiled': True,
-                        'blockxsize': 256,
-                        'blockysize': 256,
+                        "driver": "GTiff",
+                        "dtype": data.dtype,
+                        "width": data.shape[1],
+                        "height": data.shape[0],
+                        "count": len(normalized_bands),
+                        "crs": output_crs,
+                        "transform": output_transform,
+                        "compress": "lzw",
+                        "tiled": True,
+                        "blockxsize": 256,
+                        "blockysize": 256,
                     }
 
                     logger.info(f"Output dimensions: {data.shape[0]}x{data.shape[1]}, bands: {len(normalized_bands)}")
@@ -254,7 +256,7 @@ def export_sentinel2_from_mpc(
         # 7. Stack bands and write output
         output_path = EXPORT_DIR / f"{filename}.tif"
 
-        with rasterio.open(output_path, 'w', **output_profile) as dst:
+        with rasterio.open(output_path, "w", **output_profile) as dst:
             for i, data in enumerate(band_data_list, 1):
                 dst.write(data, i)
 
@@ -262,10 +264,7 @@ def export_sentinel2_from_mpc(
         size_bytes = output_path.stat().st_size
         size_mb = size_bytes / (1024 * 1024)
 
-        logger.info(
-            f"Successfully exported from Planetary Computer: "
-            f"{output_path} ({size_mb:.2f} MB)"
-        )
+        logger.info(f"Successfully exported from Planetary Computer: {output_path} ({size_mb:.2f} MB)")
 
         return {
             "status": "completed",
@@ -278,7 +277,7 @@ def export_sentinel2_from_mpc(
                 "cloud_cover": cloud_cover,
                 "bands": bands,
                 "resolution_m": scale,
-            }
+            },
         }
 
     except Exception as e:
@@ -297,10 +296,7 @@ def test_planetary_computer_access() -> bool:
         catalog = pystac_client.Client.open(STAC_API_URL)
         # Try a simple search
         search = catalog.search(
-            collections=["sentinel-2-l2a"],
-            bbox=[8.0, 46.7, 8.1, 46.8],
-            datetime="2024-01-01/2024-01-02",
-            max_items=1
+            collections=["sentinel-2-l2a"], bbox=[8.0, 46.7, 8.1, 46.8], datetime="2024-01-01/2024-01-02", max_items=1
         )
         list(search.items())
         logger.info("Planetary Computer access test: SUCCESS")

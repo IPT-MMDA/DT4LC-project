@@ -5,6 +5,7 @@ name = "dt4lc-project"
 dynamic = ["version"]
 description = "Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
 requires-python = ">=3.10"
 
 dependencies = ["numpy>=2.2.5", "torch>=2.6.0", "python-dotenv>=1.1.0"]
@@ -15,6 +16,7 @@ dev = [
     "mypy>=1.15.0",
     "ruff>=0.11.6",
     "pytest>=8.3.4",
+    "pytest-asyncio>=0.23.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "ipdb>=0.13.13",
@@ -50,6 +52,7 @@ server = [
     "google-auth>=2.0.0",
     # LLM agents
     "google-genai>=1.35.0,<2.0.0",
+    "anthropic>=0.40,<1.0",
     # Utils
     "numba>=0.60.0",
     "tqdm>=4.66.0",
@@ -86,6 +89,14 @@ warn_unused_ignores = true
 show_error_codes = true
 exclude = ["tests/", "build/", "scripts/", ".venv/"]
 
+# Third-party libraries without type stubs accessible at install time.
+# `types-PyYAML` and `types-requests` are dev deps but their import-untyped
+# detection still triggers on bare `import yaml` / `import requests`.
+[[tool.mypy.overrides]]
+module = ["yaml", "requests"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
 [tool.ruff]
 line-length = 119
 target-version = "py310"
@@ -119,9 +130,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning", "ignore::PendingDeprecationWarning"]
 markers = [
     "asyncio: marks tests as async (using pytest-asyncio)",
     "slow: marks tests as slow (require model downloads or heavy computation)",
     "llm: marks tests that require LLM API access (skip with -m 'not llm')",
+    "gpu: marks tests that require a GPU and installed ML models",
+    "network: marks tests that hit external services (GEE, MPC) and need credentials",
 ]
