@@ -33,9 +33,17 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem('token');
     }
 
-    const errorMessage = error.response?.data
-      ? (error.response.data as any).detail || 'An error occurred'
-      : error.message;
+    let errorMessage = 'An error occurred';
+    if (error.response?.data) {
+      const data = error.response.data as any;
+      if (data.error?.message) {
+        errorMessage = data.error.message;
+      } else if (data.detail) {
+        errorMessage = typeof data.detail === 'string' ? data.detail : 'An error occurred';
+      }
+    } else {
+      errorMessage = error.message;
+    }
 
     return Promise.reject(new Error(errorMessage));
   }
