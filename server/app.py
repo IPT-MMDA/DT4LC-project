@@ -17,8 +17,11 @@ configure_logging()
 
 # Imports below must follow load_dotenv() and configure_logging() so submodules see the
 # populated environment and root logger config when initialised at import time.
-from fastapi import FastAPI  # noqa: E402
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
 from .jobs import get_job_queue  # noqa: E402
 from .model_routes import router as model_router  # noqa: E402
@@ -28,6 +31,7 @@ from .routes.gee import router as gee_router  # noqa: E402
 from .routes.health import router as health_router  # noqa: E402
 from .routes.jobs import router as jobs_router  # noqa: E402
 from .routes.tiles import router as tiles_router  # noqa: E402
+from .schemas import ErrorCode, ErrorDetail, ErrorResponse  # noqa: E402
 
 
 @asynccontextmanager
@@ -58,3 +62,41 @@ app.include_router(files_router)
 app.include_router(tiles_router)
 app.include_router(gee_router)
 app.include_router(model_router)
+
+
+# ---------------------------------------------------------------------------
+# Global exception handlers – return the standardised error envelope
+# ---------------------------------------------------------------------------
+
+_STATUS_CODE_TO_ERROR_CODE: dict[int, ErrorCode] = {
+    400: ErrorCode.BAD_REQUEST,
+    401: ErrorCode.UNAUTHORIZED,
+    403: ErrorCode.FORBIDDEN,
+    404: ErrorCode.NOT_FOUND,
+    409: ErrorCode.CONFLICT,
+    422: ErrorCode.VALIDATION_ERROR,
+}
+
+
+def _build_error_response(status_code: int, message: str, details: dict | None = None) -> ErrorResponse:
+    code = _STATUS_CODE_TO_ERROR_CODE.get(status_code, ErrorCode.INTERNAL_ERROR)
+    return ErrorResponse(error=ErrorDetail(code=code, message=message, details=details))
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    response = _build_error_response(
+        422,
+        "Request validation failed",
+        details={"errors": exc.errors()},
+    )
+    return JSONResponse(status_code=422, content=response.model_dump())
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    response = _build_error_response(
+        exc.status_code,
+        exc.detail if isinstance(exc.detail, str) else "An error occurred",
+    )
+    return JSONResponse(status_code=exc.status_code, content=response.model_dump())
