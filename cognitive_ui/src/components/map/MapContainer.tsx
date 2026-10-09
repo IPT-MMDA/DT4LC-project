@@ -6,6 +6,7 @@ import { DrawControl, DrawControlRef } from './DrawControl';
 import { DrawToolbar } from './DrawToolbar';
 import { LocationQuickAccess } from './LocationQuickAccess';
 import { JobLayersManager } from './JobLayersManager';
+import { OblastBoundaries } from './OblastBoundaries';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export function MapContainer() {
@@ -187,6 +188,7 @@ export function MapContainer() {
         })}
 
         <JobLayersManager />
+        <OblastBoundaries />
       </Map>
       <DrawToolbar onModeChange={handleModeChange} currentMode={drawMode} />
       {!useNewDatasetPanel && <LocationQuickAccess onLocationSelect={handleLocationSelect} />}

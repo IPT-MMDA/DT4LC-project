@@ -1,6 +1,7 @@
 """Google Earth Engine integration for Landsat 8/9 data fetching."""
 
 import logging
+import re
 from typing import Any
 
 import ee
@@ -90,8 +91,32 @@ def fetch_landsat_composite(
 
         # Generate visualization parameters
         if len(bands) >= 3:
-            vis_bands = bands[:3]
+            # Display order: longest wavelength -> R (SR_B1..SR_B7 are in wavelength order)
+            if len(bands) > 3 and all(b in bands for b in ("SR_B4", "SR_B3", "SR_B2")):
+                vis_bands = ["SR_B4", "SR_B3", "SR_B2"]
+            else:
+                vis_bands = sorted(bands, key=lambda b: int(re.sub(r"\D", "", b) or 0), reverse=True)[:3]
+            # Contrast stretch from this area's 2-98 percentiles (shared across bands -> colours stay natural)
             vis_params = {"min": 0, "max": 3000, "bands": vis_bands}
+            try:
+                _st = (
+                    selected.select(vis_bands)
+                    .reduceRegion(
+                        reducer=ee.Reducer.percentile([2, 98]),
+                        geometry=geometry,
+                        scale=60,
+                        maxPixels=1e8,
+                        bestEffort=True,
+                        tileScale=4,
+                    )
+                    .getInfo()
+                )
+                _lo = min(_st[f"{b}_p2"] for b in vis_bands)
+                _hi = max(_st[f"{b}_p98"] for b in vis_bands)
+                if _hi > _lo:
+                    vis_params = {"min": _lo, "max": _hi, "bands": vis_bands}
+            except Exception as _e:
+                logger.warning(f"Auto-stretch failed, using fixed range: {_e}")
         else:
             vis_params = {
                 "min": 0,
