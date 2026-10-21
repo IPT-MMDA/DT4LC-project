@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from dta.dti.registry import load_registry
+from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ChatRequest
 
 from .context_agent import analyze
@@ -70,13 +70,21 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         if fallback.model_dump() != candidate.model_dump():
             try:
                 final_plan = validate(fallback, reg)
+                # A template plan with only input/post-processing steps would silently drop the user's goal.
+                if any(get_item(reg, s.uses).kind in ("algorithm", "model") for s in final_plan.steps):
+                    logger.warning(
+                        f"LLM plan failed validation ({e}); using template plan instead: "
+                        f"{[s.uses for s in final_plan.steps]}"
+                    )
+                    return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump()}
                 logger.warning(
-                    f"LLM plan failed validation ({e}); using template plan instead: "
-                    f"{[s.uses for s in final_plan.steps]}"
+                    f"Template fallback has no algorithm or model step ({[s.uses for s in final_plan.steps]}); "
+                    "returning original error"
                 )
-                return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump()}
-            except PlanError:
-                pass
+            except PlanError as e2:
+                logger.warning(f"Template fallback also failed validation ({e2}); returning original error")
+        else:
+            logger.debug("Template plan equals the rejected LLM plan; returning original error")
         return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
 
 

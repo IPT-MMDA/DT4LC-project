@@ -285,6 +285,81 @@ class TestOrchestratorTemplateFallback:
             "candidate": bad_plan.model_dump(),
         }
 
+    @pytest.mark.parametrize(
+        ("required_inputs", "llm_step"),
+        [
+            (["RasterPath"], PlanStep(uses="models/delineate-anything")),
+            ([], PlanStep(uses="algorithms/change-detection", binds={"IndexType": "ndvi"})),
+        ],
+    )
+    def test_template_without_analysis_step_returns_original_error(
+        self,
+        required_inputs: list[str],
+        llm_step: PlanStep,
+        mock_attachment: Attachment,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A template plan with no algorithm/model step must not hide the LLM plan's error.
+
+        The real template cannot map "estimate burn severity"; it yields only
+        input/file and/or agent-analysis, which validates but drops the goal.
+        """
+        from dta.dti.coe.intent_classifier import IntentType
+
+        ctx = ContextUnderstanding(
+            goal="estimate burn severity", desired_outputs=[], required_inputs=required_inputs, hints={}
+        )
+        bad_llm_plan = ExecutionPlan(flow="estimate burn severity", steps=[llm_step], outputs=["publish: chat"])
+
+        with (
+            patch(
+                "dta.dti.coe.orchestrator.classify_intent",
+                return_value={"intent": IntentType.PIPELINE, "reason": "test"},
+            ),
+            patch("dta.dti.coe.orchestrator.analyze", return_value=ctx),
+            patch("dta.dti.coe.llm_planner.plan_with_llm", return_value=bad_llm_plan),
+            caplog.at_level(logging.WARNING, logger="dta.dti.coe.orchestrator"),
+        ):
+            req = ChatRequest(prompt="estimate burn severity", attachments=[mock_attachment])
+            result = orchestrate(req)
+
+        assert result.get("ok") is False
+        assert result["intent"] == "pipeline"
+        assert "not available yet" in result["error"]
+        assert result["candidate"] == bad_llm_plan.model_dump()
+        assert "Template fallback has no algorithm or model step" in caplog.text
+
+    def test_template_failing_validation_is_logged(
+        self, mock_attachment: Attachment, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When the template plan also fails validation, its error is logged and the original returned."""
+        from dta.dti.coe.intent_classifier import IntentType
+
+        llm_plan = ExecutionPlan(
+            flow="x", steps=[PlanStep(uses="algorithms/change-detection")], outputs=["publish: chat"]
+        )
+        template_plan = ExecutionPlan(flow="x", steps=[PlanStep(uses="algorithms/ndvi")], outputs=["publish: chat"])
+
+        with (
+            patch(
+                "dta.dti.coe.orchestrator.classify_intent",
+                return_value={"intent": IntentType.PIPELINE, "reason": "test"},
+            ),
+            patch("dta.dti.coe.orchestrator.analyze", return_value=self.NDVI_CTX),
+            patch("dta.dti.coe.orchestrator.plan", side_effect=[llm_plan, template_plan]),
+            caplog.at_level(logging.WARNING, logger="dta.dti.coe.orchestrator"),
+        ):
+            req = ChatRequest(prompt="calculate NDVI", attachments=[mock_attachment])
+            result = orchestrate(req)
+
+        assert result == {
+            "ok": False,
+            "intent": "pipeline",
+            "error": "Step algorithms/change-detection requires RasterPathBefore, not available yet.",
+            "candidate": llm_plan.model_dump(),
+        }
+        assert "Template fallback also failed validation (Step algorithms/ndvi requires" in caplog.text
+
 
 class TestInjectFileBindings:
     """Tests for _inject_file_bindings helper."""
