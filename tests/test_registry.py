@@ -176,3 +176,51 @@ class TestMockRegistry:
 
         assert item.id == "algorithms/test"
         assert "algo" in item.keywords
+
+
+def test_registry_imports_only_base_dependencies() -> None:
+    """`import dta.dti.registry` must work after `pip install .` without extras.
+
+    Imports dta.dti.registry in a fresh interpreter, scans the source of every
+    loaded dta module for third-party imports and checks that each maps to a
+    distribution in [project].dependencies.
+    """
+    import ast
+    import importlib
+    from importlib.metadata import packages_distributions
+    from pathlib import Path
+    import re
+    import subprocess
+    import sys
+
+    tomllib = pytest.importorskip("tomllib")  # stdlib on Python >= 3.11
+
+    root = Path(__file__).resolve().parents[1]
+    loaded = subprocess.run(
+        [sys.executable, "-c", "import sys, dta.dti.registry; print('\\n'.join(sys.modules))"],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=root,
+    ).stdout.split()
+    imported: set[str] = set()
+    for name in loaded:
+        if name != "dta" and not name.startswith("dta."):
+            continue
+        source = Path(str(importlib.import_module(name).__file__)).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                imported.add(node.module.split(".")[0])
+    third_party = {m for m in imported if m != "dta" and m not in sys.stdlib_module_names}
+
+    def norm(dist: str) -> str:
+        return re.sub(r"[-_.]+", "-", dist).lower()
+
+    deps = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
+    base = {norm(re.split(r"[\s<>=!~;\[]", d, maxsplit=1)[0]) for d in deps}
+    dists = packages_distributions()
+    missing = {m for m in third_party if not {norm(d) for d in dists.get(m, [m])} & base}
+    assert not missing, f"dta.dti.registry imports {missing}, not in base dependencies"
