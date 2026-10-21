@@ -397,6 +397,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+delineate = [
+    { name = "gdal" },
+]
 dev = [
     { name = "ipdb" },
     { name = "mypy" },
@@ -423,12 +426,15 @@ server = [
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "planetary-computer" },
+    { name = "psutil" },
     { name = "pydantic" },
     { name = "pystac-client" },
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "rasterio" },
     { name = "requests" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "scipy", version = "1.16.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "shapely" },
     { name = "timm" },
     { name = "tqdm" },
@@ -442,6 +448,7 @@ requires-dist = [
     { name = "earthengine-api", marker = "extra == 'server'", specifier = ">=0.1.300" },
     { name = "einops", marker = "extra == 'server'", specifier = ">=0.8.1" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.116.2,<1.0.0" },
+    { name = "gdal", marker = "extra == 'delineate'" },
     { name = "geopandas", marker = "extra == 'server'", specifier = ">=1.0.0" },
     { name = "google-auth", marker = "extra == 'server'", specifier = ">=2.0.0" },
     { name = "google-genai", marker = "extra == 'server'", specifier = ">=1.35.0,<2.0.0" },
@@ -455,6 +462,7 @@ requires-dist = [
     { name = "opencv-python", marker = "extra == 'server'", specifier = ">=4.10.0" },
     { name = "pillow", marker = "extra == 'server'", specifier = ">=10.0.0" },
     { name = "planetary-computer", marker = "extra == 'server'", specifier = ">=1.0.0" },
+    { name = "psutil", marker = "extra == 'server'", specifier = ">=5.9.0" },
     { name = "pydantic", marker = "extra == 'server'", specifier = ">=2.8" },
     { name = "pystac-client", marker = "extra == 'server'", specifier = ">=0.8.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
@@ -467,6 +475,7 @@ requires-dist = [
     { name = "rasterio", marker = "extra == 'server'", specifier = ">=1.4.3" },
     { name = "requests", marker = "extra == 'server'", specifier = ">=2.32.3" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.6" },
+    { name = "scipy", marker = "extra == 'server'", specifier = ">=1.10.0" },
     { name = "shapely", marker = "extra == 'server'", specifier = ">=2.0.0" },
     { name = "timm", marker = "extra == 'server'", specifier = ">=1.0.15" },
     { name = "torch", specifier = ">=2.6.0" },
@@ -476,7 +485,7 @@ requires-dist = [
     { name = "ultralytics", marker = "extra == 'server'", specifier = ">=8.3.0" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.35.0,<1.0.0" },
 ]
-provides-extras = ["dev", "server"]
+provides-extras = ["delineate", "dev", "server"]
 
 [[package]]
 name = "earthengine-api"
@@ -597,6 +606,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/45/d8/8425e6ba5fcec61a1
 wheels = [
     { url = "https://files.pythonhosted.org/packages/44/4b/e0cfc1a6f17e990f3e64b7d941ddc4acdc7b19d6edd51abf495f32b1a9e4/fsspec-2025.3.2-py3-none-any.whl", hash = "sha256:2daf8dc3d1dfa65b6aa37748d112773a7a08416f6c70d96b264c96476ecaf711", size = 194435, upload-time = "2025-03-31T15:27:07.028Z" },
 ]
+
+[[package]]
+name = "gdal"
+version = "3.13.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/64/78639efe3f1df027f0028e1faf9719dae609b9fd02d4ffd6c2dd7a9a9757/gdal-3.13.3.tar.gz", hash = "sha256:af547af72d2a153d658c1deb2fe595eccb38c18f3d9d298882fbdeee9806a6d2", size = 940613, upload-time = "2026-08-18T09:32:21.609Z" }
 
 [[package]]
 name = "geopandas"

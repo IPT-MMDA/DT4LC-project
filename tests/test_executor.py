@@ -183,12 +183,10 @@ class TestPythonRunner:
 
         with patch("dta.dti.executor.get_item") as mock_get:
             mock_get.return_value = mock_preproc
-            # Simulate failure in loading to test fallback behavior
-            with patch("importlib.util.spec_from_file_location", return_value=None):
-                result = executor._apply_preprocessors(item, inputs, "/out")
-
-        # Should fallback to original value
-        assert result["RasterPath"] == "/input.tif"
+            # An unloadable preprocessor is a hard error, not a silent
+            # fallback to the unprocessed input (#60).
+            with pytest.raises(ExecutionError, match="Entrypoint not found"):
+                executor._apply_preprocessors(item, inputs, "/out")
 
     def test_convert_tiffs_to_visualizations(self) -> None:
         executor = PipelineExecutor()

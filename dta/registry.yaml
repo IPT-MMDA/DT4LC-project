@@ -493,6 +493,7 @@ instances:
     runner:
       type: python
       entrypoint: "dta/dti/models/third_party/delineate_anything/inference.py"
+      function: run
       args_map:
         RasterPath: "${RasterPath}"
         delineate_model: "small"

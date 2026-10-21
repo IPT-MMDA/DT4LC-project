@@ -250,24 +250,55 @@ class TestPrithviReconstruction:
 
     @pytest.mark.gpu
     @pytest.mark.slow
-    def test_prithvi_runs_when_model_installed(self, synthetic_raster_path: str) -> None:
+    def test_prithvi_runs_when_model_installed(
+        self, synthetic_raster_path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import numpy as np
+        import rasterio
+
         from dta.dti.models import get_model_manager
+        from dta.dti.preprocessors import scale_to_hls
 
         manager = get_model_manager()
         if not manager.is_model_available("prithvi-eo-v1-100m"):
             pytest.skip("prithvi-eo-v1-100m not installed; run model download first")
 
+        # Prithvi takes the 6 HLS bands B02..B07; drop the synthetic raster's
+        # B1 coastal band (Landsat B2..B7 = blue, green, red, NIR, SWIR1, SWIR2).
+        hls_path = tmp_path / "synthetic_hls_6band.tif"
+        with rasterio.open(synthetic_raster_path) as src:
+            profile = src.profile
+            profile.update(count=6)
+            hls_bands = src.read(list(range(2, 8)))
+            with rasterio.open(hls_path, "w", **profile) as dst:
+                dst.write(hls_bands)
+
         executor = PipelineExecutor()
         plan = ExecutionPlan(
             flow="prithvi-reconstruction",
             steps=[
-                PlanStep(uses="input/file", binds={"RasterPath": synthetic_raster_path}),
+                PlanStep(uses="input/file", binds={"RasterPath": str(hls_path)}),
                 PlanStep(uses="models/prithvi-reconstruction", binds={}),
             ],
             outputs=["Reconstruction"],
         )
+        # Record what scale-to-hls hands to Prithvi: the step must run and its
+        # output must be the 0-1 reflectance scaled to HLS, not an all-zero raster.
+        scaled_paths: list[str] = []
+        real_run = scale_to_hls.run
+
+        def spy_run(input_path: str, output_dir: str) -> str:
+            scaled_paths.append(real_run(input_path=input_path, output_dir=output_dir))
+            return scaled_paths[-1]
+
+        monkeypatch.setattr(scale_to_hls, "run", spy_run)
+
         result = executor.execute(plan)
         assert "Reconstruction" in result["artifacts"]
+        assert len(scaled_paths) == 1
+        with rasterio.open(scaled_paths[0]) as scaled:
+            bands = scaled.read()
+        np.testing.assert_array_equal(bands, (hls_bands * 10000).astype(np.int16))
 
 
 class TestDelineateAnything:
@@ -281,6 +312,12 @@ class TestDelineateAnything:
         manager = get_model_manager()
         if not manager.is_model_available("delineate-anything-small"):
             pytest.skip("delineate-anything-small not installed; run model download first")
+        # Model installed but no GDAL bindings is a broken install, not a missing
+        # optional: fail instead of hiding the Delineate path behind a skip.
+        try:
+            import osgeo  # noqa: F401
+        except ImportError:
+            pytest.fail("delineate-anything-small is installed but the GDAL Python bindings (osgeo) are missing")
 
         executor = PipelineExecutor()
         plan = ExecutionPlan(

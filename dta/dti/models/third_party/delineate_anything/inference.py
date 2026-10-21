@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 from typing import Any
 
@@ -239,6 +240,8 @@ def _generate_conf_yaml(
             "override_if_exists": True,
         },
         "filtering_args": {
+            # Required by current upstream main; False keeps the thresholds below as given.
+            "automatic_area_scale": False,
             "minimum_area_m2": minimum_area_m2,
             "minimum_part_area_m2": 0,
             "minimum_hole_area_m2": minimum_hole_area_m2,
@@ -414,7 +417,7 @@ def delineate_fields(
 
     try:
         result = subprocess.run(
-            ["python", str(delineate_script), "-b", str(batch_path)],
+            [sys.executable, str(delineate_script), "-b", str(batch_path)],
             cwd=str(model_path),
             env=env,
             capture_output=True,
