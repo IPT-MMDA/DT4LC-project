@@ -7,9 +7,10 @@ each demo prompt. The Layer-B counterpart in ``test_demos_llm.py`` covers the
 full intent → context → plan → execute path.
 
 Each test class corresponds to one step of the rehearsed demo flow. Tests that
-need real Kahovka samples skip when the directory is empty (the default in
-this repo); the synthetic-raster fixtures from ``conftest.py`` provide CI-safe
-coverage that exercises the same pipeline shape on Landsat-8-like data.
+need real Kahovka samples use the HLS L30 crops committed in
+resources/kahovka_data/ and skip if they are absent; the synthetic-raster
+fixtures from ``conftest.py`` provide CI-safe coverage that exercises the
+same pipeline shape on Landsat-8-like data.
 """
 
 import os
