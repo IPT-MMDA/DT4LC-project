@@ -63,6 +63,20 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         final_plan = validate(candidate, reg)
         return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump()}
     except PlanError as e:
+        # Retry once with the template planner; keep the original error if it doesn't help.
+        fallback = plan(ctx, reg, use_llm=False)
+        if req.attachments:
+            _inject_file_bindings(fallback, req.attachments)
+        if fallback.model_dump() != candidate.model_dump():
+            try:
+                final_plan = validate(fallback, reg)
+                logger.warning(
+                    f"LLM plan failed validation ({e}); using template plan instead: "
+                    f"{[s.uses for s in final_plan.steps]}"
+                )
+                return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump()}
+            except PlanError:
+                pass
         return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
 
 
