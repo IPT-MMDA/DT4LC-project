@@ -199,5 +199,6 @@ def test_create_field_boundaries_visualization(tmp_path: Path) -> None:
             res = _create_field_boundaries_visualization(str(tmp_path / "fake.tif"), gdf)
 
     assert res is not None
-    assert isinstance(res, str)
+    assert isinstance(res, bytes)
+    assert res.startswith(b"\x89PNG")
     assert len(res) > 100

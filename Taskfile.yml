@@ -134,14 +134,14 @@ tasks:
     desc: Run FastAPI server with hot reload
     deps: [venv]
     cmds:
-      - uv run uvicorn server:app --reload --host 0.0.0.0 --port 8000
+      - uv run uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 
   # =============================================================================
   # Models & Data
   # =============================================================================
 
   download:prithvi:
-    desc: Download Prithvi model weights
+    desc: Download Prithvi model weights into the model cache (DT4LC_MODEL_CACHE, default resources/.cache/models)
     deps: [venv]
     cmds:
       - uv run python scripts/download_prithvi.py
