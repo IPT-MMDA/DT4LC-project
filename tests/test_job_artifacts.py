@@ -150,6 +150,60 @@ def test_model_step_result_holds_png_refs_next_to_tiffs(tmp_path: Path) -> None:
     assert Path(ref["path"]) == tif.with_suffix(".png")
 
 
+def test_analysis_tools_read_png_refs(synthetic_raster_pair: tuple[str, str]) -> None:
+    from dta.dti.algorithms import change_detection
+    from dta.dti.post_processing.analysis_tools import execute_tool
+
+    context = {"visualizations": change_detection.run(*synthetic_raster_pair, "ndvi")["visualizations"]}
+
+    def similarity(key1: str, key2: str) -> dict[str, Any]:
+        return execute_tool("compute_image_similarity", {"image1_key": key1, "image2_key": key2}, context)
+
+    same, diff = similarity("ndvi_before", "ndvi_before"), similarity("ndvi_before", "ndvi_after")
+    spatial = execute_tool("analyze_spatial_patterns", {"image_key": "change_map"}, context)
+
+    assert "error" not in same and same["mse"] == 0.0
+    assert "error" not in diff and diff["mse"] > 0.0
+    assert "error" not in spatial and spatial["edge_density"] > 0.0
+
+
+@patch("dta.dti.models.third_party.delineate_anything.inference.subprocess.run")
+@patch("dta.dti.models.get_model_manager")
+def test_delineate_field_boundaries_is_png_ref(
+    mock_get_manager: MagicMock, mock_run: MagicMock, synthetic_raster_path: str, tmp_path: Path
+) -> None:
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    from dta.dti.models.third_party.delineate_anything.inference import delineate_fields
+
+    model_dir = tmp_path / "model_dir"
+    model_dir.mkdir()
+    (model_dir / "delineate.py").touch()
+    mock_get_manager.return_value.get_model_path.return_value = model_dir
+    with rasterio.open(synthetic_raster_path) as src:
+        b, crs = src.bounds, src.crs
+
+    def write_one_field(cmd: list[str], **_: Any) -> MagicMock:
+        # delineate.py writes <batch dir>/output/data.gpkg; here: one field in the raster's centre
+        cx, cy, w, h = (b.left + b.right) / 2, (b.bottom + b.top) / 2, b.right - b.left, b.top - b.bottom
+        field = box(cx - w / 4, cy - h / 4, cx + w / 4, cy + h / 4)
+        gpd.GeoDataFrame(geometry=[field], crs=crs).to_file(Path(cmd[-1]).parent / "output" / "data.gpkg")
+        return MagicMock(returncode=0)
+
+    mock_run.side_effect = write_one_field
+    gpkg = tmp_path / "fields.gpkg"
+
+    res = delineate_fields(synthetic_raster_path, output_path=str(gpkg), data_source="sentinel")
+
+    assert res["num_fields"] == 1
+    assert _pixel_data(res) == []
+    ref = res["visualizations"]["field_boundaries"]
+    _assert_ref(ref, "png")
+    assert Path(ref["path"]) == gpkg.with_suffix(".png")
+    assert Path(ref["path"]).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 def test_executor_writes_step_files_under_its_output_dir(synthetic_raster_path: str, tmp_path: Path) -> None:
     from dta.dti.executor import PipelineExecutor
     from dta.dti.schemas import ExecutionPlan, PlanStep
