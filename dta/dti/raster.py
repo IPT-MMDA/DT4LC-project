@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import re
 from typing import Any
 
 import numpy as np
@@ -110,14 +111,70 @@ def load_raster_as_rgb(
         )
 
 
+# Semantic band descriptions (lower-cased) -> role.
+_SEMANTIC_ROLES = {
+    "blue": "blue",
+    "b": "blue",
+    "green": "green",
+    "g": "green",
+    "red": "red",
+    "r": "red",
+    "nir": "nir",
+    "nir08": "nir",
+    "swir": "swir",
+    "swir1": "swir",
+    "swir16": "swir",
+}
+# Band codes per sensor family -> role.
+_SENTINEL2_CODES = {"blue": "2", "green": "3", "red": "4", "nir": "8", "swir": "11"}
+_LANDSAT_CODES = {"blue": "2", "green": "3", "red": "4", "nir": "5", "swir": "6"}
+_BAND_CODE = re.compile(r"^b0*(\d+a?)$")
+
+
+def _roles_from_descriptions(descriptions: Any) -> dict[str, int | None] | None:
+    """Resolve band roles from band descriptions, or ``None`` if they don't identify any."""
+    names = [(d or "").strip().lower() for d in (descriptions or ())]
+
+    semantic: dict[str, int] = {}
+    for i, name in enumerate(names, start=1):
+        if name in _SEMANTIC_ROLES:
+            semantic.setdefault(_SEMANTIC_ROLES[name], i)
+    if semantic:
+        return {role: semantic.get(role) for role in ("red", "nir", "green", "blue", "swir")}
+
+    codes = {m.group(1): i for i, n in enumerate(names, start=1) if (m := _BAND_CODE.match(n))}
+    if not codes:
+        return None
+    if "8" in codes or "8a" in codes:
+        scheme = dict(_SENTINEL2_CODES)
+        if "8" not in codes:
+            scheme["nir"] = "8a"
+    elif all(c.isdigit() and 1 <= int(c) <= 7 for c in codes):
+        scheme = _LANDSAT_CODES
+    else:
+        return None
+    return {role: codes.get(scheme[role]) for role in ("red", "nir", "green", "blue", "swir")}
+
+
 def band_indices(src: Any) -> dict[str, int | None]:
-    """Heuristic mapping from band-role names to 1-based band indices.
+    """Mapping from band-role names to 1-based band indices.
 
     Single source of truth for "which band is red?" across spectral indices
     and change detection. Returns ``None`` for roles the source doesn't carry
     (e.g. SWIR on a 4-band RGBN image).
 
-    Layouts (selected by ``src.count``):
+    Band descriptions (``src.descriptions``) are read first:
+
+    * Semantic names, case-insensitive: ``blue`` / ``B``, ``green`` / ``G``,
+      ``red`` / ``R``, ``nir`` / ``nir08``, ``swir`` / ``swir1`` / ``swir16``
+      (SWIR1). Roles not named are ``None``.
+    * ``Bn`` band codes, resolved by sensor family. If ``B8`` or ``B8A`` is
+      present: Sentinel-2 (B2 blue, B3 green, B4 red, B8 NIR (B8A if B8 is
+      absent), B11 SWIR1). Else, if all codes are within B1-B7: Landsat 8/9 /
+      HLS L30 (B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1).
+
+    If the descriptions identify no band, a warning is logged and the layout
+    is guessed from ``src.count``:
 
     * 7+ bands: Landsat 8/9 surface-reflectance order
       (B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1, B7 SWIR2).
@@ -132,7 +189,16 @@ def band_indices(src: Any) -> dict[str, int | None]:
         Dict with keys ``red``, ``nir``, ``green``, ``blue``, ``swir`` and
         1-based band-index values (or ``None`` if absent).
     """
+    roles = _roles_from_descriptions(getattr(src, "descriptions", None))
+    if roles is not None:
+        return roles
+
     n = src.count
+    logger.warning(
+        "Band roles not identifiable from band descriptions %r; guessing the layout from the band count (%d)",
+        getattr(src, "descriptions", None),
+        n,
+    )
     if n >= 7:
         # Landsat 8/9: B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1
         return {"red": 4, "nir": 5, "green": 3, "blue": 2, "swir": 6}
