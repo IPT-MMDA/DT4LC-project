@@ -70,6 +70,14 @@ FORMULAS: dict[str, Callable[[dict[str, np.ndarray]], np.ndarray]] = {
     "evi": _evi,
 }
 
+# Value range of each formula; results are clipped to it.
+RANGES: dict[str, tuple[float, float]] = {
+    "ndvi": (-1.0, 1.0),
+    "ndwi": (-1.0, 1.0),
+    "ndsi": (-1.0, 1.0),
+    "evi": (-1.0, 1.0),
+}
+
 
 # --- Colormaps: name → list of RGB tuples ------------------------------------
 # Reused from the legacy per-index files; LinearSegmentedColormap interpolates
@@ -108,6 +116,11 @@ COLORMAPS: dict[str, list[tuple[float, float, float]]] = {
 
 def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
     """Calculate a spectral index from a raster + config.
+
+    Integer-scaled reflectance (any required band with max > 1000) is divided
+    by 10000 first. Pixels that are nodata or non-finite in any required band
+    are NaN in the output; values are clipped to the formula's range
+    (``RANGES``); statistics cover valid pixels only.
 
     Args:
         raster_path: Path to a multi-band GeoTIFF.
@@ -160,14 +173,25 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
                 )
             data = src.read(idx, masked=True).astype(float)
             if hasattr(data, "filled"):
-                data = data.filled(np.nan)
+                data = data.filled(np.nan)  # nodata -> NaN
             bands[role] = data
 
-        index_array = formula(bands)
+        # A pixel is valid only if every required band is finite (not NaN/inf/nodata).
+        input_valid = np.logical_and.reduce([np.isfinite(b) for b in bands.values()])
+        # Integer-scaled reflectance (0-10000) -> 0-1, as in snow_classifier.
+        max_val = max(float(np.max(b[input_valid])) for b in bands.values()) if input_valid.any() else 0.0
+        if max_val > 1000:
+            bands = {role: b / 10000.0 for role, b in bands.items()}
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            index_array = formula(bands)
         # Mask invalids that the divide-by-zero protection didn't catch (NaN inputs).
         if np.ma.isMaskedArray(index_array):
             index_array = index_array.filled(np.nan)
         index_array = np.asarray(index_array, dtype=np.float64)
+        index_array[~input_valid | ~np.isfinite(index_array)] = np.nan
+        lo, hi = RANGES.get(formula_name, (-np.inf, np.inf))
+        index_array = np.clip(index_array, lo, hi)
 
         valid_mask = np.isfinite(index_array)
         valid = index_array[valid_mask]
