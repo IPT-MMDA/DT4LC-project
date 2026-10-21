@@ -438,6 +438,7 @@ export const useAppStore = create<AppStore>()(
       name: 'dt4lc-app-storage',
       partialize: (state) => ({
         drawnRegions: state.drawnRegions,
+        selectedRegion: state.selectedRegion,
         currentBasemap: state.currentBasemap,
         theme: state.theme,
         useNewDatasetPanel: state.useNewDatasetPanel,
