@@ -191,15 +191,32 @@ class TestPlanEndpoint:
         assert data["plan"]["flow"] == "ndvi"
 
     def test_plan_failure(self, client: TestClient) -> None:
-        with patch("server.routes.chat.orchestrate", return_value={"ok": False, "error": "test fail"}):
+        candidate = {"flow": "ndvi", "steps": []}
+        with patch(
+            "server.routes.chat.orchestrate",
+            return_value={"ok": False, "error": "test fail", "candidate": candidate},
+        ):
             resp = client.post(
                 "/v1/plan",
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        data = resp.json()
-        assert data["ok"] is False
-        assert "test fail" in data["error"]
+        error = resp.json()["error"]
+        assert error["code"] == "planning_failed"
+        assert "test fail" in error["message"]
+        assert error["details"]["candidate"] == candidate
+
+    def test_plan_unexpected_error_is_json_500(self) -> None:
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch("server.routes.chat.orchestrate", side_effect=RuntimeError("boom")):
+            resp = client.post(
+                "/v1/plan",
+                json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
+            )
+        assert resp.status_code == 500
+        error = resp.json()["error"]
+        assert error["code"] == "internal_error"
+        assert error["message"] == "Plan generation failed: boom"
 
 
 class TestExecuteEndpoint:
@@ -218,8 +235,8 @@ class TestExecuteEndpoint:
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        data = resp.json()
-        assert data["ok"] is False
+        assert resp.json()["error"]["code"] == "planning_failed"
+        assert "plan failed" in resp.json()["error"]["message"]
 
     def test_execute_success(self, client: TestClient) -> None:
         mock_plan = {
@@ -243,6 +260,25 @@ class TestExecuteEndpoint:
         assert data["ok"] is True
         assert "plan" in data
         assert "result" in data
+
+    @pytest.mark.parametrize(
+        ("orchestrate_kwargs", "message"),
+        [
+            ({"side_effect": RuntimeError("boom")}, "Execution failed: boom"),
+            ({"return_value": {"ok": True, "intent": "conversation"}}, "Execution failed: 'plan'"),
+        ],
+    )
+    def test_execute_unexpected_error_is_json_500(self, orchestrate_kwargs: dict, message: str) -> None:
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch("server.routes.chat.orchestrate", **orchestrate_kwargs):
+            resp = client.post(
+                "/v1/execute",
+                json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
+            )
+        assert resp.status_code == 500
+        error = resp.json()["error"]
+        assert error["code"] == "internal_error"
+        assert error["message"] == message
 
 
 class TestChatEndpoint:
@@ -420,7 +456,7 @@ class TestLayerEndpoints:
 
     def test_persist_layer_missing_id(self, client: TestClient) -> None:
         resp = client.post("/v1/gee/layers/persist", json={})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_persist_layer_success(self, client: TestClient) -> None:
         with patch("server.layer_metadata_store.save_layer_metadata"):
