@@ -42,7 +42,8 @@ class TestHealthEndpointDetailed:
         # TestClient sends requests with host "testclient", not 127.0.0.1
         resp = client.get("/v1/health", params={"detailed": "true"})
         assert resp.status_code == 403
-        assert "localhost" in resp.json()["detail"]
+        assert resp.json()["error"]["code"] == "unauthorized"
+        assert "localhost" in resp.json()["error"]["message"]
 
     def test_detailed_returns_full_diagnostics_from_localhost(self, client: TestClient) -> None:
         gee_stub = GEEStatus(initialized=False, service_account_configured=False)
