@@ -3,8 +3,10 @@
 Validates that execution plans have satisfied dependencies and valid runners.
 """
 
+from dta.dti.exceptions import ResourceError
 from dta.dti.registry import get_item
 from dta.dti.schemas import ExecutionPlan, Registry
+from dta.dti.validation import PlanValidator
 
 
 class PlanError(Exception):
@@ -15,8 +17,14 @@ def validate(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
     """Validate execution plan dependencies and runner configuration.
 
     Raises:
-        PlanError: If step dependencies are unmet or runner is misconfigured.
+        PlanError: If step dependencies are unmet, runner is misconfigured,
+            or the plan exceeds resource limits.
     """
+    try:
+        PlanValidator(reg).check_resources(plan)
+    except ResourceError as e:
+        raise PlanError(str(e)) from e
+
     have_types: set[str] = set()
     for step in plan.steps:
         it = get_item(reg, step.uses)
