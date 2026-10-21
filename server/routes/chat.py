@@ -38,14 +38,17 @@ async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
 
-    prompt = req.messages[-1].content
-    coe_req = COEChatRequest(prompt=prompt, attachments=[])
+    try:
+        prompt = req.messages[-1].content
+        coe_req = COEChatRequest(prompt=prompt, attachments=[])
 
-    result = orchestrate(coe_req)
-    if not result.get("ok"):
-        return _planning_failed(result)
+        result = orchestrate(coe_req)
+        if not result.get("ok"):
+            return _planning_failed(result)
 
-    return PlanResponse(plan=result["plan"])
+        return PlanResponse(plan=result["plan"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Plan generation failed: {e}") from e
 
 
 @router.post(  # type: ignore[misc]
@@ -58,29 +61,32 @@ async def execute_plan(req: ChatRequest) -> ExecuteResponse | JSONResponse:
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
 
-    prompt = req.messages[-1].content
-    coe_req = COEChatRequest(prompt=prompt, attachments=[])
+    try:
+        prompt = req.messages[-1].content
+        coe_req = COEChatRequest(prompt=prompt, attachments=[])
 
-    orch_result = orchestrate(coe_req)
-    if not orch_result.get("ok"):
-        return _planning_failed(orch_result)
+        orch_result = orchestrate(coe_req)
+        if not orch_result.get("ok"):
+            return _planning_failed(orch_result)
 
-    plan_dict = orch_result["plan"]
-    plan = ExecutionPlan(**plan_dict)
-    executor = PipelineExecutor()
+        plan_dict = orch_result["plan"]
+        plan = ExecutionPlan(**plan_dict)
+        executor = PipelineExecutor()
 
-    progress_events: list[dict[str, Any]] = []
+        progress_events: list[dict[str, Any]] = []
 
-    def on_progress(event: dict[str, Any]) -> None:
-        progress_events.append(event)
+        def on_progress(event: dict[str, Any]) -> None:
+            progress_events.append(event)
 
-    exec_result = executor.execute(plan, on_progress=on_progress)
+        exec_result = executor.execute(plan, on_progress=on_progress)
 
-    return ExecuteResponse(
-        plan=plan_dict,
-        result=exec_result,
-        progress=progress_events,
-    )
+        return ExecuteResponse(
+            plan=plan_dict,
+            result=exec_result,
+            progress=progress_events,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Execution failed: {e}") from e
 
 
 @router.post(  # type: ignore[misc]
