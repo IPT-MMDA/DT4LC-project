@@ -455,7 +455,7 @@ for model_id in ("prithvi-eo-v1-100m", "delineate-anything-small"):
 EOF
 ```
 
-The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). `task download:prithvi` downloads Prithvi alone in the same way, reading `DT4LC_MODEL_CACHE` from the environment or `.env` like the server: it prints the target directory, skips the download if the model is already there, and exits 1 with the error if the download fails. Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). `task download:prithvi` runs `scripts/download_prithvi.py`, which downloads Prithvi alone in the same way, reading `DT4LC_MODEL_CACHE` from the environment or `.env` like the server: it prints the target directory and skips the download if the model is already there. If the download fails, the script prints the error and exits 1, so the task fails. Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Expected Band Order
 
