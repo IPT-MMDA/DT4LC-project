@@ -401,6 +401,43 @@ class TestLLMRouter:
         assert failing_provider.generate.called
         assert success_provider.generate.called
 
+    def test_all_failed_reports_every_underlying_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The final error names each provider's exception type and message and chains the last one."""
+        first = MagicMock(spec=BaseLLMProvider, model="m1")
+        first.name = "first"
+        first.is_available.return_value = True
+        first.generate.side_effect = ValueError("bad request shape")
+
+        cause = TimeoutError("read timed out")
+        second = MagicMock(spec=BaseLLMProvider, model="m2")
+        second.name = "second"
+        second.is_available.return_value = True
+        wrapped = Exception("Second generation failed: read timed out")
+        wrapped.__cause__ = cause
+        second.generate.side_effect = wrapped
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.router"):
+            with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+                LLMRouter([first, second]).generate([LLMMessage(role="user", content="Hi")])
+
+        message = str(exc_info.value)
+        assert "first (m1): ValueError: bad request shape" in message
+        assert "second (m2): TimeoutError: Second generation failed: read timed out" in message
+        assert exc_info.value.__cause__ is wrapped
+        assert "ValueError: bad request shape" in caplog.text
+        assert "TimeoutError: Second generation failed" in caplog.text
+
+    def test_all_unavailable_says_so(self) -> None:
+        """When every provider is skipped the message says why, instead of 'Last error: None'."""
+        offline = MagicMock(spec=BaseLLMProvider, model="llama3.2")
+        offline.name = "ollama"
+        offline.is_available.return_value = False
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            LLMRouter([offline]).generate([LLMMessage(role="user", content="Hi")])
+
+        assert str(exc_info.value) == "All LLM providers failed: ollama (llama3.2): not available"
+
 
 class TestLLMConfig:
     """Tests for LLM configuration."""
