@@ -46,6 +46,23 @@ def test_scale_0_1_to_hls(tmp_path: Path) -> None:
         assert scaled[0, 1, 0] == 10000
 
 
+
+def test_scale_reflectance_with_negative_pixels(tmp_path: Path) -> None:
+    # Surface reflectance has small negative values (atmospheric-correction
+    # artefacts, and the synthetic test raster). It is still 0-1 data and must be
+    # scaled, not truncated to int16 zeros as "already HLS" (#60).
+    input_file = str(tmp_path / "neg.tif")
+    out_dir = str(tmp_path / "out_neg")
+    Path(out_dir).mkdir()
+
+    data = np.repeat(np.array([[[-0.15, 0.5], [0.6, 0.2]]], dtype=np.float32), HLS_BAND_COUNT, axis=0)
+    _make_tif(input_file, data)
+
+    with rasterio.open(run(input_file, out_dir)) as src:
+        scaled = src.read()
+    assert scaled.dtype == np.int16
+    assert scaled[0].tolist() == [[-1500, 5000], [6000, 2000]]
+
 def test_scale_large_values(tmp_path: Path) -> None:
     input_file = str(tmp_path / "large.tif")
     out_dir = str(tmp_path / "out2")

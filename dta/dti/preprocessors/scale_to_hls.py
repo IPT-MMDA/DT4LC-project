@@ -50,8 +50,9 @@ def run(input_path: str, output_dir: str) -> str:
             data_max = np.nanmax(data)
             data_min = np.nanmin(data)
 
-            if data_max <= 1.0 and data_min >= 0.0:
-                # Data is in 0-1 reflectance range, scale to HLS
+            if data_max <= 1.0:
+                # Data is 0-1 reflectance (small negatives are valid surface
+                # reflectance, not HLS scale), scale to HLS
                 logger.info(f"Scaling input from 0-1 to HLS scale (range: {data_min:.4f}-{data_max:.4f})")
                 scaled_data = (data * 10000).astype(np.int16)
                 meta.update(dtype="int16")
