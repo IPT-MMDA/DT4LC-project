@@ -19,7 +19,7 @@ The backend loads `.env` via `load_dotenv()` in `server/app.py`. **Source of tru
 
 | Group | Variables | Notes |
 |-------|-----------|--------|
-| **LLM routing** | `LLM_ENABLE_*`, `LLM_PROVIDER_ORDER`, `LLM_STRATEGY` | Enable/disable providers (an unset `LLM_ENABLE_*` counts as `true`); order is fallback chain (`fallback` strategy). Commercial providers (`anthropic`, `mistral`, `openai`) need `LLM_ENABLE_*=true`, a key, and an entry in `LLM_PROVIDER_ORDER`. |
+| **LLM routing** | `LLM_ENABLE_*`, `LLM_PROVIDER_ORDER`, `LLM_STRATEGY` | Enable/disable providers (an unset `LLM_ENABLE_*` counts as `true`); order is fallback chain (`fallback` strategy). Commercial providers (`anthropic`, `mistral`, `openai`) need `LLM_ENABLE_*=true`, a key, and an entry in `LLM_PROVIDER_ORDER`. The router moves to the next provider when one is unavailable or its call raises, and for context extraction also when the reply fails the context check; the other stages fall back deterministically instead of asking the next provider. |
 | **API keys** | `GEMINI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `OPENAI_API_KEY` (or `GPT_SECRET`) | Optional for local dev; without keys the router uses the next enabled provider (often Ollama). |
 | **Models** | `GEMINI_MODELS`, `GROQ_MODEL`, `ANTHROPIC_MODELS`, `MISTRAL_MODELS`, `OPENAI_MODELS` | Comma-separated lists; one model per provider is picked when the router is built (once per process). Gemini tries the rest of its list on 404/429/503. Groq takes a single model. |
 | **Ollama** | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | Default `http://localhost:11434`. Under Docker Compose, `docker-compose.yml` defaults it to `http://ollama:11434` (the `ollama` service starts with `--profile ollama`); leave it unset in `.env`. An untagged `OLLAMA_MODEL` means `:latest`; a tagged one must match an installed tag. |
@@ -226,9 +226,9 @@ ChatRequest
 |------|--------|------------------------|
 | 1 | `orchestrator.py` | Classifies intent; loads registry; builds the plan, injects attachment paths into input steps (`_inject_file_bindings`) and validates it |
 | 2 | `intent_classifier.py` | `registry.yaml` `triggers` on `algorithms/ndvi` match `"calculate ndvi"` → `PIPELINE` (with attachment) or `CONVERSATION` (asks for file if missing) |
-| 3 | `context_agent.py` | LLM extracts `desired_outputs: ["NDVIMap"]`; domain hints rendered from registry |
-| 4 | `planner.py` | Template planner when `estimate_plan_confidence()` (`llm_planner.py`) is at least 0.7, else the LLM planner. Template plan: `input/file` → `algorithms/ndvi` → `post-processing/agent-analysis` |
-| 5 | `plan_validator.py` | `PlanValidator.check_resources` (`dta/dti/validation.py`): at most 50 steps, 600 s and 4096 MB estimated (per step: algorithm 5 s / 256 MB, model 30 s / 1024 MB, other 1 s / 50 MB); then every step's inputs must come from earlier outputs or binds. A failing plan is not executed |
+| 3 | `context_agent.py` | LLM extracts `desired_outputs: ["NDVIMap"]`; domain hints rendered from registry. If no provider answers or every reply fails the context check, the context is built from the registry triggers instead (`algorithms/ndvi` gives `["NDVIMap"]`) |
+| 4 | `planner.py` | Template planner when `estimate_plan_confidence()` (`llm_planner.py`) is at least 0.7, else the LLM planner; the template planner is also used when the LLM planner fails or returns invalid JSON or an unknown component. Template plan: `input/file` → `algorithms/ndvi` → `post-processing/agent-analysis` |
+| 5 | `plan_validator.py` | `PlanValidator.check_resources` (`dta/dti/validation.py`): at most 50 steps, 600 s and 4096 MB estimated (per step: algorithm 5 s / 256 MB, model 30 s / 1024 MB, other 1 s / 50 MB); then every step's inputs must come from earlier outputs or binds. A failing plan is not executed; the orchestrator then tries the template plan once and uses it only if it passes and has an algorithm or model step |
 | 6 | `executor.py` | `input/file` passes the bound `RasterPath` through; imports `dta.dti.algorithms.ndvi` and calls `run(RasterPath=...)` |
 
 **API wiring:** `server/routes/chat.py` (`/v1/execute`, `/v1/chat`) calls `orchestrate()` then `PipelineExecutor().execute()` on the validated plan; `/v1/plan` stops after `orchestrate()`. Async jobs (`POST /v1/jobs`) use the same flow in `server/jobs.py`.

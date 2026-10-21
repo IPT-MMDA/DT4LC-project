@@ -65,7 +65,7 @@ Determines if a request needs pipeline execution or a conversational response.
 - **PIPELINE**: Requests that need data processing (NDVI, change detection)
 - **CONVERSATION**: Questions, guidance, or explanations
 
-Uses pattern matching for clear action requests, falls back to LLM for ambiguous cases.
+Uses pattern matching for clear action requests, falls back to LLM for ambiguous cases. If that call fails or returns no valid JSON, the request is treated as PIPELINE.
 
 #### Context Agent (`context_agent.py`)
 
@@ -75,6 +75,8 @@ Extracts structured understanding from user requests:
 - Required inputs/outputs
 - Keywords and hints
 
+If no provider answers, or every reply fails the context check (for example, not valid JSON of the `ContextUnderstanding` shape, types outside the registry, or keywords that are not strings; extra keys are ignored), the context is built deterministically from the registry triggers (`find_matching_item` in `triggers.py`) and the number of attachments: two or more mean before/after change detection. A WARNING in the log names the reason.
+
 #### Planner (`planner.py`)
 
 Generates execution plans using:
@@ -83,9 +85,11 @@ Generates execution plans using:
 - **LLM planner**: Smart path for complex requests
 - Hybrid mode with confidence-based routing
 
+The LLM planner runs only when `estimate_plan_confidence()` is below 0.7. If its call fails, or its answer is not valid JSON or names a component missing from the registry, the template planner is used.
+
 #### Plan Validator (`plan_validator.py`)
 
-Validates generated plans against registry constraints.
+Checks estimated resources (`PlanValidator.check_resources`: at most 50 steps, 600 s and 4096 MB), that every step's inputs come from earlier steps or binds, and that Python runners have an entrypoint. If a plan fails, the orchestrator builds the template plan once and uses it only if it differs from the rejected plan, passes the same checks and contains an algorithm or model step; otherwise it returns the original error and nothing runs.
 
 ### LLM Router (`dta/dti/coe/llm/`)
 
@@ -108,6 +112,10 @@ Request → Gemini (if available)
             ↓ (on failure)
         → Error
 ```
+
+The router moves on when a provider is unavailable or its call raises. For the context-extraction call it also moves on when the reply fails the context check (see Context Agent above). Other calls are not retried with the next provider when the answer is unusable: the intent classifier then treats the request as PIPELINE and the planner uses the template plan; result interpretation has no such check. When every provider fails, the router raises "All LLM providers failed: …" with each provider's reason, and each stage falls back deterministically: intent to PIPELINE, context to the registry triggers, planning to the template plan and interpretation to a fixed "summarization failed" summary.
+
+The order comes from `LLM_PROVIDER_ORDER` (default `gemini,groq,ollama`). For example, `LLM_PROVIDER_ORDER=gemini,anthropic,mistral`, with the models set in `GEMINI_MODELS`, `ANTHROPIC_MODELS` and `MISTRAL_MODELS`, gives the Gemini → Anthropic → Mistral chain described in Chernyatevich et al., "Hybrid-Deterministic Fallback for Dependable LLM Provider Composition" (DESSERT 2026, in press).
 
 ### Digital Twin Instance (DTI)
 
