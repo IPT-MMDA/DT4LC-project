@@ -374,6 +374,172 @@ class TestMistralProvider:
                 os.environ["MISTRAL_API_KEY"] = old_key
 
 
+def _configured_openai_models() -> list[str]:
+    """Models the app would use: OPENAI_MODELS (loaded from .env by conftest) or the code default."""
+    from dta.dti.coe.llm.config import _get_models_list
+
+    try:
+        from dta.dti.coe.llm.openai import DEFAULT_OPENAI_MODEL
+    except ImportError:  # openai SDK is part of the `server` extra
+        return []
+    return _get_models_list("OPENAI_MODELS", DEFAULT_OPENAI_MODEL)
+
+
+class TestOpenAIProvider:
+    """Tests for the OpenAI Chat Completions provider."""
+
+    pytest.importorskip("openai")
+
+    @staticmethod
+    def _fake_client(captured: dict[str, object]) -> MagicMock:
+        fake_response = MagicMock()
+        fake_response.choices = [MagicMock(finish_reason="stop")]
+        fake_response.choices[0].message.content = "ok"
+        fake_response.model = "gpt-4.1-nano-2025-04-14"
+        fake_response.usage = MagicMock(prompt_tokens=10, completion_tokens=2, total_tokens=12)
+        client = MagicMock()
+        client.chat.completions.create.side_effect = lambda **kw: captured.update(kw) or fake_response
+        return client
+
+    def test_initialization(self) -> None:
+        """Default model is the module constant; images are not forwarded (like Anthropic)."""
+        from dta.dti.coe.llm.openai import DEFAULT_OPENAI_MODEL, OpenAIProvider
+
+        provider = OpenAIProvider()
+        assert provider.name == "openai"
+        assert provider.model == DEFAULT_OPENAI_MODEL
+        assert provider.supports_images is False
+
+    def test_unavailable_without_any_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Neither OPENAI_API_KEY nor GPT_SECRET → unavailable, generate() names both."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GPT_SECRET", raising=False)
+        provider = OpenAIProvider()
+        assert provider.is_available() is False
+        with pytest.raises(ValueError, match="OPENAI_API_KEY \\(or GPT_SECRET\\)"):
+            provider.generate([LLMMessage(role="user", content="Hi")])
+
+    def test_gpt_secret_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """GPT_SECRET is used when OPENAI_API_KEY is unset or empty; OPENAI_API_KEY wins otherwise."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        monkeypatch.setenv("OPENAI_API_KEY", "")
+        monkeypatch.setenv("GPT_SECRET", "sk-gpt-secret-test")
+        with patch("dta.dti.coe.llm.openai.openai.OpenAI") as client_cls:
+            provider = OpenAIProvider()
+            assert provider.is_available() is True
+            provider._get_client()
+        assert client_cls.call_args.kwargs["api_key"] == "sk-gpt-secret-test"
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
+        with patch("dta.dti.coe.llm.openai.openai.OpenAI") as client_cls:
+            OpenAIProvider()._get_client()
+        assert client_cls.call_args.kwargs["api_key"] == "sk-openai-test"
+
+    def test_reasoning_models_omit_sampling_params(self) -> None:
+        """Models observed to 400 on temperature are recognised; the rest keep it."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        for model in (
+            "o3",
+            "o3-mini",
+            "o4-mini",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-nano",
+            "gpt-5-nano-2025-08-07",
+            "gpt-5.5",
+            "gpt-5.6-luna",
+            "gpt-6-sol",
+            "gpt-6.1-sol",
+            "chat-latest",
+        ):
+            assert OpenAIProvider(model, api_key="sk-test")._supports_sampling() is False, model
+        for model in ("gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o-mini", "gpt-5.1", "gpt-5.2", "gpt-5.4", "gpt-5.4-nano"):
+            assert OpenAIProvider(model, api_key="sk-test")._supports_sampling() is True, model
+
+    def test_generate_request_shape(self) -> None:
+        """System stays in messages; max_tokens → max_completion_tokens; temperature for chat models."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider("gpt-4.1-nano", api_key="sk-test")
+        captured: dict[str, object] = {}
+        provider._client = self._fake_client(captured)
+
+        messages = [
+            LLMMessage(role="system", content="You are a planner."),
+            LLMMessage(role="user", content="Plan."),
+        ]
+        response = provider.generate(messages, temperature=0.2, max_tokens=50)
+
+        assert captured == {
+            "model": "gpt-4.1-nano",
+            "messages": [
+                {"role": "system", "content": "You are a planner."},
+                {"role": "user", "content": "Plan."},
+            ],
+            "max_completion_tokens": 50,
+            "temperature": 0.2,
+        }
+        assert response.text == "ok"
+        assert response.provider == "openai"
+        assert response.usage == {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}
+        assert response.metadata == {"finish_reason": "stop"}
+
+    def test_reasoning_model_request_has_no_temperature(self) -> None:
+        """gpt-5-nano rejects temperature=0.2 with a 400, so it must not be sent."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider("gpt-5-nano", api_key="sk-test")
+        captured: dict[str, object] = {}
+        provider._client = self._fake_client(captured)
+
+        provider.generate([LLMMessage(role="user", content="Hi")], temperature=0.2)
+
+        assert "temperature" not in captured
+        assert "max_tokens" not in captured
+
+    def test_api_error_is_wrapped_with_cause(self) -> None:
+        """SDK errors are re-raised as 'OpenAI generation failed' with the SDK error chained."""
+        import httpx
+        import openai
+
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider("gpt-4.1-nano", api_key="sk-test")
+        sdk_error = openai.APIConnectionError(
+            request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        )
+        provider._client = MagicMock()
+        provider._client.chat.completions.create.side_effect = sdk_error
+
+        with pytest.raises(Exception, match="OpenAI generation failed") as exc_info:
+            provider.generate([LLMMessage(role="user", content="Hi")])
+        assert exc_info.value.__cause__ is sdk_error
+
+    @pytest.mark.llm
+    @pytest.mark.skipif(
+        not (os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_SECRET")),
+        reason="OPENAI_API_KEY / GPT_SECRET not set",
+    )
+    @pytest.mark.parametrize("model", _configured_openai_models())
+    def test_generation_real(self, model: str) -> None:
+        """Live smoke for every model configured in OPENAI_MODELS (requires API key)."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider(model)
+        response = provider.generate(
+            [LLMMessage(role="user", content="Say 'test successful' and nothing else")],
+            temperature=0.0,
+            max_tokens=200,
+        )
+
+        assert "test" in response.text.lower()
+        assert response.provider == "openai"
+
+
 class TestLLMRouter:
     """Tests for LLM router."""
 
@@ -566,6 +732,46 @@ class TestLLMConfig:
         config = get_default_config()
         types = [p["type"] for p in config["providers"]]
         assert "anthropic" not in types
+
+    def test_openai_selected_through_provider_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """GPT_SECRET alone enables openai; LLM_PROVIDER_ORDER sets its position; router builds it."""
+        pytest.importorskip("openai")
+        from dta.dti.coe.llm.config import create_router_from_env, get_default_config
+        from dta.dti.coe.llm.openai import DEFAULT_OPENAI_MODEL, OpenAIProvider
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_MODELS", raising=False)
+        monkeypatch.setenv("GPT_SECRET", "sk-gpt-secret-test")
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.setenv("GEMINI_MODELS", "gemini-3.8-flash")
+        monkeypatch.setenv("LLM_ENABLE_OPENAI", "true")
+        monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
+
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini,openai")
+        assert [p["type"] for p in get_default_config()["providers"]] == ["gemini", "openai"]
+
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "openai,gemini")
+        providers = get_default_config()["providers"]
+        assert providers[0] == {"type": "openai", "model": DEFAULT_OPENAI_MODEL}
+        router = create_router_from_env()
+        assert isinstance(router.providers[0], OpenAIProvider)
+        assert [p.name for p in router.providers] == ["openai", "gemini"]
+
+        monkeypatch.setenv("OPENAI_MODELS", "gpt-5.4-nano")
+        assert get_default_config()["providers"][0]["model"] == "gpt-5.4-nano"
+
+        monkeypatch.setenv("LLM_ENABLE_OPENAI", "false")
+        assert [p["type"] for p in get_default_config()["providers"]] == ["gemini"]
+
+    def test_openai_skipped_without_any_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """openai in LLM_PROVIDER_ORDER without OPENAI_API_KEY or GPT_SECRET is dropped."""
+        from dta.dti.coe.llm.config import get_default_config
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GPT_SECRET", raising=False)
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "openai,ollama")
+
+        assert "openai" not in [p["type"] for p in get_default_config()["providers"]]
 
     @pytest.mark.llm
     def test_router_fallback_works(self) -> None:

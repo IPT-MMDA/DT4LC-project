@@ -111,7 +111,7 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     """Get configuration for a specific provider.
 
     Args:
-        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral)
+        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral, openai)
 
     Returns:
         Provider config dict or None if the provider is unknown or its
@@ -164,6 +164,14 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
             models = _get_models_list("MISTRAL_MODELS", DEFAULT_MISTRAL_MODEL)
             model = _get_next_model("mistral", models)
             return {"type": "mistral", "model": model}
+    elif provider == "openai":
+        # GPT_SECRET is accepted as a legacy name for OPENAI_API_KEY.
+        if os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_SECRET"):
+            from .openai import DEFAULT_OPENAI_MODEL
+
+            models = _get_models_list("OPENAI_MODELS", DEFAULT_OPENAI_MODEL)
+            model = _get_next_model("openai", models)
+            return {"type": "openai", "model": model}
     return None
 
 
