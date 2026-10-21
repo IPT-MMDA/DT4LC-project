@@ -5,8 +5,10 @@ interface JobResultProps {
   result: any;
 }
 
-// Image URL of a png artifact reference; undefined for anything else (e.g. pre-v0.5.0 base64)
+// Image URL of a png artifact reference. Job rows stored before v0.5.0 hold base64
+// strings instead; this page is never persisted, so they are shown as data URLs.
 function imageSrc(ref: unknown): string | undefined {
+  if (typeof ref === 'string' && ref) return `data:image/png;base64,${ref}`;
   const url = artifactUrl(ref);
   return url && resolveApiUrl(url);
 }
@@ -50,6 +52,9 @@ export function JobResult({ result }: JobResultProps) {
   const ndviBeforeSrc = imageSrc(changeMap?.visualizations?.ndvi_before);
   const ndviAfterSrc = imageSrc(changeMap?.visualizations?.ndvi_after);
   const ndviMapSrc = imageSrc(ndviMap?.visualizations?.ndvi_map);
+  const reconstructionImages = Object.entries(reconstruction?.visualizations || {})
+    .map(([key, ref]) => [key, imageSrc(ref)] as const)
+    .filter((entry): entry is readonly [string, string] => !!entry[1]);
 
   return (
     <div className="space-y-6">
@@ -171,15 +176,13 @@ export function JobResult({ result }: JobResultProps) {
           </p>
 
           {/* Reconstruction Visualizations */}
-          {reconstruction.visualizations && Object.keys(reconstruction.visualizations).length > 0 && (
+          {reconstructionImages.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
                 Reconstruction Output
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(reconstruction.visualizations).map(([key, ref]) => {
-                  const src = imageSrc(ref);
-                  if (!src) return null;
+                {reconstructionImages.map(([key, src]) => {
                   const labelMap: Record<string, string> = {
                     original_rgb_t0: 'Original Image',
                     masked_rgb_t0: 'Masked Image',
