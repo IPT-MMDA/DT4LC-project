@@ -242,6 +242,11 @@ def _calculate_index_array(
         if hasattr(nir_band, "filled"):
             nir_band = nir_band.filled(np.nan)
 
+        # Integer-scaled reflectance (0-10000) -> 0-1 for EVI's "+1", as in spectral_index.run.
+        evi_bands = np.stack([blue_band, red_band, nir_band])
+        if np.isfinite(evi_bands).any() and float(np.max(evi_bands[np.isfinite(evi_bands)])) > 1000:
+            blue_band, red_band, nir_band = blue_band / 10000.0, red_band / 10000.0, nir_band / 10000.0
+
         # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         with np.errstate(divide="ignore", invalid="ignore"):
             denominator = nir_band + 6 * red_band - 7.5 * blue_band + 1

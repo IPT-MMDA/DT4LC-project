@@ -13,7 +13,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from dta.config import ROOT_DIR
-from dta.dti.algorithms import evi, ndsi, ndvi, ndwi
+from dta.dti.algorithms import change_detection, evi, ndsi, ndvi, ndwi
 
 REFLECTANCE = (0.04, 0.08, 0.05, 0.40, 0.20)  # blue, green, red, NIR, SWIR1
 KAHOVKA_CROP = ROOT_DIR / "resources/kahovka_data/hlsl_20230601.tif"
@@ -62,6 +62,16 @@ def test_constant_scene_index_independent_of_scaling(tmp_path: Path, dtype: str,
     assert round(stats["max"], 6) == expected
     assert stats["valid_pixels"] == 64 - 4
     assert stats["total_pixels"] == 64
+
+
+@pytest.mark.parametrize("dtype", ["float32", "int16"])
+def test_change_detection_evi_independent_of_scaling(tmp_path: Path, dtype: str) -> None:
+    path = str(tmp_path / f"scene_{dtype}.tif")
+    _write_constant_scene(Path(path), dtype)
+
+    index_before = np.asarray(change_detection.run(path, path, "evi")["index_before"], dtype=float)
+
+    assert round(float(np.nanmin(index_before)), 6) == round(float(np.nanmax(index_before)), 6) == 0.625
 
 
 def test_kahovka_crop_ndvi_statistics_exclude_nodata(tmp_path: Path) -> None:
