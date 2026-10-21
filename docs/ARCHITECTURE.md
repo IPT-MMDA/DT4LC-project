@@ -158,6 +158,91 @@ FastAPI application with:
 - Job lifecycle management
 - Swagger/ReDoc documentation
 
+## Job artifacts
+
+Since v0.5.0 a job result never contains pixel data. Rasters are written as
+GeoTIFF and visualizations as PNG under the job's output directory; the result
+carries a small reference per file. This keeps `GET /v1/jobs/{id}` under 1 MB
+for a 1000×1000 raster, `GET /v1/jobs?limit=20` under 200 KB, and the SQLite
+`jobs` table free of arrays and base64 (#65, #67 bugs 2 and 3).
+
+### Artifact reference
+
+```json
+{
+  "kind": "geotiff",
+  "path": "/app/resources/.cache/outputs/<job_id>/0_NDVIMap_ndvi.tif",
+  "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F<job_id>%2F0_NDVIMap_ndvi.tif",
+  "stats": {"min": -0.21, "max": 0.89, "mean": 0.41, "valid_pixels": 589824}
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `kind` | `"geotiff"` (single-band float32 raster, nodata NaN, CRS and transform of the input) or `"png"` (rendered image) |
+| `path` | Absolute server path. Used by later pipeline steps that need the pixels |
+| `url` | Server-relative download URL: `/v1/download?path=` + the URL-encoded `path`. Clients resolve it against the API base URL, like any other API call |
+| `stats` | `geotiff`: `min`, `max`, `mean`, `valid_pixels` over finite, non-nodata pixels. `png`: `{}` |
+
+### Where files go
+
+- Job output directory: `OUTPUTS_PATH/<job_id>/`, with
+  `OUTPUTS_PATH = resources/.cache/outputs` (inside the `./resources` volume
+  in Docker, so files survive restarts). Runs outside the job queue (direct
+  executor use, tests) write to `OUTPUTS_PATH/run-<uuid hex>/`.
+- File name: `<step index>_<output type>_<key>.<tif|png>`, e.g.
+  `0_NDVIMap_ndvi.tif`, `0_NDVIMap_ndvi_map.png`.
+- `GET /v1/download` serves only files under `OUTPUTS_PATH`, the uploads
+  directory, model output directories (`resources/.cache/tmp/<model>_outputs/`)
+  and `<system temp>/dt4lc_delineate`. Anything else is 403.
+
+### Result shape per step output
+
+Step outputs stay where they are (`result.execution.artifacts.<OutputType>`,
+e.g. `NDVIMap`, `ChangeMap`) with their scalar fields (`statistics`,
+`metadata`, `index_type`, `path`, …) unchanged. Two things change inside
+each one:
+
+- Every array field is removed and replaced by an entry in a new `rasters`
+  object of `geotiff` references.
+- `visualizations` keeps its keys, but each value becomes a `png` reference
+  instead of a base64 string.
+
+| Algorithm | Removed array fields → `rasters` key | `visualizations` keys (now `png` refs) |
+|-----------|--------------------------------------|----------------------------------------|
+| `spectral_index.run` (NDVI, NDWI, NDSI, EVI, …) | `<index>_array` → `<index>` | `<index>_map` |
+| `spectral_index.run_change` | `change_array` → `change` | — |
+| `change_detection` | `change_array` → `change`, `index_before` → `index_before`, `index_after` → `index_after` | `change_map`, `<index>_before`, `<index>_after` |
+| `snow_classifier` | `snow_mask`, `ndsi`, `ndvi`, `brightness` (same keys) | `snow_classification`, `criteria_analysis` |
+| `lulc_classifier` | `classification` (same key) | `classification_map`, `distribution_chart` |
+| Model steps (`_collect_model_outputs`, e.g. Prithvi) | — (`output_files` stay paths) | per output file, PNG written next to the TIFF |
+
+A pipeline step that consumes another step's pixels opens
+`rasters.<key>.path` instead of reading an in-memory array. A contract test
+walks every algorithm's result and fails on any `numpy.ndarray`, base64
+string or nested list of numbers.
+
+### API changes
+
+- `GET /v1/jobs` returns job summaries: the `GET /v1/jobs/{id}` record
+  without `result`. Clients that need a result fetch the job by id.
+- `GET /v1/jobs/{id}` returns the full record, with references as above.
+- `POST /v1/upload` additionally returns `preview_url`, the download URL of a
+  PNG preview written to the uploads directory next to the file.
+  `preview_png_base64` is still returned for compatibility but clients must
+  not persist it or send it back in job submissions.
+
+### What the frontend reads
+
+- Result images: `visualizations.<key>.url` (also used for the image download
+  link). `JobResultData.visualizations[]` holds `{type, label, url}`; no
+  `base64` field.
+- Statistics: `statistics.*` as before.
+- Attachment previews: `preview_url` from the upload response.
+- Persisted chat state (`localStorage`) holds URLs only, never image bytes.
+  Messages persisted by older versions have no URL and render without an
+  image.
+
 ## Data Flow
 
 ### Pipeline Execution Flow
