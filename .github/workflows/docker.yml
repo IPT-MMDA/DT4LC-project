@@ -202,8 +202,9 @@ jobs:
           fi
 
   # GitHub Release job — fires only on v*.*.* tags after both images publish.
-  # Creates a Release with auto-generated notes, GHCR pull commands, and a
-  # small deploy bundle (docker-compose.yml + .env.example) as a Release asset.
+  # Creates a draft Release with auto-generated notes and GHCR pull commands.
+  # A maintainer edits the notes and publishes it; publishing (not the draft)
+  # is what the Zenodo integration archives.
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
@@ -220,23 +221,15 @@ jobs:
           # changelog generation.
           fetch-depth: 0
 
-      - name: Build deploy bundle
-        run: |
-          STAGE=/tmp/dt4lc-deploy-${{ needs.prepare.outputs.version }}
-          mkdir -p "$STAGE"
-          cp docker-compose.yml "$STAGE/"
-          cp .env.example "$STAGE/"
-          cp README.md "$STAGE/"
-          cp LICENSE "$STAGE/"
-          (cd /tmp && zip -r "dt4lc-deploy-${{ needs.prepare.outputs.version }}.zip" "dt4lc-deploy-${{ needs.prepare.outputs.version }}")
-          ls -la /tmp/dt4lc-deploy-${{ needs.prepare.outputs.version }}.zip
-
       - name: Generate release notes
         id: notes
         env:
           BACKEND_REF: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ needs.prepare.outputs.version }}
           FRONTEND_REF: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.prepare.outputs.version }}
         run: |
+          # GHCR image names are lowercase; github.repository is not.
+          BACKEND_REF="${BACKEND_REF,,}"
+          FRONTEND_REF="${FRONTEND_REF,,}"
           # Find previous tag (best-effort; first release will have none).
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
@@ -260,15 +253,15 @@ jobs:
             echo "docker pull ${FRONTEND_REF}"
             echo '```'
             echo ""
-            echo "## Quick Deploy"
+            echo "## Run with Docker Compose"
             echo ""
-            echo "Download \`dt4lc-deploy-${{ needs.prepare.outputs.version }}.zip\` (attached below), then:"
+            echo "The compose file builds the images from source:"
             echo ""
             echo '```sh'
-            echo "unzip dt4lc-deploy-${{ needs.prepare.outputs.version }}.zip"
-            echo "cd dt4lc-deploy-${{ needs.prepare.outputs.version }}"
-            echo "cp .env.example .env  # then edit to add API keys (optional)"
-            echo "docker compose up -d  # backend on :8000, frontend on :80"
+            echo "git clone --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git"
+            echo "cd ${{ github.event.repository.name }}"
+            echo "cp .env.example .env  # API keys are optional; without them the bundled Ollama model is used"
+            echo "docker compose --profile ollama up -d  # UI at http://localhost, API docs at http://localhost/docs"
             echo '```'
             echo ""
             echo "## Changes"
@@ -283,9 +276,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: DT4LC ${{ needs.prepare.outputs.version }}
           body: ${{ steps.notes.outputs.notes }}
-          draft: false
+          draft: true
           # Auto-flag pre-releases on -alpha / -beta / -rc tags so stable
           # tags (v0.3.0, v1.0.0) appear as "Latest release" on GitHub.
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
-          files: |
-            /tmp/dt4lc-deploy-${{ needs.prepare.outputs.version }}.zip
