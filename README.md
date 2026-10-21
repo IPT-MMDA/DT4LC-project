@@ -2,6 +2,8 @@
 
 A cognitive digital twin framework for land cover change detection and vegetation analysis using satellite imagery, machine learning, and LLM-powered orchestration.
 
+It is aimed at remote sensing researchers, environmental scientists and disaster response teams who need to perform land cover analysis without building custom processing pipelines.
+
 ## Features
 
 - **NDVI Analysis** - Calculate vegetation health indices from satellite imagery
@@ -88,7 +90,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 task venv           # Create virtual environment
 task install        # Install all dependencies
 task test           # Run tests
-task run:api:dev    # Start server with hot reload
+task run:api        # Start the API server on :8000
 
 # Or manually with uv
 uv venv .venv --python 3.10
@@ -184,7 +186,7 @@ DT4LC-project/
 │   │   │   ├── llm/            # LLM providers (Gemini, Groq, Ollama)
 │   │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
 │   │   │   ├── context_agent.py
-│   │   │   ├── planner_agent.py
+│   │   │   ├── planner.py
 │   │   │   └── orchestrator.py
 │   │   ├── algorithms/         # NDVI, Statistics, Change Detection
 │   │   ├── models/             # Prithvi, Delineate-Anything
@@ -379,12 +381,14 @@ Context is maintained per chat session, including:
 
 ### Field Boundary Detection (Delineate-Anything)
 
-The Delineate-Anything model detects agricultural field boundaries from satellite imagery:
+The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it:
 
 ```bash
-# Install dependencies
-pip install -e ".[delineate]"
+sudo apt-get install libgdal-dev
+uv pip install "gdal==$(gdal-config --version)"   # or: pip install ...
 ```
+
+The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself.
 
 Usage via natural language:
 
@@ -395,42 +399,41 @@ Usage via natural language:
 
 The model outputs GeoPackage files with polygon geometries representing detected fields.
 
-**Note**: Input must be GeoTIFF format with at least 3 bands (RGB). Model variants:
-
-- `small`: Faster inference, good for initial testing
-- `large`: Higher accuracy, better for production use
-
-Set model via environment:
-
-```bash
-DELINEATE_MODEL=large  # or "small" (default)
-```
+**Note**: Input must be a GeoTIFF with at least 3 bands; bands 1, 2 and 3 are passed to the model as its three image channels. DT4LC runs the small model variant (`DelineateAnything-S.pt`): the registry entry `models/delineate-anything` in `dta/registry.yaml` passes `delineate_model: "small"`.
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/v1/health` | GET | Health check |
-| `/v1/chat` | POST | Submit analysis request |
-| `/v1/upload` | POST | Upload raster file |
+| `/v1/upload` | POST | Upload a GeoTIFF |
+| `/v1/jobs` | POST | Submit an analysis job (prompt and attachments) |
 | `/v1/jobs` | GET | List jobs |
-| `/v1/jobs/{id}` | GET | Get job status |
+| `/v1/jobs/{id}` | GET | Get job status and result |
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
+| `/v1/chat` | POST | Legacy: plan and run the last of `messages` as a Server-Sent Events stream (no attachments) |
+
+All routes, including file listing and download, map tiles, Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). See also [docs/API.md](docs/API.md).
 
 ### Example Request
 
 ```bash
-# Upload a file
+# 1. Upload a GeoTIFF; the response contains its server-side "path"
 curl -X POST http://localhost:8000/v1/upload \
   -F "file=@image.tif"
+# {"id": "1a2b3c4d", "filename": "image.tif", "path": "/.../resources/.cache/uploads/1a2b3c4d_image.tif", ...}
 
-# Submit analysis
-curl -X POST http://localhost:8000/v1/chat \
+# 2. Submit an analysis job with the uploaded file attached (202 Accepted)
+curl -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Calculate NDVI for vegetation analysis",
-    "attachments": [{"id": "att-1", "filename": "image.tif", "path": "/tmp/image.tif", "mime_type": "image/tiff"}]
+    "attachments": [{"id": "1a2b3c4d", "filename": "image.tif", "path": "<path from step 1>", "mime_type": "image/tiff"}]
   }'
+# {"id": "<job id>", "status": "pending", ...}
+
+# 3. Poll the job until "status" is "completed" or "failed"
+curl http://localhost:8000/v1/jobs/<job id>
 ```
 
 ## Docker Deployment
@@ -474,7 +477,7 @@ task docker:down:clean
 #### With docker compose
 
 ```bash
-# Start all services
+# Start frontend and backend (add --profile ollama to also start the local Ollama LLM)
 docker compose up -d
 
 # View logs
@@ -590,9 +593,7 @@ task --list  # Show all available commands
 | `task test:verbose` | Run with verbose output |
 | `task coverage` | Run with coverage report |
 | **Application** | |
-| `task run:ui` | Run Streamlit UI |
 | `task run:api` | Run FastAPI server |
-| `task run:api:dev` | Run API with hot reload |
 | **Build & Clean** | |
 | `task build` | Build wheel and sdist |
 | `task clean` | Remove build artifacts |
@@ -615,7 +616,7 @@ cd cognitive_ui && npm run lint
 
 ## License
 
-This project is licensed under the Research Use License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details. Licences of the third-party models it downloads are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Contributing
 
@@ -631,24 +632,3 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
   url = {https://github.com/IPT-MMDA/DT4LC-project}
 }
 ```
-# Build Backend
-docker build --network sagemaker -t dt4lc-backend .
-
-# Run Backend
-docker run -d --network sagemaker --name dt4lc-backend --env-file .env -v $(pwd)/resources:/app/resources dt4lc-backend
-
-# Build Frontend (after updating nginx.conf)
-docker build --network sagemaker -t dt4lc-frontend cognitive_ui
-
-# Run Frontend
-docker run -d --network sagemaker --name dt4# Build Backend
-docker build --network sagemaker -t dt4lc-backend .
-
-# Run Backend
-docker run -d --network sagemaker --name dt4lc-backend --env-file .env -v $(pwd)/resources:/app/resources dt4lc-backend
-
-# Build Frontend (after updating nginx.conf)
-docker build --network sagemaker -t dt4lc-frontend cognitive_ui
-
-# Run Frontend
-docker run -d --network sagemaker --name dt4

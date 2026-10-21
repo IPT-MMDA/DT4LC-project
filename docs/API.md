@@ -4,6 +4,8 @@ Complete REST API documentation for the DT4LC backend.
 
 **Base URL:** `http://localhost:8000`
 
+This page describes the main routes. The generated reference covers every route, including those not described here (`POST /v1/chat`, `GET /v1/files`, `GET /v1/download`, `GET /v1/tiles/{z}/{x}/{y}`, `/v1/gee/*` and `/v1/ml-models/*`): Swagger UI at `/docs`, ReDoc at `/redoc` and the OpenAPI schema at `/openapi.json` on the backend (<http://localhost:8000/docs>), or through nginx under Docker Compose (<http://localhost/docs>).
+
 ## Authentication
 
 Currently no authentication required (local development only).
@@ -163,7 +165,8 @@ Submit an async job for processing.
     {
       "id": "abc123",
       "filename": "image.tif",
-      "path": "/tmp/dt4lc_uploads/abc123_image.tif"
+      "path": "/tmp/dt4lc_uploads/abc123_image.tif",
+      "mime_type": "image/tiff"
     }
   ]
 }

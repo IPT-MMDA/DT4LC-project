@@ -125,7 +125,8 @@ curl -X POST http://localhost:8000/v1/jobs \
     "attachments": [{
       "id": "file_id",
       "filename": "data.tif",
-      "path": "/tmp/dt4lc_uploads/file_id_data.tif"
+      "path": "/tmp/dt4lc_uploads/file_id_data.tif",
+      "mime_type": "image/tiff"
     }]
   }'
 ```
@@ -189,8 +190,8 @@ uv pip install -e ".[dev,server]"
 # Find and kill process
 lsof -ti:8000 | xargs kill
 
-# Or use different port
-dt4lc-api --port 8001
+# Or use a different port (dt4lc-api reads DT4LC_PORT; it takes no command-line options)
+DT4LC_PORT=8001 dt4lc-api
 ```
 
 ## Next Steps
