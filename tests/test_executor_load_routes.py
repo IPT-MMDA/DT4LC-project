@@ -210,6 +210,17 @@ class TestPreprocessorRoute:
         assert "Preprocessor preprocessors/scale-to-hls applied to RasterPath" in caplog.text
         assert "not found" not in caplog.text
 
+    def test_wrong_band_count_fails_before_model(self, tmp_path: Path) -> None:
+        raster = _write_raster(tmp_path / "seven.tif", 7)
+        manager = self._mock_prithvi(tmp_path / "model")
+
+        with (
+            patch("dta.dti.models.get_model_manager", return_value=manager),
+            pytest.raises(ExecutionError, match="expected 6 bands .*, got 7") as excinfo,
+        ):
+            PipelineExecutor().execute(self._prithvi_plan(raster))
+        assert isinstance(excinfo.value.__cause__, ValueError)
+
     @pytest.mark.parametrize(
         ("entrypoint", "error"),
         [

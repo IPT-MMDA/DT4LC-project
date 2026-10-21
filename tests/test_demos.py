@@ -247,18 +247,29 @@ class TestPrithviReconstruction:
 
     @pytest.mark.gpu
     @pytest.mark.slow
-    def test_prithvi_runs_when_model_installed(self, synthetic_raster_path: str) -> None:
+    def test_prithvi_runs_when_model_installed(self, synthetic_raster_path: str, tmp_path: Path) -> None:
+        import rasterio
+
         from dta.dti.models import get_model_manager
 
         manager = get_model_manager()
         if not manager.is_model_available("prithvi-eo-v1-100m"):
             pytest.skip("prithvi-eo-v1-100m not installed; run model download first")
 
+        # Prithvi takes the 6 HLS bands B02..B07; drop the synthetic raster's
+        # B1 coastal band (Landsat B2..B7 = blue, green, red, NIR, SWIR1, SWIR2).
+        hls_path = tmp_path / "synthetic_hls_6band.tif"
+        with rasterio.open(synthetic_raster_path) as src:
+            profile = src.profile
+            profile.update(count=6)
+            with rasterio.open(hls_path, "w", **profile) as dst:
+                dst.write(src.read(list(range(2, 8))))
+
         executor = PipelineExecutor()
         plan = ExecutionPlan(
             flow="prithvi-reconstruction",
             steps=[
-                PlanStep(uses="input/file", binds={"RasterPath": synthetic_raster_path}),
+                PlanStep(uses="input/file", binds={"RasterPath": str(hls_path)}),
                 PlanStep(uses="models/prithvi-reconstruction", binds={}),
             ],
             outputs=["Reconstruction"],

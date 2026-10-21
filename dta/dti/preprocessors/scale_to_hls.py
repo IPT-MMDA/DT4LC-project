@@ -18,6 +18,10 @@ import rasterio
 
 logger = logging.getLogger(__name__)
 
+# Prithvi-EO's HLS band set (config.json pretrained_cfg.bands):
+# B02 blue, B03 green, B04 red, B05 NIR, B06 SWIR1, B07 SWIR2.
+HLS_BAND_COUNT = 6
+
 
 def run(input_path: str, output_dir: str) -> str:
     """Scale raster to HLS format.
@@ -28,9 +32,17 @@ def run(input_path: str, output_dir: str) -> str:
 
     Returns:
         Path to preprocessed raster (or original if already compatible)
+
+    Raises:
+        ValueError: If the raster does not have HLS_BAND_COUNT bands.
     """
     try:
         with rasterio.open(input_path) as src:
+            if src.count != HLS_BAND_COUNT:
+                raise ValueError(
+                    f"HLS input: expected {HLS_BAND_COUNT} bands (B02, B03, B04, B05, B06, B07), "
+                    f"got {src.count} in {input_path}"
+                )
             data = src.read()
             meta = src.meta.copy()
 
@@ -62,6 +74,8 @@ def run(input_path: str, output_dir: str) -> str:
             logger.info(f"HLS-scaled input saved to {output_path}")
             return str(output_path)
 
+    except ValueError:
+        raise
     except Exception as e:
         logger.warning(f"HLS scaling failed, using original file: {e}")
         return input_path
