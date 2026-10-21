@@ -12,7 +12,6 @@ interface DrawControlProps {
 export interface DrawControlRef {
   changeMode: (mode: string) => void;
   deleteAll: () => void;
-  getSelected: () => any;
 }
 
 export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
@@ -129,12 +128,6 @@ export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
         if (drawRef.current) {
           (drawRef.current as any).deleteAll();
         }
-      },
-      getSelected: () => {
-        if (drawRef.current) {
-          return (drawRef.current as any).getSelected();
-        }
-        return null;
       }
     }));
 

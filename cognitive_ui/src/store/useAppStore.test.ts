@@ -46,3 +46,23 @@ describe('selected region persistence (#67 bug 6)', () => {
     expect(reloaded.getState().selectedRegion).toEqual(region);
   });
 });
+
+describe('deleting the selected region (#67 bug 5)', () => {
+  it('removes it from the store, clears the selection and stays gone after a reload', async () => {
+    const other: DrawnRegion = { ...region, id: 'region-2', name: 'Region 2' };
+    const store = await loadFreshStore();
+    store.getState().addRegion(other);
+    store.getState().addRegion(region);
+
+    const selected = store.getState().selectedRegion;
+    expect(selected?.id).toBe(region.id);
+    store.getState().deleteRegion(selected!.id);
+
+    expect(store.getState().drawnRegions).toEqual([other]);
+    expect(store.getState().selectedRegion).toBeNull();
+
+    const reloaded = await loadFreshStore();
+    expect(reloaded.getState().drawnRegions).toEqual([other]);
+    expect(reloaded.getState().selectedRegion).toBeNull();
+  });
+});
