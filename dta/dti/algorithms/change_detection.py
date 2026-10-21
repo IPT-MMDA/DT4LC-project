@@ -162,6 +162,18 @@ def _calculate_index_array(
         Index array with values in appropriate range
     """
     bands = _get_band_indices(src)
+    # src.read(None) would read every band; fail clearly instead.
+    required = {
+        "ndvi": ("red", "nir"),
+        "ndsi": ("green", "swir"),
+        "ndwi": ("green", "nir"),
+        "evi": ("blue", "red", "nir"),
+    }
+    missing = [role for role in required.get(index_type, ()) if bands[role] is None]
+    if missing:
+        raise ValueError(
+            f"{index_type.upper()} requires band(s) {missing}, but the raster ({src.count} bands) doesn't expose them."
+        )
 
     if index_type == "ndvi":
         if src.count < 2:
@@ -229,6 +241,11 @@ def _calculate_index_array(
             red_band = red_band.filled(np.nan)
         if hasattr(nir_band, "filled"):
             nir_band = nir_band.filled(np.nan)
+
+        # Integer-scaled reflectance (0-10000) -> 0-1 for EVI's "+1", as in spectral_index.run.
+        evi_bands = np.stack([blue_band, red_band, nir_band])
+        if np.isfinite(evi_bands).any() and float(np.max(evi_bands[np.isfinite(evi_bands)])) > 1000:
+            blue_band, red_band, nir_band = blue_band / 10000.0, red_band / 10000.0, nir_band / 10000.0
 
         # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         with np.errstate(divide="ignore", invalid="ignore"):

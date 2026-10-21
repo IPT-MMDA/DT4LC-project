@@ -129,6 +129,7 @@ class TestDelineateAnythingOrchestration:
     explicitly requested. LLM-based selection depends on prompt interpretation.
     """
 
+    @pytest.mark.llm
     @pytest.mark.xfail(
         reason="LLM may not always select delineate-anything; depends on planner prompt",
         strict=False,
