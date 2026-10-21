@@ -164,27 +164,34 @@ Submit an async job for processing.
 
 ```json
 {
-  "prompt": "calculate ndvi on the uploaded image",
+  "prompt": "calculate ndvi",
   "attachments": [
     {
-      "id": "abc123",
-      "filename": "image.tif",
-      "path": "/tmp/dt4lc_uploads/abc123_image.tif",
+      "id": "983694a1",
+      "filename": "hlsl_20230601.tif",
+      "path": "/app/resources/.cache/uploads/983694a1_hlsl_20230601.tif",
       "mime_type": "image/tiff"
     }
   ]
 }
 ```
 
-**Response:** (202 Accepted)
+`id`, `filename` and `path` come from the `POST /v1/upload` response.
+
+**Response:** (202 Accepted, the job record)
 
 ```json
 {
-  "id": "job_xyz789",
-  "state": "pending",
-  "prompt": "calculate ndvi on the uploaded image",
+  "id": "34351192",
+  "status": "pending",
+  "prompt": "calculate ndvi",
+  "plan": null,
   "progress": 0.0,
-  "created_at": "2025-01-15T10:30:00Z"
+  "error": null,
+  "created_at": "2026-10-21T08:40:19.964349",
+  "started_at": null,
+  "completed_at": null,
+  "result": null
 }
 ```
 
@@ -272,12 +279,20 @@ The result holds no pixel data. Each raster is a `geotiff` reference in `rasters
 
 Cancel a pending or running job.
 
-**Response:** (200 OK)
+**Response:** (200 OK, the job record)
 
 ```json
 {
-  "id": "job_xyz789",
-  "state": "cancelled"
+  "id": "34351192",
+  "status": "cancelled",
+  "prompt": "calculate ndvi",
+  "plan": null,
+  "result": null,
+  "progress": 0.2,
+  "error": null,
+  "created_at": "2026-10-21T08:40:19.964349",
+  "started_at": "2026-10-21T08:40:19.967340",
+  "completed_at": "2026-10-21T08:40:20.485006"
 }
 ```
 

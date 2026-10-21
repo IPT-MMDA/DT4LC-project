@@ -125,7 +125,7 @@ curl -X POST http://localhost:8000/v1/jobs \
     "attachments": [{
       "id": "file_id",
       "filename": "data.tif",
-      "path": "/tmp/dt4lc_uploads/file_id_data.tif",
+      "path": "<path from step 1>",
       "mime_type": "image/tiff"
     }]
   }'
