@@ -273,6 +273,10 @@ numbers or list of more than 256 numbers.
 - Persisted chat state (`localStorage`) holds URLs only, never image bytes.
   Messages persisted by older versions have no URL and render without an
   image.
+- Jobs stored before v0.5.0 hold base64 strings where references now are,
+  and `GET /v1/jobs/{id}` returns them unchanged. The Job Details page
+  (`JobResult.tsx`, not persisted) renders such a string as a PNG data URL;
+  the chat card reads only `url` and shows these jobs without an image.
 
 ## Data Flow
 
