@@ -55,22 +55,25 @@ It is aimed at remote sensing researchers, environmental scientists and disaster
 
 ```bash
 # 1. Clone and navigate to project
-git clone <repo-url>
+git clone https://github.com/IPT-MMDA/DT4LC-project.git
 cd DT4LC-project
 
 # 2. Set up environment
 cp .env.example .env
 # Optional: Add GEMINI_API_KEY or GROQ_API_KEY for faster LLM responses
 
-# 3. Start all services
-docker compose up -d
+# 3. Start all services, including the local Ollama LLM (no API key needed)
+docker compose --profile ollama up -d
 
-# 4. Wait for services (1-2 min for Ollama model download)
+# 4. Wait for the one-time llama3.2 pull and for the services to become healthy
+docker compose logs ollama-pull    # ends with "Model pull complete!"
 docker compose ps
 
 # 5. Open application
 open http://localhost
 ```
+
+The UI is at <http://localhost>, and nginx also serves the API reference there: Swagger UI at <http://localhost/docs>, ReDoc at <http://localhost/redoc>. The backend alone listens on <http://localhost:8000> (Swagger UI at <http://localhost:8000/docs>). Under Docker Compose the backend reaches Ollama at `http://ollama:11434`; leave `OLLAMA_BASE_URL` unset in `.env` (bare-metal runs default to `http://localhost:11434`). With API keys in `.env`, `docker compose up -d` starts the stack without Ollama.
 
 ### Local Development
 
@@ -117,20 +120,37 @@ npm run build
 
 ## Running Tests
 
-### Using Task (Recommended)
+### Without keys, network or models (what CI runs)
 
 ```bash
-task test              # Run all tests
-task test:fast         # Run tests excluding slow ones
-task test:verbose      # Run with verbose output
-task coverage          # Run with coverage report
+uv run pytest tests/ -m "not slow and not llm"
 ```
 
-### Using pytest directly
+This needs no `.env`, API keys, network access or model weights. A plain `uv run pytest tests/` (or `task test`) also exits 0 without keys: `llm` tests skip ("no LLM provider available ..."), the Earth Engine test skips without `GEE_PROJECT_ID`, model tests skip when the weights are not downloaded, and the Delineate GPU test skips without the GDAL Python bindings. `tests/conftest.py` loads `.env`, so with keys there a plain run calls the live providers.
+
+### Opt-in tests
+
+| Marker | Command | Needs |
+|--------|---------|-------|
+| `llm` | `uv run pytest tests/ -m llm` | An available provider from `LLM_PROVIDER_ORDER`: its API key (`GEMINI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, `OPENAI_API_KEY` or `GPT_SECRET`), or a running Ollama with `OLLAMA_MODEL` pulled |
+| `network` | `uv run pytest tests/ -m network` | `GEE_PROJECT_ID` and Earth Engine credentials |
+| `slow`, `gpu` | `uv run pytest tests/ -m "slow or gpu"` | Downloaded models (see [Model weights](#model-weights)) and an NVIDIA GPU; the Delineate test also needs GDAL (see [Field Boundary Detection](#field-boundary-detection-delineate-anything)) |
+
+For Ollama, an untagged `OLLAMA_MODEL` such as `llama3.2` means `llama3.2:latest`; a tagged name such as `qwen2.5:7b` must match an installed tag exactly.
+
+Frontend tests (vitest):
 
 ```bash
-source .venv/bin/activate
-pytest tests/ -v
+cd cognitive_ui && npm test
+```
+
+### Using Task
+
+```bash
+task test              # Run all tests (uv run pytest)
+task test:fast         # Run tests excluding slow ones (-m "not slow")
+task test:verbose      # Run with verbose output
+task coverage          # Run with coverage report
 ```
 
 ### Test Categories
@@ -401,6 +421,8 @@ uv pip install "gdal==$(gdal-config --version)"   # or: pip install ...
 
 The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself.
 
+The model weights (`delineate-anything-small`) are downloaded separately; see [Model weights](#model-weights).
+
 Usage via natural language:
 
 ```text
@@ -411,6 +433,46 @@ Usage via natural language:
 The model outputs GeoPackage files with polygon geometries representing detected fields.
 
 **Note**: Input must be a GeoTIFF with at least 3 bands; bands 1, 2 and 3 are passed to the model as its three image channels. DT4LC runs the small model variant (`DelineateAnything-S.pt`): the registry entry `models/delineate-anything` in `dta/registry.yaml` passes `delineate_model: "small"`.
+
+### Model weights
+
+The Prithvi (`prithvi-eo-v1-100m`) and Delineate-Anything (`delineate-anything-small`) weights are not in the repository. Download them from the **Models** page of the UI, with `POST /v1/ml-models/{model_id}/download`, or from Python:
+
+```bash
+uv run python - <<'EOF'
+import time
+from dta.dti.models import ModelStatus, get_model_manager
+
+manager = get_model_manager()
+for model_id in ("prithvi-eo-v1-100m", "delineate-anything-small"):
+    if not manager.is_model_available(model_id):
+        manager.start_download(model_id)  # returns at once; the download runs in a background thread
+        while manager.get_model_status(model_id) == ModelStatus.DOWNLOADING:
+            time.sleep(5)
+    print(model_id, manager.get_model_status(model_id).value)
+EOF
+```
+
+The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+## Expected Band Order
+
+The spectral indices (NDVI, NDWI, NDSI, EVI) and change detection find the blue, green, red, NIR and SWIR1 bands as follows (`band_indices` in `dta/dti/raster.py`):
+
+1. **Semantic band descriptions**, case-insensitive and trimmed: `blue` or `B`, `green` or `G`, `red` or `R`, `nir` or `nir08`, `swir`, `swir1` or `swir16` (SWIR1). A role that no description names is taken from the band-count rule in step 3, with a warning, unless that band is already named as another role; otherwise the role is unavailable.
+2. **Band codes** in the descriptions (`B2`, `B02`, `B8A`, ...). If `B8` or `B8A` is present, the Sentinel-2 scheme applies: B2 blue, B3 green, B4 red, B8 NIR (B8A if there is no B8), B11 SWIR1. Otherwise, if all codes are within B1-B7, the Landsat 8/9 and HLS L30 scheme applies: B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1. Other code sets go to step 3.
+3. **Band count**, with a logged warning:
+
+   | Bands | Assumed order |
+   |-------|---------------|
+   | 7 or more | Landsat 8/9: B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1 |
+   | 5 or 6 | blue, green, red, NIR, SWIR1 |
+   | 4 | red, green, blue, NIR (no SWIR) |
+   | fewer than 4 | band 1 red, band 2 NIR (no blue, green or SWIR) |
+
+A 4-band file in blue, green, red, NIR order without descriptions is therefore read as red, green, blue, NIR. Set the descriptions to avoid the guess, e.g. with rasterio: open the file with `rasterio.open(path, "r+")` and call `set_band_description(1, "blue")` and so on for each band.
+
+The spectral-index algorithms (`dta/dti/algorithms/spectral_index.py`) also normalise the values: if the maximum over the required bands exceeds 1000, the raster is taken as reflectance scaled by 10000 and divided by 10000; nodata and non-finite pixels are masked; index values are clipped to [-1, 1]; statistics such as `valid_pixels` count valid pixels only. The land cover and snow classifiers still choose bands by band count alone.
 
 ## API Endpoints
 
@@ -569,15 +631,20 @@ GROQ_API_KEY=your_key  # 300+ tokens/sec
 
 ## Sample Data
 
-Sample Kahovka region data in `resources/kahovka_data/`:
+`resources/kahovka_data/` holds two crops of HLS L30 scenes (Harmonized Landsat Sentinel-2, the Landsat-derived product, not Sentinel-2) taken before and after the breach of the Kakhovka dam on 6 June 2023:
 
-- `hlsl_20230601.tif` - Before image
-- `hlsl_20230609.tif` - After image
+| File | Date | Size |
+|------|------|------|
+| `hlsl_20230601.tif` | 2023-06-01 (before) | 4,180,159 B |
+| `hlsl_20230609.tif` | 2023-06-09 (after) | 3,839,983 B |
 
-Test change detection:
+Both are 768 × 768 px at 30 m (23.04 km × 23.04 km) in EPSG:32636 with the upper-left corner at (453240, 5167860), about 32.39-32.69° E, 46.46-46.66° N: the lower Dnipro around Kherson, downstream of the dam. They have five bands, B2-B6 (blue, green, red, NIR, SWIR1), named in the band descriptions, stored as int16 reflectance × 10000 with nodata -9999 and DEFLATE compression. They are cut (rows 640-1408, columns 256-1024) from 2906 × 1479 px scenes that are not in the repository.
+
+The pair shows the flooding after the breach: the share of valid pixels with NDWI = (B3 - B5) / (B3 + B5) above 0 grows from 9 % to 40 %, and NDWI changes by more than 0.3 on 41.2 % of them, almost all of it an increase. Upload both files and ask, for example:
 
 ```text
-"Compare before and after images to detect changes"
+"Compare before and after images to detect changes"      (NDVI change, the default)
+"Detect water changes between these images"               (NDWI change)
 ```
 
 ## Development
