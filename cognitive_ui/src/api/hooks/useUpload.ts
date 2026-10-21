@@ -7,7 +7,7 @@ interface UploadResponse {
   size: [number, number];
   crs: string | null;
   bounds: [number, number, number, number];
-  preview_png_base64: string;
+  preview_url: string;
 }
 
 export interface GeoTIFFFile {
@@ -41,7 +41,7 @@ export function useUploadFile() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error?.message || 'Upload failed');
+        throw new Error(error.error?.message || error.detail || 'Upload failed');
       }
 
       return response.json();
