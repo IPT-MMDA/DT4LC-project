@@ -1,7 +1,11 @@
 """Tests for scripts/download_prithvi.py (the download:prithvi task), with the ModelManager mocked."""
 
 import importlib.util
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 from types import ModuleType
 from typing import Any
 from unittest.mock import MagicMock
@@ -70,3 +74,24 @@ def test_reports_failure_with_the_error(
 
     assert script.main(poll_seconds=0) == 1
     assert "prithvi-eo-v1-100m: failed (404 Client Error)" in capsys.readouterr().err
+
+
+def test_reads_model_cache_from_dotenv(tmp_path: Path) -> None:
+    """DT4LC_MODEL_CACHE set only in .env is honoured, as server/app.py's load_dotenv() does."""
+    cache = tmp_path / "envcache"
+    (cache / "prithvi-eo-v1-100m").mkdir(parents=True)
+    (cache / "prithvi-eo-v1-100m" / "Prithvi_EO_V1_100M.pt").touch()
+    (tmp_path / ".env").write_text(f"DT4LC_MODEL_CACHE={cache}\n")
+    (tmp_path / "scripts").mkdir()
+    script_copy = tmp_path / "scripts" / SCRIPT.name
+    shutil.copy(SCRIPT, script_copy)
+
+    env = {k: v for k, v in os.environ.items() if k != "DT4LC_MODEL_CACHE"}
+    env["PYTHONPATH"] = str(SCRIPT.parents[1])
+    env["HF_HUB_OFFLINE"] = "1"  # never reach the network if the .env is ignored
+    result = subprocess.run(
+        [sys.executable, str(script_copy)], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert f"available at {cache / 'prithvi-eo-v1-100m'} (already downloaded)" in result.stdout

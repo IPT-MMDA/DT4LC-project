@@ -1,13 +1,18 @@
 """Download the Prithvi EO v1 (100M) weights through the project's ModelManager.
 
 Files land in MODELS_PATH/prithvi-eo-v1-100m (resources/.cache/models/ by
-default; DT4LC_MODEL_CACHE overrides it), which is where the app reads them.
+default; DT4LC_MODEL_CACHE in the shell or the root .env overrides it), which is
+where the app reads them.
 """
 
 import sys
 import time
 
-from dta.dti.models.model_manager import ModelStatus, get_model_manager
+from dotenv import load_dotenv
+
+load_dotenv()  # like server/app.py, so a DT4LC_MODEL_CACHE in .env is seen by dta.config
+
+from dta.dti.models.model_manager import ModelStatus, get_model_manager  # noqa: E402
 
 MODEL_ID = "prithvi-eo-v1-100m"
 
