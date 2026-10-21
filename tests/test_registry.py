@@ -193,7 +193,8 @@ def test_registry_imports_only_base_dependencies() -> None:
     import subprocess
     import sys
 
-    tomllib = pytest.importorskip("tomllib")  # stdlib on Python >= 3.11
+    # tomllib is stdlib on Python >= 3.11; CI's 3.10 has tomli (a pytest dependency there)
+    tomllib = pytest.importorskip("tomllib" if sys.version_info >= (3, 11) else "tomli")
 
     root = Path(__file__).resolve().parents[1]
     loaded = subprocess.run(
