@@ -1,5 +1,6 @@
 """Tests for LLM providers using mocks."""
 
+import importlib.util
 import os
 from unittest.mock import MagicMock, patch
 
@@ -385,10 +386,9 @@ def _configured_openai_models() -> list[str]:
     return _get_models_list("OPENAI_MODELS", DEFAULT_OPENAI_MODEL)
 
 
+@pytest.mark.skipif(importlib.util.find_spec("openai") is None, reason="openai not installed")
 class TestOpenAIProvider:
     """Tests for the OpenAI Chat Completions provider."""
-
-    pytest.importorskip("openai")
 
     @staticmethod
     def _fake_client(captured: dict[str, object]) -> MagicMock:
@@ -557,6 +557,7 @@ class TestLLMRouter:
     def test_from_config(self) -> None:
         """Test router creation from config dict."""
         pytest.importorskip("anthropic")
+        pytest.importorskip("openai")  # from_config imports every provider SDK
         config = {
             "providers": [
                 {"type": "gemini", "model": "gemini-2.0-flash-exp"},
@@ -708,6 +709,7 @@ class TestLLMConfig:
     def test_create_router_from_env(self) -> None:
         """Test router creation from environment."""
         pytest.importorskip("anthropic")
+        pytest.importorskip("openai")  # from_config imports every provider SDK
         from dta.dti.coe.llm.config import create_router_from_env
 
         router = create_router_from_env()
