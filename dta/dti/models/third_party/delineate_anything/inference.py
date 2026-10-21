@@ -240,6 +240,8 @@ def _generate_conf_yaml(
             "override_if_exists": True,
         },
         "filtering_args": {
+            # Required by current upstream main; False keeps the thresholds below as given.
+            "automatic_area_scale": False,
             "minimum_area_m2": minimum_area_m2,
             "minimum_part_area_m2": 0,
             "minimum_hole_area_m2": minimum_hole_area_m2,

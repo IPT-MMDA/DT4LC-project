@@ -52,6 +52,17 @@ def test_generate_conf_yaml() -> None:
     assert conf["filtering_args"]["minimum_hole_area_m2"] == 500
 
 
+def test_generate_conf_yaml_disables_automatic_area_scale() -> None:
+    # Upstream methods/main/inference.py reads filtering_args.automatic_area_scale
+    # unconditionally (KeyError without it, #60). False keeps the thresholds we
+    # pass from get_filtering_thresholds() as given.
+    conf = _generate_conf_yaml(
+        bands=[1, 2, 3], batch_size=8, minimum_area_m2=1000, minimum_hole_area_m2=500, model_variant="small"
+    )
+
+    assert conf["filtering_args"]["automatic_area_scale"] is False
+
+
 def test_generate_batch_yaml() -> None:
     batch = _generate_batch_yaml(
         conf_path="/conf.yaml",
