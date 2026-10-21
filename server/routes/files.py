@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["files"])
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/upload",
     response_model=UploadResponse,
     summary="Upload GeoTIFF",
@@ -115,7 +115,7 @@ async def upload_geotiff(
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/files",
     response_model=FileListResponse,
     summary="List GeoTIFF files",
@@ -197,7 +197,7 @@ async def list_files() -> FileListResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/download",
     summary="Download file by path",
     response_description="Binary file (GeoTIFF, GeoPackage, PNG, etc.)",

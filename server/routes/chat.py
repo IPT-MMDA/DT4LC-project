@@ -17,7 +17,7 @@ from ..utils import sse_frame
 router = APIRouter(prefix="/v1", tags=["chat"])
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/plan",
     response_model=PlanResponse,
     summary="Generate execution plan",
@@ -38,7 +38,7 @@ async def create_plan(req: ChatRequest) -> PlanResponse:
     return PlanResponse(plan=result["plan"])
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/execute",
     response_model=ExecuteResponse,
     summary="Plan and execute pipeline",
@@ -73,7 +73,7 @@ async def execute_plan(req: ChatRequest) -> ExecuteResponse:
     )
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/chat",
     summary="Stream plan and execution (SSE)",
     response_description="Server-Sent Events stream of planning and execution progress",

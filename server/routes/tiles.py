@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/tiles", tags=["tiles"])
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/{z}/{x}/{y}",
     summary="GeoTIFF map tile",
     response_description="256×256 PNG tile",

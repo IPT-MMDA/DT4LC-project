@@ -1,6 +1,7 @@
 """Async job queue endpoints."""
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import ValidationError
@@ -13,11 +14,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["jobs"])
 
 
-def _job_record(job_dict: dict) -> JobRecord:
-    return JobRecord.model_validate(job_dict)
+def _job_record(job_dict: dict[str, Any]) -> JobRecord:
+    return JobRecord.model_validate(job_dict)  # type: ignore[no-any-return]
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/jobs",
     status_code=202,
     response_model=JobRecord,
@@ -53,7 +54,7 @@ async def submit_job(req: JobSubmitRequest) -> JobRecord:
         raise HTTPException(status_code=500, detail=f"Job submission failed: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/jobs/{job_id}",
     response_model=JobRecord,
     summary="Get job status",
@@ -76,7 +77,7 @@ async def get_job_status(job_id: str) -> JobRecord:
         raise HTTPException(status_code=500, detail=f"Failed to get job: {e}") from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/jobs/{job_id}/cancel",
     response_model=CancelJobResponse,
     summary="Cancel job",
@@ -95,14 +96,14 @@ async def cancel_job(job_id: str) -> CancelJobResponse:
 
         job = await queue.get_job(job_id)
         payload = job.to_dict() if job else {"id": job_id, "cancelled": True}
-        return CancelJobResponse.model_validate(payload)
+        return CancelJobResponse.model_validate(payload)  # type: ignore[no-any-return]
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel job: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/jobs",
     response_model=JobListResponse,
     summary="List jobs",
@@ -142,7 +143,7 @@ async def list_jobs(
         raise HTTPException(status_code=500, detail=f"Failed to list jobs: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/queue/stats",
     response_model=QueueStatsResponse,
     summary="Queue statistics",
@@ -151,6 +152,6 @@ async def get_queue_stats() -> QueueStatsResponse:
     """Return job queue statistics (counts by status, workers, etc.)."""
     try:
         queue = get_job_queue()
-        return QueueStatsResponse.model_validate(queue.get_stats())
+        return QueueStatsResponse.model_validate(queue.get_stats())  # type: ignore[no-any-return]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e

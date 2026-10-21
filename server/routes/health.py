@@ -125,7 +125,7 @@ def _collect_disk_usage() -> DiskUsage:
         return DiskUsage(error=str(exc))
 
 
-@router.get("/health", response_model=HealthResponse, summary="Health check")
+@router.get("/health", response_model=HealthResponse, summary="Health check")  # type: ignore[misc]
 async def health(
     request: Request,
     detailed: bool = Query(False, description="Return extended diagnostics (localhost only)"),
@@ -150,7 +150,7 @@ async def health(
     )
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/capabilities",
     response_model=CapabilitiesResponse,
     summary="List registry capabilities",
@@ -169,7 +169,7 @@ async def list_capabilities() -> CapabilitiesResponse:
         raise HTTPException(status_code=500, detail=f"Failed to load registry: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/models",
     response_model=RegistryModelsResponse,
     summary="List ML models",
@@ -217,7 +217,7 @@ async def list_models() -> RegistryModelsResponse:
         raise HTTPException(status_code=500, detail=f"Failed to load models: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/metrics",
     response_model=MetricsResponse,
     summary="System metrics",

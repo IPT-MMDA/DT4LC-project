@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/gee", tags=["gee"])
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/sentinel2",
     response_model=GEEFetchResponse,
     summary="Fetch Sentinel-2 tiles",
@@ -73,7 +73,7 @@ async def fetch_sentinel2_data(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return GEEFetchResponse.model_validate(result)
+        return GEEFetchResponse.model_validate(result)  # type: ignore[no-any-return]
 
     except HTTPException:
         raise
@@ -82,7 +82,7 @@ async def fetch_sentinel2_data(
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}") from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/modis",
     response_model=GEEFetchResponse,
     summary="Fetch MODIS tiles",
@@ -131,7 +131,7 @@ async def fetch_modis_data(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return GEEFetchResponse.model_validate(result)
+        return GEEFetchResponse.model_validate(result)  # type: ignore[no-any-return]
 
     except HTTPException:
         raise
@@ -140,7 +140,7 @@ async def fetch_modis_data(
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}") from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/landsat",
     response_model=GEEFetchResponse,
     summary="Fetch Landsat tiles",
@@ -189,7 +189,7 @@ async def fetch_landsat_data(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return GEEFetchResponse.model_validate(result)
+        return GEEFetchResponse.model_validate(result)  # type: ignore[no-any-return]
 
     except HTTPException:
         raise
@@ -198,7 +198,7 @@ async def fetch_landsat_data(
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}") from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/bulk-fetch",
     response_model=BulkFetchResponse,
     summary="Bulk fetch GEE layers",
@@ -273,7 +273,7 @@ async def bulk_fetch_datasets(request: BulkFetchRequest) -> BulkFetchResponse:
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return BulkFetchResponse.model_validate(result)
+        return BulkFetchResponse.model_validate(result)  # type: ignore[no-any-return]
 
     except HTTPException:
         raise
@@ -282,7 +282,7 @@ async def bulk_fetch_datasets(request: BulkFetchRequest) -> BulkFetchResponse:
         raise HTTPException(status_code=500, detail=f"Failed to bulk fetch data: {str(e)}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/datasets",
     response_model=DatasetListResponse,
     summary="List GEE datasets",
@@ -325,7 +325,7 @@ async def list_available_datasets() -> DatasetListResponse:
     return DatasetListResponse(datasets=datasets)
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/layers/persist",
     response_model=PersistLayerResponse,
     summary="Persist layer metadata",
@@ -365,7 +365,7 @@ async def persist_layer_metadata(request: PersistLayerRequest) -> PersistLayerRe
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/layers/{layer_id}/export",
     response_model=GEEExportResponse,
     summary="Export layer to GeoTIFF",
@@ -565,7 +565,7 @@ async def export_layer_for_analysis(
 
         logger.info(f"Successfully exported layer {layer_id} to {export_result['file_path']}")
 
-        return GEEExportResponse.model_validate(
+        return GEEExportResponse.model_validate(  # type: ignore[no-any-return]
             {
                 "ok": True,
                 "status": "completed",
@@ -582,7 +582,7 @@ async def export_layer_for_analysis(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/layers",
     response_model=GEELayersListResponse,
     summary="List persisted layers",
@@ -600,7 +600,7 @@ async def list_persisted_layers() -> GEELayersListResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete(
+@router.delete(  # type: ignore[misc]
     "/layers/{layer_id}",
     response_model=GEELayerIdResponse,
     summary="Delete persisted layer",
@@ -623,7 +623,7 @@ async def delete_persisted_layer(layer_id: str) -> GEELayerIdResponse:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/dates",
     response_model=GEEDatesResponse,
     summary="Sentinel-2 acquisition dates",
@@ -657,7 +657,7 @@ async def get_sentinel2_dates(
         if not result.get("ok"):
             raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-        return GEEDatesResponse.model_validate(result)
+        return GEEDatesResponse.model_validate(result)  # type: ignore[no-any-return]
 
     except HTTPException:
         raise

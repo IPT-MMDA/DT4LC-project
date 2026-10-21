@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/ml-models", tags=["models"])
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "",
     response_model=MLModelsListResponse,
     summary="List ML models",
@@ -46,7 +46,7 @@ async def list_models() -> MLModelsListResponse:
         raise HTTPException(status_code=500, detail=f"Failed to list models: {e}") from e
 
 
-@router.get(
+@router.get(  # type: ignore[misc]
     "/{model_id}",
     response_model=MLModelDetailResponse,
     summary="Get ML model details",
@@ -60,7 +60,7 @@ async def get_model(model_id: str) -> MLModelDetailResponse:
         if model_info is None:
             raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
 
-        return MLModelDetailResponse.model_validate(model_info)
+        return MLModelDetailResponse.model_validate(model_info)  # type: ignore[no-any-return]
     except HTTPException:
         raise
     except Exception as e:
@@ -68,7 +68,7 @@ async def get_model(model_id: str) -> MLModelDetailResponse:
         raise HTTPException(status_code=500, detail=f"Failed to get model: {e}") from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/{model_id}/download",
     status_code=202,
     response_model=MLModelDownloadResponse,
@@ -107,7 +107,7 @@ async def start_download(model_id: str) -> MLModelDownloadResponse:
         raise HTTPException(status_code=500, detail=f"Failed to start download: {e}") from e
 
 
-@router.post(
+@router.post(  # type: ignore[misc]
     "/{model_id}/cancel",
     response_model=MLModelActionResponse,
     summary="Cancel model download",
@@ -127,7 +127,7 @@ async def cancel_download(model_id: str) -> MLModelActionResponse:
         if not cancelled:
             raise HTTPException(status_code=400, detail="Failed to cancel download")
 
-        return MLModelActionResponse.model_validate(
+        return MLModelActionResponse.model_validate(  # type: ignore[no-any-return]
             {
                 "model_id": model_id,
                 "status": "cancelling",
@@ -141,7 +141,7 @@ async def cancel_download(model_id: str) -> MLModelActionResponse:
         raise HTTPException(status_code=500, detail=f"Failed to cancel download: {e}") from e
 
 
-@router.delete(
+@router.delete(  # type: ignore[misc]
     "/{model_id}",
     response_model=MLModelActionResponse,
     summary="Delete ML model",
@@ -163,7 +163,7 @@ async def delete_model(model_id: str) -> MLModelActionResponse:
             raise HTTPException(status_code=500, detail="Failed to delete model")
 
         logger.info(f"Deleted model {model_id}")
-        return MLModelActionResponse.model_validate(
+        return MLModelActionResponse.model_validate(  # type: ignore[no-any-return]
             {
                 "model_id": model_id,
                 "status": "deleted",
