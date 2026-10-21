@@ -13,7 +13,7 @@ DT4LC accepts GeoTIFF file uploads via the `/v1/upload` endpoint. Uploaded files
    POST /v1/upload (multipart/form-data)
    ↓
 2. Backend validates and saves file
-   → /tmp/dt4lc_uploads/{id}_{filename}
+   → resources/.cache/uploads/{id}_{filename}
    ↓
 3. Backend returns file metadata
    {id, path, size, crs, bounds, preview}
@@ -42,13 +42,16 @@ curl -X POST http://localhost:8000/v1/upload \
 {
   "id": "a1b2c3d4",
   "filename": "data.tif",
-  "path": "/tmp/dt4lc_uploads/a1b2c3d4_data.tif",
+  "path": "/app/resources/.cache/uploads/a1b2c3d4_data.tif",
   "size": [1024, 1024],
   "crs": "EPSG:4326",
   "bounds": [30.0, 45.0, 31.0, 46.0],
-  "preview_png_base64": "iVBORw0KGgo..."
+  "preview_png_base64": "iVBORw0KGgo...",
+  "preview_url": "/v1/download?path=..."
 }
 ```
+
+`preview_url` downloads the grayscale PNG preview written next to the upload. `preview_png_base64` holds the same PNG for compatibility; do not persist it or send it back in a job submission.
 
 ### 2. Submit Job with Attachment
 
@@ -60,7 +63,7 @@ curl -X POST http://localhost:8000/v1/jobs \
     "attachments": [{
       "id": "a1b2c3d4",
       "filename": "data.tif",
-      "path": "/tmp/dt4lc_uploads/a1b2c3d4_data.tif"
+      "path": "/app/resources/.cache/uploads/a1b2c3d4_data.tif"
     }]
   }'
 ```
@@ -91,8 +94,9 @@ The frontend maintains chat session context including:
 
 ## File Storage
 
-- **Location:** `/tmp/dt4lc_uploads/`
+- **Location:** `resources/.cache/uploads/` (set `DT4LC_UPLOADS_PATH` to change it; Docker Compose sets `/app/resources/.cache/uploads`)
 - **Format:** `{file_id}_{original_filename}`
+- **Preview:** `{file_id}_{original_filename without extension}.png` next to the upload, served at `preview_url`
 - **Supported:** GeoTIFF (.tif, .tiff)
 
 ## Validation

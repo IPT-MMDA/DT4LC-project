@@ -4,6 +4,10 @@ Thank you for your interest in contributing to DT4LC. This project is licensed u
 
 ## How to Contribute
 
+### Getting Support
+
+Ask questions and get help by opening a [GitHub issue](https://github.com/IPT-MMDA/DT4LC-project/issues).
+
 ### Reporting Bugs
 
 Open a [GitHub issue](https://github.com/IPT-MMDA/DT4LC-project/issues) with:
@@ -25,6 +29,12 @@ Open a GitHub issue describing the feature, its use case, and how it fits the pr
 
 Pull requests are reviewed by maintainers before merging.
 
+### Branches and Releases
+
+- `dev` is the integration branch: feature and fix branches start from it and their pull requests target it.
+- `master` holds released code. A release is a pull request from `dev` into `master`; the release commit on `master` is tagged `vX.Y.Z` (for example `v0.4.0`).
+- Before tagging, the version is set to the same `X.Y.Z` in `dta/__init__.py`, `cognitive_ui/package.json` and `CITATION.cff` (with `date-released`).
+
 ## Development Setup
 
 Full guide: [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) (environment, structure, tests, algorithms, COE, git).
@@ -40,8 +50,13 @@ uv sync --extra dev --extra server
 # Run backend
 uv run uvicorn server.app:app --reload --port 8000
 
-# Run tests
-uv run pytest tests/ -v
+# Run tests (what CI runs; no API keys, network or model weights needed)
+uv run pytest tests/ -m "not slow and not llm"
+
+# Opt-in tests (see README "Running Tests" for what each needs)
+uv run pytest tests/ -m llm               # an available LLM provider
+uv run pytest tests/ -m network           # GEE_PROJECT_ID + Earth Engine credentials
+uv run pytest tests/ -m "slow or gpu"     # downloaded models + NVIDIA GPU
 
 # Lint, format, type check
 uv run ruff check .
@@ -55,13 +70,14 @@ uv run mypy dta server
 cd cognitive_ui
 npm install
 npm run dev                 # starts on http://localhost:5173
+npm test                    # vitest
 ```
 
 ### Docker (full stack)
 
 ```bash
 cp .env.example .env
-docker compose up -d        # backend :8000 + frontend :80
+docker compose --profile ollama up -d   # backend :8000 + frontend :80 + local Ollama (no API key needed)
 ```
 
 ## Code Style
