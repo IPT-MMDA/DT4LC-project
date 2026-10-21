@@ -1,7 +1,24 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+
+/** Resolve a server-relative URL (e.g. an artifact `url`) against the API base URL. */
+export function resolveApiUrl(url: string): string {
+  return `${API_BASE_URL}${url}`;
+}
+
+/**
+ * Server-relative `url` of an artifact reference ({kind, path, url, stats}, see
+ * docs/ARCHITECTURE.md "Job artifacts"), or undefined for anything else, such as
+ * the base64 strings of results produced before v0.5.0.
+ */
+export function artifactUrl(ref: unknown): string | undefined {
+  const url = (ref as { url?: unknown } | null | undefined)?.url;
+  return typeof url === 'string' && url ? url : undefined;
+}
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',

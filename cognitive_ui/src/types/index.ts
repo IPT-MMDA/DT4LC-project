@@ -16,7 +16,7 @@ export interface ChatMessage {
   attachments?: Array<{
     id: string;
     filename: string;
-    preview_png_base64?: string;
+    preview_url?: string;  // Server-relative preview URL from POST /v1/upload
     path?: string;  // Server path for follow-up requests
   }>;
 }
@@ -53,11 +53,11 @@ export interface JobResultData {
     values: Record<string, number | string>;
   };
 
-  // Visualizations (base64 images, NOT included in LLM context)
+  // Visualizations (server-relative PNG URLs, NOT included in LLM context)
   visualizations?: {
     type: string;
     label: string;
-    base64: string;
+    url: string;
   }[];
 
   // Classification data
@@ -117,8 +117,8 @@ export interface Attachment {
   path: string;
   mime_type?: string;
   size_bytes?: number;
-  // Preview image for display in chat
-  preview_png_base64?: string;
+  // Server-relative preview URL for display in chat (never the image bytes)
+  preview_url?: string;
 }
 
 export interface JobSubmitRequest {

@@ -7,7 +7,7 @@ interface UploadResponse {
   size: [number, number];
   crs: string | null;
   bounds: [number, number, number, number];
-  preview_png_base64: string;
+  preview_url: string;
 }
 
 export interface GeoTIFFFile {

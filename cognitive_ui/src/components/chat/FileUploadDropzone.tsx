@@ -3,6 +3,7 @@ import { Upload, X, Loader2, AlertCircle, CheckCircle, Paperclip, Download, Data
 import type { GeoTIFFFile } from '../../api/hooks/useUpload';
 import { useUploadFile, useListFiles } from '../../api/hooks/useUpload';
 import { useAppStore } from '../../store/useAppStore';
+import { resolveApiUrl } from '../../api/client';
 import { uploadLogger as logger } from '../../utils/logger';
 
 interface FileUploadDropzoneProps {
@@ -13,7 +14,7 @@ interface FileUploadDropzoneProps {
 interface UploadedFilePreview {
   id: string;
   filename: string;
-  preview_png_base64?: string;
+  preview_url?: string;
   size: [number, number];
   crs: string | null;
 }
@@ -115,7 +116,7 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
       setRecentUpload({
         id: result.id,
         filename: result.filename,
-        preview_png_base64: result.preview_png_base64,
+        preview_url: result.preview_url,
         size: result.size,
         crs: result.crs,
       });
@@ -126,7 +127,7 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
         filename: result.filename,
         path: result.path,
         mime_type: 'image/tiff',
-        preview_png_base64: result.preview_png_base64,
+        preview_url: result.preview_url,
       };
       logger.debug('Adding attachment to store:', attachment);
       addAttachment(attachment);
@@ -255,9 +256,9 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
                     {recentUpload.size[0]} x {recentUpload.size[1]} px
                   </p>
                 </div>
-                {recentUpload.preview_png_base64 && (
+                {recentUpload.preview_url && (
                   <img
-                    src={`data:image/png;base64,${recentUpload.preview_png_base64}`}
+                    src={resolveApiUrl(recentUpload.preview_url)}
                     alt="Preview"
                     className="w-12 h-12 rounded object-cover"
                   />
@@ -401,9 +402,9 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
                 {recentUpload.size[0]} x {recentUpload.size[1]} px
                 {recentUpload.crs && ` | ${recentUpload.crs}`}
               </p>
-              {recentUpload.preview_png_base64 && (
+              {recentUpload.preview_url && (
                 <img
-                  src={`data:image/png;base64,${recentUpload.preview_png_base64}`}
+                  src={resolveApiUrl(recentUpload.preview_url)}
                   alt="Preview"
                   className="mt-2 mx-auto w-full h-24 rounded object-cover"
                 />
