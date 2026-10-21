@@ -154,10 +154,14 @@ class OllamaProvider(BaseLLMProvider):
             tags_response = requests.get(tags_url, timeout=5)
             tags_response.raise_for_status()
 
-            models = tags_response.json().get("models", [])
-            model_names = [m.get("name", "").split(":")[0] for m in models]
+            # Ollama treats an untagged name as ":latest"; tagged names must match exactly.
+            def with_tag(name: str) -> str:
+                return name if ":" in name else f"{name}:latest"
 
-            return self.model in model_names or any(self.model in name for name in model_names)
+            models = tags_response.json().get("models", [])
+            model_names = {with_tag(m.get("name", "")) for m in models}
+
+            return with_tag(self.model) in model_names
 
         except requests.exceptions.RequestException:
             # Network error, connection refused, timeout, etc.
