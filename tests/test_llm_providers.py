@@ -809,7 +809,7 @@ class TestLLMConfig:
 
         assert response.text is not None
         assert len(response.text) > 0
-        assert response.provider in ["gemini", "ollama"]
+        assert response.provider in {p.name for p in router.get_available_providers()}
 
 
 @pytest.mark.llm
