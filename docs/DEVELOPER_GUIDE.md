@@ -130,7 +130,25 @@ def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803
     return _run_index(RasterPath, _config())
 ```
 
-For non–spectral-index logic, implement `run()` returning a dict with results/statistics (see `dta/dti/algorithms/statistics.py`).
+`spectral_index.run` writes the index as a GeoTIFF and its map as a PNG and returns references to them in `rasters["<formula>"]` and `visualizations["<formula>_map"]` (here `ndvi` and `ndvi_map`, the formula in the config below).
+
+For non–spectral-index logic, implement `run()` returning a dict with results/statistics (see `dta/dti/algorithms/statistics.py`). A result must not hold pixel arrays or images ("Job artifacts" in [ARCHITECTURE.md](ARCHITECTURE.md#job-artifacts)). Pass them to `artifact_files.save`, which writes each 2-D array as a single-band float32 GeoTIFF (nodata NaN) and each PNG as a file, and puts `{kind, path, url, stats}` references into `result["rasters"]` and `result["visualizations"]` under the same keys:
+
+```python
+import rasterio
+
+from dta.dti import artifact_files
+
+
+def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803
+    with rasterio.open(RasterPath) as src:
+        mask = ...  # 2-D numpy array, NaN where invalid
+        png = ...   # PNG bytes, or None
+        result = {"statistics": {...}}
+        return artifact_files.save(result, {"my_mask": mask}, {"my_mask_map": png}, crs=src.crs, transform=src.transform)
+```
+
+In a pipeline the files go to the job's directory as `OUTPUTS_PATH/<job_id>/<step index>_<output type>_<key>.<tif|png>`; called directly, to a new `OUTPUTS_PATH/run-<uuid hex>/`. To compute a spectral index without writing files (e.g. to threshold it), call `spectral_index.calculate_index(path, config)`, which returns `(result, array, (crs, transform))`. A step that needs another step's pixels opens `rasters["<key>"]["path"]` with rasterio.
 
 The executor calls `run(**inputs)` with one keyword argument per entry of the item's `inputs`, named after the type (`RasterPath=...`); a runner with `args_map:` instead calls `function:` (default `main`) with the mapped arguments. With a single output type the returned dict is stored as that output; with several, return a dict keyed by output type.
 
@@ -186,7 +204,9 @@ def test_registry_has_my_index() -> None:
     assert item.outputs == ["MYIMap"]
 ```
 
-Run: `pytest tests/test_algorithms.py -v` (and `tests/test_registry.py` if you added types).
+Add the module to the parametrized list of `test_single_raster_algorithm_results_hold_refs` in `tests/test_job_artifacts.py`, as `("my_index", {<rasters keys>}, {<visualizations keys>})`; the test fails if the result holds arrays or base64 images instead of references.
+
+Run: `pytest tests/test_algorithms.py tests/test_job_artifacts.py -v` (and `tests/test_registry.py` if you added types).
 
 ## COE pipeline walkthrough: "Calculate NDVI"
 

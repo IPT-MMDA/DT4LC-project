@@ -161,8 +161,9 @@ FastAPI application with:
 ## Job artifacts
 
 Since v0.5.0 a job result never contains pixel data. Rasters are written as
-GeoTIFF and visualizations as PNG under the job's output directory; the result
-carries a small reference per file. This keeps `GET /v1/jobs/{id}` under 1 MB
+GeoTIFF and visualizations as PNG under the job's output directory (model
+steps: next to the model's own output files); the result carries a small
+reference per file. This keeps `GET /v1/jobs/{id}` under 1 MB
 for a 1000×1000 raster, `GET /v1/jobs?limit=20` under 200 KB, and the SQLite
 `jobs` table free of arrays and base64 (#65, #67 bugs 2 and 3).
 
@@ -171,30 +172,49 @@ for a 1000×1000 raster, `GET /v1/jobs?limit=20` under 200 KB, and the SQLite
 ```json
 {
   "kind": "geotiff",
-  "path": "/app/resources/.cache/outputs/<job_id>/0_NDVIMap_ndvi.tif",
-  "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F<job_id>%2F0_NDVIMap_ndvi.tif",
-  "stats": {"min": -0.21, "max": 0.89, "mean": 0.41, "valid_pixels": 589824}
+  "path": "/app/resources/.cache/outputs/<job_id>/1_NDVIMap_ndvi.tif",
+  "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F<job_id>%2F1_NDVIMap_ndvi.tif",
+  "stats": {"min": -1.0, "max": 1.0, "mean": 0.5451, "valid_pixels": 589824}
 }
 ```
+
+(NDVI of the bundled sample `resources/kahovka_data/hlsl_20230601.tif`.)
 
 | Field | Meaning |
 |-------|---------|
 | `kind` | `"geotiff"` (single-band float32 raster, nodata NaN, CRS and transform of the input) or `"png"` (rendered image) |
 | `path` | Absolute server path. Used by later pipeline steps that need the pixels |
 | `url` | Server-relative download URL: `/v1/download?path=` + the URL-encoded `path`. Clients resolve it against the API base URL, like any other API call |
-| `stats` | `geotiff`: `min`, `max`, `mean`, `valid_pixels` over finite, non-nodata pixels. `png`: `{}` |
+| `stats` | `geotiff`: `min`, `max`, `mean`, `valid_pixels` over finite, non-nodata pixels; with no valid pixel `min`, `max` and `mean` are `null` and `valid_pixels` is 0. `png`: `{}` |
+
+`dta/dti/artifact_files.py` writes these files and builds the references.
 
 ### Where files go
 
 - Job output directory: `OUTPUTS_PATH/<job_id>/`, with
   `OUTPUTS_PATH = resources/.cache/outputs` (inside the `./resources` volume
-  in Docker, so files survive restarts). Runs outside the job queue (direct
-  executor use, tests) write to `OUTPUTS_PATH/run-<uuid hex>/`.
-- File name: `<step index>_<output type>_<key>.<tif|png>`, e.g.
-  `0_NDVIMap_ndvi.tif`, `0_NDVIMap_ndvi_map.png`.
+  in Docker, so files survive restarts). Executor runs outside the job queue
+  (`POST /v1/execute`, `POST /v1/chat`, direct `PipelineExecutor.execute()`
+  calls) write to `OUTPUTS_PATH/run-<uuid hex>/`, one directory per run.
+- File name: `<step index>_<output type>_<key>.<tif|png>`, where the step
+  index is the step's 0-based position in the plan and the output type is the
+  step's first registry output. The standard NDVI plan (`input/file`,
+  `algorithms/ndvi`, `post-processing/agent-analysis`) gives
+  `1_NDVIMap_ndvi.tif` and `1_NDVIMap_ndvi_map.png`. A step without outputs
+  uses the bare index as prefix.
+- An algorithm called directly, without the executor, writes to a new
+  `OUTPUTS_PATH/run-<uuid hex>/` on each call, with files named
+  `<key>.<tif|png>`.
+- Model steps such as Prithvi write to `TEMP_PATH/<model id>_outputs/<run id>/`
+  (`TEMP_PATH = resources/.cache/tmp`), and the PNG of each output TIFF is
+  written next to it. Delineate-Anything writes its GeoPackage and the
+  `field_boundaries` PNG to `TEMP_PATH/delineate_outputs/` instead.
+- Upload previews: `<uploads directory>/<id>_<file name stem>.png`, next to the
+  upload.
 - `GET /v1/download` serves only files under `OUTPUTS_PATH`, the uploads
-  directory, model output directories (`resources/.cache/tmp/<model>_outputs/`)
-  and `<system temp>/dt4lc_delineate`. Anything else is 403.
+  directory, all of `TEMP_PATH` (model outputs and `delineate_outputs/`) and
+  `<system temp>/dt4lc_delineate`. The path is resolved before the check;
+  anything else is 403.
 
 ### Result shape per step output
 
@@ -210,25 +230,36 @@ each one:
 
 | Algorithm | Removed array fields → `rasters` key | `visualizations` keys (now `png` refs) |
 |-----------|--------------------------------------|----------------------------------------|
-| `spectral_index.run` (NDVI, NDWI, NDSI, EVI, …) | `<index>_array` → `<index>` | `<index>_map` |
-| `spectral_index.run_change` | `change_array` → `change` | — |
-| `change_detection` | `change_array` → `change`, `index_before` → `index_before`, `index_after` → `index_after` | `change_map`, `<index>_before`, `<index>_after` |
-| `snow_classifier` | `snow_mask`, `ndsi`, `ndvi`, `brightness` (same keys) | `snow_classification`, `criteria_analysis` |
-| `lulc_classifier` | `classification` (same key) | `classification_map`, `distribution_chart` |
+| `spectral_index.run`; NDVI, NDWI, EVI modules | `<index>_array` → `<index>` | `<index>_map` |
+| NDSI (`ndsi.py`) | `ndsi_array` → `ndsi`, `snow_mask` → `snow_mask` (1 snow, 0 no snow, NaN where the input is invalid) | `ndsi_map` |
+| `spectral_index.run_change`, `ndvi.ndvi_change` | `change_array` → `change` | none (no `visualizations` key) |
+| `change_detection` | `change_array` → `change`, `index_before` → `index_before`, `index_after` → `index_after`; the NDVI aliases `ndvi_before` and `ndvi_after` are removed (`ndvi_statistics` stays) | `change_map`, `<index>_before`, `<index>_after` |
+| `snow_classifier` | `snow_mask` (NaN where the input is invalid), `ndsi`, `ndvi`, `brightness` (same keys) | `snow_classification`, `criteria_analysis` |
+| `lulc_classifier` | `classification` (same key; class 0 "No Data" is stored as NaN) | `classification_map`, `distribution_chart` |
 | Model steps (`_collect_model_outputs`, e.g. Prithvi) | — (`output_files` stay paths) | per output file, PNG written next to the TIFF |
+| Delineate-Anything | — (`output_path` stays the GeoPackage path) | `field_boundaries`, PNG next to the GeoPackage |
+
+Without matplotlib the algorithms return an empty `visualizations`;
+`artifact_files.save` keeps an image that is `None` as `null` instead of a
+reference.
 
 A pipeline step that consumes another step's pixels opens
-`rasters.<key>.path` instead of reading an in-memory array. A contract test
-walks every algorithm's result and fails on any `numpy.ndarray`, base64
-string or nested list of numbers.
+`rasters.<key>.path` instead of reading an in-memory array. The contract test
+`tests/test_job_artifacts.py` walks a result for each row of the table and
+fails on any `numpy.ndarray`, base64-looking string over 1 KB, nested list of
+numbers or list of more than 256 numbers.
 
 ### API changes
 
 - `GET /v1/jobs` returns job summaries: the `GET /v1/jobs/{id}` record
   without `result`. Clients that need a result fetch the job by id.
-- `GET /v1/jobs/{id}` returns the full record, with references as above.
+- `GET /v1/jobs/{id}` returns the full record, with references as above. In
+  the OpenAPI schema `JobRecord` extends `JobSummary`, so `result` is its last
+  field. Jobs stored before v0.5.0 are not rewritten: their stored result
+  still holds arrays (as nested lists) and base64 images.
 - `POST /v1/upload` additionally returns `preview_url`, the download URL of a
-  PNG preview written to the uploads directory next to the file.
+  PNG preview written to the uploads directory next to the file
+  (`<id>_<file name stem>.png`).
   `preview_png_base64` is still returned for compatibility but clients must
   not persist it or send it back in job submissions.
 

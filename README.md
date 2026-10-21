@@ -397,6 +397,8 @@ Context is maintained per chat session, including:
        return {"result": ..., "statistics": {...}}
    ```
 
+   Return statistics and other small values only. Pixel arrays and images go to files through `dta.dti.artifact_files.save`, which puts references to them into the result (see [Adding a new algorithm](docs/DEVELOPER_GUIDE.md#adding-a-new-algorithm)).
+
 2. Register in `dta/registry.yaml`:
 
    ```yaml
@@ -430,7 +432,7 @@ Usage via natural language:
 "Delineate agricultural parcels from the satellite image"
 ```
 
-The model outputs GeoPackage files with polygon geometries representing detected fields.
+The model outputs GeoPackage files with polygon geometries representing detected fields; when fields are detected, the result also references a PNG of the boundaries (`visualizations.field_boundaries`).
 
 **Note**: Input must be a GeoTIFF with at least 3 bands; bands 1, 2 and 3 are passed to the model as its three image channels. DT4LC runs the small model variant (`DelineateAnything-S.pt`): the registry entry `models/delineate-anything` in `dta/registry.yaml` passes `delineate_model: "small"`.
 
@@ -481,9 +483,10 @@ The spectral-index algorithms (`dta/dti/algorithms/spectral_index.py`) also norm
 | `/v1/health` | GET | Health check |
 | `/v1/upload` | POST | Upload a GeoTIFF |
 | `/v1/jobs` | POST | Submit an analysis job (prompt and attachments) |
-| `/v1/jobs` | GET | List jobs |
+| `/v1/jobs` | GET | List job summaries (without `result`) |
 | `/v1/jobs/{id}` | GET | Get job status and result |
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
+| `/v1/download` | GET | Download a job output file or upload preview by its `url` |
 | `/v1/chat` | POST | Legacy: plan and run the last of `messages` as a Server-Sent Events stream (no attachments) |
 
 All routes, including file listing and download, map tiles, Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). See also [docs/API.md](docs/API.md).
@@ -507,7 +510,15 @@ curl -X POST http://localhost:8000/v1/jobs \
 
 # 3. Poll the job until "status" is "completed" or "failed"
 curl http://localhost:8000/v1/jobs/<job id>
+
+# 4. The result references output files instead of embedding pixels. For NDVI,
+#    result.execution.artifacts.NDVIMap.rasters.ndvi is the GeoTIFF and
+#    result.execution.artifacts.NDVIMap.visualizations.ndvi_map the PNG;
+#    download each with its "url"
+curl -o ndvi.tif "http://localhost:8000<url>"
 ```
+
+Each reference has `kind` (`geotiff` or `png`), `path`, `url` and `stats`; the keys each algorithm returns are listed under [Job artifacts](docs/ARCHITECTURE.md#job-artifacts). The upload response also has a `preview_url` for the PNG preview of the uploaded file.
 
 ## Docker Deployment
 

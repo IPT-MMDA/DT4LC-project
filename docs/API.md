@@ -4,7 +4,7 @@ Complete REST API documentation for the DT4LC backend.
 
 **Base URL:** `http://localhost:8000`
 
-This page describes the main routes. The generated reference covers every route, including those not described here (`POST /v1/chat`, `GET /v1/files`, `GET /v1/download`, `GET /v1/tiles/{z}/{x}/{y}`, `/v1/gee/*` and `/v1/ml-models/*`): Swagger UI at `/docs`, ReDoc at `/redoc` and the OpenAPI schema at `/openapi.json` on the backend (<http://localhost:8000/docs>), or through nginx under Docker Compose (<http://localhost/docs>).
+This page describes the main routes. The generated reference covers every route, including those not described here (`POST /v1/chat`, `GET /v1/files`, `GET /v1/tiles/{z}/{x}/{y}`, `/v1/gee/*` and `/v1/ml-models/*`): Swagger UI at `/docs`, ReDoc at `/redoc` and the OpenAPI schema at `/openapi.json` on the backend (<http://localhost:8000/docs>), or through nginx under Docker Compose (<http://localhost/docs>).
 
 ## Authentication
 
@@ -190,48 +190,80 @@ Submit an async job for processing.
 
 #### GET /v1/jobs/{job_id}
 
-Get job status and results.
+Get the full job record: status, plan and, once the job has finished, its `result` (`null` while the job is pending or running).
 
-**Response (completed):**
+**Response (completed NDVI job on the bundled sample, trimmed; paths as under Docker Compose):**
 
 ```json
 {
-  "id": "job_xyz789",
-  "state": "completed",
+  "id": "c360c0df",
+  "status": "completed",
   "prompt": "calculate ndvi",
-  "progress": 1.0,
-  "intent": "pipeline",
-  "result": {
-    "plan": {
-      "steps": [
-        {"uses": "input/file", "binds": {"RasterPath": "/path/to/file.tif"}},
-        {"uses": "algorithms/ndvi", "binds": {}},
-        {"uses": "post-processing/agent-analysis", "binds": {}}
-      ]
-    },
-    "execution": {
-      "ok": true,
-      "artifacts": {
-        "ndvi_result": {"mean": 0.45, "min": -0.2, "max": 0.85},
-        "agent_result": {"summary": "Vegetation health is moderate..."}
-      }
-    }
+  "plan": {
+    "flow": "calculate ndvi",
+    "steps": [
+      {"uses": "input/file", "binds": {"RasterPath": "/app/resources/.cache/uploads/983694a1_hlsl_20230601.tif"}},
+      {"uses": "algorithms/ndvi", "binds": {}},
+      {"uses": "post-processing/agent-analysis", "binds": {}}
+    ],
+    "outputs": ["publish: chat"]
   },
-  "created_at": "2025-01-15T10:30:00Z",
-  "completed_at": "2025-01-15T10:30:05Z"
+  "progress": 1.0,
+  "error": null,
+  "created_at": "2026-10-21T08:36:07.125036",
+  "started_at": "2026-10-21T08:36:07.128291",
+  "completed_at": "2026-10-21T08:36:07.762783",
+  "result": {
+    "intent": "pipeline",
+    "plan": {...},
+    "execution": {
+      "flow": "calculate ndvi",
+      "steps": ["input/file", "algorithms/ndvi", "post-processing/agent-analysis"],
+      "artifacts": {
+        "RasterPath": "/app/resources/.cache/uploads/983694a1_hlsl_20230601.tif",
+        "NDVIMap": {
+          "metadata": {"crs": "EPSG:32636", "width": 768, "height": 768, "count": 5, ...},
+          "statistics": {"min": -1.0, "max": 1.0, "mean": 0.5451, "std": 0.2704, "median": 0.6149, "valid_pixels": 589824, "total_pixels": 589824},
+          "visualizations": {
+            "ndvi_map": {
+              "kind": "png",
+              "path": "/app/resources/.cache/outputs/c360c0df/1_NDVIMap_ndvi_map.png",
+              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fc360c0df%2F1_NDVIMap_ndvi_map.png",
+              "stats": {}
+            }
+          },
+          "path": "/app/resources/.cache/uploads/983694a1_hlsl_20230601.tif",
+          "index_type": "ndvi",
+          "rasters": {
+            "ndvi": {
+              "kind": "geotiff",
+              "path": "/app/resources/.cache/outputs/c360c0df/1_NDVIMap_ndvi.tif",
+              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fc360c0df%2F1_NDVIMap_ndvi.tif",
+              "stats": {"min": -1.0, "max": 1.0, "mean": 0.5451, "valid_pixels": 589824}
+            }
+          }
+        },
+        "agent_result": {"summary": "...", "inputs": {...}, "llm_provider": "..."}
+      },
+      "outputs": {}
+    }
+  }
 }
 ```
 
-**Response (conversation intent):**
+The result holds no pixel data. Each raster is a `geotiff` reference in `rasters` and each image a `png` reference in `visualizations`, both `{kind, path, url, stats}`; fetch the file with a `GET` on its `url` (see [GET /v1/download](#get-v1download)). The reference fields, file names and the keys each algorithm returns are in [Job artifacts](ARCHITECTURE.md#job-artifacts). Jobs stored before v0.5.0 are returned as they were stored, with arrays (as nested lists) and base64 images in `result`.
+
+**Response (conversation intent, trimmed):**
 
 ```json
 {
   "id": "job_abc123",
-  "state": "completed",
+  "status": "completed",
   "prompt": "what can we do next?",
-  "intent": "conversation",
   "result": {
-    "response": "Based on your uploaded data, you can: 1) Calculate NDVI..."
+    "intent": "conversation",
+    "response": "Based on your uploaded data, you can: 1) Calculate NDVI...",
+    "reason": "..."
   }
 }
 ```
@@ -251,7 +283,7 @@ Cancel a pending or running job.
 
 #### GET /v1/jobs
 
-List jobs with optional filtering and pagination.
+List job summaries with optional filtering and pagination. A summary is the `GET /v1/jobs/{job_id}` record without `result`; fetch a job by id for its result.
 
 **Query Parameters:**
 
@@ -265,7 +297,19 @@ List jobs with optional filtering and pagination.
 
 ```json
 {
-  "jobs": [...],
+  "jobs": [
+    {
+      "id": "c360c0df",
+      "status": "completed",
+      "prompt": "calculate ndvi",
+      "plan": {...},
+      "progress": 1.0,
+      "error": null,
+      "created_at": "2026-10-21T08:36:07.125036",
+      "started_at": "2026-10-21T08:36:07.128291",
+      "completed_at": "2026-10-21T08:36:07.762783"
+    }
+  ],
   "total": 50,
   "limit": 10,
   "offset": 0
@@ -285,23 +329,36 @@ curl -X POST http://localhost:8000/v1/upload \
   -F "file=@/path/to/image.tif"
 ```
 
-**Response:**
+**Response (the bundled sample; paths as under Docker Compose):**
 
 ```json
 {
-  "id": "abc123",
-  "filename": "image.tif",
-  "path": "/tmp/dt4lc_uploads/abc123_image.tif",
-  "size": [1024, 1024],
-  "crs": "EPSG:4326",
-  "bounds": [30.0, 45.0, 31.0, 46.0],
-  "preview_png_base64": "iVBORw0KGgo..."
+  "id": "983694a1",
+  "filename": "hlsl_20230601.tif",
+  "path": "/app/resources/.cache/uploads/983694a1_hlsl_20230601.tif",
+  "size": [768, 768],
+  "crs": "EPSG:32636",
+  "bounds": [453240.0, 5144820.0, 476280.0, 5167860.0],
+  "preview_png_base64": "iVBORw0KGgoA...",
+  "preview_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Fuploads%2F983694a1_hlsl_20230601.png"
 }
 ```
+
+The grayscale preview is written next to the upload as `<id>_<file name stem>.png`; `preview_url` is its download URL. `preview_png_base64` holds the same PNG and is kept for compatibility: do not persist it or send it back in job submissions.
 
 **Supported Formats:**
 
 - GeoTIFF (.tif, .tiff)
+
+#### GET /v1/download
+
+Download a job artifact, upload preview or other generated file by its server path. The `url` of an artifact reference and the `preview_url` of an upload already have this form: `/v1/download?path=` + the URL-encoded absolute path.
+
+```bash
+curl -o ndvi.tif "http://localhost:8000/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fc360c0df%2F1_NDVIMap_ndvi.tif"
+```
+
+Only files under these directories are served: job outputs (`resources/.cache/outputs/`), uploads (`resources/.cache/uploads/`, or `DT4LC_UPLOADS_PATH`), temporary and model outputs (`resources/.cache/tmp/`) and `<system temp>/dt4lc_delineate`. The path is resolved first, so `..` cannot leave them. Any other path returns 403 (`error.code` `unauthorized`); a missing file returns 404. The content type follows the extension: `.tif`/`.tiff` `image/tiff`, `.png` `image/png`, `.gpkg` `application/geopackage+sqlite3`, `.json` `application/json`, anything else `application/octet-stream`.
 
 ### Legacy/Sync Endpoints
 

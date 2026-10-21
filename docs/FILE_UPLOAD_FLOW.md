@@ -46,9 +46,12 @@ curl -X POST http://localhost:8000/v1/upload \
   "size": [1024, 1024],
   "crs": "EPSG:4326",
   "bounds": [30.0, 45.0, 31.0, 46.0],
-  "preview_png_base64": "iVBORw0KGgo..."
+  "preview_png_base64": "iVBORw0KGgo...",
+  "preview_url": "/v1/download?path=..."
 }
 ```
+
+`preview_url` downloads the grayscale PNG preview written next to the upload. `preview_png_base64` holds the same PNG for compatibility; do not persist it or send it back in a job submission.
 
 ### 2. Submit Job with Attachment
 
@@ -93,6 +96,7 @@ The frontend maintains chat session context including:
 
 - **Location:** `/tmp/dt4lc_uploads/`
 - **Format:** `{file_id}_{original_filename}`
+- **Preview:** `{file_id}_{original_filename without extension}.png` next to the upload, served at `preview_url`
 - **Supported:** GeoTIFF (.tif, .tiff)
 
 ## Validation
