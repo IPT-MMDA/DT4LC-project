@@ -247,10 +247,14 @@ class TestPrithviReconstruction:
 
     @pytest.mark.gpu
     @pytest.mark.slow
-    def test_prithvi_runs_when_model_installed(self, synthetic_raster_path: str, tmp_path: Path) -> None:
+    def test_prithvi_runs_when_model_installed(
+        self, synthetic_raster_path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import numpy as np
         import rasterio
 
         from dta.dti.models import get_model_manager
+        from dta.dti.preprocessors import scale_to_hls
 
         manager = get_model_manager()
         if not manager.is_model_available("prithvi-eo-v1-100m"):
@@ -262,8 +266,9 @@ class TestPrithviReconstruction:
         with rasterio.open(synthetic_raster_path) as src:
             profile = src.profile
             profile.update(count=6)
+            hls_bands = src.read(list(range(2, 8)))
             with rasterio.open(hls_path, "w", **profile) as dst:
-                dst.write(src.read(list(range(2, 8))))
+                dst.write(hls_bands)
 
         executor = PipelineExecutor()
         plan = ExecutionPlan(
@@ -274,8 +279,23 @@ class TestPrithviReconstruction:
             ],
             outputs=["Reconstruction"],
         )
+        # Record what scale-to-hls hands to Prithvi: the step must run and its
+        # output must be the 0-1 reflectance scaled to HLS, not an all-zero raster.
+        scaled_paths: list[str] = []
+        real_run = scale_to_hls.run
+
+        def spy_run(input_path: str, output_dir: str) -> str:
+            scaled_paths.append(real_run(input_path=input_path, output_dir=output_dir))
+            return scaled_paths[-1]
+
+        monkeypatch.setattr(scale_to_hls, "run", spy_run)
+
         result = executor.execute(plan)
         assert "Reconstruction" in result["artifacts"]
+        assert len(scaled_paths) == 1
+        with rasterio.open(scaled_paths[0]) as scaled:
+            bands = scaled.read()
+        np.testing.assert_array_equal(bands, (hls_bands * 10000).astype(np.int16))
 
 
 class TestDelineateAnything:
