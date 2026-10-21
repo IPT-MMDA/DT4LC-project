@@ -21,3 +21,9 @@ def test_frontend_healthcheck_targets_ipv4_loopback() -> None:
     healthcheck = re.search(r"^HEALTHCHECK .*?(?<!\\)$", dockerfile, re.M | re.S)
     assert healthcheck, "frontend Dockerfile has no HEALTHCHECK"
     assert "http://127.0.0.1" in healthcheck.group(0), healthcheck.group(0)
+
+
+def test_backend_has_shared_memory_for_delineate() -> None:
+    """Docker's default 64 MB /dev/shm cannot hold Delineate-Anything's 64 MiB SharedMemory region."""
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    assert compose["services"]["backend"].get("shm_size") == "2gb"
