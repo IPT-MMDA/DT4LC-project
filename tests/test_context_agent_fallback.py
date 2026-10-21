@@ -249,6 +249,27 @@ def test_provider_error_still_falls_through_to_next_provider() -> None:
     assert _analyze_with([p1, p2]) == _ctx_from(_P2_REPLY)
 
 
+@pytest.mark.parametrize(("files", "inputs"), [([BEFORE], ["RasterPath"]), ([], [])])
+def test_deterministic_context_without_match_is_skeletal(files: list[str], inputs: list[str]) -> None:
+    req = ChatRequest(prompt="hello there", attachments=_attachments(*files))
+
+    assert context_agent._deterministic_context(req) == ContextUnderstanding(
+        goal="hello there", desired_outputs=[], required_inputs=inputs, hints={"keywords": []}
+    )
+
+
+def test_rejection_log_redacts_and_truncates_llm_strings(caplog: pytest.LogCaptureFixture) -> None:
+    secret = "sk-proj-ABCDEFGHSECRETKEY1234"
+    data = {**_VALID, "desired_outputs": [secret, "x" * 300]}
+
+    with caplog.at_level("WARNING"):
+        assert context_agent._accept(data, load_registry().types) is None
+
+    assert "2 types not in the registry" in caplog.text
+    assert secret not in caplog.text
+    assert "x" * 41 not in caplog.text
+
+
 # --- P1: delta_t, every trigger phrase planned without any LLM ----------------
 # A phrase that cannot reach an accepted plan with an analysis step counts towards delta_t;
 # mark it with an explicit strict xfail and its reason rather than loosening the rules.
@@ -273,6 +294,10 @@ def test_trigger_phrase_plans_an_analysis_step_without_llm(phrase: str, files: l
     final = validate(candidate, reg)
 
     assert any(get_item(reg, s.uses).kind in ("algorithm", "model") for s in final.steps), final.steps
+    # The plan must use the component the phrase triggers, not just any analysis step.
+    item = get_trigger_index().find_matching_item(phrase)
+    expected = "algorithms/change-detection" if len(files) >= 2 else (item.id if item else None)
+    assert expected in [s.uses for s in final.steps], (phrase, final.steps)
 
 
 # --- I1: the whole job path with every provider down --------------------------

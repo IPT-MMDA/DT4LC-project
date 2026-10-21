@@ -9,6 +9,7 @@ from pydantic import ValidationError
 import rasterio
 
 from dta.dti.coe.llm import LLMMessage, LLMResponse, get_llm_router
+from dta.dti.coe.llm.router import _KEY_PATTERN
 from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, Registry
@@ -180,7 +181,9 @@ def _accept(data: Any, registry_types: list[str]) -> ContextUnderstanding | None
         if not ctx.goal.strip():
             reason = "blank goal"
         elif unknown:
-            reason = f"types not in the registry: {unknown}"
+            # LLM-written strings: redact key-like tokens and cap their length before logging.
+            shown = [_KEY_PATTERN.sub("***", t)[:40] for t in unknown[:5]]
+            reason = f"{len(unknown)} types not in the registry: {shown}"
         elif not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
             reason = "hints.keywords is not a list of strings"
         else:
@@ -224,7 +227,8 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
     """Analyze user request and extract structured context.
 
     Falls back to the deterministic context when every LLM provider fails or
-    the reply is not accepted, so this never raises for LLM reasons.
+    the reply is not accepted, so an outage or a rejected reply does not raise;
+    a broken router configuration still does.
 
     Args:
         req: User chat request
