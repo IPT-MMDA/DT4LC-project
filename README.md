@@ -256,9 +256,9 @@ The system supports multiple LLM providers with automatic fallback:
 
 Anthropic (`ANTHROPIC_API_KEY`) and Mistral (`MISTRAL_API_KEY`) are set up like OpenAI: the key, plus `anthropic` or `mistral` in `LLM_PROVIDER_ORDER`. See `.env.example`.
 
-Providers are tried in `LLM_PROVIDER_ORDER`. The router moves to the next provider when one is not available or its call raises an error. For context extraction it also moves on when the reply fails the context check (for example, no valid JSON of the expected shape, or types that are not in the registry); the other stages do not pass an unusable answer to the next provider. When no provider gives a usable answer, each stage falls back to a deterministic counterpart:
+With the default `fallback` strategy, providers are tried in `LLM_PROVIDER_ORDER`. The router moves to the next provider when one is not available or its call raises an error. For context extraction it also moves on when the reply fails the context check (for example, no valid JSON of the expected shape, or types that are not in the registry); the other stages do not pass an unusable answer to the next provider. When no provider gives a usable answer, each stage falls back to a deterministic counterpart:
 
-- **Intent:** most requests are classified from the registry triggers without an LLM call; if the LLM call fails or returns no valid JSON, the request is treated as a pipeline request.
+- **Intent:** clear requests are classified by pattern matching (registry triggers and fixed question and imperative patterns) without an LLM call; if the LLM call fails or returns no valid JSON, the request is treated as a pipeline request.
 - **Context:** the context is built from the registry triggers and the number of attachments (two or more mean before/after change detection).
 - **Planning:** if the LLM planner fails, returns invalid JSON or names a component that is not in the registry, the template planner is used; if a plan fails validation, the template plan is tried once and used only if it passes and contains an algorithm or model step.
 - **Interpretation:** without an answering provider the job still completes, and its summary says that summarization failed.
