@@ -123,7 +123,10 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
 
             models = _get_models_list("GEMINI_MODELS", DEFAULT_GEMINI_MODEL)
             model = _get_next_model("gemini", models)
-            return {"type": "gemini", "model": model}
+            # The router is built once per process, so a retired/zero-quota draw would fail every
+            # request: GeminiProvider falls back through the rest, in configured order after `model`.
+            i = models.index(model)
+            return {"type": "gemini", "model": model, "fallback_models": models[i + 1 :] + models[:i]}
     elif provider == "groq":
         if os.environ.get("GROQ_API_KEY"):
             model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")

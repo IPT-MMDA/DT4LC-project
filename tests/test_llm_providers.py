@@ -98,7 +98,25 @@ class TestGeminiProvider:
         monkeypatch.delenv("GEMINI_MODELS", raising=False)
         monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini")
         monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
-        assert get_default_config()["providers"] == [{"type": "gemini", "model": DEFAULT_GEMINI_MODEL}]
+        assert get_default_config()["providers"] == [
+            {"type": "gemini", "model": DEFAULT_GEMINI_MODEL, "fallback_models": []}
+        ]
+
+    def test_config_passes_remaining_models_as_fallbacks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The drawn GEMINI_MODELS entry is primary; the rest follow it in configured order, wrapping."""
+        from dta.dti.coe.llm import config
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.setenv("GEMINI_MODELS", "gemini-a,gemini-b,gemini-c")
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini")
+        monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
+        monkeypatch.setitem(config._model_rotation_index, "gemini", 1)
+
+        providers = config.get_default_config()["providers"]
+        assert providers == [{"type": "gemini", "model": "gemini-b", "fallback_models": ["gemini-c", "gemini-a"]}]
+        router = LLMRouter.from_config({"providers": providers})
+        assert router.providers[0].model == "gemini-b"
+        assert router.providers[0].fallback_models == ["gemini-c", "gemini-a"]
 
     def test_generate_request_shape(self) -> None:
         """System text leads the contents; temperature/max_tokens go into GenerateContentConfig."""
@@ -138,15 +156,90 @@ class TestGeminiProvider:
             LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
 
         message = str(exc_info.value)
-        assert "gemini (gemini-2.0-flash-exp): ClientError: Gemini generation failed: 404 NOT_FOUND" in message
+        assert (
+            "gemini (gemini-2.0-flash-exp): ClientError: Gemini generation failed: gemini-2.0-flash-exp: 404 NOT_FOUND"
+            in message
+        )
         assert "None" not in message
+
+    @staticmethod
+    def _api_error(code: int, status: str) -> Exception:
+        from google.genai import errors
+
+        cls = errors.ServerError if code >= 500 else errors.ClientError
+        return cls(code, {"error": {"code": code, "message": f"{status} for this model", "status": status}})
+
+    @pytest.mark.parametrize(
+        ("code", "status"), [(404, "NOT_FOUND"), (429, "RESOURCE_EXHAUSTED"), (503, "UNAVAILABLE")]
+    )
+    def test_falls_back_to_next_configured_model(
+        self, code: int, status: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """404/429/503 on the drawn model → the next GEMINI_MODELS entry answers; a warning names both."""
+        fake_response = MagicMock(text="ok", usage_metadata=None, candidates=[])
+        calls: list[str] = []
+
+        def generate_content(**kw: object) -> object:
+            calls.append(str(kw["model"]))
+            if kw["model"] == "gemini-retired":
+                raise self._api_error(code, status)
+            return fake_response
+
+        provider = GeminiProvider(
+            "gemini-retired", api_key="test-gemini-key", fallback_models=["gemini-ok", "gemini-x"]
+        )
+        provider._client = MagicMock()
+        provider._client.models.generate_content.side_effect = generate_content
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.gemini"):
+            response = provider.generate([LLMMessage(role="user", content="Hi")])
+
+        assert calls == ["gemini-retired", "gemini-ok"]
+        assert response.model == "gemini-ok"
+        assert response.text == "ok"
+        assert "gemini-retired" in caplog.text
+        assert f"{code} {status}" in caplog.text
+
+    def test_other_errors_do_not_fall_back(self) -> None:
+        """A 400 (bad request) is not a model-availability problem: fail at once, no second call."""
+        provider = GeminiProvider("gemini-a", api_key="test-gemini-key", fallback_models=["gemini-b"])
+        provider._client = MagicMock()
+        provider._client.models.generate_content.side_effect = self._api_error(400, "INVALID_ARGUMENT")
+
+        with pytest.raises(Exception, match="Gemini generation failed: gemini-a: 400 INVALID_ARGUMENT"):
+            provider.generate([LLMMessage(role="user", content="Hi")])
+        assert provider._client.models.generate_content.call_count == 1
+
+    def test_all_configured_models_fail_router_lists_each(self) -> None:
+        """Every model fails → the router message carries each model's underlying error."""
+        errors_by_model = {
+            "gemini-2.0-flash": self._api_error(404, "NOT_FOUND"),
+            "gemini-2.5-pro": self._api_error(429, "RESOURCE_EXHAUSTED"),
+        }
+
+        def generate_content(**kw: object) -> object:
+            raise errors_by_model[str(kw["model"])]
+
+        provider = GeminiProvider("gemini-2.0-flash", api_key="test-gemini-key", fallback_models=["gemini-2.5-pro"])
+        provider._client = MagicMock()
+        provider._client.models.generate_content.side_effect = generate_content
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
+
+        message = str(exc_info.value)
+        assert "gemini (gemini-2.0-flash): ClientError: Gemini generation failed: " in message
+        assert "gemini-2.0-flash: 404 NOT_FOUND" in message
+        assert "gemini-2.5-pro: 429 RESOURCE_EXHAUSTED" in message
 
     @pytest.mark.llm
     @pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
     @pytest.mark.parametrize("model", _configured_gemini_models())
     def test_generation_real(self, model: str) -> None:
-        """Live smoke for every model configured in GEMINI_MODELS (requires API key)."""
-        provider = GeminiProvider(model)
+        """Live smoke with each GEMINI_MODELS entry drawn first, the rest as fallbacks, as config.py builds it."""
+        models = _configured_gemini_models()
+        i = models.index(model)
+        provider = GeminiProvider(model, fallback_models=models[i + 1 :] + models[:i])
         messages = [LLMMessage(role="user", content="Say 'test successful' and nothing else")]
 
         try:
