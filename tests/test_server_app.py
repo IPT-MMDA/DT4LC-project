@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
+import dta
 from server.app import app
 from server.utils import apply_colormap, detect_data_type, sse_frame
 
@@ -98,7 +99,13 @@ class TestHealthEndpoint:
         data = resp.json()
         assert data["ok"] is True
         assert data["service"] == "DT4LC"
-        assert data["version"] == "1.0.0"
+        assert data["version"] == dta.__version__
+
+    def test_served_versions_match_package_version(self, client: TestClient) -> None:
+        """Health and OpenAPI report the release version from dta.__version__."""
+        assert dta.__version__ == "0.5.0"
+        assert client.get("/v1/health").json()["version"] == dta.__version__
+        assert client.get("/openapi.json").json()["info"]["version"] == dta.__version__
 
 
 class TestCapabilitiesEndpoint:
