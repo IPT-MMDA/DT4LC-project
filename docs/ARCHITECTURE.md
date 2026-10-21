@@ -336,7 +336,7 @@ LLM_PROVIDER_ORDER=gemini,groq,ollama
 LLM_STRATEGY=fallback
 
 # Model Selection
-GEMINI_MODELS=gemini-2.0-flash-exp
+GEMINI_MODELS=gemini-3.5-flash-lite
 GROQ_MODEL=llama-3.3-70b-versatile
 OLLAMA_MODEL=llama3.2
 ```

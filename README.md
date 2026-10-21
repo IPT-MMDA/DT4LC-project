@@ -12,7 +12,7 @@ It is aimed at remote sensing researchers, environmental scientists and disaster
 - **LLM-Powered Planning** - Natural language interface with automatic pipeline generation
 - **Intent Classification** - Smart routing between pipeline execution and conversational responses
 - **Multi-Turn Conversations** - Follow-up requests using previous context and attachments
-- **Multi-Provider LLM Support** - Gemini, Groq, and local Ollama with automatic fallback
+- **Multi-Provider LLM Support** - Gemini, Groq, OpenAI, Anthropic, Mistral, and local Ollama or Apertus with automatic fallback
 - **Prithvi Model Integration** - NASA/IBM foundation model for geospatial features
 
 ## Architecture
@@ -232,6 +232,9 @@ The system supports multiple LLM providers with automatic fallback:
 | Groq | Ultra-fast (300+ tok/s) | Yes | `GROQ_API_KEY` from [Console](https://console.groq.com/) |
 | Ollama | Local (5-10 tok/s) | N/A | Automatic in Docker |
 | Apertus | Local (GPU) | N/A | Requires GPU (~16GB+ VRAM) |
+| OpenAI | Cloud | No (commercial) | `OPENAI_API_KEY` (or `GPT_SECRET`) from [platform.openai.com](https://platform.openai.com/api-keys), plus `openai` in `LLM_PROVIDER_ORDER` |
+
+Anthropic (`ANTHROPIC_API_KEY`) and Mistral (`MISTRAL_API_KEY`) are set up like OpenAI: the key, plus `anthropic` or `mistral` in `LLM_PROVIDER_ORDER`. See `.env.example`.
 
 #### Basic Setup
 
@@ -247,23 +250,28 @@ GROQ_API_KEY=your_key
 Choose specific models for each provider:
 
 ```bash
-# Gemini: Single model or multiple (rotates for rate limit balancing)
-GEMINI_MODELS=gemini-2.5-flash
-GEMINI_MODELS=gemini-2.0-flash,gemini-2.5-flash  # rotates between models
+# Gemini: one model, or a list. One model from the list is picked when the process
+# starts; if it answers 404, 429 (quota) or 503, the others are tried in order.
+GEMINI_MODELS=gemini-3.5-flash-lite
+GEMINI_MODELS=gemini-3.5-flash-lite,gemini-3.5-flash
 
 # Groq: Single model (already ultra-fast, no rotation needed)
 GROQ_MODEL=llama-3.3-70b-versatile
 
 # Ollama: Local model
 OLLAMA_MODEL=llama3.2
+
+# OpenAI
+OPENAI_MODELS=gpt-4o-mini
 ```
 
 Available models:
 
-- **Gemini**: `gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash-lite`
+- **Gemini**: model IDs that the Gemini API lists for `generateContent`, e.g. `gemini-3.5-flash-lite` (default), `gemini-3.5-flash`, `gemini-3.8-flash`, `gemini-2.5-flash`
 - **Groq**: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`
 - **Ollama**: Any installed model (e.g., `llama3.2`, `mistral`)
 - **Apertus**: `swiss-ai/Apertus-8B`, `swiss-ai/Apertus-70B`
+- **OpenAI**: `gpt-4o-mini` (default) or another chat model. Reasoning models (the o-series, `gpt-5`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.5` and later, `gpt-6` and later) are sent without `temperature`, which they reject.
 
 #### Apertus (Local GPU Model)
 
@@ -272,6 +280,7 @@ Available models:
 ```bash
 # Enable Apertus (disabled by default)
 APERTUS_ENABLED=true
+LLM_ENABLE_APERTUS=true             # .env.example sets it to false
 APERTUS_MODEL=swiss-ai/Apertus-8B  # or swiss-ai/Apertus-70B
 APERTUS_DEVICE=0                    # GPU device index
 APERTUS_DTYPE=bfloat16              # bfloat16, float16, float32
@@ -291,8 +300,10 @@ Control which providers are used and their priority:
 LLM_ENABLE_GEMINI=true
 LLM_ENABLE_GROQ=true
 LLM_ENABLE_OLLAMA=true
+LLM_ENABLE_OPENAI=true
 
 # Set priority order (comma-separated)
+# Available: gemini, groq, ollama, apertus, anthropic, mistral, openai
 LLM_PROVIDER_ORDER=gemini,groq,ollama
 
 # Routing strategy: fallback | cost | availability
@@ -532,6 +543,12 @@ docker compose logs ollama-pull
 curl http://localhost:8000/v1/health
 # Verify backend is running
 ```
+
+**"All LLM providers failed":**
+
+The message lists every provider that was tried and why it failed, e.g.
+`All LLM providers failed: gemini (gemini-3.5-flash-lite): <ErrorType>: <message>; ollama (llama3.2): not available`
+(API-key fragments are redacted). Check the keys in `.env`, `LLM_PROVIDER_ORDER`, and for Ollama that `OLLAMA_MODEL` is pulled.
 
 **LLM responses slow:**
 
