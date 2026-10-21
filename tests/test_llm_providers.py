@@ -407,7 +407,8 @@ class TestOpenAIProvider:
 
         provider = OpenAIProvider()
         assert provider.name == "openai"
-        assert provider.model == DEFAULT_OPENAI_MODEL
+        assert provider.model == DEFAULT_OPENAI_MODEL == "gpt-4o-mini"
+        assert provider._supports_sampling() is True  # the default model receives temperature
         assert provider.supports_images is False
 
     def test_unavailable_without_any_key(self, monkeypatch: pytest.MonkeyPatch) -> None:

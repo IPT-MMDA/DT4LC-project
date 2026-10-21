@@ -20,10 +20,12 @@ import openai
 
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 
-# Default model: a low-cost chat model from GET /v1/models that passes the `-m llm` planner
-# tests (gpt-4.1-nano failed 4 of 17; gpt-5-nano spends its token budget on reasoning).
+# Default model: the cheapest chat model that passes the `-m llm` planner tests (17/17).
+# Published Standard-tier pricing (USD per 1M input/output tokens, checked 2026-10-21):
+# gpt-4o-mini 0.15/0.60. Cheaper ones fail here: gpt-5-nano (0.05/0.40) spends its token
+# budget on reasoning, gpt-4.1-nano (0.10/0.40) failed 4 of 17.
 # Change it here; OPENAI_MODELS overrides it per deployment.
-DEFAULT_OPENAI_MODEL = "gpt-5.4-nano"
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 
 # Models that reject any `temperature` other than the default 1 (400 "Unsupported value:
 # 'temperature' ..."). `chat-latest` is an alias of the newest chat model.
@@ -33,8 +35,8 @@ _RESTRICTED_SAMPLING_MODELS: frozenset[str] = frozenset({"chat-latest"})
 # gpt-5.5 and later, and generation 6+. gpt-4.x and gpt-5.1 to gpt-5.4 accept temperature.
 _RESTRICTED_SAMPLING_PATTERN = re.compile(r"^(?:o\d|gpt-5(?:-|$)|gpt-5\.(?:[5-9]|\d{2,})|gpt-(?:[6-9]|\d{2,}))")
 
-# TODO: no per-model pricing table yet (prices not verified), so estimate_cost() returns the
-# base 0.0 and LLM_STRATEGY=cost ranks OpenAI as free.
+# TODO: no per-model pricing table yet, so estimate_cost() returns the base 0.0 and
+# LLM_STRATEGY=cost ranks OpenAI as free.
 
 
 def _get_api_key(config: dict[str, Any]) -> str | None:
@@ -47,7 +49,7 @@ class OpenAIProvider(BaseLLMProvider):
     """OpenAI Chat Completions provider.
 
     Example:
-        >>> provider = OpenAIProvider("gpt-5.4-nano")
+        >>> provider = OpenAIProvider("gpt-4o-mini")
         >>> messages = [LLMMessage(role="user", content="Hello")]
         >>> response = provider.generate(messages)
         >>> print(response.text)
