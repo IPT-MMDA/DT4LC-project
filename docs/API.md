@@ -30,7 +30,11 @@ Health check endpoint.
 {
   "ok": true,
   "service": "DT4LC",
-  "version": "1.0.0"
+  "version": "0.5.0",
+  "llm_providers": null,
+  "gee": null,
+  "models": null,
+  "disk": null
 }
 ```
 
@@ -40,7 +44,7 @@ Health check endpoint.
 {
   "ok": true,
   "service": "DT4LC",
-  "version": "1.0.0",
+  "version": "0.5.0",
   "llm_providers": [
     { "name": "gemini", "model": "gemini-2.5-flash", "available": true },
     { "name": "groq",   "model": "llama-3.3-70b-versatile", "available": true },
