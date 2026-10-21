@@ -1,3 +1,4 @@
+import functools
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,6 +17,27 @@ except Exception:
     ROOT = Path(__file__).resolve().parents[1]
 
 load_dotenv(ROOT / ".env")
+
+
+@functools.cache
+def _no_llm_provider_reason() -> str | None:
+    """Return a skip reason if the router has no available provider, else None."""
+    from dta.dti.coe.llm.config import create_router_from_env
+
+    router = create_router_from_env()
+    if router.get_available_providers():
+        return None
+    checked = ", ".join(p.name for p in router.providers) or "none"
+    return (
+        f"no LLM provider available (checked: {checked}); set an API key such as "
+        "GEMINI_API_KEY or GROQ_API_KEY, or run Ollama with OLLAMA_MODEL pulled"
+    )
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip ``llm``-marked tests, instead of failing them, when no provider is configured."""
+    if item.get_closest_marker("llm") and (reason := _no_llm_provider_reason()):
+        pytest.skip(reason)
 
 
 # --- Synthetic raster fixtures for demo-flow smoke tests ---------------------
