@@ -16,14 +16,14 @@ from collections.abc import Iterator
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from dta.config import ROOT_DIR
 from dta.dti.coe import context_agent
 from dta.dti.coe.context_agent import analyze
-from dta.dti.coe.llm import LLMResponse, get_llm_router, reset_llm_router
+from dta.dti.coe.llm import BaseLLMProvider, LLMResponse, LLMRouter, get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate
 from dta.dti.coe.plan_validator import validate
@@ -196,6 +196,57 @@ def test_extra_keys_are_accepted_and_ignored(caplog: pytest.LogCaptureFixture) -
 def test_accept_rejects_a_json_array() -> None:
     assert context_agent._accept([_VALID], load_registry().types) is None
     assert context_agent._accept(_VALID, load_registry().types) == _ctx_from(_VALID)
+
+
+# --- U3: escalation to the next provider on a rejected reply ------------------
+
+
+def _provider(name: str, reply: str | None = None, error: Exception | None = None) -> MagicMock:
+    provider = MagicMock(spec=BaseLLMProvider, model=f"{name}-model", supports_images=False)
+    provider.name = name
+    provider.is_available.return_value = True
+    if error is not None:
+        provider.generate.side_effect = error
+    else:
+        provider.generate.return_value = LLMResponse(text=reply or "", model=f"{name}-model", provider=name)
+    return provider
+
+
+_P2_REPLY = {**_VALID, "goal": "NDVI map of the upload"}
+_INVALID_REPLY = json.dumps({**_VALID, "desired_outputs": ["PrettyMap"]})
+
+
+def _analyze_with(providers: list[MagicMock]) -> ContextUnderstanding:
+    req = ChatRequest(prompt="calculate NDVI", attachments=[])
+    with patch("dta.dti.coe.context_agent.get_llm_router", return_value=LLMRouter(providers)):
+        return analyze(req, load_registry().types)
+
+
+def test_rejected_reply_escalates_to_next_provider() -> None:
+    p1 = _provider("p1", _INVALID_REPLY)
+    p2 = _provider("p2", json.dumps(_P2_REPLY))
+
+    assert _analyze_with([p1, p2]) == _ctx_from(_P2_REPLY)
+    assert p1.generate.called and p2.generate.called
+
+
+def test_all_replies_rejected_returns_deterministic_context(caplog: pytest.LogCaptureFixture) -> None:
+    p1 = _provider("p1", _INVALID_REPLY)
+    p2 = _provider("p2", "no json here")
+
+    with caplog.at_level("WARNING", logger="dta.dti.coe.context_agent"):
+        ctx = _analyze_with([p1, p2])
+
+    assert ctx == context_agent._deterministic_context(ChatRequest(prompt="calculate NDVI", attachments=[]))
+    assert "p1 (p1-model): reply rejected by validator" in caplog.text
+    assert "p2 (p2-model): reply rejected by validator" in caplog.text
+
+
+def test_provider_error_still_falls_through_to_next_provider() -> None:
+    p1 = _provider("p1", error=Exception("quota exceeded"))
+    p2 = _provider("p2", json.dumps(_P2_REPLY))
+
+    assert _analyze_with([p1, p2]) == _ctx_from(_P2_REPLY)
 
 
 # --- P1: delta_t, every trigger phrase planned without any LLM ----------------

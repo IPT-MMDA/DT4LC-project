@@ -804,6 +804,39 @@ class TestLLMRouter:
             for fragment in ("WXYZ", "sk-proj", "FAKEKEY", "gsk_", "AIza"):
                 assert fragment not in text, fragment
 
+    def test_rejected_reply_escalates_and_is_reported(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A reply refused by `accept` counts as a failure; `accept` is not forwarded to providers."""
+        providers = []
+        for name, text in (("first", "bad"), ("second", "good")):
+            provider = MagicMock(spec=BaseLLMProvider, model=f"{name}-model")
+            provider.name = name
+            provider.is_available.return_value = True
+            provider.generate.return_value = LLMResponse(text=text, model=f"{name}-model", provider=name)
+            providers.append(provider)
+        router = LLMRouter(providers)
+        messages = [LLMMessage(role="user", content="Hi")]
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.router"):
+            assert router.generate(messages, accept=lambda r: r.text == "good").provider == "second"
+        assert "first (first-model): reply rejected by validator" in caplog.text
+        assert all("accept" not in p.generate.call_args.kwargs for p in providers)
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            router.generate(messages, accept=lambda r: False)
+        assert str(exc_info.value) == (
+            "All LLM providers failed: first (first-model): reply rejected by validator; "
+            "second (second-model): reply rejected by validator"
+        )
+
+    def test_without_accept_first_reply_is_returned(self) -> None:
+        """Default accept=None keeps the old behaviour: the first successful reply wins, whatever it says."""
+        provider = MagicMock(spec=BaseLLMProvider, model="m1")
+        provider.name = "only"
+        provider.is_available.return_value = True
+        provider.generate.return_value = LLMResponse(text="not json", model="m1", provider="only")
+
+        assert LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")]).text == "not json"
+
 
 class TestLLMConfig:
     """Tests for LLM configuration."""

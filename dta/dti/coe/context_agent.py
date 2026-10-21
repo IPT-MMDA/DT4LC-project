@@ -1,12 +1,14 @@
 import io
+import json
 import logging
+import re
 from typing import Any
 
 import numpy as np
 from pydantic import ValidationError
 import rasterio
 
-from dta.dti.coe.llm import LLMMessage, get_llm_router
+from dta.dti.coe.llm import LLMMessage, LLMResponse, get_llm_router
 from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, Registry
@@ -148,6 +150,19 @@ def _image_part(att: Attachment) -> str | None:
         return None
 
 
+def _parse(text: str) -> Any:
+    """Parse the first {...} span of a reply as JSON; log the reason and return None if impossible."""
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        logger.warning("Context agent reply contains no JSON object")
+        return None
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        logger.warning(f"Context agent returned malformed JSON ({e})")
+        return None
+
+
 def _accept(data: Any, registry_types: list[str]) -> ContextUnderstanding | None:
     """Structural check on a parsed context reply.
 
@@ -240,27 +255,20 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
         LLMMessage(role="user", content=user_msg, images=image_b64_list or None),
     ]
 
+    # A rejected reply makes the router try the next provider.
+    def accept(response: LLMResponse) -> bool:
+        data = _parse(response.text)
+        return data is not None and _accept(data, registry_types) is not None
+
     # Generate with router (will try Gemini, fallback to Ollama)
     try:
-        response = router.generate(messages, temperature=0.3)  # Lower temp for structured output
+        response = router.generate(messages, temperature=0.3, accept=accept)  # Lower temp for structured output
     except Exception as e:
         logger.warning(f"Context agent LLM call failed ({e}); using deterministic context")
         return _deterministic_context(req)
 
-    # Parse JSON from response
-    import json
-    import re
-
-    m = re.search(r"\{.*\}", response.text, re.S)
-    if not m:
-        logger.warning("Context agent reply contains no JSON object; using deterministic context")
-        return _deterministic_context(req)
-    try:
-        data = json.loads(m.group(0))
-    except json.JSONDecodeError as e:
-        logger.warning(f"Context agent returned malformed JSON ({e}); using deterministic context")
-        return _deterministic_context(req)
-    ctx = _accept(data, registry_types)
+    data = _parse(response.text)
+    ctx = _accept(data, registry_types) if data is not None else None
     if ctx is None:
         logger.warning("Context agent reply failed validation; using deterministic context")
         return _deterministic_context(req)

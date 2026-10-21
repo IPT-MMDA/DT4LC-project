@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
 import re
 from typing import Any
@@ -63,6 +64,8 @@ class LLMRouter:
         messages: list[LLMMessage],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        *,
+        accept: Callable[[LLMResponse], bool] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         """Generate response using best available provider.
@@ -71,6 +74,8 @@ class LLMRouter:
             messages: Conversation messages
             temperature: Sampling temperature
             max_tokens: Max output tokens
+            accept: Optional reply validator; a reply it rejects counts as a
+                provider failure and the next provider is tried
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -104,6 +109,11 @@ class LLMRouter:
             try:
                 logger.info(f"Attempting generation with {provider.name} ({provider.model})")
                 response = provider.generate(messages, temperature, max_tokens, **kwargs)
+                if accept is not None and not accept(response):
+                    failure = f"{provider.name} ({provider.model}): reply rejected by validator"
+                    logger.warning(f"Provider {failure}")
+                    failures.append(failure)
+                    continue
                 logger.info(f"Success with {provider.name}")
                 return response
 
