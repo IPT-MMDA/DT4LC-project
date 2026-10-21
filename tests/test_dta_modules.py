@@ -191,7 +191,7 @@ class TestPlanner:
             hints={"keywords": ["field", "boundaries"]},
         )
 
-        result = plan(ctx, reg)
+        result = plan(ctx, reg, use_llm=False)  # low template confidence would call the live LLM
         steps = [s.uses for s in result.steps]
         assert "input/file" in steps
 

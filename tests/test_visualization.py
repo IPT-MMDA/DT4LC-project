@@ -8,6 +8,7 @@ import base64
 import numpy as np
 import pytest
 
+from dta.dti.coe.llm import LLMRouter
 from dta.dti.post_processing import InsightGenerator, Visualizer, format_statistics
 
 
@@ -234,7 +235,7 @@ class TestInsightGenerator:
 
     def test_ndvi_insights_fallback(self) -> None:
         """Test NDVI insights with fallback when LLM unavailable."""
-        gen = InsightGenerator(llm_router=None)
+        gen = InsightGenerator(llm_router=LLMRouter([]))  # no providers; never the live router
 
         ndvi_data = {
             "statistics": {
@@ -253,7 +254,7 @@ class TestInsightGenerator:
 
     def test_change_insights_fallback(self) -> None:
         """Test change insights with fallback when LLM unavailable."""
-        gen = InsightGenerator(llm_router=None)
+        gen = InsightGenerator(llm_router=LLMRouter([]))  # no providers; never the live router
 
         change_data = {
             "statistics": {
