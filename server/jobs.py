@@ -734,8 +734,10 @@ class JobQueue:
                 functools.partial(self._run_blocking_job, job, job_id, worker_id),
             )
 
-            # Mark completed
+            # Mark completed, unless cancel_job ran while the last step was executing
             async with self._lock:
+                if job.status == JobStatus.CANCELLED:
+                    raise CancellationError("Job cancelled during its last step")
                 job.result = result
                 job.status = JobStatus.COMPLETED
                 job.progress = 1.0
@@ -764,11 +766,12 @@ class JobQueue:
             logger.warning(f"Job {job_id} requires model '{e.model_id}' which is not installed")
 
         except Exception as e:
-            # Mark failed
+            # Mark failed, unless the job was cancelled while its step was running
             async with self._lock:
-                job.status = JobStatus.FAILED
-                job.error = str(e)
-                job.completed_at = datetime.now()
+                if job.status != JobStatus.CANCELLED:
+                    job.status = JobStatus.FAILED
+                    job.error = str(e)
+                    job.completed_at = datetime.now()
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 

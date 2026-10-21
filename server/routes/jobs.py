@@ -67,7 +67,12 @@ async def get_job_status(job_id: str) -> JSONResponse:
 
 @router.post("/jobs/{job_id}/cancel")  # type: ignore[misc]
 async def cancel_job(job_id: str) -> JSONResponse:
-    """Cancel a running or pending job."""
+    """Cancel a running or pending job.
+
+    The status becomes ``cancelled`` immediately, but a running job stops only at the
+    next step boundary: the step in progress (e.g. a subprocess) runs to completion,
+    then the remaining steps are skipped and the job stays ``cancelled``.
+    """
     try:
         queue = get_job_queue()
         cancelled = await queue.cancel_job(job_id)

@@ -4,10 +4,15 @@ Tests job submission, processing, cancellation, and queue management.
 """
 
 import asyncio
+from pathlib import Path
+import threading
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from server.jobs import Job, JobQueue, JobStatus
+from dta.dti.executor import PipelineExecutor
+from dta.dti.schemas import PlanStep
+from server.jobs import Job, JobQueue, JobStatus, SQLiteJobStore
 
 
 class TestJobQueueInitialization:
@@ -257,3 +262,73 @@ class TestJobSerialization:
         assert data["prompt"] == "test prompt"
         assert data["progress"] == 1.0
         assert "created_at" in data
+
+
+class TestCancelRunningJob:
+    """Cancelling a running multi-step job (#67 bug 1)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("cancel_during_step", "step_fails"),
+        [(1, False), (3, False), (3, True)],
+        ids=["first-step", "last-step", "last-step-fails"],
+    )
+    async def test_cancel_during_step_stays_cancelled(
+        self, tmp_path: Path, cancel_during_step: int, step_fails: bool
+    ) -> None:
+        """Cancel while a step runs: status stays cancelled, remaining steps are skipped."""
+        step_running = threading.Event()
+        release_step = threading.Event()
+        executed: list[str] = []
+
+        def slow_step(_self: PipelineExecutor, step: PlanStep, _item: object) -> None:
+            executed.append(step.uses)
+            if len(executed) == cancel_during_step:
+                step_running.set()
+                assert release_step.wait(timeout=10)
+                if step_fails:
+                    raise RuntimeError("step failed after cancel")
+
+        plan_result = {
+            "ok": True,
+            "intent": "pipeline",
+            "plan": {"flow": "test", "steps": [{"uses": f"algorithms/step{i}"} for i in range(1, 4)]},
+        }
+        process_done = asyncio.Event()
+        original_process = JobQueue._process_job
+
+        async def tracked_process(self: JobQueue, job_id: str, worker_id: int) -> None:
+            await original_process(self, job_id, worker_id)
+            process_done.set()
+
+        store = SQLiteJobStore(tmp_path / "jobs.db")
+        queue = JobQueue(max_workers=1, store=store)
+        with (
+            patch("server.jobs.orchestrate", return_value=plan_result),
+            patch("dta.dti.executor.get_item", return_value=MagicMock()),
+            patch.object(PipelineExecutor, "_execute_step", slow_step),
+            patch.object(JobQueue, "_process_job", tracked_process),
+        ):
+            await queue.start()
+            try:
+                job_id = await queue.submit_job("multi-step job")
+                assert await asyncio.to_thread(step_running.wait, 10)
+
+                assert await queue.cancel_job(job_id)
+                job = await queue.get_job(job_id)
+                assert job is not None
+                assert job.status == JobStatus.CANCELLED
+
+                release_step.set()
+                await asyncio.wait_for(process_done.wait(), timeout=10)
+
+                job = await queue.get_job(job_id)
+                assert job is not None
+                assert job.status == JobStatus.CANCELLED
+                assert len(executed) == cancel_during_step
+                row = store.get(job_id)
+                assert row is not None
+                assert row.status == JobStatus.CANCELLED
+            finally:
+                release_step.set()
+                await queue.stop()
