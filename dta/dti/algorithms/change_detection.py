@@ -162,6 +162,18 @@ def _calculate_index_array(
         Index array with values in appropriate range
     """
     bands = _get_band_indices(src)
+    # src.read(None) would read every band; fail clearly instead.
+    required = {
+        "ndvi": ("red", "nir"),
+        "ndsi": ("green", "swir"),
+        "ndwi": ("green", "nir"),
+        "evi": ("blue", "red", "nir"),
+    }
+    missing = [role for role in required.get(index_type, ()) if bands[role] is None]
+    if missing:
+        raise ValueError(
+            f"{index_type.upper()} requires band(s) {missing}, but the raster ({src.count} bands) doesn't expose them."
+        )
 
     if index_type == "ndvi":
         if src.count < 2:

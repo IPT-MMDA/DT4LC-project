@@ -131,7 +131,22 @@ _LANDSAT_CODES = {"blue": "2", "green": "3", "red": "4", "nir": "5", "swir": "6"
 _BAND_CODE = re.compile(r"^b0*(\d+a?)$")
 
 
-def _roles_from_descriptions(descriptions: Any) -> dict[str, int | None] | None:
+def _roles_from_count(n: int) -> dict[str, int | None]:
+    """Guess band roles from the band count alone (see :func:`band_indices`)."""
+    if n >= 7:
+        # Landsat 8/9: B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1
+        return {"red": 4, "nir": 5, "green": 3, "blue": 2, "swir": 6}
+    if n >= 5:
+        # Sentinel-2 subset / generic: B, G, R, NIR, SWIR (+ optional SWIR2)
+        return {"red": 3, "nir": 4, "green": 2, "blue": 1, "swir": 5}
+    if n == 4:
+        # RGBN format: R, G, B, NIR
+        return {"red": 1, "nir": 4, "green": 2, "blue": 3, "swir": None}
+    # 2-3 bands: minimal — assume red and NIR are present.
+    return {"red": 1, "nir": 2, "green": None, "blue": None, "swir": None}
+
+
+def _roles_from_descriptions(descriptions: Any, count: int) -> dict[str, int | None] | None:
     """Resolve band roles from band descriptions, or ``None`` if they don't identify any."""
     names = [(d or "").strip().lower() for d in (descriptions or ())]
 
@@ -140,6 +155,21 @@ def _roles_from_descriptions(descriptions: Any) -> dict[str, int | None] | None:
         if name in _SEMANTIC_ROLES:
             semantic.setdefault(_SEMANTIC_ROLES[name], i)
     if semantic:
+        # Roles not named: take the count heuristic's band, unless another role names it.
+        guessed = {
+            role: idx
+            for role, idx in _roles_from_count(count).items()
+            if role not in semantic and idx is not None and idx not in semantic.values()
+        }
+        if guessed:
+            logger.warning(
+                "Band descriptions %r name only %s; guessing %s from the band count (%d)",
+                descriptions,
+                sorted(semantic),
+                guessed,
+                count,
+            )
+        semantic.update(guessed)
         return {role: semantic.get(role) for role in ("red", "nir", "green", "blue", "swir")}
 
     codes = {m.group(1): i for i, n in enumerate(names, start=1) if (m := _BAND_CODE.match(n))}
@@ -167,7 +197,8 @@ def band_indices(src: Any) -> dict[str, int | None]:
 
     * Semantic names, case-insensitive: ``blue`` / ``B``, ``green`` / ``G``,
       ``red`` / ``R``, ``nir`` / ``nir08``, ``swir`` / ``swir1`` / ``swir16``
-      (SWIR1). Roles not named are ``None``.
+      (SWIR1). Roles not named take the count heuristic's band below,
+      with a warning, unless that band is named as another role; else ``None``.
     * ``Bn`` band codes, resolved by sensor family. If ``B8`` or ``B8A`` is
       present: Sentinel-2 (B2 blue, B3 green, B4 red, B8 NIR (B8A if B8 is
       absent), B11 SWIR1). Else, if all codes are within B1-B7: Landsat 8/9 /
@@ -189,7 +220,7 @@ def band_indices(src: Any) -> dict[str, int | None]:
         Dict with keys ``red``, ``nir``, ``green``, ``blue``, ``swir`` and
         1-based band-index values (or ``None`` if absent).
     """
-    roles = _roles_from_descriptions(getattr(src, "descriptions", None))
+    roles = _roles_from_descriptions(getattr(src, "descriptions", None), src.count)
     if roles is not None:
         return roles
 
@@ -199,17 +230,7 @@ def band_indices(src: Any) -> dict[str, int | None]:
         getattr(src, "descriptions", None),
         n,
     )
-    if n >= 7:
-        # Landsat 8/9: B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1
-        return {"red": 4, "nir": 5, "green": 3, "blue": 2, "swir": 6}
-    if n >= 5:
-        # Sentinel-2 subset / generic: B, G, R, NIR, SWIR (+ optional SWIR2)
-        return {"red": 3, "nir": 4, "green": 2, "blue": 1, "swir": 5}
-    if n == 4:
-        # RGBN format: R, G, B, NIR
-        return {"red": 1, "nir": 4, "green": 2, "blue": 3, "swir": None}
-    # 2-3 bands: minimal — assume red and NIR are present.
-    return {"red": 1, "nir": 2, "green": None, "blue": None, "swir": None}
+    return _roles_from_count(n)
 
 
 def validate_geotiff(raster_path: str | Path) -> tuple[bool, str]:

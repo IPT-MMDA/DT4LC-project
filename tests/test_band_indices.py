@@ -9,7 +9,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from dta.config import ROOT_DIR
-from dta.dti.algorithms import ndvi
+from dta.dti.algorithms import change_detection, ndvi
 from dta.dti.raster import band_indices
 
 # Constant reflectance by role, from the JOSS review.
@@ -56,6 +56,31 @@ def test_without_descriptions_uses_count_heuristic_and_warns(tmp_path: Path, cap
 
     assert roles == {"red": 1, "nir": 4, "green": 2, "blue": 3, "swir": None}
     assert any("band count" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+
+
+@pytest.mark.parametrize("descriptions", [("Red", "Green", "Blue", ""), ("red", "", "", "nir")])
+def test_partial_semantic_names_fill_rest_from_band_count(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, descriptions: tuple[str, ...]
+) -> None:
+    path = _write(tmp_path / "rgbn.tif", ["red", "green", "blue", "nir"], descriptions)
+
+    with caplog.at_level(logging.WARNING, logger="dta.dti.raster"):
+        roles = _roles(path)
+
+    assert roles == {"red": 1, "nir": 4, "green": 2, "blue": 3, "swir": None}
+    assert any("band count" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+    assert round(ndvi.run(path)["statistics"]["mean"], 6) == 0.777778
+    for index_type in ("ndvi", "ndwi", "evi"):
+        assert np.asarray(change_detection.run(path, path, index_type)["index_before"]).shape == (8, 8)
+
+
+def test_change_detection_rejects_missing_band_role(tmp_path: Path) -> None:
+    # Named B, G, R: the count heuristic's NIR (band 2) is already green, so NIR stays None.
+    path = _write(tmp_path / "bgr.tif", ["blue", "green", "red"], ("blue", "green", "red"))
+
+    assert _roles(path)["nir"] is None
+    with pytest.raises(ValueError, match="nir"):
+        change_detection.run(path, path, "ndvi")
 
 
 def test_sentinel2_codes(tmp_path: Path) -> None:
