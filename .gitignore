@@ -43,6 +43,7 @@ resources/kahovka_data_full/
 cognitive_ui/node_modules/
 cognitive_ui/dist/
 cognitive_ui/.vite/
+*.tsbuildinfo
 *.log
 npm-debug.log*
 docs/features/
