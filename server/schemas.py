@@ -209,7 +209,8 @@ class UploadResponse(BaseModel):  # type: ignore[misc]
     size: list[int] = Field(description="Raster width and height in pixels")
     crs: str | None = None
     bounds: list[float] = Field(description="Bounding box [left, bottom, right, top]")
-    preview_png_base64: str = Field(description="Grayscale PNG preview as base64")
+    preview_png_base64: str = Field(description="Grayscale PNG preview as base64 (do not persist)")
+    preview_url: str = Field(description="Download URL of the PNG preview written next to the upload")
 
 
 class FileInfo(BaseModel):  # type: ignore[misc]

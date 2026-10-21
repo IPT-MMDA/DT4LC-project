@@ -59,10 +59,12 @@ class TestUploadContract:
         body = r.json()
         # Keys the frontend Attachment interface reads (some optional in TS,
         # but required at the API boundary for the chat-with-attachment flow).
-        for key in ("id", "filename", "path", "preview_png_base64"):
+        for key in ("id", "filename", "path", "preview_png_base64", "preview_url"):
             assert key in body, f"frontend reads .{key} from /v1/upload"
         # The path must point at a real file the executor can later read.
         assert Path(body["path"]).exists()
+        # The preview is a PNG file next to the upload, served by /v1/download (#65).
+        assert client.get(body["preview_url"]).status_code == 200
 
 
 class TestJobSubmitContract:

@@ -293,3 +293,19 @@ def test_ndvi_job_record_list_and_row_are_small(
         assert src.dtypes[0] == "float32" and np.isnan(src.nodata)
     png = client.get(png_ref["url"])
     assert png.status_code == 200 and png.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_upload_returns_preview_url(api: tuple[TestClient, Path], synthetic_raster_path: str) -> None:
+    client, _ = api
+    with open(synthetic_raster_path, "rb") as f:
+        body = client.post("/v1/upload", files={"file": ("synthetic.tif", f, "image/tiff")}).json()
+
+    preview_path = Path(body["path"]).with_suffix(".png")
+    try:
+        assert body["preview_png_base64"]
+        preview = client.get(body["preview_url"])
+        assert preview.status_code == 200 and preview.content[:8] == b"\x89PNG\r\n\x1a\n"
+        assert preview_path.exists()
+    finally:
+        Path(body["path"]).unlink(missing_ok=True)
+        preview_path.unlink(missing_ok=True)
