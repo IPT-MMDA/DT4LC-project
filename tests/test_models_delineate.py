@@ -32,6 +32,7 @@ def _check_delineate_dependencies() -> tuple[bool, str]:
         "geopandas": "geopandas",
         "shapely": "shapely",
         "cv2": "opencv-python",
+        "osgeo": "gdal",
     }
     for module, package in deps.items():
         try:
