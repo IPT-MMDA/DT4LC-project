@@ -90,9 +90,35 @@ def test_sentinel2_codes(tmp_path: Path) -> None:
     assert _roles(path) == {"red": 3, "nir": 5, "green": 2, "blue": 1, "swir": 6}
 
 
-def test_hls_l30_codes_of_kahovka_crop() -> None:
-    with rasterio.open(ROOT_DIR / "resources/kahovka_data/hlsl_20230601.tif") as src:
-        assert src.descriptions == ("B2", "B3", "B4", "B5", "B6")
-        roles = band_indices(src)
+def test_sentinel2_b8a_when_b8_absent(tmp_path: Path) -> None:
+    descriptions = ("B8A", "B4", "B3", "B2", "B11", "B12")
+    path = _write(tmp_path / "s2.tif", ["nir", "red", "green", "blue", "swir", "other"], descriptions)
+
+    assert _roles(path) == {"red": 2, "nir": 1, "green": 3, "blue": 4, "swir": 5}
+
+
+def test_unknown_codes_fall_back_to_band_count(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    path = _write(tmp_path / "mixed.tif", ["red", "green", "blue", "nir"], ("B2", "B3", "B4", "B11"))
+
+    with caplog.at_level(logging.WARNING, logger="dta.dti.raster"):
+        roles = _roles(path)
+
+    assert roles == {"red": 1, "nir": 4, "green": 2, "blue": 3, "swir": None}
+    assert any("band count" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+
+
+def test_hls_l30_codes_reordered(tmp_path: Path) -> None:
+    # Same codes as the Kahovka crop, in an order the 5-band count heuristic would misread.
+    path = _write(tmp_path / "l30.tif", ["nir", "red", "green", "blue", "swir"], ("B5", "B4", "B3", "B2", "B6"))
+
+    assert _roles(path) == {"red": 2, "nir": 1, "green": 3, "blue": 4, "swir": 5}
+
+
+def test_hls_l30_codes_of_kahovka_crop(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.WARNING, logger="dta.dti.raster"):
+        with rasterio.open(ROOT_DIR / "resources/kahovka_data/hlsl_20230601.tif") as src:
+            assert src.descriptions == ("B2", "B3", "B4", "B5", "B6")
+            roles = band_indices(src)
 
     assert roles == {"blue": 1, "green": 2, "red": 3, "nir": 4, "swir": 5}
+    assert not any("band count" in r.getMessage() for r in caplog.records)
