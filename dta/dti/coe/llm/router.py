@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
+
+# API-key-like tokens (OpenAI/Anthropic `sk-`, Groq `gsk_`, Google `AIza`), including the masked
+# form OpenAI echoes in its 401 text (`sk-proj-****WXYZ`); stripped before logging or raising.
+_KEY_PATTERN = re.compile(r"\b(?:sk|gsk)[-_][\w*-]{4,}|\bAIza[\w-]{8,}")
 
 
 class LLMRouter:
@@ -88,10 +93,12 @@ class LLMRouter:
             raise Exception("No available LLM providers")
 
         # Try each provider in order
-        last_error = None
+        last_error: Exception | None = None
+        failures: list[str] = []
         for provider in providers:
             if not provider.is_available():
                 logger.debug(f"Provider {provider.name} not available, skipping")
+                failures.append(f"{provider.name} ({provider.model}): not available")
                 continue
 
             try:
@@ -101,12 +108,17 @@ class LLMRouter:
                 return response
 
             except Exception as e:
-                logger.warning(f"Provider {provider.name} failed: {e}")
+                # Providers wrap SDK errors (`raise Exception(...) from e`); name the underlying type.
+                root = e.__cause__ or e
+                detail = _KEY_PATTERN.sub("***", str(e))
+                failure = f"{provider.name} ({provider.model}): {type(root).__name__}: {detail}"
+                logger.warning(f"Provider {failure}")
+                failures.append(failure)
                 last_error = e
                 continue
 
-        # All providers failed
-        raise Exception(f"All LLM providers failed. Last error: {last_error}")
+        # All providers failed: report every provider's real reason, not "Last error: None".
+        raise Exception(f"All LLM providers failed: {'; '.join(failures)}") from last_error
 
     def add_provider(self, provider: BaseLLMProvider, priority: int | None = None) -> None:
         """Add a provider to the router.
@@ -173,6 +185,7 @@ class LLMRouter:
         from .groq import GroqProvider
         from .mistral import MistralProvider
         from .ollama import OllamaProvider
+        from .openai import OpenAIProvider
 
         provider_map: dict[str, type[BaseLLMProvider]] = {
             "gemini": GeminiProvider,
@@ -181,6 +194,7 @@ class LLMRouter:
             "apertus": ApertusProvider,
             "anthropic": AnthropicProvider,
             "mistral": MistralProvider,
+            "openai": OpenAIProvider,
         }
 
         providers = []

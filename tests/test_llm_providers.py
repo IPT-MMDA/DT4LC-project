@@ -1,5 +1,6 @@
 """Tests for LLM providers using mocks."""
 
+import importlib.util
 import os
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,14 @@ from dta.dti.coe.llm.base import BaseLLMProvider
 from dta.dti.coe.llm.gemini import GeminiProvider
 from dta.dti.coe.llm.groq import GroqProvider
 from dta.dti.coe.llm.ollama import OllamaProvider
+
+
+def _configured_gemini_models() -> list[str]:
+    """Models the app would use: GEMINI_MODELS (loaded from .env by conftest) or the code default."""
+    from dta.dti.coe.llm.config import _get_models_list
+    from dta.dti.coe.llm.gemini import DEFAULT_GEMINI_MODEL
+
+    return _get_models_list("GEMINI_MODELS", DEFAULT_GEMINI_MODEL)
 
 
 class TestLLMDataClasses:
@@ -77,11 +86,160 @@ class TestGeminiProvider:
         assert cost > 0
         assert cost < 0.01
 
+    def test_default_model_is_current(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Code default and env-config default are the same current model, not retired 2.0."""
+        from dta.dti.coe.llm.config import get_default_config
+        from dta.dti.coe.llm.gemini import DEFAULT_GEMINI_MODEL
+
+        assert GeminiProvider().model == DEFAULT_GEMINI_MODEL
+        assert not DEFAULT_GEMINI_MODEL.startswith("gemini-2.0")
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.delenv("GEMINI_MODELS", raising=False)
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini")
+        monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
+        assert get_default_config()["providers"] == [
+            {"type": "gemini", "model": DEFAULT_GEMINI_MODEL, "fallback_models": []}
+        ]
+
+    def test_config_passes_remaining_models_as_fallbacks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The drawn GEMINI_MODELS entry is primary; the rest follow it in configured order, wrapping."""
+        from dta.dti.coe.llm import config
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.setenv("GEMINI_MODELS", "gemini-a,gemini-b,gemini-c")
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini")
+        monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
+        monkeypatch.setitem(config._model_rotation_index, "gemini", 1)
+
+        providers = config.get_default_config()["providers"]
+        assert providers == [{"type": "gemini", "model": "gemini-b", "fallback_models": ["gemini-c", "gemini-a"]}]
+        router = LLMRouter.from_config({"providers": providers})
+        assert router.providers[0].model == "gemini-b"
+        assert router.providers[0].fallback_models == ["gemini-c", "gemini-a"]
+
+    def test_generate_request_shape(self) -> None:
+        """System text leads the contents; temperature/max_tokens go into GenerateContentConfig."""
+        provider = GeminiProvider("gemini-3.8-flash", api_key="test-gemini-key")
+        captured: dict[str, object] = {}
+        fake_response = MagicMock(text="ok", usage_metadata=None, candidates=[])
+        fake_client = MagicMock()
+        fake_client.models.generate_content.side_effect = lambda **kw: captured.update(kw) or fake_response
+        provider._client = fake_client
+
+        messages = [
+            LLMMessage(role="system", content="You are a planner."),
+            LLMMessage(role="user", content="Plan."),
+        ]
+        response = provider.generate(messages, temperature=0.2, max_tokens=50)
+
+        assert captured["model"] == "gemini-3.8-flash"
+        assert captured["contents"] == ["You are a planner.", "Plan."]
+        config = captured["config"]
+        assert config.temperature == 0.2
+        assert config.max_output_tokens == 50
+        assert response.text == "ok"
+        assert response.provider == "gemini"
+
+    def test_sdk_error_reaches_router_message(self) -> None:
+        """A retired model's 404 surfaces with its SDK type and text, not 'Last error: None'."""
+        from google.genai import errors
+
+        provider = GeminiProvider("gemini-2.0-flash-exp", api_key="test-gemini-key")
+        fake_client = MagicMock()
+        fake_client.models.generate_content.side_effect = errors.ClientError(
+            404, {"error": {"code": 404, "message": "models/gemini-2.0-flash-exp is not found", "status": "NOT_FOUND"}}
+        )
+        provider._client = fake_client
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
+
+        message = str(exc_info.value)
+        assert (
+            "gemini (gemini-2.0-flash-exp): ClientError: Gemini generation failed: gemini-2.0-flash-exp: 404 NOT_FOUND"
+            in message
+        )
+        assert "None" not in message
+
+    @staticmethod
+    def _api_error(code: int, status: str) -> Exception:
+        from google.genai import errors
+
+        cls = errors.ServerError if code >= 500 else errors.ClientError
+        return cls(code, {"error": {"code": code, "message": f"{status} for this model", "status": status}})
+
+    @pytest.mark.parametrize(
+        ("code", "status"), [(404, "NOT_FOUND"), (429, "RESOURCE_EXHAUSTED"), (503, "UNAVAILABLE")]
+    )
+    def test_falls_back_to_next_configured_model(
+        self, code: int, status: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """404/429/503 on the drawn model → the next GEMINI_MODELS entry answers; a warning names both."""
+        fake_response = MagicMock(text="ok", usage_metadata=None, candidates=[])
+        calls: list[str] = []
+
+        def generate_content(**kw: object) -> object:
+            calls.append(str(kw["model"]))
+            if kw["model"] == "gemini-retired":
+                raise self._api_error(code, status)
+            return fake_response
+
+        provider = GeminiProvider(
+            "gemini-retired", api_key="test-gemini-key", fallback_models=["gemini-ok", "gemini-x"]
+        )
+        provider._client = MagicMock()
+        provider._client.models.generate_content.side_effect = generate_content
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.gemini"):
+            response = provider.generate([LLMMessage(role="user", content="Hi")])
+
+        assert calls == ["gemini-retired", "gemini-ok"]
+        assert response.model == "gemini-ok"
+        assert response.text == "ok"
+        assert "gemini-retired" in caplog.text
+        assert f"{code} {status}" in caplog.text
+
+    def test_other_errors_do_not_fall_back(self) -> None:
+        """A 400 (bad request) is not a model-availability problem: fail at once, no second call."""
+        provider = GeminiProvider("gemini-a", api_key="test-gemini-key", fallback_models=["gemini-b"])
+        provider._client = MagicMock()
+        provider._client.models.generate_content.side_effect = self._api_error(400, "INVALID_ARGUMENT")
+
+        with pytest.raises(Exception, match="Gemini generation failed: gemini-a: 400 INVALID_ARGUMENT"):
+            provider.generate([LLMMessage(role="user", content="Hi")])
+        assert provider._client.models.generate_content.call_count == 1
+
+    def test_all_configured_models_fail_router_lists_each(self) -> None:
+        """Every model fails → the router message carries each model's underlying error."""
+        errors_by_model = {
+            "gemini-2.0-flash": self._api_error(404, "NOT_FOUND"),
+            "gemini-2.5-pro": self._api_error(429, "RESOURCE_EXHAUSTED"),
+        }
+
+        def generate_content(**kw: object) -> object:
+            raise errors_by_model[str(kw["model"])]
+
+        provider = GeminiProvider("gemini-2.0-flash", api_key="test-gemini-key", fallback_models=["gemini-2.5-pro"])
+        provider._client = MagicMock()
+        provider._client.models.generate_content.side_effect = generate_content
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
+
+        message = str(exc_info.value)
+        assert "gemini (gemini-2.0-flash): ClientError: Gemini generation failed: " in message
+        assert "gemini-2.0-flash: 404 NOT_FOUND" in message
+        assert "gemini-2.5-pro: 429 RESOURCE_EXHAUSTED" in message
+
     @pytest.mark.llm
     @pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
-    def test_generation_real(self) -> None:
-        """Test real Gemini generation (requires API key)."""
-        provider = GeminiProvider("gemini-2.0-flash-exp")
+    @pytest.mark.parametrize("model", _configured_gemini_models())
+    def test_generation_real(self, model: str) -> None:
+        """Live smoke with each GEMINI_MODELS entry drawn first, the rest as fallbacks, as config.py builds it."""
+        models = _configured_gemini_models()
+        i = models.index(model)
+        provider = GeminiProvider(model, fallback_models=models[i + 1 :] + models[:i])
         messages = [LLMMessage(role="user", content="Say 'test successful' and nothing else")]
 
         try:
@@ -329,6 +487,172 @@ class TestMistralProvider:
                 os.environ["MISTRAL_API_KEY"] = old_key
 
 
+def _configured_openai_models() -> list[str]:
+    """Models the app would use: OPENAI_MODELS (loaded from .env by conftest) or the code default."""
+    from dta.dti.coe.llm.config import _get_models_list
+
+    try:
+        from dta.dti.coe.llm.openai import DEFAULT_OPENAI_MODEL
+    except ImportError:  # openai SDK is part of the `server` extra
+        return []
+    return _get_models_list("OPENAI_MODELS", DEFAULT_OPENAI_MODEL)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("openai") is None, reason="openai not installed")
+class TestOpenAIProvider:
+    """Tests for the OpenAI Chat Completions provider."""
+
+    @staticmethod
+    def _fake_client(captured: dict[str, object]) -> MagicMock:
+        fake_response = MagicMock()
+        fake_response.choices = [MagicMock(finish_reason="stop")]
+        fake_response.choices[0].message.content = "ok"
+        fake_response.model = "gpt-4.1-nano-2025-04-14"
+        fake_response.usage = MagicMock(prompt_tokens=10, completion_tokens=2, total_tokens=12)
+        client = MagicMock()
+        client.chat.completions.create.side_effect = lambda **kw: captured.update(kw) or fake_response
+        return client
+
+    def test_initialization(self) -> None:
+        """Default model is the module constant; images are not forwarded (like Anthropic)."""
+        from dta.dti.coe.llm.openai import DEFAULT_OPENAI_MODEL, OpenAIProvider
+
+        provider = OpenAIProvider()
+        assert provider.name == "openai"
+        assert provider.model == DEFAULT_OPENAI_MODEL == "gpt-4o-mini"
+        assert provider._supports_sampling() is True  # the default model receives temperature
+        assert provider.supports_images is False
+
+    def test_unavailable_without_any_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Neither OPENAI_API_KEY nor GPT_SECRET → unavailable, generate() names both."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GPT_SECRET", raising=False)
+        provider = OpenAIProvider()
+        assert provider.is_available() is False
+        with pytest.raises(ValueError, match="OPENAI_API_KEY \\(or GPT_SECRET\\)"):
+            provider.generate([LLMMessage(role="user", content="Hi")])
+
+    def test_gpt_secret_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """GPT_SECRET is used when OPENAI_API_KEY is unset or empty; OPENAI_API_KEY wins otherwise."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        monkeypatch.setenv("OPENAI_API_KEY", "")
+        monkeypatch.setenv("GPT_SECRET", "sk-gpt-secret-test")
+        with patch("dta.dti.coe.llm.openai.openai.OpenAI") as client_cls:
+            provider = OpenAIProvider()
+            assert provider.is_available() is True
+            provider._get_client()
+        assert client_cls.call_args.kwargs["api_key"] == "sk-gpt-secret-test"
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
+        with patch("dta.dti.coe.llm.openai.openai.OpenAI") as client_cls:
+            OpenAIProvider()._get_client()
+        assert client_cls.call_args.kwargs["api_key"] == "sk-openai-test"
+
+    def test_reasoning_models_omit_sampling_params(self) -> None:
+        """Models observed to 400 on temperature are recognised; the rest keep it."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        for model in (
+            "o3",
+            "o3-mini",
+            "o4-mini",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-nano",
+            "gpt-5-nano-2025-08-07",
+            "gpt-5.5",
+            "gpt-5.6-luna",
+            "gpt-6-sol",
+            "gpt-6.1-sol",
+            "chat-latest",
+        ):
+            assert OpenAIProvider(model, api_key="sk-test")._supports_sampling() is False, model
+        for model in ("gpt-4.1-nano", "gpt-4.1-mini", "gpt-4o-mini", "gpt-5.1", "gpt-5.2", "gpt-5.4", "gpt-5.4-nano"):
+            assert OpenAIProvider(model, api_key="sk-test")._supports_sampling() is True, model
+
+    def test_generate_request_shape(self) -> None:
+        """System stays in messages; max_tokens → max_completion_tokens; temperature for chat models."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider("gpt-4.1-nano", api_key="sk-test")
+        captured: dict[str, object] = {}
+        provider._client = self._fake_client(captured)
+
+        messages = [
+            LLMMessage(role="system", content="You are a planner."),
+            LLMMessage(role="user", content="Plan."),
+        ]
+        response = provider.generate(messages, temperature=0.2, max_tokens=50)
+
+        assert captured == {
+            "model": "gpt-4.1-nano",
+            "messages": [
+                {"role": "system", "content": "You are a planner."},
+                {"role": "user", "content": "Plan."},
+            ],
+            "max_completion_tokens": 50,
+            "temperature": 0.2,
+        }
+        assert response.text == "ok"
+        assert response.provider == "openai"
+        assert response.usage == {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}
+        assert response.metadata == {"finish_reason": "stop"}
+
+    def test_reasoning_model_request_has_no_temperature(self) -> None:
+        """gpt-5-nano rejects temperature=0.2 with a 400, so it must not be sent."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider("gpt-5-nano", api_key="sk-test")
+        captured: dict[str, object] = {}
+        provider._client = self._fake_client(captured)
+
+        provider.generate([LLMMessage(role="user", content="Hi")], temperature=0.2)
+
+        assert "temperature" not in captured
+        assert "max_tokens" not in captured
+
+    def test_api_error_is_wrapped_with_cause(self) -> None:
+        """SDK errors are re-raised as 'OpenAI generation failed' with the SDK error chained."""
+        import httpx
+        import openai
+
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider("gpt-4.1-nano", api_key="sk-test")
+        sdk_error = openai.APIConnectionError(
+            request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        )
+        provider._client = MagicMock()
+        provider._client.chat.completions.create.side_effect = sdk_error
+
+        with pytest.raises(Exception, match="OpenAI generation failed") as exc_info:
+            provider.generate([LLMMessage(role="user", content="Hi")])
+        assert exc_info.value.__cause__ is sdk_error
+
+    @pytest.mark.llm
+    @pytest.mark.skipif(
+        not (os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_SECRET")),
+        reason="OPENAI_API_KEY / GPT_SECRET not set",
+    )
+    @pytest.mark.parametrize("model", _configured_openai_models())
+    def test_generation_real(self, model: str) -> None:
+        """Live smoke for every model configured in OPENAI_MODELS (requires API key)."""
+        from dta.dti.coe.llm.openai import OpenAIProvider
+
+        provider = OpenAIProvider(model)
+        response = provider.generate(
+            [LLMMessage(role="user", content="Say 'test successful' and nothing else")],
+            temperature=0.0,
+            max_tokens=200,
+        )
+
+        assert "test" in response.text.lower()
+        assert response.provider == "openai"
+
+
 class TestLLMRouter:
     """Tests for LLM router."""
 
@@ -346,6 +670,7 @@ class TestLLMRouter:
     def test_from_config(self) -> None:
         """Test router creation from config dict."""
         pytest.importorskip("anthropic")
+        pytest.importorskip("openai")  # from_config imports every provider SDK
         config = {
             "providers": [
                 {"type": "gemini", "model": "gemini-2.0-flash-exp"},
@@ -420,6 +745,65 @@ class TestLLMRouter:
         assert failing_provider.generate.called
         assert success_provider.generate.called
 
+    def test_all_failed_reports_every_underlying_error(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The final error names each provider's exception type and message and chains the last one."""
+        first = MagicMock(spec=BaseLLMProvider, model="m1")
+        first.name = "first"
+        first.is_available.return_value = True
+        first.generate.side_effect = ValueError("bad request shape")
+
+        cause = TimeoutError("read timed out")
+        second = MagicMock(spec=BaseLLMProvider, model="m2")
+        second.name = "second"
+        second.is_available.return_value = True
+        wrapped = Exception("Second generation failed: read timed out")
+        wrapped.__cause__ = cause
+        second.generate.side_effect = wrapped
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.router"):
+            with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+                LLMRouter([first, second]).generate([LLMMessage(role="user", content="Hi")])
+
+        message = str(exc_info.value)
+        assert "first (m1): ValueError: bad request shape" in message
+        assert "second (m2): TimeoutError: Second generation failed: read timed out" in message
+        assert exc_info.value.__cause__ is wrapped
+        assert "ValueError: bad request shape" in caplog.text
+        assert "TimeoutError: Second generation failed" in caplog.text
+
+    def test_all_unavailable_says_so(self) -> None:
+        """When every provider is skipped the message says why, instead of 'Last error: None'."""
+        offline = MagicMock(spec=BaseLLMProvider, model="llama3.2")
+        offline.name = "ollama"
+        offline.is_available.return_value = False
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            LLMRouter([offline]).generate([LLMMessage(role="user", content="Hi")])
+
+        assert str(exc_info.value) == "All LLM providers failed: ollama (llama3.2): not available"
+
+    def test_key_fragments_redacted_from_log_and_message(self, caplog: pytest.LogCaptureFixture) -> None:
+        """OpenAI's 401 echoes the key prefix and last 4 chars; neither may reach users or logs."""
+        provider = MagicMock(spec=BaseLLMProvider, model="gpt-4o-mini")
+        provider.name = "openai"
+        provider.is_available.return_value = True
+        provider.generate.side_effect = Exception(
+            "OpenAI generation failed: Error code: 401 - {'error': {'message': "
+            "'Incorrect API key provided: sk-proj-***********************WXYZ. You can find your API key at "
+            "https://platform.openai.com/account/api-keys.'}} "
+            "(also sk-ant-FAKEKEYabcd1234, gsk_FAKEKEYabcd1234, AIzaFAKEKEYabcd1234)"
+        )
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.router"):
+            with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+                LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
+
+        for text in (str(exc_info.value), caplog.text):
+            assert "Error code: 401" in text
+            assert "Incorrect API key provided: ***" in text
+            for fragment in ("WXYZ", "sk-proj", "FAKEKEY", "gsk_", "AIza"):
+                assert fragment not in text, fragment
+
 
 class TestLLMConfig:
     """Tests for LLM configuration."""
@@ -438,6 +822,7 @@ class TestLLMConfig:
     def test_create_router_from_env(self) -> None:
         """Test router creation from environment."""
         pytest.importorskip("anthropic")
+        pytest.importorskip("openai")  # from_config imports every provider SDK
         from dta.dti.coe.llm.config import create_router_from_env
 
         router = create_router_from_env()
@@ -485,6 +870,46 @@ class TestLLMConfig:
         types = [p["type"] for p in config["providers"]]
         assert "anthropic" not in types
 
+    def test_openai_selected_through_provider_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """GPT_SECRET alone enables openai; LLM_PROVIDER_ORDER sets its position; router builds it."""
+        pytest.importorskip("openai")
+        from dta.dti.coe.llm.config import create_router_from_env, get_default_config
+        from dta.dti.coe.llm.openai import DEFAULT_OPENAI_MODEL, OpenAIProvider
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_MODELS", raising=False)
+        monkeypatch.setenv("GPT_SECRET", "sk-gpt-secret-test")
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.setenv("GEMINI_MODELS", "gemini-3.8-flash")
+        monkeypatch.setenv("LLM_ENABLE_OPENAI", "true")
+        monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
+
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini,openai")
+        assert [p["type"] for p in get_default_config()["providers"]] == ["gemini", "openai"]
+
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "openai,gemini")
+        providers = get_default_config()["providers"]
+        assert providers[0] == {"type": "openai", "model": DEFAULT_OPENAI_MODEL}
+        router = create_router_from_env()
+        assert isinstance(router.providers[0], OpenAIProvider)
+        assert [p.name for p in router.providers] == ["openai", "gemini"]
+
+        monkeypatch.setenv("OPENAI_MODELS", "gpt-5.4-nano")
+        assert get_default_config()["providers"][0]["model"] == "gpt-5.4-nano"
+
+        monkeypatch.setenv("LLM_ENABLE_OPENAI", "false")
+        assert [p["type"] for p in get_default_config()["providers"]] == ["gemini"]
+
+    def test_openai_skipped_without_any_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """openai in LLM_PROVIDER_ORDER without OPENAI_API_KEY or GPT_SECRET is dropped."""
+        from dta.dti.coe.llm.config import get_default_config
+
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("GPT_SECRET", raising=False)
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "openai,ollama")
+
+        assert "openai" not in [p["type"] for p in get_default_config()["providers"]]
+
     @pytest.mark.llm
     def test_router_fallback_works(self) -> None:
         """Test that router successfully falls back when primary provider fails."""
@@ -497,7 +922,7 @@ class TestLLMConfig:
 
         assert response.text is not None
         assert len(response.text) > 0
-        assert response.provider in ["gemini", "ollama"]
+        assert response.provider in {p.name for p in router.get_available_providers()}
 
 
 @pytest.mark.llm
