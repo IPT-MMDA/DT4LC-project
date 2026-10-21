@@ -14,7 +14,8 @@ import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
 
-from dta.config import TEMP_PATH
+from dta.config import OUTPUTS_PATH, TEMP_PATH
+from dta.dti import artifact_files
 
 from ..schemas import FileInfo, FileListResponse, UploadResponse
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
@@ -32,7 +33,11 @@ router = APIRouter(prefix="/v1", tags=["files"])
 async def upload_geotiff(
     file: Annotated[UploadFile, File(description="GeoTIFF raster (.tif or .tiff)")],
 ) -> UploadResponse:
-    """Upload a GeoTIFF, store it on the server, and return metadata plus a PNG preview."""
+    """Upload a GeoTIFF, store it on the server, and return metadata plus a PNG preview.
+
+    The preview is written next to the upload and returned as ``preview_url``;
+    ``preview_png_base64`` is kept for compatibility (clients must not persist it).
+    """
     # Basic checks
     if not file.filename or not file.filename.lower().endswith((".tif", ".tiff")):
         raise HTTPException(status_code=400, detail="Please upload a .tif/.tiff GeoTIFF.")
@@ -62,6 +67,7 @@ async def upload_geotiff(
     file_id = str(uuid.uuid4())[:8]
     saved_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
     saved_path.write_bytes(raw)
+    preview_path = saved_path.with_suffix(".png")
 
     # Read in-memory with rasterio for preview
     try:
@@ -100,6 +106,7 @@ async def upload_geotiff(
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            preview_url = artifact_files.write_png(preview_path, buf.getvalue())["url"]
 
         return UploadResponse(
             id=file_id,
@@ -109,11 +116,13 @@ async def upload_geotiff(
             crs=crs,
             bounds=[bounds.left, bounds.bottom, bounds.right, bounds.top],
             preview_png_base64=b64,
+            preview_url=preview_url,
         )
     except Exception as e:
         # Clean up saved file on error
         if saved_path.exists():
             saved_path.unlink()
+        preview_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
 
 
@@ -211,24 +220,17 @@ async def download_file(
     file_path = Path(path)
 
     # Security: Only allow downloads from specific directories
-    # (TEMP_PATH holds job outputs written by the executor and Delineate-Anything)
+    # (OUTPUTS_PATH holds job artifacts; TEMP_PATH model outputs written by the
+    # executor and Delineate-Anything)
     allowed_dirs = [
         Path(tempfile.gettempdir()) / "dt4lc_delineate",
         UPLOAD_DIR,
         TEMP_PATH,
+        OUTPUTS_PATH,
     ]
 
-    # Check if path is under an allowed directory
-    is_allowed = False
-    for allowed_dir in allowed_dirs:
-        try:
-            file_path.resolve().relative_to(allowed_dir.resolve())
-            is_allowed = True
-            break
-        except ValueError:
-            continue
-
-    if not is_allowed:
+    resolved = file_path.resolve()
+    if not any(resolved.is_relative_to(allowed_dir.resolve()) for allowed_dir in allowed_dirs):
         raise HTTPException(status_code=403, detail="Access denied: path not in allowed directories")
 
     if not file_path.exists():

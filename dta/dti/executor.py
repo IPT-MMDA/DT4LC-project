@@ -17,6 +17,7 @@ from typing import Any
 import uuid
 
 from dta.config import ROOT_DIR, TEMP_PATH
+from dta.dti import artifact_files
 from dta.dti.coe.llm import LLMMessage, get_llm_router
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
@@ -120,6 +121,7 @@ class PipelineExecutor:
         plan: ExecutionPlan,
         on_progress: Callable[[dict[str, Any]], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
+        output_dir: Path | None = None,
     ) -> dict[str, Any]:
         """Execute a pipeline plan step by step.
 
@@ -127,6 +129,9 @@ class PipelineExecutor:
             plan: Execution plan from COE planner
             on_progress: Optional callback for progress events
             is_cancelled: Optional callback to check if execution should be cancelled
+            output_dir: Directory for the steps' GeoTIFF/PNG artifacts, named
+                ``<step index>_<output type>_<key>.<tif|png>``. The job queue
+                passes ``OUTPUTS_PATH/<job_id>``; default ``OUTPUTS_PATH/run-<uuid hex>``.
 
         Returns:
             Dictionary with:
@@ -142,6 +147,7 @@ class PipelineExecutor:
         self.artifacts = {}  # Reset for each execution
         self.executed_items = []  # Reset executed items
         executed_steps: list[str] = []
+        output_dir = output_dir or artifact_files.output_dir()
 
         for idx, step in enumerate(plan.steps, start=1):
             # Check for cancellation before each step
@@ -160,7 +166,9 @@ class PipelineExecutor:
 
             try:
                 item = get_item(self.registry, step.uses)
-                self._execute_step(step, item)
+                prefix = f"{idx - 1}_{item.outputs[0]}" if item.outputs else str(idx - 1)
+                with artifact_files.step_outputs(output_dir, prefix):
+                    self._execute_step(step, item)
                 executed_steps.append(step.uses)
                 self.executed_items.append(item)  # Track for interpretation lookup
 
@@ -581,24 +589,25 @@ class PipelineExecutor:
             "input_file": inputs.get("RasterPath"),
         }
 
-        # Convert TIFF outputs to base64 PNG for frontend visualization
+        # Write a PNG next to each TIFF output for frontend visualization
         visualizations = self._convert_tiffs_to_visualizations(output_files, model_id)
         if visualizations:
             result["visualizations"] = visualizations
 
         return result
 
-    def _convert_tiffs_to_visualizations(self, tiff_files: list[Path], model_id: str | None) -> dict[str, str]:
-        """Convert TIFF files to base64 PNG images for frontend display.
+    def _convert_tiffs_to_visualizations(
+        self, tiff_files: list[Path], model_id: str | None
+    ) -> dict[str, dict[str, Any]]:
+        """Write each TIFF as a PNG next to it for frontend display.
 
         Args:
             tiff_files: List of TIFF file paths
             model_id: Model identifier for labeling
 
         Returns:
-            Dictionary mapping label -> base64 PNG string
+            Dictionary mapping label -> ``png`` artifact reference
         """
-        import base64
         import io
 
         try:
@@ -609,7 +618,7 @@ class PipelineExecutor:
             logger.warning("rasterio or PIL not available for TIFF conversion")
             return {}
 
-        visualizations: dict[str, str] = {}
+        visualizations: dict[str, dict[str, Any]] = {}
 
         for tiff_path in tiff_files:
             try:
@@ -645,12 +654,10 @@ class PipelineExecutor:
                         # Take first band as grayscale
                         img = Image.fromarray(img_data[0], mode="L")
 
-                    # Convert to PNG base64
+                    # Write the PNG next to the TIFF
                     buffer = io.BytesIO()
                     img.save(buffer, format="PNG")
-                    buffer.seek(0)
-                    b64_str = base64.b64encode(buffer.read()).decode("utf-8")
-                    visualizations[label] = b64_str
+                    visualizations[label] = artifact_files.write_png(tiff_path.with_suffix(".png"), buffer.getvalue())
 
             except Exception as e:
                 logger.warning(f"Failed to convert {tiff_path} to PNG: {e}")

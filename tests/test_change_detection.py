@@ -60,8 +60,8 @@ def test_create_visualization(tmp_path: Path) -> None:
         res = _create_change_visualization(change, "ndvi")
 
     assert res is not None
-    assert isinstance(res, str)
-    assert len(res) > 100
+    assert isinstance(res, bytes)
+    assert res[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_run_change_detection(dummy_tifs) -> None:
@@ -72,8 +72,9 @@ def test_run_change_detection(dummy_tifs) -> None:
     with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
         result = run(RasterPathBefore=before, RasterPathAfter=after, IndexType="ndvi")
 
-    assert "change_array" in result
+    assert "change" in result["rasters"]
 
-    # Check the change array
-    change_data = np.array(result["change_array"])
+    # Check the change raster
+    with rasterio.open(result["rasters"]["change"]["path"]) as src:
+        change_data = src.read(1)
     assert np.all(change_data == 0.0)

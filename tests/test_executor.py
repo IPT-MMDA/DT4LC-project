@@ -216,9 +216,11 @@ class TestPythonRunner:
             dst.write(data)
 
         res = executor._convert_tiffs_to_visualizations([tif_path], "test")
-        assert tif_path.stem in res
+        assert res[tif_path.stem]["kind"] == "png"
+        assert res[tif_path.stem]["path"] == str(tif_path.with_suffix(".png"))
 
         tif_path.unlink()
+        tif_path.with_suffix(".png").unlink()
 
     def test_model_not_installed_check(self) -> None:
         executor = PipelineExecutor()

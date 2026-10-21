@@ -12,7 +12,8 @@ from typing import Any
 
 import numpy as np
 
-from dta.dti.algorithms.spectral_index import run as _run_index
+from dta.dti import artifact_files
+from dta.dti.algorithms.spectral_index import calculate_index
 from dta.dti.registry import get_item, load_registry
 
 # Standard snow threshold; NDSI ≥ 0.42 typically indicates snow/ice.
@@ -26,16 +27,14 @@ def _config() -> dict[str, Any]:
 def calculate_ndsi(raster_path: str) -> dict[str, Any]:
     """Calculate NDSI from a multispectral raster.
 
-    Returns a dict with ``ndsi_array``, ``snow_mask``, ``metadata``,
+    Returns a dict with ``rasters`` (``ndsi``, ``snow_mask``), ``metadata``,
     ``statistics`` (extended with ``snow_threshold``, ``snow_pixels``,
     ``non_snow_pixels``, ``snow_coverage_percent``), ``visualizations``, and
     ``path``.
     """
-    result = _run_index(raster_path, _config())
-    arr = np.asarray(result["ndsi_array"], dtype=float)
+    result, arr, (crs, transform) = calculate_index(raster_path, _config())
     finite = np.isfinite(arr)
     snow_mask = (finite & (arr >= SNOW_THRESHOLD)).astype(np.uint8)
-    result["snow_mask"] = snow_mask
     valid = arr[finite]
     if valid.size > 0:
         snow_pixels = int(np.sum(valid >= SNOW_THRESHOLD))
@@ -47,7 +46,8 @@ def calculate_ndsi(raster_path: str) -> dict[str, Any]:
                 "snow_coverage_percent": float(snow_pixels / valid.size * 100),
             }
         )
-    return result
+    rasters = {"ndsi": arr, "snow_mask": np.where(finite, snow_mask, np.nan)}
+    return artifact_files.save(result, rasters, result["visualizations"], crs=crs, transform=transform)
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

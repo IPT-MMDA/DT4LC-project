@@ -59,10 +59,12 @@ class TestUploadContract:
         body = r.json()
         # Keys the frontend Attachment interface reads (some optional in TS,
         # but required at the API boundary for the chat-with-attachment flow).
-        for key in ("id", "filename", "path", "preview_png_base64"):
+        for key in ("id", "filename", "path", "preview_png_base64", "preview_url"):
             assert key in body, f"frontend reads .{key} from /v1/upload"
         # The path must point at a real file the executor can later read.
         assert Path(body["path"]).exists()
+        # The preview is a PNG file next to the upload, served by /v1/download (#65).
+        assert client.get(body["preview_url"]).status_code == 200
 
 
 class TestJobSubmitContract:
@@ -124,6 +126,16 @@ class TestJobListContract:
             assert key in body, f"frontend reads .{key} from /v1/jobs (list)"
         assert isinstance(body["jobs"], list)
         assert isinstance(body["total"], int)
+
+    def test_list_items_are_summaries_without_result(self, client: TestClient) -> None:
+        client.post("/v1/jobs", json={"prompt": "what can you do?", "attachments": []})
+        jobs = client.get("/v1/jobs?limit=5").json()["jobs"]
+        assert jobs
+        for job in jobs:
+            for key in ("id", "status", "progress", "plan", "error", "created_at"):
+                assert key in job, f"frontend reads .{key} from /v1/jobs (list item)"
+            # Results only come from GET /v1/jobs/{id} (#65).
+            assert "result" not in job
 
 
 class TestErrorContract:

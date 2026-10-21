@@ -7,7 +7,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import ValidationError
 
 from ..jobs import JobStatus, get_job_queue
-from ..schemas import CancelJobResponse, JobListResponse, JobRecord, JobSubmitRequest, QueueStatsResponse
+from ..schemas import (
+    CancelJobResponse,
+    JobListResponse,
+    JobRecord,
+    JobSubmitRequest,
+    JobSummary,
+    QueueStatsResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +125,7 @@ async def list_jobs(
     limit: int = Query(20, ge=1, le=100, description="Maximum results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ) -> JobListResponse:
-    """List jobs with optional status filter and pagination."""
+    """List job summaries (no ``result``) with optional status filter and pagination."""
     try:
         queue = get_job_queue()
 
@@ -136,7 +143,7 @@ async def list_jobs(
         total = await queue.get_total_count()
 
         return JobListResponse(
-            jobs=[_job_record(j.to_dict()) for j in jobs],
+            jobs=[JobSummary.model_validate(j.to_dict()) for j in jobs],
             total=total,
             limit=limit,
             offset=offset,
