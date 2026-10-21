@@ -56,10 +56,11 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 
 # --- Synthetic raster fixtures for demo-flow smoke tests ---------------------
 #
-# resources/kahovka_data/ holds two committed HLS L30 crops of the Kakhovka
-# reservoir (hlsl_20230601.tif, hlsl_20230609.tif: 768x768 px, 30 m, EPSG:32636,
-# 5 bands B2..B6, int16 reflectance x10000, nodata -9999) used by the real-data
-# tests. These fixtures generate small Landsat-8-like 7-band GeoTIFFs on disk so
+# resources/kahovka_data/ holds two committed HLS L30 crops of the lower Dnipro
+# around Kherson, downstream of the Kakhovka dam (hlsl_20230601.tif,
+# hlsl_20230609.tif: 768x768 px, 30 m, EPSG:32636, 5 bands B2..B6, int16
+# reflectance x10000, nodata -9999) used by the real-data tests. These
+# fixtures generate small Landsat-8-like 7-band GeoTIFFs on disk so
 # Layer-A demo tests can exercise the full algorithm + executor pipeline with
 # controllable signals.
 #
