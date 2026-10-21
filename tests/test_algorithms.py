@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import rasterio
-from rasterio.transform import from_bounds
+from rasterio.transform import from_bounds, from_origin
 
 
 def _create_synthetic_geotiff(
@@ -141,21 +141,31 @@ class TestNDVIAlgorithm:
         result = calculate_ndvi(synthetic_tif)
         assert "visualizations" in result
 
-    def test_ndvi_change(self) -> None:
+    def test_ndvi_change(self, tmp_path: Path) -> None:
         from dta.dti.algorithms.ndvi import ndvi_change
+        from dta.dti.artifact_files import write_geotiff
 
+        transform = from_origin(0, 32, 1, 1)
         before = {
-            "ndvi_array": np.random.uniform(0.2, 0.6, (32, 32)),
+            "rasters": {
+                "ndvi": write_geotiff(
+                    tmp_path / "b.tif", np.random.uniform(0.2, 0.6, (32, 32)), "EPSG:4326", transform
+                )
+            },
             "metadata": {"crs": "EPSG:4326"},
             "path": "/before.tif",
         }
         after = {
-            "ndvi_array": np.random.uniform(0.3, 0.7, (32, 32)),
+            "rasters": {
+                "ndvi": write_geotiff(
+                    tmp_path / "a.tif", np.random.uniform(0.3, 0.7, (32, 32)), "EPSG:4326", transform
+                )
+            },
             "metadata": {"crs": "EPSG:4326"},
             "path": "/after.tif",
         }
         result = ndvi_change(before, after)
-        assert "change_array" in result
+        assert "change" in result["rasters"]
         assert "statistics" in result
         assert result["statistics"]["total_valid_pixels"] > 0
 
@@ -204,7 +214,7 @@ class TestEVIAlgorithm:
 
         result = calculate_evi(str(tif_files[0]))
 
-        assert "evi_array" in result
+        assert "evi" in result["rasters"]
         assert "metadata" in result
         assert "statistics" in result
 
@@ -278,7 +288,7 @@ class TestLULCClassifier:
 
         result = classify_land_cover(synthetic_tif)
         assert "statistics" in result
-        assert "class_names" in result or "classes" in result or "classification" in result
+        assert "classification" in result["rasters"]
 
     def test_lulc_file_not_found(self) -> None:
         from dta.dti.algorithms.lulc_classifier import classify_land_cover
@@ -354,7 +364,7 @@ class TestChangeDetection:
         result = calculate_change(str(tif_files[0]), str(tif_files[1]))
 
         # Check result contains expected keys
-        assert "change_map" in result or "change_array" in result or "outputs" in result
+        assert "change" in result["rasters"]
         assert "statistics" in result or "metadata" in result
 
     def test_change_detection(self, tmp_path: Path) -> None:

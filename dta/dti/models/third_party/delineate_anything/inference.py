@@ -9,7 +9,6 @@ See: https://github.com/Lavreniuk/Delineate-Anything
 
 from __future__ import annotations
 
-import base64
 from datetime import datetime
 import io
 import logging
@@ -23,6 +22,7 @@ from typing import Any
 
 import yaml
 
+from dta.dti import artifact_files
 from dta.dti.utils.data_source import detect_data_source, get_filtering_thresholds
 
 # Try to import visualization dependencies
@@ -47,7 +47,7 @@ def _create_field_boundaries_visualization(
     raster_path: str,
     gdf: Any,
     title: str = "Detected Field Boundaries",
-) -> str | None:
+) -> bytes | None:
     """Create visualization of detected field boundaries as filled polygons.
 
     Creates a segmentation-style visualization with:
@@ -60,7 +60,7 @@ def _create_field_boundaries_visualization(
         title: Title for the visualization
 
     Returns:
-        Base64 encoded PNG image, or None if dependencies unavailable
+        PNG bytes, or None if dependencies unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -120,9 +120,8 @@ def _create_field_boundaries_visualization(
             buf = io.BytesIO()
             plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
             plt.close(fig)
-            buf.seek(0)
 
-            return base64.b64encode(buf.read()).decode("utf-8")
+            return buf.getvalue()
 
     except Exception as e:
         logger.warning(f"Failed to create field boundary visualization: {e}")
@@ -476,7 +475,8 @@ def delineate_fields(
             title=f"Field Boundaries - {Path(raster_path).stem}",
         )
         if viz:
-            visualizations["field_boundaries"] = viz
+            # PNG next to the GeoPackage, referenced instead of embedded (job artifact contract)
+            visualizations["field_boundaries"] = artifact_files.write_png(Path(output_path).with_suffix(".png"), viz)
 
     # Cleanup work directory
     try:

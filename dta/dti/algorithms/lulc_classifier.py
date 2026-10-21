@@ -19,13 +19,14 @@ References:
 
 from __future__ import annotations
 
-import base64
 import io
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import rasterio
+
+from dta.dti import artifact_files
 
 # Try to import matplotlib for visualization
 try:
@@ -137,7 +138,7 @@ def _calculate_ndsi(green: np.ndarray, swir: np.ndarray) -> np.ndarray:
 def _create_lulc_visualization(
     classification: np.ndarray,
     title: str = "Land Cover Classification",
-) -> str | None:
+) -> bytes | None:
     """Create colored visualization of LULC classification.
 
     Args:
@@ -145,7 +146,7 @@ def _create_lulc_visualization(
         title: Title for the image
 
     Returns:
-        Base64 encoded PNG image, or None if matplotlib unavailable
+        PNG bytes, or None if matplotlib unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -176,15 +177,14 @@ def _create_lulc_visualization(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
 
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()
 
 
 def _create_histogram_visualization(
     class_stats: dict[str, dict[str, Any]],
     title: str = "Land Cover Distribution",
-) -> str | None:
+) -> bytes | None:
     """Create bar chart of land cover distribution.
 
     Args:
@@ -192,7 +192,7 @@ def _create_histogram_visualization(
         title: Title for the chart
 
     Returns:
-        Base64 encoded PNG image, or None if matplotlib unavailable
+        PNG bytes, or None if matplotlib unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -233,9 +233,8 @@ def _create_histogram_visualization(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
 
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()
 
 
 def classify_land_cover(raster_path: str) -> dict[str, Any]:
@@ -250,11 +249,11 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
 
     Returns:
         Dictionary containing:
-            - classification: 2D array of class values (0-6)
+            - rasters: GeoTIFF reference ``classification`` (class values 1-6, No Data as NaN)
             - class_statistics: Per-class pixel counts and percentages
             - indices: Computed spectral indices (NDVI, NDWI, NDSI)
             - metadata: Raster metadata
-            - visualizations: Classification map and histogram
+            - visualizations: PNG references to the classification map and histogram
 
     Raises:
         FileNotFoundError: If raster file not found
@@ -427,15 +426,16 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
                 title="Land Cover Distribution",
             )
 
-        return {
-            "classification": classification.tolist(),
+        result = {
             "class_statistics": class_statistics,
             "index_statistics": index_stats,
             "statistics": statistics,
             "metadata": metadata,
-            "visualizations": visualizations,
             "path": str(raster_path),
         }
+        # Class 0 is "No Data" -> NaN in the GeoTIFF.
+        rasters = {"classification": np.where(classification == 0, np.nan, classification)}
+        return artifact_files.save(result, rasters, visualizations, crs=src.crs, transform=src.transform)
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

@@ -71,7 +71,8 @@ def test_partial_semantic_names_fill_rest_from_band_count(
     assert any("band count" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
     assert round(ndvi.run(path)["statistics"]["mean"], 6) == 0.777778
     for index_type in ("ndvi", "ndwi", "evi"):
-        assert np.asarray(change_detection.run(path, path, index_type)["index_before"]).shape == (8, 8)
+        with rasterio.open(change_detection.run(path, path, index_type)["rasters"]["index_before"]["path"]) as src:
+            assert src.shape == (8, 8)
 
 
 def test_change_detection_rejects_missing_band_role(tmp_path: Path) -> None:

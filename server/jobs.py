@@ -23,6 +23,7 @@ import uuid
 
 import numpy as np
 
+from dta.dti import artifact_files
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import load_registry
@@ -688,8 +689,10 @@ class JobQueue:
         # Create a fresh executor for this job (executor has mutable state - artifacts dict)
         executor = PipelineExecutor(self._registry)
 
-        # Execute plan with cancellation support
-        execution_result = executor.execute(job.plan, is_cancelled=check_cancelled)
+        # Execute plan with cancellation support; artifact files go to OUTPUTS_PATH/<job_id>/
+        execution_result = executor.execute(
+            job.plan, is_cancelled=check_cancelled, output_dir=artifact_files.output_dir(job_id)
+        )
 
         job.progress = 0.8
 

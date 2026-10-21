@@ -69,7 +69,8 @@ def test_change_detection_evi_independent_of_scaling(tmp_path: Path, dtype: str)
     path = str(tmp_path / f"scene_{dtype}.tif")
     _write_constant_scene(Path(path), dtype)
 
-    index_before = np.asarray(change_detection.run(path, path, "evi")["index_before"], dtype=float)
+    with rasterio.open(change_detection.run(path, path, "evi")["rasters"]["index_before"]["path"]) as src:
+        index_before = src.read(1).astype(float)
 
     assert round(float(np.nanmin(index_before)), 6) == round(float(np.nanmax(index_before)), 6) == 0.625
 

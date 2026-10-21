@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 import functools
 from pathlib import Path
 
@@ -32,6 +33,19 @@ def _no_llm_provider_reason() -> str | None:
         f"no LLM provider available (checked: {checked}); set an API key such as "
         "GEMINI_API_KEY or GROQ_API_KEY, or run Ollama with OLLAMA_MODEL pulled"
     )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _outputs_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    """Write job artifact files (GeoTIFF/PNG) under a temp dir instead of resources/.cache/outputs."""
+    import dta.dti.artifact_files
+    import server.routes.files
+
+    outputs = tmp_path_factory.mktemp("outputs")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(dta.dti.artifact_files, "OUTPUTS_PATH", outputs)
+        mp.setattr(server.routes.files, "OUTPUTS_PATH", outputs)
+        yield outputs
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
