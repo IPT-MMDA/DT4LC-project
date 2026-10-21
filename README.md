@@ -256,6 +256,15 @@ The system supports multiple LLM providers with automatic fallback:
 
 Anthropic (`ANTHROPIC_API_KEY`) and Mistral (`MISTRAL_API_KEY`) are set up like OpenAI: the key, plus `anthropic` or `mistral` in `LLM_PROVIDER_ORDER`. See `.env.example`.
 
+With the default `fallback` strategy, providers are tried in `LLM_PROVIDER_ORDER`. The router moves to the next provider when one is not available or its call raises an error. For context extraction it also moves on when the reply fails the context check (for example, no valid JSON of the expected shape, or types that are not in the registry); the other stages do not pass an unusable answer to the next provider. When no provider gives a usable answer, each stage falls back to a deterministic counterpart:
+
+- **Intent:** clear requests are classified by pattern matching (registry triggers and fixed question and imperative patterns) without an LLM call; if the LLM call fails or returns no valid JSON, the request is treated as a pipeline request.
+- **Context:** the context is built from the registry triggers and the number of attachments (two or more mean before/after change detection).
+- **Planning:** if the LLM planner fails, returns invalid JSON or names a component that is not in the registry, the template planner is used; if a plan fails validation, the template plan is tried once and used only if it passes and contains an algorithm or model step.
+- **Interpretation:** without an answering provider the job still completes, and its summary says that summarization failed.
+
+So with no provider at all, "Calculate NDVI" on an uploaded raster still runs; a request that matches no component gets a plan with only the input and interpretation steps.
+
 #### Basic Setup
 
 Add API keys to `.env`:
@@ -345,6 +354,11 @@ LLM_PROVIDER_ORDER=ollama
 
 # Prefer Groq, fallback to Ollama
 LLM_PROVIDER_ORDER=groq,ollama
+
+# Gemini, then Anthropic, then Mistral (the chain described in the DESSERT 2026
+# paper, see docs/ARCHITECTURE.md): needs the three API keys; pick the models
+# with GEMINI_MODELS, ANTHROPIC_MODELS and MISTRAL_MODELS
+LLM_PROVIDER_ORDER=gemini,anthropic,mistral
 ```
 
 ### Intent Classification
@@ -363,7 +377,7 @@ Examples:
 | "What can we do next?" | CONVERSATION | Returns helpful guidance |
 | "Explain what NDVI means" | CONVERSATION | Provides explanation |
 
-The classifier uses pattern matching for clear action requests and falls back to LLM-based classification for ambiguous cases.
+The classifier uses pattern matching for clear action requests and falls back to LLM-based classification for ambiguous cases; if that call fails or returns no valid JSON, the request is treated as PIPELINE.
 
 ### Multi-Turn Conversations
 
@@ -621,7 +635,7 @@ curl http://localhost:8000/v1/health
 
 The message lists every provider that was tried and why it failed, e.g.
 `All LLM providers failed: gemini (gemini-3.5-flash-lite): <ErrorType>: <message>; ollama (llama3.2): not available`
-(API-key fragments are redacted). Check the keys in `.env`, `LLM_PROVIDER_ORDER`, and for Ollama that `OLLAMA_MODEL` is pulled.
+(API-key fragments are redacted). Check the keys in `.env`, `LLM_PROVIDER_ORDER`, and for Ollama that `OLLAMA_MODEL` is pulled. Analysis jobs still run without a provider (see [LLM Providers](#llm-providers)): they use a template plan, and this message appears in the job summary in place of the LLM interpretation.
 
 **LLM responses slow:**
 
