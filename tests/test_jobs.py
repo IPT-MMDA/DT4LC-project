@@ -4,10 +4,44 @@ Tests job submission, processing, cancellation, and queue management.
 """
 
 import asyncio
+from collections.abc import Iterator
+import functools
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from dta.dti.coe import planner
+from dta.dti.schemas import ContextUnderstanding
 from server.jobs import Job, JobQueue, JobStatus
+
+
+@pytest.fixture
+def stub_llm() -> Iterator[None]:
+    """Replace every LLM call on the job path so no provider is needed.
+
+    The context agent returns a fixed NDVI context, the planner is forced to
+    its template path, and the executor's summary step gets a mock router.
+    """
+    ctx = ContextUnderstanding(
+        goal="calculate ndvi",
+        desired_outputs=["NDVIMap"],
+        required_inputs=["RasterPath"],
+        hints={"keywords": ["ndvi"]},
+    )
+    summary = MagicMock(text="Stub summary.", provider="mock")
+    router = MagicMock()
+    router.generate.return_value = summary
+    with (
+        patch("dta.dti.coe.orchestrator.analyze", return_value=ctx),
+        patch("dta.dti.coe.orchestrator.plan", functools.partial(planner.plan, use_llm=False)),
+        patch("dta.dti.executor.get_llm_router", return_value=router),
+    ):
+        yield
+
+
+def _raster_attachment(path: str) -> list[dict[str, Any]]:
+    return [{"id": "synthetic", "filename": "synthetic_landsat.tif", "mime_type": "image/tiff", "path": path}]
 
 
 class TestJobQueueInitialization:
@@ -77,15 +111,16 @@ class TestJobSubmission:
 class TestJobProcessing:
     """Tests for job processing."""
 
-    @pytest.mark.llm
     @pytest.mark.asyncio
-    async def test_job_processing(self) -> None:
+    async def test_job_processing(self, synthetic_raster_path: str, stub_llm: None) -> None:
         """Test job processing through queue."""
         queue = JobQueue(max_workers=1)
         await queue.start()
 
         try:
-            job_id = await queue.submit_job("calculate ndvi on kahovka data")
+            job_id = await queue.submit_job(
+                "calculate ndvi on kahovka data", attachments=_raster_attachment(synthetic_raster_path)
+            )
 
             for _ in range(60):
                 job = await queue.get_job(job_id)
@@ -96,14 +131,12 @@ class TestJobProcessing:
             job = await queue.get_job(job_id)
             assert job is not None
 
-            assert job.status in (JobStatus.COMPLETED, JobStatus.FAILED)
-
-            if job.status == JobStatus.COMPLETED:
-                assert job.result is not None
-                if job.result.get("intent") == "pipeline":
-                    assert job.plan is not None
-                assert job.progress == 1.0
-                assert job.completed_at is not None
+            assert job.status == JobStatus.COMPLETED, job.error
+            assert job.result is not None
+            assert job.result.get("intent") == "pipeline"
+            assert job.plan is not None
+            assert job.progress == 1.0
+            assert job.completed_at is not None
         finally:
             await queue.stop()
 
@@ -130,13 +163,15 @@ class TestJobCancellation:
             await queue.stop()
 
     @pytest.mark.asyncio
-    async def test_cancel_completed_job(self) -> None:
+    async def test_cancel_completed_job(self, synthetic_raster_path: str, stub_llm: None) -> None:
         """Test that completed jobs cannot be cancelled."""
         queue = JobQueue(max_workers=1)
         await queue.start()
 
         try:
-            job_id = await queue.submit_job("calculate ndvi on kahovka data")
+            job_id = await queue.submit_job(
+                "calculate ndvi on kahovka data", attachments=_raster_attachment(synthetic_raster_path)
+            )
 
             for _ in range(60):
                 job = await queue.get_job(job_id)
