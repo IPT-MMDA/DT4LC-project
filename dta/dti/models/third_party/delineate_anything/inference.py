@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 from typing import Any
 
@@ -414,7 +415,7 @@ def delineate_fields(
 
     try:
         result = subprocess.run(
-            ["python", str(delineate_script), "-b", str(batch_path)],
+            [sys.executable, str(delineate_script), "-b", str(batch_path)],
             cwd=str(model_path),
             env=env,
             capture_output=True,

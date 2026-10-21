@@ -1,6 +1,7 @@
 """Tests for delineate_anything inference wrapper."""
 
 from pathlib import Path
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -107,6 +108,9 @@ def test_delineate_fields_success(mock_get_manager: MagicMock, mock_run: MagicMo
     assert Path(res["output_path"]).exists()
     assert res["data_source"] == "sentinel"
     assert res["model"] == "small"
+    # Upstream delineate.py must run under this interpreter (its venv), not
+    # whatever "python" is first on PATH (#60).
+    assert mock_run.call_args.args[0][0] == sys.executable
 
 
 @patch("dta.dti.models.get_model_manager")

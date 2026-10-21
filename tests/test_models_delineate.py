@@ -79,6 +79,77 @@ class TestDelineateAnythingRegistry:
         """Verify FieldBoundaries type is in registry."""
         assert "FieldBoundaries" in REGISTRY.types
 
+    def test_delineate_runner_function_is_run(self) -> None:
+        """The executor defaults to ``main``; inference.py only defines ``run`` (#60)."""
+        from dta.dti.models.third_party.delineate_anything import inference
+
+        assert DELINEATE_ITEM.runner is not None
+        assert DELINEATE_ITEM.runner.function == "run"
+        assert callable(getattr(inference, "run", None))
+        assert not hasattr(inference, "main")
+
+    def test_executor_invokes_run_under_current_interpreter(self, tmp_path: Path) -> None:
+        """Pipeline step reaches ``run()`` and spawns delineate.py with sys.executable.
+
+        Model manager and the delineate.py subprocess are mocked (no GPU, no model).
+        """
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+
+        from dta.dti.executor import PipelineExecutor
+        from dta.dti.schemas import ExecutionPlan, PlanStep
+
+        raster = tmp_path / "input.tif"
+        with rasterio.open(
+            raster,
+            "w",
+            driver="GTiff",
+            height=8,
+            width=8,
+            count=3,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=from_origin(30.0, 47.0, 0.0001, 0.0001),
+        ) as dst:
+            dst.write(np.full((3, 8, 8), 0.1, dtype=np.float32))
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        (model_dir / "delineate.py").touch()
+        manager = MagicMock()
+        manager.is_model_available.return_value = True
+        manager.get_model_path.return_value = model_dir
+
+        def fake_delineate(argv: list[str], **kwargs: object) -> MagicMock:
+            # argv = [python, delineate.py, "-b", <work_dir>/batch.yaml]
+            (Path(argv[3]).parent / "output" / "data.gpkg").touch()
+            return MagicMock(returncode=0)
+
+        plan = ExecutionPlan(
+            flow="delineate",
+            steps=[
+                PlanStep(uses="input/file", binds={"RasterPath": str(raster)}),
+                PlanStep(uses="models/delineate-anything", binds={}),
+            ],
+            outputs=["FieldBoundaries"],
+        )
+        with (
+            patch("dta.dti.models.get_model_manager", return_value=manager),
+            patch("subprocess.run", side_effect=fake_delineate) as mock_run,
+        ):
+            result = PipelineExecutor().execute(plan)
+
+        assert mock_run.call_count == 1
+        assert mock_run.call_args.args[0][0] == sys.executable
+        boundaries = result["artifacts"]["FieldBoundaries"]
+        assert boundaries["model"] == "small"
+        assert Path(boundaries["output_path"]).exists()
+        Path(boundaries["output_path"]).unlink()
+
 
 class TestDelineateAnythingModule:
     """Test the inference module itself."""
