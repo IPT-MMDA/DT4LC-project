@@ -64,8 +64,12 @@ server = [
 
 # Delineate-Anything field boundaries: its upstream delineate.py imports osgeo.gdal.
 # GDAL's Python package builds from source against the system libgdal: install
-# libgdal-dev (provides gdal-config) first, and if the build fails pin the binding
-# to the system version as the Dockerfile does: gdal==$(gdal-config --version).
+# libgdal-dev (provides gdal-config) first. The binding must match the system
+# libgdal, but uv.lock pins one gdal sdist version, so `uv sync --extra delineate`
+# only builds where libgdal is that version. Otherwise skip this extra and install
+# the matching binding as the Dockerfile does:
+#   uv pip install gdal==$(gdal-config --version)
+# (a later plain `uv sync` removes it again; use `uv sync --inexact`).
 delineate = [
     "gdal",
 ]
