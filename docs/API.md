@@ -358,43 +358,39 @@ Generate plan and execute synchronously.
 
 ## Error Responses
 
-### 400 Bad Request
-
-Invalid request format or parameters.
+HTTP errors return an `ErrorResponse` body:
 
 ```json
 {
-  "detail": "Invalid request: missing required field 'prompt'"
+  "ok": false,
+  "error": {
+    "code": "not_found",
+    "message": "Job xyz123 not found",
+    "details": {}
+  }
 }
 ```
 
-### 404 Not Found
+`error.code` follows the HTTP status:
 
-Resource not found.
+| Status | `error.code` |
+|--------|--------------|
+| 400 | `bad_request` |
+| 403 | `unauthorized` |
+| 404 | `not_found` |
+| 413 | `file_too_large` |
+| 405, 409, 429 and other 4xx | `bad_request` |
+| 5xx | `internal_error` |
 
-```json
-{
-  "detail": "Job not found: xyz123"
-}
-```
+When planning fails on `POST /v1/plan` or `POST /v1/execute`, the response is 400 with code `planning_failed`; the rejected plan, if any, is in `error.details.candidate`.
 
-### 429 Too Many Requests
-
-Queue is full.
-
-```json
-{
-  "detail": "Job queue is full, try again later"
-}
-```
-
-### 500 Internal Server Error
-
-Server-side error.
+Request validation errors (422) keep FastAPI's format, a `detail` array:
 
 ```json
 {
-  "detail": "Internal error: [error message]"
+  "detail": [
+    {"type": "missing", "loc": ["body", "prompt"], "msg": "Field required", "input": {}}
+  ]
 }
 ```
 
