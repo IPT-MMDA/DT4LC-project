@@ -7,13 +7,25 @@ SQLite rows stay small.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+import functools
+import json
 from pathlib import Path
 import re
+import sqlite3
+import time
 from typing import Any
+from unittest.mock import MagicMock, patch
 
+from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 import rasterio
+from rasterio.io import MemoryFile
+from rasterio.transform import from_origin
+
+from dta.dti.coe import planner
+from dta.dti.schemas import ContextUnderstanding
 
 _BASE64 = re.compile(r"^[A-Za-z0-9+/=\s]+$")
 
@@ -173,3 +185,111 @@ def test_executor_outside_job_queue_writes_to_run_dir(synthetic_raster_path: str
 
     assert path.parent.parent == artifacts.OUTPUTS_PATH
     assert re.fullmatch(r"run-[0-9a-f]{32}", path.parent.name)
+
+
+# --- Job API sizes (1000x1000 uint16 NDVI job) --------------------------------
+
+
+@pytest.fixture
+def stub_llm() -> Iterator[MagicMock]:
+    """No LLM on the job path: fixed NDVI context, template planner, mock summary router."""
+    ctx = ContextUnderstanding(
+        goal="calculate ndvi",
+        desired_outputs=["NDVIMap"],
+        required_inputs=["RasterPath"],
+        hints={"keywords": ["ndvi"]},
+    )
+    router = MagicMock()
+    router.generate.return_value = MagicMock(text="Stub summary.", provider="mock")
+    with (
+        patch("dta.dti.coe.orchestrator.analyze", return_value=ctx),
+        patch("dta.dti.coe.orchestrator.plan", functools.partial(planner.plan, use_llm=False)),
+        patch("dta.dti.executor.get_llm_router", return_value=router),
+    ):
+        yield router
+
+
+@pytest.fixture
+def raster_1000(tmp_path: Path) -> str:
+    path = tmp_path / "u16_1000.tif"
+    rng = np.random.default_rng(0)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=1000,
+        height=1000,
+        count=5,
+        dtype="uint16",
+        crs="EPSG:32636",
+        transform=from_origin(500000, 5000000, 30, 30),
+    ) as dst:
+        dst.write(rng.integers(100, 6000, size=(5, 1000, 1000), dtype=np.uint16))
+    return str(path)
+
+
+@pytest.fixture
+def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient, Path]]:
+    """TestClient whose job queue persists to a temp SQLite DB."""
+    from server.app import app
+    import server.jobs as jobs_mod
+
+    db = tmp_path / "jobs.db"
+    monkeypatch.setattr(jobs_mod, "_job_queue", jobs_mod.JobQueue(max_workers=1, store=jobs_mod.SQLiteJobStore(db)))
+    with TestClient(app) as client:
+        yield client, db
+
+
+def test_ndvi_job_record_list_and_row_are_small(
+    api: tuple[TestClient, Path], raster_1000: str, stub_llm: MagicMock
+) -> None:
+    from dta.dti import artifact_files as artifacts
+    import server.jobs as jobs_mod
+
+    client, db = api
+    att = {"id": "a1", "filename": "u16_1000.tif", "path": raster_1000, "mime_type": "image/tiff"}
+    job_id = client.post("/v1/jobs", json={"prompt": "calculate ndvi", "attachments": [att]}).json()["id"]
+    for _ in range(240):
+        if client.get(f"/v1/jobs/{job_id}").json()["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.25)
+
+    r = client.get(f"/v1/jobs/{job_id}")
+    job = r.json()
+    assert job["status"] == "completed", job["error"]
+    assert len(r.content) < 1_000_000, f"GET /v1/jobs/{{id}} is {len(r.content)} bytes"
+    assert _pixel_data(job) == []
+
+    # 20 jobs in the list: the real one plus 19 copies of its record.
+    store = jobs_mod._job_queue._store  # type: ignore[union-attr]
+    real = store.get(job_id)
+    for i in range(19):
+        real.id = f"copy{i:04d}"
+        store.save(real)
+    r = client.get("/v1/jobs?limit=20")
+    assert len(r.json()["jobs"]) == 20
+    assert len(r.content) < 200_000, f"GET /v1/jobs?limit=20 is {len(r.content)} bytes"
+    assert all("result" not in j for j in r.json()["jobs"])
+
+    con = sqlite3.connect(db)
+    for (row_result,) in con.execute("SELECT result FROM jobs"):
+        assert len(row_result) < 1_000_000
+        assert _pixel_data(json.loads(row_result)) == []
+    con.close()
+
+    ndvi_map = job["result"]["execution"]["artifacts"]["NDVIMap"]
+    assert "ndvi_array" not in ndvi_map
+    tif_ref = ndvi_map["rasters"]["ndvi"]
+    png_ref = ndvi_map["visualizations"]["ndvi_map"]
+    assert Path(tif_ref["path"]).parent == artifacts.OUTPUTS_PATH / job_id
+    assert tif_ref["stats"]["valid_pixels"] == 1_000_000
+    assert -1.0 <= tif_ref["stats"]["min"] <= tif_ref["stats"]["max"] <= 1.0
+
+    tif = client.get(tif_ref["url"])
+    assert tif.status_code == 200
+    with MemoryFile(tif.content) as mem, mem.open() as src:
+        assert src.crs.to_string() == "EPSG:32636"
+        assert (src.count, src.height, src.width) == (1, 1000, 1000)
+        assert src.dtypes[0] == "float32" and np.isnan(src.nodata)
+    png = client.get(png_ref["url"])
+    assert png.status_code == 200 and png.content[:8] == b"\x89PNG\r\n\x1a\n"

@@ -135,14 +135,13 @@ class JobStatus(BaseModel):  # type: ignore[misc]
 # --- Jobs ---
 
 
-class JobRecord(BaseModel):  # type: ignore[misc]
-    """Async job status and results."""
+class JobSummary(BaseModel):  # type: ignore[misc]
+    """Async job status without results (``GET /v1/jobs`` list item)."""
 
     id: str
     status: str = Field(description="pending, running, completed, failed, or cancelled")
     prompt: str
     plan: dict[str, Any] | None = None
-    result: dict[str, Any] | None = None
     progress: float = Field(ge=0.0, le=1.0)
     error: str | None = None
     created_at: str
@@ -150,10 +149,18 @@ class JobRecord(BaseModel):  # type: ignore[misc]
     completed_at: str | None = None
 
 
-class JobListResponse(BaseModel):  # type: ignore[misc]
-    """Paginated job list."""
+class JobRecord(JobSummary):
+    """Async job status and results (``GET /v1/jobs/{id}``)."""
 
-    jobs: list[JobRecord]
+    result: dict[str, Any] | None = Field(
+        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats}"
+    )
+
+
+class JobListResponse(BaseModel):  # type: ignore[misc]
+    """Paginated job list (summaries; fetch a job by id for its result)."""
+
+    jobs: list[JobSummary]
     total: int
     limit: int
     offset: int
