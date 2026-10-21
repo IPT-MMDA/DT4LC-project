@@ -83,7 +83,7 @@ cd cognitive_ui && npm install && npm run dev   # http://localhost:5173
 | `cognitive_ui/` | React + TypeScript UI |
 | `tests/` | pytest suite |
 
-Bundled algorithms use dotted module paths as registry entrypoints (`dta.dti.algorithms.ndvi`). Filesystem paths (ending in `.py` or containing `/`) are also accepted and are used for downloaded models, e.g. `dta/dti/models/third_party/delineate_anything/inference.py`.
+Bundled algorithms use dotted module paths as registry entrypoints (`dta.dti.algorithms.ndvi`). Filesystem paths (ending in `.py` or containing `/`) are also accepted and are used for the models: Prithvi's `${MODEL_PATH}/inference.py` is a file of the downloaded model (`${MODEL_PATH}` becomes the model's cache directory), and Delineate-Anything's `dta/dti/models/third_party/delineate_anything/inference.py` is a committed wrapper that runs the downloaded upstream code.
 
 ## Running tests
 

@@ -421,7 +421,7 @@ sudo apt-get install libgdal-dev
 uv pip install "gdal==$(gdal-config --version)"   # or: pip install ...
 ```
 
-The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself.
+The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself. In Docker the Delineate subprocess needs more shared memory than the default 64 MB `/dev/shm` and otherwise hangs until its 30-minute timeout, so `docker-compose.yml` gives the backend `shm_size: "2gb"`; pass `--shm-size=2g` when starting the image with `docker run`.
 
 The model weights (`delineate-anything-small`) are downloaded separately; see [Model weights](#model-weights).
 
@@ -455,7 +455,7 @@ for model_id in ("prithvi-eo-v1-100m", "delineate-anything-small"):
 EOF
 ```
 
-The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). `task download:prithvi` runs `scripts/download_prithvi.py`, which downloads Prithvi alone in the same way, reading `DT4LC_MODEL_CACHE` from the environment or `.env` like the server: it prints the target directory and skips the download if the model is already there. If the download fails, the script prints the error and exits 1, so the task fails. Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Expected Band Order
 
@@ -508,7 +508,7 @@ curl -X POST http://localhost:8000/v1/jobs \
   }'
 # {"id": "<job id>", "status": "pending", ...}
 
-# 3. Poll the job until "status" is "completed" or "failed"
+# 3. Poll the job until "status" is "completed", "failed" or "cancelled"
 curl http://localhost:8000/v1/jobs/<job id>
 
 # 4. The result references output files instead of embedding pixels. For NDVI,
@@ -689,6 +689,9 @@ task --list  # Show all available commands
 | `task coverage` | Run with coverage report |
 | **Application** | |
 | `task run:api` | Run FastAPI server |
+| `task run:api:dev` | Run FastAPI server with hot reload on port 8000 (does not read `DT4LC_HOST`/`DT4LC_PORT`) |
+| **Models & Data** | |
+| `task download:prithvi` | Download the Prithvi weights into the model cache (see [Model weights](#model-weights)) |
 | **Build & Clean** | |
 | `task build` | Build wheel and sdist |
 | `task clean` | Remove build artifacts |
