@@ -119,7 +119,9 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     """
     if provider == "gemini":
         if os.environ.get("GEMINI_API_KEY"):
-            models = _get_models_list("GEMINI_MODELS", "gemini-2.0-flash-exp")
+            from .gemini import DEFAULT_GEMINI_MODEL
+
+            models = _get_models_list("GEMINI_MODELS", DEFAULT_GEMINI_MODEL)
             model = _get_next_model("gemini", models)
             return {"type": "gemini", "model": model}
     elif provider == "groq":

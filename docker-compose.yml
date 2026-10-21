@@ -53,7 +53,7 @@ services:
       - LLM_STRATEGY=${LLM_STRATEGY:-fallback}
       # LLM API Keys and Models
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODELS=${GEMINI_MODELS:-gemini-2.0-flash-exp}
+      - GEMINI_MODELS=${GEMINI_MODELS:-gemini-3.5-flash-lite}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       # Ollama Configuration (only used if LLM_ENABLE_OLLAMA=true)

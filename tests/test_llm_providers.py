@@ -13,6 +13,14 @@ from dta.dti.coe.llm.groq import GroqProvider
 from dta.dti.coe.llm.ollama import OllamaProvider
 
 
+def _configured_gemini_models() -> list[str]:
+    """Models the app would use: GEMINI_MODELS (loaded from .env by conftest) or the code default."""
+    from dta.dti.coe.llm.config import _get_models_list
+    from dta.dti.coe.llm.gemini import DEFAULT_GEMINI_MODEL
+
+    return _get_models_list("GEMINI_MODELS", DEFAULT_GEMINI_MODEL)
+
+
 class TestLLMDataClasses:
     """Tests for LLM data classes."""
 
@@ -77,11 +85,67 @@ class TestGeminiProvider:
         assert cost > 0
         assert cost < 0.01
 
+    def test_default_model_is_current(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Code default and env-config default are the same current model, not retired 2.0."""
+        from dta.dti.coe.llm.config import get_default_config
+        from dta.dti.coe.llm.gemini import DEFAULT_GEMINI_MODEL
+
+        assert GeminiProvider().model == DEFAULT_GEMINI_MODEL
+        assert not DEFAULT_GEMINI_MODEL.startswith("gemini-2.0")
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+        monkeypatch.delenv("GEMINI_MODELS", raising=False)
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "gemini")
+        monkeypatch.setenv("LLM_ENABLE_GEMINI", "true")
+        assert get_default_config()["providers"] == [{"type": "gemini", "model": DEFAULT_GEMINI_MODEL}]
+
+    def test_generate_request_shape(self) -> None:
+        """System text leads the contents; temperature/max_tokens go into GenerateContentConfig."""
+        provider = GeminiProvider("gemini-3.8-flash", api_key="test-gemini-key")
+        captured: dict[str, object] = {}
+        fake_response = MagicMock(text="ok", usage_metadata=None, candidates=[])
+        fake_client = MagicMock()
+        fake_client.models.generate_content.side_effect = lambda **kw: captured.update(kw) or fake_response
+        provider._client = fake_client
+
+        messages = [
+            LLMMessage(role="system", content="You are a planner."),
+            LLMMessage(role="user", content="Plan."),
+        ]
+        response = provider.generate(messages, temperature=0.2, max_tokens=50)
+
+        assert captured["model"] == "gemini-3.8-flash"
+        assert captured["contents"] == ["You are a planner.", "Plan."]
+        config = captured["config"]
+        assert config.temperature == 0.2
+        assert config.max_output_tokens == 50
+        assert response.text == "ok"
+        assert response.provider == "gemini"
+
+    def test_sdk_error_reaches_router_message(self) -> None:
+        """A retired model's 404 surfaces with its SDK type and text, not 'Last error: None'."""
+        from google.genai import errors
+
+        provider = GeminiProvider("gemini-2.0-flash-exp", api_key="test-gemini-key")
+        fake_client = MagicMock()
+        fake_client.models.generate_content.side_effect = errors.ClientError(
+            404, {"error": {"code": 404, "message": "models/gemini-2.0-flash-exp is not found", "status": "NOT_FOUND"}}
+        )
+        provider._client = fake_client
+
+        with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+            LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
+
+        message = str(exc_info.value)
+        assert "gemini (gemini-2.0-flash-exp): ClientError: Gemini generation failed: 404 NOT_FOUND" in message
+        assert "None" not in message
+
     @pytest.mark.llm
     @pytest.mark.skipif(not os.environ.get("GEMINI_API_KEY"), reason="GEMINI_API_KEY not set")
-    def test_generation_real(self) -> None:
-        """Test real Gemini generation (requires API key)."""
-        provider = GeminiProvider("gemini-2.0-flash-exp")
+    @pytest.mark.parametrize("model", _configured_gemini_models())
+    def test_generation_real(self, model: str) -> None:
+        """Live smoke for every model configured in GEMINI_MODELS (requires API key)."""
+        provider = GeminiProvider(model)
         messages = [LLMMessage(role="user", content="Say 'test successful' and nothing else")]
 
         try:

@@ -11,6 +11,11 @@ from google.genai import types
 
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 
+# Default model. gemini-2.0-flash(-exp) are retired (404 NOT_FOUND); this is a current
+# Flash-Lite model listed by `client.models.list()` with generateContent support that
+# answered on the free tier and fits the planner's 2000-token budget.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+
 
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini API provider.
@@ -21,13 +26,13 @@ class GeminiProvider(BaseLLMProvider):
     - Streaming (future)
 
     Example:
-        >>> provider = GeminiProvider("gemini-2.0-flash-exp")
+        >>> provider = GeminiProvider("gemini-3.5-flash-lite")
         >>> messages = [LLMMessage(role="user", content="Hello")]
         >>> response = provider.generate(messages)
         >>> print(response.text)
     """
 
-    def __init__(self, model: str = "gemini-2.0-flash-exp", **config: Any) -> None:
+    def __init__(self, model: str = DEFAULT_GEMINI_MODEL, **config: Any) -> None:
         """Initialize Gemini provider.
 
         Args:
