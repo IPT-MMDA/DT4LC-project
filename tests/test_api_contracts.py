@@ -124,3 +124,24 @@ class TestJobListContract:
             assert key in body, f"frontend reads .{key} from /v1/jobs (list)"
         assert isinstance(body["jobs"], list)
         assert isinstance(body["total"], int)
+
+
+class TestErrorContract:
+    """HTTP errors — ``ErrorResponse`` parsed by ``cognitive_ui/src/api/client.ts``."""
+
+    @pytest.mark.parametrize(
+        ("method", "url", "status", "code"),
+        [
+            ("get", "/v1/jobs/does-not-exist", 404, "not_found"),
+            ("get", "/v1/jobs?status=bogus", 400, "bad_request"),
+        ],
+    )
+    def test_error_shape(self, client: TestClient, method: str, url: str, status: int, code: str) -> None:
+        r = getattr(client, method)(url)
+        assert r.status_code == status, r.text
+        body = r.json()
+        assert body["ok"] is False
+        assert body["error"]["code"] == code
+        assert isinstance(body["error"]["message"], str) and body["error"]["message"]
+        assert body["error"]["details"] == {}
+        assert "detail" not in body

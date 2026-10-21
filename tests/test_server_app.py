@@ -172,7 +172,7 @@ class TestPlanEndpoint:
         resp = client.post("/v1/plan", json={"messages": []})
         # HTTPException(400) is caught by outer handler → 500
         assert resp.status_code in (400, 500)
-        assert "No messages" in resp.json()["detail"]
+        assert "No messages" in resp.json()["error"]["message"]
 
     def test_plan_success(self, client: TestClient) -> None:
         mock_plan = {
@@ -209,7 +209,7 @@ class TestExecuteEndpoint:
         resp = client.post("/v1/execute", json={"messages": []})
         # HTTPException(400) is caught by outer handler → 500
         assert resp.status_code in (400, 500)
-        assert "No messages" in resp.json()["detail"]
+        assert "No messages" in resp.json()["error"]["message"]
 
     def test_execute_orchestrate_fail(self, client: TestClient) -> None:
         with patch("server.routes.chat.orchestrate", return_value={"ok": False, "error": "plan failed"}):
