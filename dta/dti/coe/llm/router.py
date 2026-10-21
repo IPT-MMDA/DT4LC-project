@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
+
+# API-key-like tokens (OpenAI/Anthropic `sk-`, Groq `gsk_`, Google `AIza`), including the masked
+# form OpenAI echoes in its 401 text (`sk-proj-****WXYZ`); stripped before logging or raising.
+_KEY_PATTERN = re.compile(r"\b(?:sk|gsk)[-_][\w*-]{4,}|\bAIza[\w-]{8,}")
 
 
 class LLMRouter:
@@ -105,7 +110,8 @@ class LLMRouter:
             except Exception as e:
                 # Providers wrap SDK errors (`raise Exception(...) from e`); name the underlying type.
                 root = e.__cause__ or e
-                failure = f"{provider.name} ({provider.model}): {type(root).__name__}: {e}"
+                detail = _KEY_PATTERN.sub("***", str(e))
+                failure = f"{provider.name} ({provider.model}): {type(root).__name__}: {detail}"
                 logger.warning(f"Provider {failure}")
                 failures.append(failure)
                 last_error = e

@@ -668,6 +668,28 @@ class TestLLMRouter:
 
         assert str(exc_info.value) == "All LLM providers failed: ollama (llama3.2): not available"
 
+    def test_key_fragments_redacted_from_log_and_message(self, caplog: pytest.LogCaptureFixture) -> None:
+        """OpenAI's 401 echoes the key prefix and last 4 chars; neither may reach users or logs."""
+        provider = MagicMock(spec=BaseLLMProvider, model="gpt-4o-mini")
+        provider.name = "openai"
+        provider.is_available.return_value = True
+        provider.generate.side_effect = Exception(
+            "OpenAI generation failed: Error code: 401 - {'error': {'message': "
+            "'Incorrect API key provided: sk-proj-***********************WXYZ. You can find your API key at "
+            "https://platform.openai.com/account/api-keys.'}} "
+            "(also sk-ant-FAKEKEYabcd1234, gsk_FAKEKEYabcd1234, AIzaFAKEKEYabcd1234)"
+        )
+
+        with caplog.at_level("WARNING", logger="dta.dti.coe.llm.router"):
+            with pytest.raises(Exception, match="All LLM providers failed") as exc_info:
+                LLMRouter([provider]).generate([LLMMessage(role="user", content="Hi")])
+
+        for text in (str(exc_info.value), caplog.text):
+            assert "Error code: 401" in text
+            assert "Incorrect API key provided: ***" in text
+            for fragment in ("WXYZ", "sk-proj", "FAKEKEY", "gsk_", "AIza"):
+                assert fragment not in text, fragment
+
 
 class TestLLMConfig:
     """Tests for LLM configuration."""
