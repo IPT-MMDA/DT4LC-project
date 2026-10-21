@@ -17,13 +17,18 @@ synthetically so it doesn't bitrot before the third-party plugin loader lands.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import textwrap
+from unittest.mock import MagicMock, patch
 
-from dta.dti.executor import PipelineExecutor
+import pytest
+
+from dta.dti.executor import ExecutionError, PipelineExecutor
 from dta.dti.schemas import (
     ExecutionPlan,
     PlanStep,
+    PreprocessorRef,
     Registry,
     RegistryItem,
     Runner,
@@ -136,3 +141,103 @@ class TestModulePathRoute:
         a = importlib.import_module("dta.dti.algorithms.ndvi")
         b = importlib.import_module("dta.dti.algorithms.ndvi")
         assert a is b
+
+
+def _write_raster(path: Path, count: int) -> str:
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=8,
+        width=8,
+        count=count,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(30.0, 47.0, 0.0001, 0.0001),
+    ) as dst:
+        dst.write(np.full((count, 8, 8), 0.1, dtype=np.float32))
+    return str(path)
+
+
+class TestPreprocessorRoute:
+    """Preprocessors load through the same dotted/filesystem loader (#60).
+
+    ``preprocessors/scale-to-hls`` is a dotted module path; it used to be
+    resolved as a filesystem path only, logged "entrypoint not found" and was
+    skipped, so Prithvi got unscaled input.
+    """
+
+    @staticmethod
+    def _prithvi_plan(raster: str) -> ExecutionPlan:
+        return ExecutionPlan(
+            flow="prithvi-reconstruction",
+            steps=[
+                PlanStep(uses="input/file", binds={"RasterPath": raster}),
+                PlanStep(uses="models/prithvi-reconstruction", binds={}),
+            ],
+            outputs=["Reconstruction"],
+        )
+
+    @staticmethod
+    def _mock_prithvi(model_dir: Path) -> MagicMock:
+        """Stand-in for the downloaded Prithvi model: inference.py echoes its input."""
+        model_dir.mkdir()
+        (model_dir / "inference.py").write_text(
+            "def main(data_files, **kwargs):\n    return {'data_files': data_files}\n"
+        )
+        manager = MagicMock()
+        manager.is_model_available.return_value = True
+        manager.get_model_path.return_value = model_dir
+        return manager
+
+    def test_dotted_preprocessor_runs_before_model(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        raster = _write_raster(tmp_path / "six.tif", 6)
+        manager = self._mock_prithvi(tmp_path / "model")
+
+        with (
+            patch("dta.dti.models.get_model_manager", return_value=manager),
+            caplog.at_level(logging.INFO, logger="dta.dti.executor"),
+        ):
+            result = PipelineExecutor().execute(self._prithvi_plan(raster))
+
+        (model_input,) = result["artifacts"]["Reconstruction"]["data_files"]
+        assert model_input != raster
+        assert Path(model_input).name == "hls_scaled_input.tif"
+        assert "Preprocessor preprocessors/scale-to-hls applied to RasterPath" in caplog.text
+        assert "not found" not in caplog.text
+
+    @pytest.mark.parametrize(
+        ("entrypoint", "error"),
+        [
+            ("dta.dti.preprocessors.does_not_exist", "Failed to import module"),
+            ("dta/dti/preprocessors/does_not_exist.py", "Entrypoint not found"),
+        ],
+    )
+    def test_unloadable_preprocessor_is_an_error(self, tmp_path: Path, entrypoint: str, error: str) -> None:
+        registry = Registry(
+            version="1.0",
+            types=["RasterPath"],
+            instances=[
+                RegistryItem(
+                    id="preprocessors/broken",
+                    kind="preprocessor",
+                    runner=Runner(type="python", entrypoint=entrypoint, function="run"),
+                ),
+                RegistryItem(
+                    id="models/needs-preprocessing",
+                    kind="model",
+                    inputs=["RasterPath"],
+                    preprocessors=[PreprocessorRef(id="preprocessors/broken", apply_to="RasterPath")],
+                    runner=Runner(type="python", entrypoint="dta.dti.algorithms.ndvi"),
+                ),
+            ],
+        )
+        executor = PipelineExecutor(registry=registry)
+        item = registry.instances[1]
+
+        with pytest.raises(ExecutionError, match=error):
+            executor._apply_preprocessors(item, {"RasterPath": "in.tif"}, str(tmp_path))
