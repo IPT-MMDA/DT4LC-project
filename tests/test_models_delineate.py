@@ -162,6 +162,26 @@ class TestDelineateAnythingModule:
         assert callable(delineate_fields)
         assert callable(run)
 
+    @pytest.mark.parametrize(("dist", "module"), [("psutil", "psutil"), ("scipy", "scipy.ndimage")])
+    def test_server_extra_declares_upstream_runtime_imports(self, dist: str, module: str) -> None:
+        """Upstream methods/main imports these directly (#60).
+
+        They used to arrive only through ultralytics, whose newer releases no
+        longer pull scipy in: the Docker image (unlocked install) had no scipy
+        and every Delineate run failed. GDAL is the separate ``delineate`` extra.
+        """
+        import importlib
+        from importlib.metadata import requires
+        import re
+
+        server = {
+            re.split(r"[\s<>=!~;\[]", req, maxsplit=1)[0].lower()
+            for req in requires("dt4lc-project") or []
+            if re.search(r"extra\s*==\s*[\"']server[\"']", req)
+        }
+        assert dist in server
+        importlib.import_module(module)
+
     def test_validate_input_missing_file(self) -> None:
         """Test validation rejects missing files."""
         from dta.dti.models.third_party.delineate_anything.inference import _validate_input

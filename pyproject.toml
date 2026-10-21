@@ -42,6 +42,9 @@ server = [
     "timm>=1.0.15",
     "ultralytics>=8.3.0",
     "huggingface-hub>=0.25.0",
+    # Imported directly by upstream Delineate-Anything (methods/main)
+    "psutil>=5.9.0",
+    "scipy>=1.10.0",
     # Geo processing
     "shapely>=2.0.0",
     "pystac-client>=0.8.5",
