@@ -141,7 +141,7 @@ tasks:
   # =============================================================================
 
   download:prithvi:
-    desc: Download Prithvi model weights
+    desc: Download Prithvi model weights into the model cache (DT4LC_MODEL_CACHE, default resources/.cache/models)
     deps: [venv]
     cmds:
       - uv run python scripts/download_prithvi.py
