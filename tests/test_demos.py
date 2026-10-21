@@ -309,7 +309,12 @@ class TestDelineateAnything:
         manager = get_model_manager()
         if not manager.is_model_available("delineate-anything-small"):
             pytest.skip("delineate-anything-small not installed; run model download first")
-        pytest.importorskip("osgeo", reason="GDAL Python bindings missing; install the delineate extra")
+        # Model installed but no GDAL bindings is a broken install, not a missing
+        # optional: fail instead of hiding the Delineate path behind a skip.
+        try:
+            import osgeo  # noqa: F401
+        except ImportError:
+            pytest.fail("delineate-anything-small is installed but the GDAL Python bindings (osgeo) are missing")
 
         executor = PipelineExecutor()
         plan = ExecutionPlan(
