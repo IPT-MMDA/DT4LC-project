@@ -145,3 +145,33 @@ class TestErrorContract:
         assert isinstance(body["error"]["message"], str) and body["error"]["message"]
         assert body["error"]["details"] == {}
         assert "detail" not in body
+
+
+class TestGEEFetchContract:
+    """``POST /v1/gee/{sentinel2,modis,landsat}`` — request shape sent by ``useGEEData.ts``.
+
+    The hooks put ``start_date``/``end_date``/``data_type``/``cloud_cover_max``
+    in the query string and post the bare ``bbox`` array as the JSON body.
+    """
+
+    @pytest.mark.parametrize(
+        ("route", "target"),
+        [
+            ("sentinel2", "dta.dti.data_sources.gee_sentinel2.fetch_sentinel2_composite"),
+            ("modis", "dta.dti.data_sources.gee_modis.fetch_modis_composite"),
+            ("landsat", "dta.dti.data_sources.gee_landsat.fetch_landsat_composite"),
+        ],
+    )
+    def test_frontend_request_shape(self, client: TestClient, route: str, target: str) -> None:
+        from unittest.mock import patch
+
+        bbox = [30.0, 46.0, 31.0, 47.0]
+        with patch(target, return_value={"ok": True, "tile_url": "https://example.invalid/{z}/{x}/{y}"}) as fetch:
+            r = client.post(
+                f"/v1/gee/{route}?start_date=2023-06-01&end_date=2023-06-09&data_type=rgb&cloud_cover_max=20",
+                json=bbox,
+            )
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+        fetch.assert_called_once()
+        assert fetch.call_args.args[:3] == (bbox, "2023-06-01", "2023-06-09")

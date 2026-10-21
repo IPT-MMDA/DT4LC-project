@@ -31,8 +31,8 @@ router = APIRouter(prefix="/v1/gee", tags=["gee"])
 )
 async def fetch_sentinel2_data(
     bbox: Annotated[list[float], Body(description="Bounding box [minX, minY, maxX, maxY] WGS84")],
-    start_date: Annotated[str, Body(description="Start date YYYY-MM-DD")],
-    end_date: Annotated[str, Body(description="End date YYYY-MM-DD")],
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
     data_type: str = Query("rgb", description="Data type: rgb, ndvi, ndwi, or ndsi"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
 ) -> GEEFetchResponse:
@@ -89,8 +89,8 @@ async def fetch_sentinel2_data(
 )
 async def fetch_modis_data(
     bbox: Annotated[list[float], Body(description="Bounding box [minX, minY, maxX, maxY] WGS84")],
-    start_date: Annotated[str, Body(description="Start date YYYY-MM-DD")],
-    end_date: Annotated[str, Body(description="End date YYYY-MM-DD")],
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
     data_type: str = Query("rgb", description="Data type: rgb, ndvi, ndwi"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
 ) -> GEEFetchResponse:
@@ -147,8 +147,8 @@ async def fetch_modis_data(
 )
 async def fetch_landsat_data(
     bbox: Annotated[list[float], Body(description="Bounding box [minX, minY, maxX, maxY] WGS84")],
-    start_date: Annotated[str, Body(description="Start date YYYY-MM-DD")],
-    end_date: Annotated[str, Body(description="End date YYYY-MM-DD")],
+    start_date: str = Query(..., description="Start date YYYY-MM-DD"),
+    end_date: str = Query(..., description="End date YYYY-MM-DD"),
     data_type: str = Query("rgb", description="Data type: rgb, ndvi, ndwi, ndsi"),
     cloud_cover_max: float = Query(20.0, ge=0, le=100, description="Maximum cloud cover %"),
 ) -> GEEFetchResponse:
