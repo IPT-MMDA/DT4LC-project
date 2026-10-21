@@ -116,8 +116,46 @@ def fetch_sentinel2_composite(
         band_image = composite.select(selected_bands)
 
         # Generate visualization parameters (use first 3 bands for RGB visualization)
-        vis_bands = selected_bands[:3] if len(selected_bands) >= 3 else selected_bands
-        vis_params = {"min": 0, "max": 3000, "bands": vis_bands}
+        # Display order: longest wavelength -> R, shortest -> B (works for any band combo)
+        _wl = {
+            "B1": 443,
+            "B2": 490,
+            "B3": 560,
+            "B4": 665,
+            "B5": 705,
+            "B6": 740,
+            "B7": 783,
+            "B8": 842,
+            "B8A": 865,
+            "B9": 945,
+            "B11": 1610,
+            "B12": 2190,
+        }
+        if len(selected_bands) > 3 and all(b in selected_bands for b in ("B4", "B3", "B2")):
+            vis_bands = ["B4", "B3", "B2"]
+        else:
+            vis_bands = sorted(selected_bands, key=lambda b: _wl.get(b, 0), reverse=True)[:3]
+        # Contrast stretch from this area's 2-98 percentiles (shared across bands -> colours stay natural)
+        vis_params = {"min": 500, "max": 1500, "bands": vis_bands}
+        try:
+            _st = (
+                band_image.select(vis_bands)
+                .reduceRegion(
+                    reducer=ee.Reducer.percentile([2, 98]),
+                    geometry=geometry,
+                    scale=60,
+                    maxPixels=1e8,
+                    bestEffort=True,
+                    tileScale=4,
+                )
+                .getInfo()
+            )
+            _lo = min(_st[f"{b}_p2"] for b in vis_bands)
+            _hi = max(_st[f"{b}_p98"] for b in vis_bands)
+            if _hi > _lo:
+                vis_params = {"min": _lo, "max": _hi, "bands": vis_bands}
+        except Exception as _e:
+            logger.warning(f"Auto-stretch failed, using fixed range: {_e}")
 
         # Get tile URL for MapLibre
         map_id = band_image.getMapId(vis_params)

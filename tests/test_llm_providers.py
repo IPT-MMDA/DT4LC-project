@@ -196,6 +196,15 @@ class TestAnthropicProvider:
         assert opus_47._supports_sampling() is False
         assert sonnet_46._supports_sampling() is True
 
+    def test_claude_5_models_omit_sampling_params(self) -> None:
+        """Claude 5.x models reject temperature ("deprecated for this model")."""
+        from dta.dti.coe.llm.anthropic import AnthropicProvider
+
+        for model in ("claude-sonnet-5-5", "claude-opus-5-5", "claude-sonnet-5", "claude-haiku-5-1"):
+            assert AnthropicProvider(model, api_key="sk-ant-test")._supports_sampling() is False, model
+        for model in ("claude-sonnet-4-6", "claude-haiku-4-5", "claude-opus-4-6"):
+            assert AnthropicProvider(model, api_key="sk-ant-test")._supports_sampling() is True, model
+
     def test_generate_passes_cache_control_on_system(self) -> None:
         """Verify cache_control: ephemeral is attached to the system block."""
         from dta.dti.coe.llm.anthropic import AnthropicProvider
