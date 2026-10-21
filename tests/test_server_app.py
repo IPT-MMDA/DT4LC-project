@@ -336,12 +336,73 @@ class TestDownloadEndpoint:
         assert resp.status_code == 403
 
     def test_missing_file_returns_404(self, client: TestClient) -> None:
-        import tempfile
+        from dta.config import TEMP_PATH
 
-        tmp = Path(tempfile.gettempdir()) / "nonexistent_dt4lc_test_file.xyz"
+        tmp = TEMP_PATH / "nonexistent_dt4lc_test_file.xyz"
         resp = client.get("/v1/download", params={"path": str(tmp)})
-        # Path is under allowed dir (tempdir) but file doesn't exist
+        # Path is under allowed dir (TEMP_PATH) but file doesn't exist
         assert resp.status_code == 404
+
+    def test_unrelated_tempdir_file_returns_403(self, client: TestClient) -> None:
+        import tempfile
+        import uuid
+
+        tmp = Path(tempfile.gettempdir()) / f"dt4lc_unrelated_{uuid.uuid4().hex}.txt"
+        tmp.write_text("not a job output")
+        try:
+            resp = client.get("/v1/download", params={"path": str(tmp)})
+        finally:
+            tmp.unlink()
+        assert resp.status_code == 403
+
+    def test_job_output_file_returns_200(self, client: TestClient) -> None:
+        import uuid
+
+        from dta.config import TEMP_PATH
+
+        out_dir = TEMP_PATH / "delineate_outputs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out = out_dir / f"test_{uuid.uuid4().hex}_fields.gpkg"
+        out.write_bytes(b"gpkg")
+        try:
+            resp = client.get("/v1/download", params={"path": str(out)})
+        finally:
+            out.unlink()
+        assert resp.status_code == 200
+        assert resp.content == b"gpkg"
+
+    def test_traversal_out_of_allowed_dir_returns_403(self, client: TestClient) -> None:
+        import tempfile
+        import uuid
+
+        from dta.config import TEMP_PATH
+
+        tmp = Path(tempfile.gettempdir()) / f"dt4lc_unrelated_{uuid.uuid4().hex}.txt"
+        tmp.write_text("not a job output")
+        # TEMP_PATH/../../(...)/<tmp file> starts with TEMP_PATH but resolves outside it
+        up = TEMP_PATH.joinpath(*[".."] * len(TEMP_PATH.parts))
+        traversal = up / tmp.resolve().relative_to(tmp.resolve().anchor)
+        try:
+            resp = client.get("/v1/download", params={"path": str(traversal)})
+        finally:
+            tmp.unlink()
+        assert resp.status_code == 403
+
+    def test_sibling_prefix_dir_returns_403(self, client: TestClient) -> None:
+        import tempfile
+        import uuid
+
+        # A string-prefix check would accept <tmp>/dt4lc_delineate_evil.../x.gpkg
+        evil_dir = Path(tempfile.gettempdir()) / f"dt4lc_delineate_evil_{uuid.uuid4().hex}"
+        evil_dir.mkdir()
+        evil = evil_dir / "x.gpkg"
+        evil.write_text("evil")
+        try:
+            resp = client.get("/v1/download", params={"path": str(evil)})
+        finally:
+            evil.unlink()
+            evil_dir.rmdir()
+        assert resp.status_code == 403
 
 
 class TestFilesEndpoint:

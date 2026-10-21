@@ -103,3 +103,24 @@ def test_plan_with_llm_failure(mock_get_router: MagicMock) -> None:
 
     with pytest.raises(Exception, match="LLM planner failed: Generation failed"):
         plan_with_llm(ctx, reg)
+
+
+def test_system_prompt_component_ids_exist_in_registry() -> None:
+    """Every component ID named in the planner's system prompt is a real registry ID."""
+    import re
+
+    from dta.dti.registry import load_registry
+
+    reg = load_registry()
+    ctx = ContextUnderstanding(goal="test", required_inputs=[], desired_outputs=[])
+    router = MagicMock()
+    router.generate.side_effect = Exception("stop after prompt is built")
+
+    with pytest.raises(Exception, match="stop after prompt is built"):
+        plan_with_llm(ctx, reg, router=router)
+
+    system_prompt = router.generate.call_args.args[0][0].content
+    mentioned = set(re.findall(r"\b(?:models|algorithms)/[\w-]+", system_prompt))
+    registry_ids = {item.id for item in reg.instances}
+    assert mentioned, "expected component IDs in the system prompt"
+    assert mentioned <= registry_ids, f"unknown IDs in prompt: {mentioned - registry_ids}"

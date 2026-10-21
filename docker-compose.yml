@@ -10,7 +10,7 @@ services:
     ports:
       - "11434:11434"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]  # the ollama image ships no curl/wget
       interval: 30s
       timeout: 10s
       retries: 5

@@ -46,3 +46,9 @@ cognitive_ui/.vite/
 *.log
 npm-debug.log*
 docs/features/
+
+# Secrets: Google Earth Engine service-account key
+resources/key_gee.json
+
+# Windows/WSL alternate data stream artefacts
+*:Zone.Identifier

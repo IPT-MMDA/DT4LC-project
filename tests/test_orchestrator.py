@@ -122,6 +122,30 @@ class TestOrchestratorPlanValidationFailure:
         assert "error" in result
         assert "candidate" in result
 
+    def test_oversized_plan_rejected(self, mock_attachment: Attachment) -> None:
+        """A 201-step plan from the planner is rejected by the resource check."""
+        from dta.dti.coe.intent_classifier import IntentType
+
+        huge_plan = ExecutionPlan(
+            flow="test",
+            steps=[PlanStep(uses="input/file", binds={})] + [PlanStep(uses="algorithms/ndvi") for _ in range(200)],
+            outputs=["publish: chat"],
+        )
+
+        with (
+            patch(
+                "dta.dti.coe.orchestrator.classify_intent",
+                return_value={"intent": IntentType.PIPELINE, "reason": "test"},
+            ),
+            patch("dta.dti.coe.orchestrator.analyze"),
+            patch("dta.dti.coe.orchestrator.plan", return_value=huge_plan),
+        ):
+            req = ChatRequest(prompt="calculate ndvi", attachments=[mock_attachment])
+            result = orchestrate(req)
+
+        assert result.get("ok") is False
+        assert "201 steps, exceeds limit of 50" in result["error"]
+
 
 class TestInjectFileBindings:
     """Tests for _inject_file_bindings helper."""
