@@ -9,6 +9,8 @@ import os
 
 from dotenv import load_dotenv
 
+from dta import __version__
+
 load_dotenv()
 
 from .logging_config import configure_logging  # noqa: E402  # must run after load_dotenv
@@ -45,7 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="DT4LC API",
-    version="1.0.0",
+    version=__version__,
     description=(
         "REST API for the Digital Twin for Land Cover (DT4LC): async geospatial jobs, "
         "LLM-powered chat and planning, file uploads, map tiles, Google Earth Engine data, "

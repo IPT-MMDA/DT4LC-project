@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from dta import __version__
+
 # Re-export Attachment from domain schemas to avoid duplication
 from dta.dti.schemas import Attachment
 
@@ -285,7 +287,7 @@ class HealthResponse(BaseModel):  # type: ignore[misc]
 
     ok: bool = True
     service: str = "DT4LC"
-    version: str = "1.0.0"
+    version: str = __version__
     llm_providers: list[LLMProviderStatus] | None = None
     gee: GEEStatus | None = None
     models: ModelsInfo | None = None
