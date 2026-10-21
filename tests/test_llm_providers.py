@@ -115,6 +115,25 @@ class TestOllamaProvider:
         cost = provider.estimate_cost(messages)
         assert cost == 0.0
 
+    @pytest.mark.parametrize(
+        ("configured", "installed", "expected"),
+        [
+            ("qwen2.5:7b", ["qwen2.5:7b"], True),
+            ("qwen2.5", ["qwen2.5:latest"], True),
+            ("qwen2.5:latest", ["qwen2.5:latest"], True),
+            ("qwen2.5:7b", ["qwen2.5:14b"], False),
+            ("qwen2.5", ["qwen2.5:7b"], False),
+            ("qwen2", ["qwen2.5:latest"], False),
+        ],
+    )
+    def test_is_available_matches_model_tags(self, configured: str, installed: list[str], expected: bool) -> None:
+        """Tagged names match exactly; an untagged name means ``:latest``."""
+        version = MagicMock()
+        tags = MagicMock()
+        tags.json.return_value = {"models": [{"name": name} for name in installed]}
+        with patch("dta.dti.coe.llm.ollama.requests.get", side_effect=[version, tags]):
+            assert OllamaProvider(configured).is_available() is expected
+
 
 class TestAnthropicProvider:
     """Tests for Anthropic Claude LLM provider."""
