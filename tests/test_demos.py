@@ -12,6 +12,7 @@ this repo); the synthetic-raster fixtures from ``conftest.py`` provide CI-safe
 coverage that exercises the same pipeline shape on Landsat-8-like data.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -223,6 +224,7 @@ class TestSentinel2NdwiFetch:
 
     @pytest.mark.network
     @pytest.mark.slow
+    @pytest.mark.skipif(not os.environ.get("GEE_PROJECT_ID"), reason="GEE_PROJECT_ID not set (GEE credentials needed)")
     def test_small_bbox_fetch(self) -> None:
         from dta.dti.data_sources.gee_sentinel2 import fetch_sentinel2_indices
 
