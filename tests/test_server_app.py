@@ -191,13 +191,20 @@ class TestPlanEndpoint:
         assert data["plan"]["flow"] == "ndvi"
 
     def test_plan_failure(self, client: TestClient) -> None:
-        with patch("server.routes.chat.orchestrate", return_value={"ok": False, "error": "test fail"}):
+        candidate = {"flow": "ndvi", "steps": []}
+        with patch(
+            "server.routes.chat.orchestrate",
+            return_value={"ok": False, "error": "test fail", "candidate": candidate},
+        ):
             resp = client.post(
                 "/v1/plan",
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        assert "test fail" in resp.json()["error"]["message"]
+        error = resp.json()["error"]
+        assert error["code"] == "planning_failed"
+        assert "test fail" in error["message"]
+        assert error["details"]["candidate"] == candidate
 
 
 class TestExecuteEndpoint:
@@ -216,6 +223,7 @@ class TestExecuteEndpoint:
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "planning_failed"
         assert "plan failed" in resp.json()["error"]["message"]
 
     def test_execute_success(self, client: TestClient) -> None:

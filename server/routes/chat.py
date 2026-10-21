@@ -4,17 +4,27 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
-from ..schemas import ChatRequest, ExecuteResponse, PlanResponse
+from ..schemas import ChatRequest, ErrorCode, ErrorDetail, ErrorResponse, ExecuteResponse, PlanResponse
 from ..utils import sse_frame
 
 router = APIRouter(prefix="/v1", tags=["chat"])
+
+
+def _planning_failed(result: dict[str, Any]) -> JSONResponse:
+    """400 ErrorResponse that keeps the rejected plan candidate in ``details``."""
+    error = ErrorDetail(
+        code=ErrorCode.PLANNING_FAILED,
+        message=result.get("error", "Plan generation failed"),
+        details={"candidate": result.get("candidate")},
+    )
+    return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=400)
 
 
 @router.post(  # type: ignore[misc]
@@ -23,7 +33,7 @@ router = APIRouter(prefix="/v1", tags=["chat"])
     summary="Generate execution plan",
     response_description="COE plan without running the pipeline",
 )
-async def create_plan(req: ChatRequest) -> PlanResponse:
+async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
     """Generate an execution plan from the latest user message (no execution)."""
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
@@ -33,7 +43,7 @@ async def create_plan(req: ChatRequest) -> PlanResponse:
 
     result = orchestrate(coe_req)
     if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result.get("error", "Plan generation failed"))
+        return _planning_failed(result)
 
     return PlanResponse(plan=result["plan"])
 
@@ -43,7 +53,7 @@ async def create_plan(req: ChatRequest) -> PlanResponse:
     response_model=ExecuteResponse,
     summary="Plan and execute pipeline",
 )
-async def execute_plan(req: ChatRequest) -> ExecuteResponse:
+async def execute_plan(req: ChatRequest) -> ExecuteResponse | JSONResponse:
     """Plan via COE and execute the pipeline synchronously."""
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
@@ -53,7 +63,7 @@ async def execute_plan(req: ChatRequest) -> ExecuteResponse:
 
     orch_result = orchestrate(coe_req)
     if not orch_result.get("ok"):
-        raise HTTPException(status_code=400, detail=orch_result.get("error", "Plan generation failed"))
+        return _planning_failed(orch_result)
 
     plan_dict = orch_result["plan"]
     plan = ExecutionPlan(**plan_dict)
