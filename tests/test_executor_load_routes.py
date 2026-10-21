@@ -252,3 +252,19 @@ class TestPreprocessorRoute:
 
         with pytest.raises(ExecutionError, match=error):
             executor._apply_preprocessors(item, {"RasterPath": "in.tif"}, str(tmp_path))
+
+    def test_preprocessor_missing_from_registry_is_an_error(self, tmp_path: Path) -> None:
+        # A typo in a ``preprocessors:`` id fails the step (get_item raises
+        # KeyError); it must not run the model on unscaled input.
+        from dta.dti.registry import get_item, load_registry
+
+        registry = load_registry()
+        get_item(registry, "models/prithvi-reconstruction").preprocessors[0].id = "preprocessors/typo"
+        raster = _write_raster(tmp_path / "six.tif", 6)
+        manager = self._mock_prithvi(tmp_path / "model")
+
+        with (
+            patch("dta.dti.models.get_model_manager", return_value=manager),
+            pytest.raises(ExecutionError, match="Registry item not found: preprocessors/typo"),
+        ):
+            PipelineExecutor(registry=registry).execute(self._prithvi_plan(raster))
