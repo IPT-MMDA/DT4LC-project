@@ -138,7 +138,7 @@ references:
       Acquisition and Advanced Computing Systems (IDAACS)
     year: 2025
     doi: "10.1109/IDAACS68557.2025.11322175"
-  - type: book-section
+  - type: generic
     title: "Digital Twins for Land Use Change"
     authors:
       - given-names: Nataliia
