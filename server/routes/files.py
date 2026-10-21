@@ -13,6 +13,8 @@ import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
 
+from dta.config import TEMP_PATH
+
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
@@ -205,10 +207,11 @@ async def download_file(path: str) -> FileResponse:
     file_path = Path(path)
 
     # Security: Only allow downloads from specific directories
+    # (TEMP_PATH holds job outputs written by the executor and Delineate-Anything)
     allowed_dirs = [
         Path(tempfile.gettempdir()) / "dt4lc_delineate",
         UPLOAD_DIR,
-        Path(tempfile.gettempdir()),
+        TEMP_PATH,
     ]
 
     # Check if path is under an allowed directory
