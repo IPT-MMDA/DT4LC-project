@@ -12,10 +12,12 @@ import importlib.util
 import logging
 from pathlib import Path
 import sys
+from types import ModuleType
 from typing import Any
 import uuid
 
 from dta.config import ROOT_DIR, TEMP_PATH
+from dta.dti import artifact_files
 from dta.dti.coe.llm import LLMMessage, get_llm_router
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
@@ -119,6 +121,7 @@ class PipelineExecutor:
         plan: ExecutionPlan,
         on_progress: Callable[[dict[str, Any]], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
+        output_dir: Path | None = None,
     ) -> dict[str, Any]:
         """Execute a pipeline plan step by step.
 
@@ -126,6 +129,9 @@ class PipelineExecutor:
             plan: Execution plan from COE planner
             on_progress: Optional callback for progress events
             is_cancelled: Optional callback to check if execution should be cancelled
+            output_dir: Directory for the steps' GeoTIFF/PNG artifacts, named
+                ``<step index>_<output type>_<key>.<tif|png>``. The job queue
+                passes ``OUTPUTS_PATH/<job_id>``; default ``OUTPUTS_PATH/run-<uuid hex>``.
 
         Returns:
             Dictionary with:
@@ -141,6 +147,7 @@ class PipelineExecutor:
         self.artifacts = {}  # Reset for each execution
         self.executed_items = []  # Reset executed items
         executed_steps: list[str] = []
+        output_dir = output_dir or artifact_files.output_dir()
 
         for idx, step in enumerate(plan.steps, start=1):
             # Check for cancellation before each step
@@ -159,7 +166,9 @@ class PipelineExecutor:
 
             try:
                 item = get_item(self.registry, step.uses)
-                self._execute_step(step, item)
+                prefix = f"{idx - 1}_{item.outputs[0]}" if item.outputs else str(idx - 1)
+                with artifact_files.step_outputs(output_dir, prefix):
+                    self._execute_step(step, item)
                 executed_steps.append(step.uses)
                 self.executed_items.append(item)  # Track for interpretation lookup
 
@@ -348,45 +357,10 @@ class PipelineExecutor:
             **inputs,  # Input types like RasterPath
         }
 
-        # Resolve entrypoint - supports two forms:
-        #   1. Dotted module path ("dta.dti.algorithms.ndvi") — bundled in-package
-        #      code; loaded via importlib.import_module (cached, no sys.path mutation).
-        #   2. Filesystem path ("dta/.../foo.py", "${MODEL_PATH}/inference.py") —
-        #      third-party / runtime-resolved plugins; loaded via spec_from_file_location.
         entrypoint_str = self._resolve_variables(item.runner.entrypoint, var_context)
-        is_filesystem_path = entrypoint_str.endswith(".py") or "/" in entrypoint_str or "\\" in entrypoint_str
-
-        model_dir_added = False
-        if is_filesystem_path:
-            entrypoint = Path(entrypoint_str)
-            if not entrypoint.is_absolute():
-                entrypoint = ROOT_DIR / entrypoint
-            if not entrypoint.exists():
-                raise ExecutionError(f"Entrypoint not found: {entrypoint}")
-
-            # Add the model directory to sys.path so the entrypoint can import
-            # siblings (e.g. Prithvi's inference.py imports prithvi_mae.py).
-            # Process-global mutation, but each model has a unique cache directory
-            # and concurrent executions of the same model insert the same path —
-            # so threads don't clobber each other in practice. Removing this would
-            # require rewriting third-party model code to use relative imports.
-            if model_path:
-                model_dir = str(Path(model_path))
-                if model_dir not in sys.path:
-                    sys.path.insert(0, model_dir)
-                    model_dir_added = True
-
-            spec = importlib.util.spec_from_file_location(f"runner_{item.id.replace('/', '_')}", str(entrypoint))
-            if spec is None or spec.loader is None:
-                raise ExecutionError(f"Failed to load module: {entrypoint}")
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[spec.name] = module
-            spec.loader.exec_module(module)
-        else:
-            try:
-                module = importlib.import_module(entrypoint_str)
-            except ImportError as e:
-                raise ExecutionError(f"Failed to import module {entrypoint_str}: {e}") from e
+        module, model_dir_added = self._load_entrypoint(
+            entrypoint_str, f"runner_{item.id.replace('/', '_')}", model_path
+        )
 
         try:
             # Determine function to call and arguments
@@ -431,6 +405,59 @@ class PipelineExecutor:
                     sys.path.remove(str(Path(model_path)))
                 except ValueError:
                     pass  # Already removed
+
+    def _load_entrypoint(
+        self, entrypoint_str: str, module_name: str, model_path: str | None
+    ) -> tuple[ModuleType, bool]:
+        """Load a runner entrypoint module.
+
+        Returns:
+            (module, model_dir_added) — the caller removes ``model_path`` from
+            ``sys.path`` when ``model_dir_added`` is True.
+
+        Raises:
+            ExecutionError: If the entrypoint cannot be found or imported
+        """
+        # Resolve entrypoint - supports two forms:
+        #   1. Dotted module path ("dta.dti.algorithms.ndvi") — bundled in-package
+        #      code; loaded via importlib.import_module (cached, no sys.path mutation).
+        #   2. Filesystem path ("dta/.../foo.py", "${MODEL_PATH}/inference.py") —
+        #      third-party / runtime-resolved plugins; loaded via spec_from_file_location.
+        is_filesystem_path = entrypoint_str.endswith(".py") or "/" in entrypoint_str or "\\" in entrypoint_str
+
+        model_dir_added = False
+        if is_filesystem_path:
+            entrypoint = Path(entrypoint_str)
+            if not entrypoint.is_absolute():
+                entrypoint = ROOT_DIR / entrypoint
+            if not entrypoint.exists():
+                raise ExecutionError(f"Entrypoint not found: {entrypoint}")
+
+            # Add the model directory to sys.path so the entrypoint can import
+            # siblings (e.g. Prithvi's inference.py imports prithvi_mae.py).
+            # Process-global mutation, but each model has a unique cache directory
+            # and concurrent executions of the same model insert the same path —
+            # so threads don't clobber each other in practice. Removing this would
+            # require rewriting third-party model code to use relative imports.
+            if model_path:
+                model_dir = str(Path(model_path))
+                if model_dir not in sys.path:
+                    sys.path.insert(0, model_dir)
+                    model_dir_added = True
+
+            spec = importlib.util.spec_from_file_location(module_name, str(entrypoint))
+            if spec is None or spec.loader is None:
+                raise ExecutionError(f"Failed to load module: {entrypoint}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+        else:
+            try:
+                module = importlib.import_module(entrypoint_str)
+            except ImportError as e:
+                raise ExecutionError(f"Failed to import module {entrypoint_str}: {e}") from e
+
+        return module, model_dir_added
 
     def _resolve_variables(self, value: str, context: dict[str, Any]) -> str:
         """Resolve ${VAR} placeholders in a string.
@@ -499,6 +526,10 @@ class PipelineExecutor:
 
         Returns:
             Updated inputs dict with preprocessed values
+
+        Raises:
+            ExecutionError: If a preprocessor cannot be loaded; exceptions
+                raised by the preprocessor itself propagate unchanged.
         """
         updated_inputs = inputs.copy()
 
@@ -515,44 +546,25 @@ class PipelineExecutor:
                 continue
 
             if not preproc_item.runner or not preproc_item.runner.entrypoint:
-                logger.warning(f"Preprocessor {preproc_ref.id} has no runner/entrypoint")
-                continue
+                raise ExecutionError(f"Preprocessor {preproc_ref.id} has no runner/entrypoint")
 
-            # Resolve and load preprocessor module
-            entrypoint = Path(preproc_item.runner.entrypoint)
-            if not entrypoint.is_absolute():
-                entrypoint = ROOT_DIR / entrypoint
+            # Same dotted-module / filesystem-path loading as model and algorithm
+            # runners. A preprocessor that cannot be loaded or fails is a hard
+            # error: running the model on unprocessed input gives wrong results.
+            entrypoint = preproc_item.runner.entrypoint
+            module, _ = self._load_entrypoint(entrypoint, f"preprocessor_{preproc_ref.id.replace('/', '_')}", None)
 
-            if not entrypoint.exists():
-                logger.warning(f"Preprocessor entrypoint not found: {entrypoint}")
-                continue
+            # Call preprocessor function
+            func_name = preproc_item.runner.function or "run"
+            if not hasattr(module, func_name):
+                raise ExecutionError(f"Preprocessor {entrypoint} has no {func_name}() function")
 
-            try:
-                spec = importlib.util.spec_from_file_location(
-                    f"preprocessor_{preproc_ref.id.replace('/', '_')}", str(entrypoint)
-                )
-                if spec is None or spec.loader is None:
-                    raise ExecutionError(f"Failed to load preprocessor: {entrypoint}")
+            func = getattr(module, func_name)
+            original_value = updated_inputs[input_type]
+            new_value = func(input_path=original_value, output_dir=output_dir)
 
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[spec.name] = module
-                spec.loader.exec_module(module)
-
-                # Call preprocessor function
-                func_name = preproc_item.runner.function or "run"
-                if not hasattr(module, func_name):
-                    raise ExecutionError(f"Preprocessor {entrypoint} has no {func_name}() function")
-
-                func = getattr(module, func_name)
-                original_value = updated_inputs[input_type]
-                new_value = func(input_path=original_value, output_dir=output_dir)
-
-                updated_inputs[input_type] = new_value
-                logger.info(f"Preprocessor {preproc_ref.id} applied to {input_type}: {original_value} -> {new_value}")
-
-            except Exception as e:
-                logger.warning(f"Preprocessor {preproc_ref.id} failed: {e}, using original value")
-                continue
+            updated_inputs[input_type] = new_value
+            logger.info(f"Preprocessor {preproc_ref.id} applied to {input_type}: {original_value} -> {new_value}")
 
         return updated_inputs
 
@@ -577,24 +589,25 @@ class PipelineExecutor:
             "input_file": inputs.get("RasterPath"),
         }
 
-        # Convert TIFF outputs to base64 PNG for frontend visualization
+        # Write a PNG next to each TIFF output for frontend visualization
         visualizations = self._convert_tiffs_to_visualizations(output_files, model_id)
         if visualizations:
             result["visualizations"] = visualizations
 
         return result
 
-    def _convert_tiffs_to_visualizations(self, tiff_files: list[Path], model_id: str | None) -> dict[str, str]:
-        """Convert TIFF files to base64 PNG images for frontend display.
+    def _convert_tiffs_to_visualizations(
+        self, tiff_files: list[Path], model_id: str | None
+    ) -> dict[str, dict[str, Any]]:
+        """Write each TIFF as a PNG next to it for frontend display.
 
         Args:
             tiff_files: List of TIFF file paths
             model_id: Model identifier for labeling
 
         Returns:
-            Dictionary mapping label -> base64 PNG string
+            Dictionary mapping label -> ``png`` artifact reference
         """
-        import base64
         import io
 
         try:
@@ -605,7 +618,7 @@ class PipelineExecutor:
             logger.warning("rasterio or PIL not available for TIFF conversion")
             return {}
 
-        visualizations: dict[str, str] = {}
+        visualizations: dict[str, dict[str, Any]] = {}
 
         for tiff_path in tiff_files:
             try:
@@ -641,12 +654,10 @@ class PipelineExecutor:
                         # Take first band as grayscale
                         img = Image.fromarray(img_data[0], mode="L")
 
-                    # Convert to PNG base64
+                    # Write the PNG next to the TIFF
                     buffer = io.BytesIO()
                     img.save(buffer, format="PNG")
-                    buffer.seek(0)
-                    b64_str = base64.b64encode(buffer.read()).decode("utf-8")
-                    visualizations[label] = b64_str
+                    visualizations[label] = artifact_files.write_png(tiff_path.with_suffix(".png"), buffer.getvalue())
 
             except Exception as e:
                 logger.warning(f"Failed to convert {tiff_path} to PNG: {e}")

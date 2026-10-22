@@ -9,6 +9,7 @@ import { ChatHistory } from '../components/chat/ChatHistory';
 import { FileUploadDropzone } from '../components/chat/FileUploadDropzone';
 import { ImagePreviewModal } from '../components/chat/ImagePreviewModal';
 import { useJobSync } from '../hooks/useJobSync';
+import { resolveApiUrl } from '../api/client';
 import { chatLogger as logger } from '../utils/logger';
 import { getGeoTIFFOutputsFromJob } from '../utils/jobGeoTIFF';
 import type { ChatMessage, Job } from '../types';
@@ -172,7 +173,7 @@ export function ChatPage() {
       ? uploadedAttachments.map(att => ({
           id: att.id,
           filename: att.filename,
-          preview_png_base64: att.preview_png_base64,
+          preview_url: att.preview_url,
           path: att.path,  // Include path for follow-up context
         }))
       : undefined;
@@ -394,16 +395,16 @@ export function ChatPage() {
               {message.attachments.map((att) => (
                 <button
                   key={att.id}
-                  onClick={() => att.preview_png_base64 && setPreviewImage({
-                    src: `data:image/png;base64,${att.preview_png_base64}`,
+                  onClick={() => att.preview_url && setPreviewImage({
+                    src: resolveApiUrl(att.preview_url),
                     filename: att.filename,
                   })}
                   className="group relative rounded-lg overflow-hidden border-2 border-white/30 hover:border-white/60 transition-colors cursor-pointer"
                   title={`Click to view: ${att.filename}`}
                 >
-                  {att.preview_png_base64 ? (
+                  {att.preview_url ? (
                     <img
-                      src={`data:image/png;base64,${att.preview_png_base64}`}
+                      src={resolveApiUrl(att.preview_url)}
                       alt={att.filename}
                       className="w-20 h-20 object-cover"
                     />

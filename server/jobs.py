@@ -23,6 +23,7 @@ import uuid
 
 import numpy as np
 
+from dta.dti import artifact_files
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import load_registry
@@ -688,8 +689,10 @@ class JobQueue:
         # Create a fresh executor for this job (executor has mutable state - artifacts dict)
         executor = PipelineExecutor(self._registry)
 
-        # Execute plan with cancellation support
-        execution_result = executor.execute(job.plan, is_cancelled=check_cancelled)
+        # Execute plan with cancellation support; artifact files go to OUTPUTS_PATH/<job_id>/
+        execution_result = executor.execute(
+            job.plan, is_cancelled=check_cancelled, output_dir=artifact_files.output_dir(job_id)
+        )
 
         job.progress = 0.8
 
@@ -734,8 +737,10 @@ class JobQueue:
                 functools.partial(self._run_blocking_job, job, job_id, worker_id),
             )
 
-            # Mark completed
+            # Mark completed, unless cancel_job ran while the last step was executing
             async with self._lock:
+                if job.status == JobStatus.CANCELLED:
+                    raise CancellationError("Job cancelled during its last step")
                 job.result = result
                 job.status = JobStatus.COMPLETED
                 job.progress = 1.0
@@ -764,11 +769,12 @@ class JobQueue:
             logger.warning(f"Job {job_id} requires model '{e.model_id}' which is not installed")
 
         except Exception as e:
-            # Mark failed
+            # Mark failed, unless the job was cancelled while its step was running
             async with self._lock:
-                job.status = JobStatus.FAILED
-                job.error = str(e)
-                job.completed_at = datetime.now()
+                if job.status != JobStatus.CANCELLED:
+                    job.status = JobStatus.FAILED
+                    job.error = str(e)
+                    job.completed_at = datetime.now()
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 

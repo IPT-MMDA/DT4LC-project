@@ -7,7 +7,7 @@ interface UploadResponse {
   size: [number, number];
   crs: string | null;
   bounds: [number, number, number, number];
-  preview_png_base64: string;
+  preview_url: string;
 }
 
 export interface GeoTIFFFile {
@@ -34,14 +34,14 @@ export function useUploadFile() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/v1/upload`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/v1/upload`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Upload failed');
+        throw new Error(error.error?.message || error.detail || 'Upload failed');
       }
 
       return response.json();
@@ -53,7 +53,7 @@ export function useListFiles() {
   return useQuery({
     queryKey: ['files'],
     queryFn: async (): Promise<GeoTIFFFile[]> => {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/v1/files`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/v1/files`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch files');

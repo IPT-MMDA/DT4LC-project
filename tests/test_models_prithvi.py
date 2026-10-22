@@ -89,7 +89,7 @@ def test_fullflow_prithvi_example_persist_to_temp() -> None:
     assert result["ok"], f"Plan/DM failed: {result}"
     plan = result["plan"]
     step_ids = [s["uses"] for s in plan["steps"]]
-    assert any("models/prithvi_features" in s for s in step_ids), f"Plan missing prithvi step: {step_ids}"
+    assert any("models/prithvi-reconstruction" in s for s in step_ids), f"Plan missing prithvi step: {step_ids}"
 
     # sanity: model path exists and has inference.py
     assert (prithvi_dir / "inference.py").exists(), f"inference.py not found in {prithvi_dir}"

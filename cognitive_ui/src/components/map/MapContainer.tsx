@@ -6,6 +6,7 @@ import { DrawControl, DrawControlRef } from './DrawControl';
 import { DrawToolbar } from './DrawToolbar';
 import { LocationQuickAccess } from './LocationQuickAccess';
 import { JobLayersManager } from './JobLayersManager';
+import { OblastBoundaries } from './OblastBoundaries';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export function MapContainer() {
@@ -14,6 +15,7 @@ export function MapContainer() {
   const isProcessingDraw = useRef(false);
   const currentBasemap = useAppStore((state) => state.currentBasemap);
   const addRegion = useAppStore((state) => state.addRegion);
+  const deleteRegion = useAppStore((state) => state.deleteRegion);
   const drawnRegions = useAppStore((state) => state.drawnRegions);
   const selectedRegion = useAppStore((state) => state.selectedRegion);
   const useNewDatasetPanel = useAppStore((state) => state.useNewDatasetPanel);
@@ -94,9 +96,9 @@ export function MapContainer() {
     } else if (mode === 'draw') {
       drawRef.current?.changeMode('draw_polygon');
     } else if (mode === 'delete') {
-      const selected = drawRef.current?.getSelected();
-      if (selected && selected.features && selected.features.length > 0) {
-        drawRef.current?.deleteAll();
+      // Drawn polygons live in the store (handleDrawCreate empties the draw control)
+      if (selectedRegion) {
+        deleteRegion(selectedRegion.id);
       }
       setDrawMode('select');
       drawRef.current?.changeMode('simple_select');
@@ -187,6 +189,7 @@ export function MapContainer() {
         })}
 
         <JobLayersManager />
+        <OblastBoundaries />
       </Map>
       <DrawToolbar onModeChange={handleModeChange} currentMode={drawMode} />
       {!useNewDatasetPanel && <LocationQuickAccess onLocationSelect={handleLocationSelect} />}

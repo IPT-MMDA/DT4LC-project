@@ -24,7 +24,7 @@ class TestDetectDataSource:
         if not tif_files:
             pytest.skip("No GeoTIFF files found")
 
-        # Kahovka data is Sentinel-2 (10m resolution)
+        # Kahovka data is HLS L30 (30 m), which falls in the medium-resolution 'sentinel' class
         source = detect_data_source(str(tif_files[0]))
         assert source == "sentinel", f"Expected 'sentinel' for Kahovka data, got '{source}'"
 

@@ -3,16 +3,25 @@ import { CheckCircle, AlertCircle, BarChart3, TrendingUp, Map, Download, ArrowUp
 import type { Job } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { getArtifactsFromJobResult, getGeoTIFFOutputsFromJob } from '../../utils/jobGeoTIFF';
+import { artifactUrl, resolveApiUrl } from '../../api/client';
 
 interface JobResultProps {
   job?: Job;
   result: any;
 }
 
-// Helper to download base64 image
-function downloadBase64Image(base64: string, filename: string) {
+// Image URL of a png artifact reference. Job rows stored before v0.5.0 hold base64
+// strings instead; this page is never persisted, so they are shown as data URLs.
+function imageSrc(ref: unknown): string | undefined {
+  if (typeof ref === 'string' && ref) return `data:image/png;base64,${ref}`;
+  const url = artifactUrl(ref);
+  return url && resolveApiUrl(url);
+}
+
+// Helper to download an image by URL
+function downloadImage(src: string, filename: string) {
   const link = document.createElement('a');
-  link.href = `data:image/png;base64,${base64}`;
+  link.href = src;
   link.download = filename;
   link.click();
 }
@@ -71,6 +80,16 @@ export function JobResult({ job, result }: JobResultProps) {
   // AI summary is in agent_result
   const aiSummary = artifacts.agent_result?.summary;
 
+  // Visualization image URLs
+  const fieldBoundariesSrc = imageSrc(fieldBoundaries?.visualizations?.field_boundaries);
+  const changeMapSrc = imageSrc(changeMap?.visualizations?.change_map);
+  const ndviBeforeSrc = imageSrc(changeMap?.visualizations?.ndvi_before);
+  const ndviAfterSrc = imageSrc(changeMap?.visualizations?.ndvi_after);
+  const ndviMapSrc = imageSrc(ndviMap?.visualizations?.ndvi_map);
+  const reconstructionImages = Object.entries(reconstruction?.visualizations || {})
+    .map(([key, ref]) => [key, imageSrc(ref)] as const)
+    .filter((entry): entry is readonly [string, string] => !!entry[1]);
+
   return (
     <div className="space-y-6">
       {/* Execution Status */}
@@ -116,9 +135,9 @@ export function JobResult({ job, result }: JobResultProps) {
               </h3>
             </div>
             <div className="flex items-center gap-2">
-              {fieldBoundaries.visualizations?.field_boundaries && (
+              {fieldBoundariesSrc && (
                 <button
-                  onClick={() => downloadBase64Image(fieldBoundaries.visualizations.field_boundaries, 'field_boundaries.png')}
+                  onClick={() => downloadImage(fieldBoundariesSrc, 'field_boundaries.png')}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400
                              bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
@@ -141,14 +160,14 @@ export function JobResult({ job, result }: JobResultProps) {
           </div>
 
           {/* Field Boundaries Visualization */}
-          {fieldBoundaries.visualizations?.field_boundaries && (
+          {fieldBoundariesSrc && (
             <div className="mb-4">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Detected Field Boundaries
               </p>
               <div className="rounded-lg overflow-hidden border border-blue-200 dark:border-blue-700">
                 <img
-                  src={`data:image/png;base64,${fieldBoundaries.visualizations.field_boundaries}`}
+                  src={fieldBoundariesSrc}
                   alt="Field Boundaries"
                   className="w-full h-auto"
                 />
@@ -207,13 +226,13 @@ export function JobResult({ job, result }: JobResultProps) {
           </p>
 
           {/* Reconstruction Visualizations */}
-          {reconstruction.visualizations && Object.keys(reconstruction.visualizations).length > 0 && (
+          {reconstructionImages.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
                 Reconstruction Output
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(reconstruction.visualizations).map(([key, base64]) => {
+                {reconstructionImages.map(([key, src]) => {
                   const labelMap: Record<string, string> = {
                     original_rgb_t0: 'Original Image',
                     masked_rgb_t0: 'Masked Image',
@@ -227,7 +246,7 @@ export function JobResult({ job, result }: JobResultProps) {
                           {label}
                         </span>
                         <button
-                          onClick={() => downloadBase64Image(base64 as string, `${key}.png`)}
+                          onClick={() => downloadImage(src, `${key}.png`)}
                           className="text-violet-500 hover:text-violet-700 dark:hover:text-violet-300"
                           title="Download"
                         >
@@ -235,7 +254,7 @@ export function JobResult({ job, result }: JobResultProps) {
                         </button>
                       </div>
                       <img
-                        src={`data:image/png;base64,${base64}`}
+                        src={src}
                         alt={label}
                         className="w-full h-auto"
                       />
@@ -258,9 +277,9 @@ export function JobResult({ job, result }: JobResultProps) {
                 Vegetation Change Detection
               </h3>
             </div>
-            {changeMap.visualizations?.change_map && (
+            {changeMapSrc && (
               <button
-                onClick={() => downloadBase64Image(changeMap.visualizations.change_map, 'change_map.png')}
+                onClick={() => downloadImage(changeMapSrc, 'change_map.png')}
                 className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400
                            bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
               >
@@ -274,14 +293,14 @@ export function JobResult({ job, result }: JobResultProps) {
           {changeMap.visualizations && (
             <div className="space-y-4">
               {/* Main Change Map */}
-              {changeMap.visualizations.change_map && (
+              {changeMapSrc && (
                 <div>
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Change Map (Red: Loss, Green: Gain)
                   </p>
                   <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                     <img
-                      src={`data:image/png;base64,${changeMap.visualizations.change_map}`}
+                      src={changeMapSrc}
                       alt="Vegetation Change Map"
                       className="w-full h-auto"
                     />
@@ -290,16 +309,16 @@ export function JobResult({ job, result }: JobResultProps) {
               )}
 
               {/* Before/After NDVI */}
-              {(changeMap.visualizations.ndvi_before || changeMap.visualizations.ndvi_after) && (
+              {(ndviBeforeSrc || ndviAfterSrc) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {changeMap.visualizations.ndvi_before && (
+                  {ndviBeforeSrc && (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                           NDVI - Before
                         </p>
                         <button
-                          onClick={() => downloadBase64Image(changeMap.visualizations.ndvi_before, 'ndvi_before.png')}
+                          onClick={() => downloadImage(ndviBeforeSrc, 'ndvi_before.png')}
                           className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                           title="Download"
                         >
@@ -308,21 +327,21 @@ export function JobResult({ job, result }: JobResultProps) {
                       </div>
                       <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                         <img
-                          src={`data:image/png;base64,${changeMap.visualizations.ndvi_before}`}
+                          src={ndviBeforeSrc}
                           alt="NDVI Before"
                           className="w-full h-auto"
                         />
                       </div>
                     </div>
                   )}
-                  {changeMap.visualizations.ndvi_after && (
+                  {ndviAfterSrc && (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                           NDVI - After
                         </p>
                         <button
-                          onClick={() => downloadBase64Image(changeMap.visualizations.ndvi_after, 'ndvi_after.png')}
+                          onClick={() => downloadImage(ndviAfterSrc, 'ndvi_after.png')}
                           className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                           title="Download"
                         >
@@ -331,7 +350,7 @@ export function JobResult({ job, result }: JobResultProps) {
                       </div>
                       <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
                         <img
-                          src={`data:image/png;base64,${changeMap.visualizations.ndvi_after}`}
+                          src={ndviAfterSrc}
                           alt="NDVI After"
                           className="w-full h-auto"
                         />
@@ -439,11 +458,12 @@ export function JobResult({ job, result }: JobResultProps) {
                   View on Map
                 </button>
               )}
-              {ndviMap.visualizations.ndvi_map && (
+              {ndviMapSrc && (
                 <button
-                  onClick={() => downloadBase64Image(ndviMap.visualizations.ndvi_map, 'ndvi_map.png')}
+                  type="button"
+                  onClick={() => downloadImage(ndviMapSrc, 'ndvi_map.png')}
                   className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400
-                             bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                           bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   <Download className="w-4 h-4" />
                   Download
@@ -452,10 +472,10 @@ export function JobResult({ job, result }: JobResultProps) {
             </div>
           </div>
 
-          {ndviMap.visualizations.ndvi_map && (
+          {ndviMapSrc && (
             <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
               <img
-                src={`data:image/png;base64,${ndviMap.visualizations.ndvi_map}`}
+                src={ndviMapSrc}
                 alt="NDVI Map"
                 className="w-full h-auto"
               />

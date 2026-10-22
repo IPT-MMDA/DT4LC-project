@@ -12,7 +12,6 @@ file in ``algorithms/``.
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Callable
 import io
 from pathlib import Path
@@ -21,6 +20,7 @@ from typing import Any
 import numpy as np
 import rasterio
 
+from dta.dti import artifact_files
 from dta.dti.raster import band_indices
 
 # Try to import matplotlib for visualization; degrade gracefully if absent.
@@ -70,6 +70,14 @@ FORMULAS: dict[str, Callable[[dict[str, np.ndarray]], np.ndarray]] = {
     "evi": _evi,
 }
 
+# Value range of each formula; results are clipped to it.
+RANGES: dict[str, tuple[float, float]] = {
+    "ndvi": (-1.0, 1.0),
+    "ndwi": (-1.0, 1.0),
+    "ndsi": (-1.0, 1.0),
+    "evi": (-1.0, 1.0),
+}
+
 
 # --- Colormaps: name → list of RGB tuples ------------------------------------
 # Reused from the legacy per-index files; LinearSegmentedColormap interpolates
@@ -107,7 +115,28 @@ COLORMAPS: dict[str, list[tuple[float, float, float]]] = {
 
 
 def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
-    """Calculate a spectral index from a raster + config.
+    """Calculate a spectral index and write it as GeoTIFF + PNG (see :func:`calculate_index`).
+
+    Returns:
+        The :func:`calculate_index` result with the array in
+        ``rasters["<formula>"]`` and ``visualizations["<formula>_map"]`` as
+        artifact references (``{kind, path, url, stats}``).
+    """
+    result, index_array, (crs, transform) = calculate_index(raster_path, index_config)
+    return artifact_files.save(
+        result, {result["index_type"]: index_array}, result["visualizations"], crs=crs, transform=transform
+    )
+
+
+def calculate_index(
+    raster_path: str, index_config: dict[str, Any]
+) -> tuple[dict[str, Any], np.ndarray, tuple[Any, Any]]:
+    """Calculate a spectral index from a raster + config, in memory.
+
+    Integer-scaled reflectance (any required band with max > 1000) is divided
+    by 10000 first. Pixels that are nodata or non-finite in any required band
+    are NaN in the output; values are clipped to the formula's range
+    (``RANGES``); statistics cover valid pixels only.
 
     Args:
         raster_path: Path to a multi-band GeoTIFF.
@@ -118,13 +147,13 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
             - ``vmin`` / ``vmax``: visualization value range (optional).
 
     Returns:
-        Dict with::
+        ``(result, index_array, (crs, transform))`` where ``index_array`` is
+        NaN-filled, ``(crs, transform)`` are the input's, and ``result`` is::
 
             {
-                "<formula>_array": list[list[float]] (NaN-filled),
                 "metadata": {crs, transform, bounds, width, height, count},
                 "statistics": {min, max, mean, std, median, valid_pixels, total_pixels},
-                "visualizations": {"<formula>_map": <base64 png> | None},
+                "visualizations": {"<formula>_map": <png bytes> | None},
                 "path": "<input path>",
                 "index_type": "<formula>",
             }
@@ -160,14 +189,25 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
                 )
             data = src.read(idx, masked=True).astype(float)
             if hasattr(data, "filled"):
-                data = data.filled(np.nan)
+                data = data.filled(np.nan)  # nodata -> NaN
             bands[role] = data
 
-        index_array = formula(bands)
+        # A pixel is valid only if every required band is finite (not NaN/inf/nodata).
+        input_valid = np.logical_and.reduce([np.isfinite(b) for b in bands.values()])
+        # Integer-scaled reflectance (0-10000) -> 0-1, as in snow_classifier.
+        max_val = max(float(np.max(b[input_valid])) for b in bands.values()) if input_valid.any() else 0.0
+        if max_val > 1000:
+            bands = {role: b / 10000.0 for role, b in bands.items()}
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            index_array = formula(bands)
         # Mask invalids that the divide-by-zero protection didn't catch (NaN inputs).
         if np.ma.isMaskedArray(index_array):
             index_array = index_array.filled(np.nan)
         index_array = np.asarray(index_array, dtype=np.float64)
+        index_array[~input_valid | ~np.isfinite(index_array)] = np.nan
+        lo, hi = RANGES.get(formula_name, (-np.inf, np.inf))
+        index_array = np.clip(index_array, lo, hi)
 
         valid_mask = np.isfinite(index_array)
         valid = index_array[valid_mask]
@@ -191,8 +231,9 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
             "height": src.height,
             "count": src.count,
         }
+        geo = (src.crs, src.transform)
 
-    visualizations: dict[str, str | None] = {}
+    visualizations: dict[str, bytes | None] = {}
     if HAS_MATPLOTLIB:
         visualizations[f"{formula_name}_map"] = _render_index_png(
             index_array,
@@ -202,14 +243,14 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
             title=f"{formula_name.upper()} - {raster_path_obj.stem}",
         )
 
-    return {
-        f"{formula_name}_array": index_array.tolist(),
+    result = {
         "metadata": metadata,
         "statistics": stats,
         "visualizations": visualizations,
         "path": str(raster_path),
         "index_type": formula_name,
     }
+    return result, index_array, geo
 
 
 def run_change(
@@ -219,17 +260,12 @@ def run_change(
 ) -> dict[str, Any]:
     """Compute the temporal difference of a spectral index between two rasters.
 
-    Convenience wrapper that calls :func:`run` on each path and computes
-    ``after - before``. The legacy per-index ``<index>_change()`` helpers
-    in `ndvi.py` etc. are thin shims around this.
+    Calls :func:`calculate_index` on each path and computes ``after - before``;
+    the change is written as GeoTIFF and referenced from ``rasters["change"]``.
     """
-    before = run(before_path, index_config)
-    after = run(after_path, index_config)
+    before, arr_before, _ = calculate_index(before_path, index_config)
+    after, arr_after, (crs, transform) = calculate_index(after_path, index_config)
     formula_name = before["index_type"]
-    array_key = f"{formula_name}_array"
-
-    arr_before = np.asarray(before[array_key], dtype=np.float64)
-    arr_after = np.asarray(after[array_key], dtype=np.float64)
     if arr_before.shape != arr_after.shape:
         raise ValueError(
             f"{formula_name.upper()} arrays must have same shape; got {arr_before.shape} and {arr_after.shape}."
@@ -251,14 +287,14 @@ def run_change(
             "total_valid_pixels": int(valid.size),
         }
 
-    return {
-        "change_array": change,
+    result = {
         "statistics": stats,
         "metadata": after["metadata"],
         "before_path": before.get("path"),
         "after_path": after.get("path"),
         "index_type": formula_name,
     }
+    return artifact_files.save(result, {"change": change}, None, crs=crs, transform=transform)
 
 
 # --- Internals ---------------------------------------------------------------
@@ -271,8 +307,8 @@ def _render_index_png(
     vmin: float,
     vmax: float,
     title: str,
-) -> str | None:
-    """Render an index array to a base64 PNG using a registered colormap."""
+) -> bytes | None:
+    """Render an index array to PNG bytes using a registered colormap."""
     if not HAS_MATPLOTLIB:
         return None
 
@@ -289,5 +325,4 @@ def _render_index_png(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()

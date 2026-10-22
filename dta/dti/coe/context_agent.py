@@ -1,10 +1,16 @@
 import io
+import json
 import logging
+import re
+from typing import Any
 
 import numpy as np
+from pydantic import ValidationError
 import rasterio
 
-from dta.dti.coe.llm import LLMMessage, get_llm_router
+from dta.dti.coe.llm import LLMMessage, LLMResponse, get_llm_router
+from dta.dti.coe.llm.router import _KEY_PATTERN
+from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, Registry
 
@@ -145,8 +151,84 @@ def _image_part(att: Attachment) -> str | None:
         return None
 
 
+def _parse(text: str) -> Any:
+    """Parse the first {...} span of a reply as JSON; log the reason and return None if impossible."""
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        logger.warning("Context agent reply contains no JSON object")
+        return None
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        logger.warning(f"Context agent returned malformed JSON ({e})")
+        return None
+
+
+def _accept(data: Any, registry_types: list[str]) -> ContextUnderstanding | None:
+    """Structural check on a parsed context reply.
+
+    Accepts a reply that fits the ContextUnderstanding schema, has a non-blank
+    goal, names only registry types and carries string keywords; extra keys are
+    ignored. Logs the reason and returns None otherwise.
+    """
+    try:
+        ctx: ContextUnderstanding = ContextUnderstanding.model_validate(data)
+    except ValidationError as e:
+        reason = f"does not match the ContextUnderstanding schema: {e.error_count()} error(s)"
+    else:
+        unknown = [t for t in ctx.desired_outputs + ctx.required_inputs if t not in registry_types]
+        keywords = ctx.hints.get("keywords", [])
+        if not ctx.goal.strip():
+            reason = "blank goal"
+        elif unknown:
+            # LLM-written strings: redact key-like tokens and cap their length before logging.
+            shown = [_KEY_PATTERN.sub("***", t)[:40] for t in unknown[:5]]
+            reason = f"{len(unknown)} types not in the registry: {shown}"
+        elif not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
+            reason = "hints.keywords is not a list of strings"
+        else:
+            return ctx
+    logger.warning(f"Context agent reply rejected: {reason}")
+    return None
+
+
+def _deterministic_context(req: ChatRequest) -> ContextUnderstanding:
+    """Context from the registry triggers, used when no LLM reply is usable.
+
+    Two or more attachments, or a prompt matching a ChangeMap producer, ask for a
+    ChangeMap from before/after rasters with no keywords, so the planner takes the
+    index type from the goal. Another matched item gives its first output, its
+    inputs and its trigger keywords. No match keeps only the uploaded raster.
+    """
+    item = get_trigger_index().find_matching_item(req.prompt)
+    if len(req.attachments) >= 2 or (item is not None and "ChangeMap" in item.outputs):
+        return ContextUnderstanding(
+            goal=req.prompt,
+            desired_outputs=["ChangeMap"],
+            required_inputs=["RasterPathBefore", "RasterPathAfter"],
+            hints={"keywords": []},
+        )
+    if item is not None:
+        return ContextUnderstanding(
+            goal=req.prompt,
+            desired_outputs=item.outputs[:1],
+            required_inputs=list(item.inputs),
+            hints={"keywords": list(item.triggers.keywords) if item.triggers else []},
+        )
+    return ContextUnderstanding(
+        goal=req.prompt,
+        desired_outputs=[],
+        required_inputs=["RasterPath"] if req.attachments else [],
+        hints={"keywords": []},
+    )
+
+
 def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding:
     """Analyze user request and extract structured context.
+
+    Falls back to the deterministic context when every LLM provider fails or
+    the reply is not accepted, so an outage or a rejected reply does not raise;
+    a broken router configuration still does.
 
     Args:
         req: User chat request
@@ -154,9 +236,6 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
 
     Returns:
         Structured context understanding
-
-    Raises:
-        Exception: If all LLM providers fail
     """
     router = get_llm_router()
 
@@ -180,21 +259,21 @@ def analyze(req: ChatRequest, registry_types: list[str]) -> ContextUnderstanding
         LLMMessage(role="user", content=user_msg, images=image_b64_list or None),
     ]
 
+    # A rejected reply makes the router try the next provider.
+    def accept(response: LLMResponse) -> bool:
+        data = _parse(response.text)
+        return data is not None and _accept(data, registry_types) is not None
+
     # Generate with router (will try Gemini, fallback to Ollama)
-    response = router.generate(messages, temperature=0.3)  # Lower temp for structured output
+    try:
+        response = router.generate(messages, temperature=0.3, accept=accept)  # Lower temp for structured output
+    except Exception as e:
+        logger.warning(f"Context agent LLM call failed ({e}); using deterministic context")
+        return _deterministic_context(req)
 
-    # Parse JSON from response
-    import json
-    import re
-
-    fallback = {"goal": req.prompt, "desired_outputs": [], "required_inputs": [], "hints": {"keywords": []}}
-    m = re.search(r"\{.*\}", response.text, re.S)
-    if m:
-        try:
-            data = json.loads(m.group(0))
-        except json.JSONDecodeError:
-            logger.warning("Context agent returned malformed JSON, using fallback")
-            data = fallback
-    else:
-        data = fallback
-    return ContextUnderstanding(**data)
+    data = _parse(response.text)
+    ctx = _accept(data, registry_types) if data is not None else None
+    if ctx is None:
+        logger.warning("Context agent reply failed validation; using deterministic context")
+        return _deterministic_context(req)
+    return ctx

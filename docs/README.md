@@ -4,6 +4,7 @@ Documentation for the Digital Twin for Land Cover (DT4LC) project.
 
 ## Quick Links
 
+- [Developer Guide](DEVELOPER_GUIDE.md) - Setup, tests, algorithms, COE, git
 - [Quick Start Guide](QUICKSTART.md) - Get up and running in 5 minutes
 - [API Reference](API.md) - Complete REST API documentation
 - [Architecture](ARCHITECTURE.md) - System design and components
@@ -26,5 +27,5 @@ See the project [README.md](../README.md) for:
 
 ## Additional Resources
 
-- **Swagger UI**: http://localhost:8000/docs (when server is running)
-- **ReDoc**: http://localhost:8000/redoc (when server is running)
+- **Swagger UI**: http://localhost/docs (Docker) or http://localhost:8000/docs (backend only)
+- **ReDoc**: http://localhost/redoc (Docker) or http://localhost:8000/redoc (backend only)
