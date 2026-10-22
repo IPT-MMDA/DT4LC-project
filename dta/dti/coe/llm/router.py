@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
+import re
 from typing import Any
 
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 
 logger = logging.getLogger(__name__)
+
+# API-key-like tokens (OpenAI/Anthropic `sk-`, Groq `gsk_`, Google `AIza`), including the masked
+# form OpenAI echoes in its 401 text (`sk-proj-****WXYZ`); stripped before logging or raising.
+_KEY_PATTERN = re.compile(r"\b(?:sk|gsk)[-_][\w*-]{4,}|\bAIza[\w-]{8,}")
 
 
 class LLMRouter:
@@ -58,6 +64,8 @@ class LLMRouter:
         messages: list[LLMMessage],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        *,
+        accept: Callable[[LLMResponse], bool] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         """Generate response using best available provider.
@@ -66,6 +74,8 @@ class LLMRouter:
             messages: Conversation messages
             temperature: Sampling temperature
             max_tokens: Max output tokens
+            accept: Optional reply validator; a reply it rejects counts as a
+                provider failure and the next provider is tried
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -88,25 +98,37 @@ class LLMRouter:
             raise Exception("No available LLM providers")
 
         # Try each provider in order
-        last_error = None
+        last_error: Exception | None = None
+        failures: list[str] = []
         for provider in providers:
             if not provider.is_available():
                 logger.debug(f"Provider {provider.name} not available, skipping")
+                failures.append(f"{provider.name} ({provider.model}): not available")
                 continue
 
             try:
                 logger.info(f"Attempting generation with {provider.name} ({provider.model})")
                 response = provider.generate(messages, temperature, max_tokens, **kwargs)
+                if accept is not None and not accept(response):
+                    failure = f"{provider.name} ({provider.model}): reply rejected by validator"
+                    logger.warning(f"Provider {failure}")
+                    failures.append(failure)
+                    continue
                 logger.info(f"Success with {provider.name}")
                 return response
 
             except Exception as e:
-                logger.warning(f"Provider {provider.name} failed: {e}")
+                # Providers wrap SDK errors (`raise Exception(...) from e`); name the underlying type.
+                root = e.__cause__ or e
+                detail = _KEY_PATTERN.sub("***", str(e))
+                failure = f"{provider.name} ({provider.model}): {type(root).__name__}: {detail}"
+                logger.warning(f"Provider {failure}")
+                failures.append(failure)
                 last_error = e
                 continue
 
-        # All providers failed
-        raise Exception(f"All LLM providers failed. Last error: {last_error}")
+        # All providers failed: report every provider's real reason, not "Last error: None".
+        raise Exception(f"All LLM providers failed: {'; '.join(failures)}") from last_error
 
     def add_provider(self, provider: BaseLLMProvider, priority: int | None = None) -> None:
         """Add a provider to the router.
@@ -173,6 +195,7 @@ class LLMRouter:
         from .groq import GroqProvider
         from .mistral import MistralProvider
         from .ollama import OllamaProvider
+        from .openai import OpenAIProvider
 
         provider_map: dict[str, type[BaseLLMProvider]] = {
             "gemini": GeminiProvider,
@@ -181,6 +204,7 @@ class LLMRouter:
             "apertus": ApertusProvider,
             "anthropic": AnthropicProvider,
             "mistral": MistralProvider,
+            "openai": OpenAIProvider,
         }
 
         providers = []

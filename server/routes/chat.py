@@ -9,85 +9,67 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.schemas import ChatRequest as COEChatRequest
+from dta.dti.schemas import ExecutionPlan
 
-from ..schemas import ChatRequest
+from ..schemas import ChatRequest, ErrorCode, ErrorDetail, ErrorResponse, ExecuteResponse, PlanResponse
 from ..utils import sse_frame
 
 router = APIRouter(prefix="/v1", tags=["chat"])
 
 
-@router.post("/plan")  # type: ignore[misc]
-async def create_plan(req: ChatRequest) -> JSONResponse:
-    """Generate an execution plan from a user prompt.
+def _planning_failed(result: dict[str, Any]) -> JSONResponse:
+    """400 ErrorResponse that keeps the rejected plan candidate in ``details``."""
+    error = ErrorDetail(
+        code=ErrorCode.PLANNING_FAILED,
+        message=result.get("error", "Plan generation failed"),
+        details={"candidate": result.get("candidate")},
+    )
+    return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=400)
 
-    This endpoint uses the COE to analyze the prompt and generate a plan
-    without executing it.
-    """
+
+@router.post(  # type: ignore[misc]
+    "/plan",
+    response_model=PlanResponse,
+    summary="Generate execution plan",
+    response_description="COE plan without running the pipeline",
+)
+async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
+    """Generate an execution plan from the latest user message (no execution)."""
+    if not req.messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
+
     try:
-        # Convert server ChatRequest to COE ChatRequest
-        # For now, use the last message as prompt
-        if not req.messages:
-            raise HTTPException(status_code=400, detail="No messages provided")
-
         prompt = req.messages[-1].content
         coe_req = COEChatRequest(prompt=prompt, attachments=[])
 
-        # Orchestrate (generate plan)
         result = orchestrate(coe_req)
-
         if not result.get("ok"):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "error": result.get("error", "Plan generation failed"),
-                    "candidate": result.get("candidate"),
-                },
-            )
+            return _planning_failed(result)
 
-        return JSONResponse(
-            {
-                "ok": True,
-                "plan": result["plan"],
-            }
-        )
-
+        return PlanResponse(plan=result["plan"])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Plan generation failed: {e}") from e
 
 
-@router.post("/execute")  # type: ignore[misc]
-async def execute_plan(req: ChatRequest) -> JSONResponse:
-    """Generate and execute a pipeline plan.
+@router.post(  # type: ignore[misc]
+    "/execute",
+    response_model=ExecuteResponse,
+    summary="Plan and execute pipeline",
+)
+async def execute_plan(req: ChatRequest) -> ExecuteResponse | JSONResponse:
+    """Plan via COE and execute the pipeline synchronously."""
+    if not req.messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
 
-    This is the main endpoint that combines COE planning with DTA execution.
-    """
     try:
-        # Convert server ChatRequest to COE ChatRequest
-        if not req.messages:
-            raise HTTPException(status_code=400, detail="No messages provided")
-
         prompt = req.messages[-1].content
         coe_req = COEChatRequest(prompt=prompt, attachments=[])
 
-        # Step 1: Generate plan via COE
         orch_result = orchestrate(coe_req)
-
         if not orch_result.get("ok"):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "error": orch_result.get("error", "Plan generation failed"),
-                    "candidate": orch_result.get("candidate"),
-                },
-            )
+            return _planning_failed(orch_result)
 
         plan_dict = orch_result["plan"]
-
-        # Step 2: Execute plan via DTA
-        from dta.dti.schemas import ExecutionPlan
-
         plan = ExecutionPlan(**plan_dict)
         executor = PipelineExecutor()
 
@@ -98,30 +80,25 @@ async def execute_plan(req: ChatRequest) -> JSONResponse:
 
         exec_result = executor.execute(plan, on_progress=on_progress)
 
-        return JSONResponse(
-            {
-                "ok": True,
-                "plan": plan_dict,
-                "result": exec_result,
-                "progress": progress_events,
-            }
+        return ExecuteResponse(
+            plan=plan_dict,
+            result=exec_result,
+            progress=progress_events,
         )
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Execution failed: {e}") from e
 
 
-@router.post("/chat")  # type: ignore[misc]
+@router.post(  # type: ignore[misc]
+    "/chat",
+    summary="Stream plan and execution (SSE)",
+    response_description="Server-Sent Events stream of planning and execution progress",
+)
 async def chat(req: ChatRequest) -> StreamingResponse:
-    """Legacy chat endpoint - redirects to execute endpoint.
-
-    For MVP, this simply calls execute and streams the result.
-    In future, this can support true streaming execution.
-    """
+    """Stream planning and execution as ``text/event-stream`` (legacy chat API)."""
 
     async def gen() -> AsyncIterator[bytes]:
         try:
-            # Convert to COE request
             if not req.messages:
                 yield sse_frame({"error": "No messages provided"})
                 yield sse_frame({"done": True})
@@ -130,11 +107,9 @@ async def chat(req: ChatRequest) -> StreamingResponse:
             prompt = req.messages[-1].content
             coe_req = COEChatRequest(prompt=prompt, attachments=[])
 
-            # Generate plan
             yield sse_frame({"event": "planning", "message": "Generating execution plan..."})
 
             orch_result = orchestrate(coe_req)
-
             if not orch_result.get("ok"):
                 yield sse_frame(
                     {
@@ -147,19 +122,12 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
             yield sse_frame({"event": "plan_ready", "plan": orch_result["plan"]})
 
-            # Execute plan
-            from dta.dti.schemas import ExecutionPlan
-
             plan = ExecutionPlan(**orch_result["plan"])
             executor = PipelineExecutor()
 
-            def on_progress(event: dict[str, Any]) -> None:
-                # Can't directly yield from callback, so we'll skip for now
-                pass
-
             yield sse_frame({"event": "executing", "message": "Running pipeline..."})
 
-            exec_result = executor.execute(plan, on_progress=on_progress)
+            exec_result = executor.execute(plan, on_progress=lambda _e: None)
 
             yield sse_frame({"event": "complete", "result": exec_result})
             yield sse_frame({"done": True})

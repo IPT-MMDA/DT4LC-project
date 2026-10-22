@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
+import dta
 from server.app import app
 from server.utils import apply_colormap, detect_data_type, sse_frame
 
@@ -98,7 +99,13 @@ class TestHealthEndpoint:
         data = resp.json()
         assert data["ok"] is True
         assert data["service"] == "DT4LC"
-        assert data["version"] == "1.0.0"
+        assert data["version"] == dta.__version__
+
+    def test_served_versions_match_package_version(self, client: TestClient) -> None:
+        """Health and OpenAPI report the release version from dta.__version__."""
+        assert dta.__version__ == "0.5.0"
+        assert client.get("/v1/health").json()["version"] == dta.__version__
+        assert client.get("/openapi.json").json()["info"]["version"] == dta.__version__
 
 
 class TestCapabilitiesEndpoint:
@@ -172,7 +179,7 @@ class TestPlanEndpoint:
         resp = client.post("/v1/plan", json={"messages": []})
         # HTTPException(400) is caught by outer handler → 500
         assert resp.status_code in (400, 500)
-        assert "No messages" in resp.json()["detail"]
+        assert "No messages" in resp.json()["error"]["message"]
 
     def test_plan_success(self, client: TestClient) -> None:
         mock_plan = {
@@ -191,15 +198,32 @@ class TestPlanEndpoint:
         assert data["plan"]["flow"] == "ndvi"
 
     def test_plan_failure(self, client: TestClient) -> None:
-        with patch("server.routes.chat.orchestrate", return_value={"ok": False, "error": "test fail"}):
+        candidate = {"flow": "ndvi", "steps": []}
+        with patch(
+            "server.routes.chat.orchestrate",
+            return_value={"ok": False, "error": "test fail", "candidate": candidate},
+        ):
             resp = client.post(
                 "/v1/plan",
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        data = resp.json()
-        assert data["ok"] is False
-        assert "test fail" in data["error"]
+        error = resp.json()["error"]
+        assert error["code"] == "planning_failed"
+        assert "test fail" in error["message"]
+        assert error["details"]["candidate"] == candidate
+
+    def test_plan_unexpected_error_is_json_500(self) -> None:
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch("server.routes.chat.orchestrate", side_effect=RuntimeError("boom")):
+            resp = client.post(
+                "/v1/plan",
+                json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
+            )
+        assert resp.status_code == 500
+        error = resp.json()["error"]
+        assert error["code"] == "internal_error"
+        assert error["message"] == "Plan generation failed: boom"
 
 
 class TestExecuteEndpoint:
@@ -209,7 +233,7 @@ class TestExecuteEndpoint:
         resp = client.post("/v1/execute", json={"messages": []})
         # HTTPException(400) is caught by outer handler → 500
         assert resp.status_code in (400, 500)
-        assert "No messages" in resp.json()["detail"]
+        assert "No messages" in resp.json()["error"]["message"]
 
     def test_execute_orchestrate_fail(self, client: TestClient) -> None:
         with patch("server.routes.chat.orchestrate", return_value={"ok": False, "error": "plan failed"}):
@@ -218,8 +242,8 @@ class TestExecuteEndpoint:
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
             )
         assert resp.status_code == 400
-        data = resp.json()
-        assert data["ok"] is False
+        assert resp.json()["error"]["code"] == "planning_failed"
+        assert "plan failed" in resp.json()["error"]["message"]
 
     def test_execute_success(self, client: TestClient) -> None:
         mock_plan = {
@@ -243,6 +267,25 @@ class TestExecuteEndpoint:
         assert data["ok"] is True
         assert "plan" in data
         assert "result" in data
+
+    @pytest.mark.parametrize(
+        ("orchestrate_kwargs", "message"),
+        [
+            ({"side_effect": RuntimeError("boom")}, "Execution failed: boom"),
+            ({"return_value": {"ok": True, "intent": "conversation"}}, "Execution failed: 'plan'"),
+        ],
+    )
+    def test_execute_unexpected_error_is_json_500(self, orchestrate_kwargs: dict, message: str) -> None:
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch("server.routes.chat.orchestrate", **orchestrate_kwargs):
+            resp = client.post(
+                "/v1/execute",
+                json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
+            )
+        assert resp.status_code == 500
+        error = resp.json()["error"]
+        assert error["code"] == "internal_error"
+        assert error["message"] == message
 
 
 class TestChatEndpoint:
@@ -300,12 +343,91 @@ class TestDownloadEndpoint:
         assert resp.status_code == 403
 
     def test_missing_file_returns_404(self, client: TestClient) -> None:
-        import tempfile
+        from dta.config import TEMP_PATH
 
-        tmp = Path(tempfile.gettempdir()) / "nonexistent_dt4lc_test_file.xyz"
+        tmp = TEMP_PATH / "nonexistent_dt4lc_test_file.xyz"
         resp = client.get("/v1/download", params={"path": str(tmp)})
-        # Path is under allowed dir (tempdir) but file doesn't exist
+        # Path is under allowed dir (TEMP_PATH) but file doesn't exist
         assert resp.status_code == 404
+
+    def test_unrelated_tempdir_file_returns_403(self, client: TestClient) -> None:
+        import tempfile
+        import uuid
+
+        tmp = Path(tempfile.gettempdir()) / f"dt4lc_unrelated_{uuid.uuid4().hex}.txt"
+        tmp.write_text("not a job output")
+        try:
+            resp = client.get("/v1/download", params={"path": str(tmp)})
+        finally:
+            tmp.unlink()
+        assert resp.status_code == 403
+
+    def test_job_output_file_returns_200(self, client: TestClient) -> None:
+        import uuid
+
+        from dta.config import TEMP_PATH
+
+        out_dir = TEMP_PATH / "delineate_outputs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out = out_dir / f"test_{uuid.uuid4().hex}_fields.gpkg"
+        out.write_bytes(b"gpkg")
+        try:
+            resp = client.get("/v1/download", params={"path": str(out)})
+        finally:
+            out.unlink()
+        assert resp.status_code == 200
+        assert resp.content == b"gpkg"
+
+    def test_job_artifact_file_returns_200(self, client: TestClient) -> None:
+        import uuid
+
+        from server.routes import files
+
+        # Job artifacts live in OUTPUTS_PATH/<job_id>/ (#65)
+        out_dir = files.OUTPUTS_PATH / f"test-{uuid.uuid4().hex}"
+        out_dir.mkdir(parents=True)
+        out = out_dir / "1_NDVIMap_ndvi.tif"
+        out.write_bytes(b"tif")
+        try:
+            resp = client.get("/v1/download", params={"path": str(out)})
+        finally:
+            out.unlink()
+            out_dir.rmdir()
+        assert resp.status_code == 200
+        assert resp.content == b"tif"
+
+    def test_traversal_out_of_allowed_dir_returns_403(self, client: TestClient) -> None:
+        import tempfile
+        import uuid
+
+        from dta.config import TEMP_PATH
+
+        tmp = Path(tempfile.gettempdir()) / f"dt4lc_unrelated_{uuid.uuid4().hex}.txt"
+        tmp.write_text("not a job output")
+        # TEMP_PATH/../../(...)/<tmp file> starts with TEMP_PATH but resolves outside it
+        up = TEMP_PATH.joinpath(*[".."] * len(TEMP_PATH.parts))
+        traversal = up / tmp.resolve().relative_to(tmp.resolve().anchor)
+        try:
+            resp = client.get("/v1/download", params={"path": str(traversal)})
+        finally:
+            tmp.unlink()
+        assert resp.status_code == 403
+
+    def test_sibling_prefix_dir_returns_403(self, client: TestClient) -> None:
+        import tempfile
+        import uuid
+
+        # A string-prefix check would accept <tmp>/dt4lc_delineate_evil.../x.gpkg
+        evil_dir = Path(tempfile.gettempdir()) / f"dt4lc_delineate_evil_{uuid.uuid4().hex}"
+        evil_dir.mkdir()
+        evil = evil_dir / "x.gpkg"
+        evil.write_text("evil")
+        try:
+            resp = client.get("/v1/download", params={"path": str(evil)})
+        finally:
+            evil.unlink()
+            evil_dir.rmdir()
+        assert resp.status_code == 403
 
 
 class TestFilesEndpoint:
@@ -420,7 +542,7 @@ class TestLayerEndpoints:
 
     def test_persist_layer_missing_id(self, client: TestClient) -> None:
         resp = client.post("/v1/gee/layers/persist", json={})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_persist_layer_success(self, client: TestClient) -> None:
         with patch("server.layer_metadata_store.save_layer_metadata"):

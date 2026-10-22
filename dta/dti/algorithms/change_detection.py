@@ -12,13 +12,14 @@ Supported indices:
 
 from __future__ import annotations
 
-import base64
 import io
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
 import rasterio
+
+from dta.dti import artifact_files
 
 # Try to import matplotlib for visualization, graceful fallback
 try:
@@ -162,6 +163,18 @@ def _calculate_index_array(
         Index array with values in appropriate range
     """
     bands = _get_band_indices(src)
+    # src.read(None) would read every band; fail clearly instead.
+    required = {
+        "ndvi": ("red", "nir"),
+        "ndsi": ("green", "swir"),
+        "ndwi": ("green", "nir"),
+        "evi": ("blue", "red", "nir"),
+    }
+    missing = [role for role in required.get(index_type, ()) if bands[role] is None]
+    if missing:
+        raise ValueError(
+            f"{index_type.upper()} requires band(s) {missing}, but the raster ({src.count} bands) doesn't expose them."
+        )
 
     if index_type == "ndvi":
         if src.count < 2:
@@ -230,6 +243,11 @@ def _calculate_index_array(
         if hasattr(nir_band, "filled"):
             nir_band = nir_band.filled(np.nan)
 
+        # Integer-scaled reflectance (0-10000) -> 0-1 for EVI's "+1", as in spectral_index.run.
+        evi_bands = np.stack([blue_band, red_band, nir_band])
+        if np.isfinite(evi_bands).any() and float(np.max(evi_bands[np.isfinite(evi_bands)])) > 1000:
+            blue_band, red_band, nir_band = blue_band / 10000.0, red_band / 10000.0, nir_band / 10000.0
+
         # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         with np.errstate(divide="ignore", invalid="ignore"):
             denominator = nir_band + 6 * red_band - 7.5 * blue_band + 1
@@ -245,7 +263,7 @@ def _create_change_visualization(
     change_array: np.ndarray,
     index_type: IndexType,
     title: str | None = None,
-) -> str | None:
+) -> bytes | None:
     """Create a colored visualization of index change.
 
     Args:
@@ -254,7 +272,7 @@ def _create_change_visualization(
         title: Title for the image
 
     Returns:
-        Base64 encoded PNG image, or None if matplotlib unavailable
+        PNG bytes, or None if matplotlib unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -285,16 +303,15 @@ def _create_change_visualization(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
 
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()
 
 
 def _create_index_visualization(
     index_array: np.ndarray,
     index_type: IndexType,
     title: str | None = None,
-) -> str | None:
+) -> bytes | None:
     """Create a colored visualization of spectral index.
 
     Args:
@@ -303,7 +320,7 @@ def _create_index_visualization(
         title: Title for the image
 
     Returns:
-        Base64 encoded PNG image, or None if matplotlib unavailable
+        PNG bytes, or None if matplotlib unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -328,9 +345,8 @@ def _create_index_visualization(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
 
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()
 
 
 def calculate_change(
@@ -350,13 +366,12 @@ def calculate_change(
 
     Returns:
         Dictionary containing:
-            - change_array: Index difference (after - before) as list
-            - index_before: Index array for before image
-            - index_after: Index array for after image
+            - rasters: GeoTIFF references ``change`` (after - before),
+              ``index_before`` and ``index_after``
             - statistics: Change statistics
             - classification: Pixel classification counts
             - metadata: Raster metadata
-            - visualizations: Base64 PNG images (if matplotlib available)
+            - visualizations: PNG references (if matplotlib available)
             - index_type: The index type used
 
     Raises:
@@ -497,11 +512,7 @@ def calculate_change(
                 title=f"{config['name']} - After",
             )
 
-        # For backwards compatibility, also include ndvi_* keys if using NDVI
         result = {
-            "change_array": change.tolist(),
-            "index_before": index_before.tolist(),
-            "index_after": index_after.tolist(),
             "statistics": statistics,
             "index_statistics": index_stats,
             "classification": classification,
@@ -513,11 +524,10 @@ def calculate_change(
 
         # Backwards compatibility for NDVI
         if index_type == "ndvi":
-            result["ndvi_before"] = result["index_before"]
-            result["ndvi_after"] = result["index_after"]
             result["ndvi_statistics"] = result["index_statistics"]
 
-        return result
+        rasters = {"change": change, "index_before": index_before, "index_after": index_after}
+        return artifact_files.save(result, rasters, visualizations, crs=src_after.crs, transform=src_after.transform)
 
 
 def run(

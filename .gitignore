@@ -30,8 +30,8 @@ htmlcov
 # This includes: models, uploads, temp files
 resources/.cache/
 
-# Legacy paths (no longer used but kept for safety)
-resources/kahovka_data/*
+# Full-resolution Kahovka scenes stay local; resources/kahovka_data/ holds committed crops
+resources/kahovka_data_full/
 
 # Backups
 *.bak
@@ -43,6 +43,13 @@ resources/kahovka_data/*
 cognitive_ui/node_modules/
 cognitive_ui/dist/
 cognitive_ui/.vite/
+*.tsbuildinfo
 *.log
 npm-debug.log*
 docs/features/
+
+# Secrets: Google Earth Engine service-account key
+resources/key_gee.json
+
+# Windows/WSL alternate data stream artefacts
+*:Zone.Identifier

@@ -7,11 +7,13 @@ each demo prompt. The Layer-B counterpart in ``test_demos_llm.py`` covers the
 full intent → context → plan → execute path.
 
 Each test class corresponds to one step of the rehearsed demo flow. Tests that
-need real Kahovka samples skip when the directory is empty (the default in
-this repo); the synthetic-raster fixtures from ``conftest.py`` provide CI-safe
-coverage that exercises the same pipeline shape on Landsat-8-like data.
+need real Kahovka samples use the HLS L30 crops committed in
+resources/kahovka_data/ and skip if they are absent; the synthetic-raster
+fixtures from ``conftest.py`` provide CI-safe coverage that exercises the
+same pipeline shape on Landsat-8-like data.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -223,6 +225,7 @@ class TestSentinel2NdwiFetch:
 
     @pytest.mark.network
     @pytest.mark.slow
+    @pytest.mark.skipif(not os.environ.get("GEE_PROJECT_ID"), reason="GEE_PROJECT_ID not set (GEE credentials needed)")
     def test_small_bbox_fetch(self) -> None:
         from dta.dti.data_sources.gee_sentinel2 import fetch_sentinel2_indices
 
@@ -247,24 +250,55 @@ class TestPrithviReconstruction:
 
     @pytest.mark.gpu
     @pytest.mark.slow
-    def test_prithvi_runs_when_model_installed(self, synthetic_raster_path: str) -> None:
+    def test_prithvi_runs_when_model_installed(
+        self, synthetic_raster_path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import numpy as np
+        import rasterio
+
         from dta.dti.models import get_model_manager
+        from dta.dti.preprocessors import scale_to_hls
 
         manager = get_model_manager()
         if not manager.is_model_available("prithvi-eo-v1-100m"):
             pytest.skip("prithvi-eo-v1-100m not installed; run model download first")
 
+        # Prithvi takes the 6 HLS bands B02..B07; drop the synthetic raster's
+        # B1 coastal band (Landsat B2..B7 = blue, green, red, NIR, SWIR1, SWIR2).
+        hls_path = tmp_path / "synthetic_hls_6band.tif"
+        with rasterio.open(synthetic_raster_path) as src:
+            profile = src.profile
+            profile.update(count=6)
+            hls_bands = src.read(list(range(2, 8)))
+            with rasterio.open(hls_path, "w", **profile) as dst:
+                dst.write(hls_bands)
+
         executor = PipelineExecutor()
         plan = ExecutionPlan(
             flow="prithvi-reconstruction",
             steps=[
-                PlanStep(uses="input/file", binds={"RasterPath": synthetic_raster_path}),
+                PlanStep(uses="input/file", binds={"RasterPath": str(hls_path)}),
                 PlanStep(uses="models/prithvi-reconstruction", binds={}),
             ],
             outputs=["Reconstruction"],
         )
+        # Record what scale-to-hls hands to Prithvi: the step must run and its
+        # output must be the 0-1 reflectance scaled to HLS, not an all-zero raster.
+        scaled_paths: list[str] = []
+        real_run = scale_to_hls.run
+
+        def spy_run(input_path: str, output_dir: str) -> str:
+            scaled_paths.append(real_run(input_path=input_path, output_dir=output_dir))
+            return scaled_paths[-1]
+
+        monkeypatch.setattr(scale_to_hls, "run", spy_run)
+
         result = executor.execute(plan)
         assert "Reconstruction" in result["artifacts"]
+        assert len(scaled_paths) == 1
+        with rasterio.open(scaled_paths[0]) as scaled:
+            bands = scaled.read()
+        np.testing.assert_array_equal(bands, (hls_bands * 10000).astype(np.int16))
 
 
 class TestDelineateAnything:
@@ -278,6 +312,13 @@ class TestDelineateAnything:
         manager = get_model_manager()
         if not manager.is_model_available("delineate-anything-small"):
             pytest.skip("delineate-anything-small not installed; run model download first")
+        # GDAL is a system prerequisite (see the delineate extra in pyproject.toml), like
+        # the model weights: skip with the reason rather than fail the documented test
+        # command on hosts without libgdal. The Docker image has it.
+        pytest.importorskip(
+            "osgeo",
+            reason="GDAL Python bindings (osgeo) missing: install system libgdal and the delineate extra",
+        )
 
         executor = PipelineExecutor()
         plan = ExecutionPlan(

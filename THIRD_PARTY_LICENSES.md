@@ -20,18 +20,20 @@ This document lists the third-party machine learning models used in DT4LC and th
 
 ## Delineate-Anything
 
-- **Source:** https://huggingface.co/MykolaL/DelineateAnything
-- **License:** MIT
-- **Copyright:** Mykola Lavreniuk
-- **Description:** Agricultural field boundary detection model based on SAM (Segment Anything Model).
-- **Paper:** https://arxiv.org/abs/2401.05923
+- **Source:** https://huggingface.co/MykolaL/DelineateAnything (weights `DelineateAnything-S.pt`) and https://github.com/Lavreniuk/Delineate-Anything (inference code, branch `main`), both downloaded by the model manager
+- **License:** GNU Affero General Public License v3.0 (AGPL-3.0): `license: agpl-3.0` on the Hugging Face model card, and the AGPL-3.0 `LICENSE` file of the GitHub repository
+- **Authors:** Mykola Lavreniuk, Nataliia Kussul, Andrii Shelestov, Bohdan Yailymov, Yevhenii Salii, Volodymyr Kuzin, Zoltan Szantoi
+- **Description:** Instance segmentation model for agricultural field boundary delineation on satellite imagery.
+- **Paper:** https://arxiv.org/abs/2504.02534
 - **Citation:**
   ```
-  @article{lavreniuk2024delineate,
-    title={Delineate-Anything: Segment Anything Model for Agricultural Field Boundary Delineation},
-    author={Lavreniuk, Mykola and others},
-    journal={arXiv preprint arXiv:2401.05923},
-    year={2024}
+  @misc{lavreniuk2025delineate,
+    title={Delineate Anything: Resolution-Agnostic Field Boundary Delineation on Satellite Imagery},
+    author={Lavreniuk, Mykola and Kussul, Nataliia and Shelestov, Andrii and Yailymov, Bohdan and Salii, Yevhenii and Kuzin, Volodymyr and Szantoi, Zoltan},
+    year={2025},
+    eprint={2504.02534},
+    archivePrefix={arXiv},
+    doi={10.48550/arXiv.2504.02534}
   }
   ```
 
@@ -55,37 +57,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-### MIT License (Delineate-Anything)
+### GNU AGPL-3.0 (Delineate-Anything)
 
-```
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+Delineate-Anything is distributed under the GNU Affero General Public License, version 3, the same licence as DT4LC. The full text is in this repository's [LICENSE](LICENSE) file and at https://www.gnu.org/licenses/agpl-3.0.html.
 
 ---
 
 ## Model Download
 
-Models are downloaded on-demand when users request features that require them. The models are cached locally in:
+Models are not bundled with DT4LC; they are downloaded on request (see "Model weights" in the [README](README.md#model-weights)) and cached in:
 
-- **Local development:** `~/.cache/dt4lc/models/`
-- **Docker:** `/app/models/` (baked into image at build time)
+- **Local development:** `resources/.cache/models/<model_id>/` (override with the `DT4LC_MODEL_CACHE` environment variable)
+- **Docker:** `/app/resources/.cache/models/<model_id>/` (`DT4LC_MODEL_CACHE` in `docker-compose.yml`), inside the mounted `./resources` directory; downloaded at runtime, not part of the image
 
 Use the Models page in the UI to manage model downloads and deletions.

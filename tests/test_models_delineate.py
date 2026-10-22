@@ -32,6 +32,7 @@ def _check_delineate_dependencies() -> tuple[bool, str]:
         "geopandas": "geopandas",
         "shapely": "shapely",
         "cv2": "opencv-python",
+        "osgeo": "gdal",
     }
     for module, package in deps.items():
         try:
@@ -79,6 +80,77 @@ class TestDelineateAnythingRegistry:
         """Verify FieldBoundaries type is in registry."""
         assert "FieldBoundaries" in REGISTRY.types
 
+    def test_delineate_runner_function_is_run(self) -> None:
+        """The executor defaults to ``main``; inference.py only defines ``run`` (#60)."""
+        from dta.dti.models.third_party.delineate_anything import inference
+
+        assert DELINEATE_ITEM.runner is not None
+        assert DELINEATE_ITEM.runner.function == "run"
+        assert callable(getattr(inference, "run", None))
+        assert not hasattr(inference, "main")
+
+    def test_executor_invokes_run_under_current_interpreter(self, tmp_path: Path) -> None:
+        """Pipeline step reaches ``run()`` and spawns delineate.py with sys.executable.
+
+        Model manager and the delineate.py subprocess are mocked (no GPU, no model).
+        """
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+
+        from dta.dti.executor import PipelineExecutor
+        from dta.dti.schemas import ExecutionPlan, PlanStep
+
+        raster = tmp_path / "input.tif"
+        with rasterio.open(
+            raster,
+            "w",
+            driver="GTiff",
+            height=8,
+            width=8,
+            count=3,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=from_origin(30.0, 47.0, 0.0001, 0.0001),
+        ) as dst:
+            dst.write(np.full((3, 8, 8), 0.1, dtype=np.float32))
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        (model_dir / "delineate.py").touch()
+        manager = MagicMock()
+        manager.is_model_available.return_value = True
+        manager.get_model_path.return_value = model_dir
+
+        def fake_delineate(argv: list[str], **kwargs: object) -> MagicMock:
+            # argv = [python, delineate.py, "-b", <work_dir>/batch.yaml]
+            (Path(argv[3]).parent / "output" / "data.gpkg").touch()
+            return MagicMock(returncode=0)
+
+        plan = ExecutionPlan(
+            flow="delineate",
+            steps=[
+                PlanStep(uses="input/file", binds={"RasterPath": str(raster)}),
+                PlanStep(uses="models/delineate-anything", binds={}),
+            ],
+            outputs=["FieldBoundaries"],
+        )
+        with (
+            patch("dta.dti.models.get_model_manager", return_value=manager),
+            patch("subprocess.run", side_effect=fake_delineate) as mock_run,
+        ):
+            result = PipelineExecutor().execute(plan)
+
+        assert mock_run.call_count == 1
+        assert mock_run.call_args.args[0][0] == sys.executable
+        boundaries = result["artifacts"]["FieldBoundaries"]
+        assert boundaries["model"] == "small"
+        assert Path(boundaries["output_path"]).exists()
+        Path(boundaries["output_path"]).unlink()
+
 
 class TestDelineateAnythingModule:
     """Test the inference module itself."""
@@ -89,6 +161,26 @@ class TestDelineateAnythingModule:
 
         assert callable(delineate_fields)
         assert callable(run)
+
+    @pytest.mark.parametrize(("dist", "module"), [("psutil", "psutil"), ("scipy", "scipy.ndimage")])
+    def test_server_extra_declares_upstream_runtime_imports(self, dist: str, module: str) -> None:
+        """Upstream methods/main imports these directly (#60).
+
+        They used to arrive only through ultralytics, whose newer releases no
+        longer pull scipy in: the Docker image (unlocked install) had no scipy
+        and every Delineate run failed. GDAL is the separate ``delineate`` extra.
+        """
+        import importlib
+        from importlib.metadata import requires
+        import re
+
+        server = {
+            re.split(r"[\s<>=!~;\[]", req, maxsplit=1)[0].lower()
+            for req in requires("dt4lc-project") or []
+            if re.search(r"extra\s*==\s*[\"']server[\"']", req)
+        }
+        assert dist in server
+        importlib.import_module(module)
 
     def test_validate_input_missing_file(self) -> None:
         """Test validation rejects missing files."""
@@ -129,6 +221,7 @@ class TestDelineateAnythingOrchestration:
     explicitly requested. LLM-based selection depends on prompt interpretation.
     """
 
+    @pytest.mark.llm
     @pytest.mark.xfail(
         reason="LLM may not always select delineate-anything; depends on planner prompt",
         strict=False,

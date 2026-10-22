@@ -130,6 +130,29 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+  frontend-test:
+    name: Frontend Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cognitive_ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: cognitive_ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest

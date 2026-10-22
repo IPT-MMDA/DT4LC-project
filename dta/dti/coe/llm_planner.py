@@ -138,7 +138,7 @@ COMPONENT PURPOSE (use to match user intent):
 - models/delineate-anything: Field boundaries, parcels, agricultural plots, segmentation
 - algorithms/ndvi: Vegetation index, greenness, plant health from spectral bands
 - algorithms/statistics: Band statistics, histograms, data distribution
-- models/prithvi_features: Foundation model embeddings, deep features (ONLY if user asks for features/embeddings)
+- models/prithvi-reconstruction: Foundation model embeddings, deep features (ONLY if user asks for features/embeddings)
 - algorithms/change-detection: Temporal comparison, before/after analysis
 
 Output format:
