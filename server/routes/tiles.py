@@ -2,7 +2,6 @@
 
 import io
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -13,6 +12,7 @@ import rasterio
 from rasterio.warp import transform_bounds
 from rasterio.windows import from_bounds
 
+from ..paths import resolve_served_path
 from ..utils import apply_colormap, detect_data_type
 
 logger = logging.getLogger(__name__)
@@ -38,9 +38,7 @@ async def get_tile(
         tile_bounds_wgs84 = mercantile.bounds(tile)
 
         # Open GeoTIFF
-        file_path = Path(path)
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail=f"GeoTIFF file not found: {path}")
+        file_path = resolve_served_path(path)
 
         # Detect data type from filename
         data_type = detect_data_type(file_path.name)

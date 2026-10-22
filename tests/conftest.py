@@ -39,12 +39,12 @@ def _no_llm_provider_reason() -> str | None:
 def _outputs_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     """Write job artifact files (GeoTIFF/PNG) under a temp dir instead of resources/.cache/outputs."""
     import dta.dti.artifact_files
-    import server.routes.files
+    import server.paths
 
     outputs = tmp_path_factory.mktemp("outputs")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(dta.dti.artifact_files, "OUTPUTS_PATH", outputs)
-        mp.setattr(server.routes.files, "OUTPUTS_PATH", outputs)
+        mp.setattr(server.paths, "OUTPUTS_PATH", outputs)
         yield outputs
 
 

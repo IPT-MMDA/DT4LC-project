@@ -381,10 +381,10 @@ class TestDownloadEndpoint:
     def test_job_artifact_file_returns_200(self, client: TestClient) -> None:
         import uuid
 
-        from server.routes import files
+        from server import paths
 
         # Job artifacts live in OUTPUTS_PATH/<job_id>/ (#65)
-        out_dir = files.OUTPUTS_PATH / f"test-{uuid.uuid4().hex}"
+        out_dir = paths.OUTPUTS_PATH / f"test-{uuid.uuid4().hex}"
         out_dir.mkdir(parents=True)
         out = out_dir / "1_NDVIMap_ndvi.tif"
         out.write_bytes(b"tif")
