@@ -12,6 +12,8 @@ export interface ChatMessage {
   timestamp?: string;
   // For job_result messages: includes the parsed result data for display
   resultData?: JobResultData;
+  /** Precomputed map layers (from job result) so chat works after polling stops */
+  viewOnMapLayers?: Array<{ path: string; label: string; layerId: string }>;
   // For user messages with attachments: includes preview images and path for context
   attachments?: Array<{
     id: string;

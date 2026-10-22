@@ -120,7 +120,7 @@ export function JobDetailsPage() {
       )}
 
       {/* Results */}
-      {job.result && <JobResult result={job.result} />}
+      {job.result && <JobResult job={job} result={job.result} />}
 
       {/* Plan Details */}
       {(job.plan || job.result?.plan) && (
