@@ -24,11 +24,9 @@ from dta.dti.raster import reflectance_divisor
 
 # Try to import matplotlib for visualization, graceful fallback
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")  # Non-interactive backend
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.colors import LinearSegmentedColormap
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
 
     HAS_MATPLOTLIB = True
 except ImportError:
@@ -286,7 +284,9 @@ def _create_change_visualization(
 
     cmap = LinearSegmentedColormap.from_list(f"{index_type}_change", config["colors"], N=256)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = Figure(figsize=(10, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     # Clip change values for better visualization
     vmin, vmax = -0.5, 0.5
@@ -296,15 +296,14 @@ def _create_change_visualization(
     ax.axis("off")
 
     # Colorbar
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, aspect=30)
     cbar.set_label(f"{config['name']} Change", fontsize=10)
     cbar.set_ticks([-0.5, -0.25, 0, 0.25, 0.5])
     cbar.set_ticklabels([config["loss_label"], "", "Stable", "", config["gain_label"]])
 
     # Save to bytes
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 
@@ -334,19 +333,20 @@ def _create_index_visualization(
 
     cmap = LinearSegmentedColormap.from_list(index_type, config["index_colors"], N=256)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = Figure(figsize=(10, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     im = ax.imshow(index_array, cmap=cmap, vmin=config["vmin"], vmax=config["vmax"])
 
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
 
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, aspect=30)
     cbar.set_label(config["name"], fontsize=10)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 

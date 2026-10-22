@@ -25,11 +25,9 @@ from dta.dti.raster import band_indices, reflectance_divisor
 
 # Try to import matplotlib for visualization; degrade gracefully if absent.
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.colors import LinearSegmentedColormap
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
 
     HAS_MATPLOTLIB = True
 except ImportError:
@@ -317,14 +315,15 @@ def _render_index_png(
     colors = COLORMAPS.get(colormap_name) or COLORMAPS["ndvi"]
     cmap = LinearSegmentedColormap.from_list(colormap_name, colors, N=256)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = Figure(figsize=(10, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
     im = ax.imshow(index_array, cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, aspect=30)
     cbar.set_label(colormap_name.upper(), fontsize=10)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     return buf.getvalue()

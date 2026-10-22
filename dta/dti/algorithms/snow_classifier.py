@@ -32,11 +32,9 @@ from dta.dti.raster import reflectance_divisor
 
 # Try to import matplotlib for visualization
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.colors import LinearSegmentedColormap
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
 
     HAS_MATPLOTLIB = True
 except ImportError:
@@ -69,7 +67,9 @@ def _create_snow_classification_visualization(
     colors = [(0.4, 0.5, 0.3), (1.0, 0.8, 0.4)]  # Green-brown to orange-yellow (snow)
     cmap = LinearSegmentedColormap.from_list("snow_class", colors, N=2)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = Figure(figsize=(10, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     ax.imshow(snow_mask.astype(float), cmap=cmap, vmin=0, vmax=1)
 
@@ -86,8 +86,7 @@ def _create_snow_classification_visualization(
     ax.legend(handles=legend_elements, loc="lower right", fontsize=10)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 
@@ -114,25 +113,27 @@ def _create_criteria_visualization(
     if not HAS_MATPLOTLIB:
         return None
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    fig = Figure(figsize=(12, 10))
+    FigureCanvasAgg(fig)
+    axes = fig.subplots(2, 2)
 
     # NDSI
     im1 = axes[0, 0].imshow(ndsi, cmap="RdYlBu", vmin=-0.5, vmax=1.0)
     axes[0, 0].set_title(f"NDSI (threshold ≥ {NDSI_THRESHOLD})")
     axes[0, 0].axis("off")
-    plt.colorbar(im1, ax=axes[0, 0], shrink=0.8)
+    fig.colorbar(im1, ax=axes[0, 0], shrink=0.8)
 
     # NDVI
     im2 = axes[0, 1].imshow(ndvi, cmap="RdYlGn", vmin=-0.5, vmax=1.0)
     axes[0, 1].set_title(f"NDVI (target ≈ {NDVI_CENTER})")
     axes[0, 1].axis("off")
-    plt.colorbar(im2, ax=axes[0, 1], shrink=0.8)
+    fig.colorbar(im2, ax=axes[0, 1], shrink=0.8)
 
     # Brightness
     im3 = axes[1, 0].imshow(brightness, cmap="gray", vmin=0, vmax=1.0)
     axes[1, 0].set_title(f"Green Brightness (threshold > {BRIGHTNESS_THRESHOLD})")
     axes[1, 0].axis("off")
-    plt.colorbar(im3, ax=axes[1, 0], shrink=0.8)
+    fig.colorbar(im3, ax=axes[1, 0], shrink=0.8)
 
     # Final classification
     colors = [(0.4, 0.5, 0.3), (1.0, 0.8, 0.4)]
@@ -142,11 +143,10 @@ def _create_criteria_visualization(
     axes[1, 1].axis("off")
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
-    plt.tight_layout()
+    fig.tight_layout()
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 

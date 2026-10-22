@@ -30,12 +30,10 @@ from dta.dti import artifact_files
 
 # Try to import matplotlib for visualization
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.colors import ListedColormap
+    from matplotlib.figure import Figure
     from matplotlib.patches import Patch
-    import matplotlib.pyplot as plt
 
     HAS_MATPLOTLIB = True
 except ImportError:
@@ -155,7 +153,9 @@ def _create_lulc_visualization(
     colors = [LULC_CLASSES[i]["color"] for i in range(7)]
     cmap = ListedColormap(colors)
 
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig = Figure(figsize=(12, 10))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     ax.imshow(classification, cmap=cmap, vmin=0, vmax=6, interpolation="nearest")
 
@@ -175,8 +175,7 @@ def _create_lulc_visualization(
     )
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 
@@ -209,7 +208,9 @@ def _create_histogram_visualization(
             percentages.append(class_stats[class_name]["percentage"])
             colors.append(LULC_CLASSES[class_id]["color"])
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig = Figure(figsize=(10, 6))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     bars = ax.barh(classes, percentages, color=colors, edgecolor="black", linewidth=0.5)
 
@@ -228,11 +229,10 @@ def _create_histogram_visualization(
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.set_xlim(0, max(percentages) * 1.15 if percentages else 100)
 
-    plt.tight_layout()
+    fig.tight_layout()
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 
