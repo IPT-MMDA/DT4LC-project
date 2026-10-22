@@ -103,7 +103,7 @@ class TestHealthEndpoint:
 
     def test_served_versions_match_package_version(self, client: TestClient) -> None:
         """Health and OpenAPI report the release version from dta.__version__."""
-        assert dta.__version__ == "0.5.0"
+        assert dta.__version__ == "0.5.1"
         assert client.get("/v1/health").json()["version"] == dta.__version__
         assert client.get("/openapi.json").json()["info"]["version"] == dta.__version__
 
