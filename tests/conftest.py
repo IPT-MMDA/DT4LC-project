@@ -1,5 +1,6 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 import functools
+import itertools
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -141,3 +142,40 @@ def synthetic_raster_pair(tmp_path_factory: pytest.TempPathFactory) -> tuple[str
     _write_landsat8_like(before, vegetation_strength=0.45, snow_strength=0.30)
     _write_landsat8_like(after, vegetation_strength=0.10, snow_strength=0.05)
     return str(before), str(after)
+
+
+@pytest.fixture
+def write_scaled_scene(tmp_path: Path) -> Callable[..., str]:
+    """Factory for 16x16 5-band constant scenes (``B2,B3,B4,B8,B11``) stored as ``dtype``.
+
+    ``write(dtype, scale, reflectance)`` writes ``reflectance`` (blue, green,
+    red, NIR, SWIR1) multiplied by ``scale`` (rounded for integer dtypes) and
+    returns the path. The default is the dark scene from the v0.5.1 QA baseline
+    (#64): every int16 x10000 value is below 1000. Signed integer scenes carry
+    ``nodata=-9999``, like the HLS crops.
+    """
+    counter = itertools.count()
+
+    def write(dtype: str, scale: float, reflectance: tuple[float, ...] = (0.004, 0.008, 0.005, 0.040, 0.020)) -> str:
+        data = np.stack([np.full((16, 16), v * scale, dtype=np.float64) for v in reflectance])
+        if np.issubdtype(np.dtype(dtype), np.integer):
+            data = np.round(data)
+        path = tmp_path / f"scene_{next(counter)}_{dtype}.tif"
+        with rasterio.open(
+            path,
+            "w",
+            driver="GTiff",
+            height=16,
+            width=16,
+            count=5,
+            dtype=dtype,
+            nodata=-9999 if np.issubdtype(np.dtype(dtype), np.signedinteger) else None,
+            crs="EPSG:32636",
+            transform=from_origin(0, 480, 30, 30),
+        ) as dst:
+            dst.write(data.astype(dtype))
+            for i, name in enumerate(("B2", "B3", "B4", "B8", "B11"), start=1):
+                dst.set_band_description(i, name)
+        return str(path)
+
+    return write

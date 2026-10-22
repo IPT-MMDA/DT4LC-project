@@ -21,7 +21,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
-from dta.dti.raster import band_indices
+from dta.dti.raster import band_indices, reflectance_divisor
 
 # Try to import matplotlib for visualization; degrade gracefully if absent.
 try:
@@ -133,10 +133,10 @@ def calculate_index(
 ) -> tuple[dict[str, Any], np.ndarray, tuple[Any, Any]]:
     """Calculate a spectral index from a raster + config, in memory.
 
-    Integer-scaled reflectance (any required band with max > 1000) is divided
-    by 10000 first. Pixels that are nodata or non-finite in any required band
-    are NaN in the output; values are clipped to the formula's range
-    (``RANGES``); statistics cover valid pixels only.
+    Band values are scaled to 0-1 reflectance first, by the source dtype
+    (:func:`dta.dti.raster.reflectance_divisor`). Pixels that are nodata or
+    non-finite in any required band are NaN in the output; values are clipped
+    to the formula's range (``RANGES``); statistics cover valid pixels only.
 
     Args:
         raster_path: Path to a multi-band GeoTIFF.
@@ -180,6 +180,7 @@ def calculate_index(
     with rasterio.open(raster_path) as src:
         roles = band_indices(src)
         bands: dict[str, np.ndarray] = {}
+        dtypes: list[str] = []
         for role in required:
             idx = roles.get(role)
             if idx is None:
@@ -187,6 +188,7 @@ def calculate_index(
                     f"{formula_name.upper()} requires band '{role}', but the raster "
                     f"({src.count} bands) doesn't expose it."
                 )
+            dtypes.append(src.dtypes[idx - 1])
             data = src.read(idx, masked=True).astype(float)
             if hasattr(data, "filled"):
                 data = data.filled(np.nan)  # nodata -> NaN
@@ -194,10 +196,10 @@ def calculate_index(
 
         # A pixel is valid only if every required band is finite (not NaN/inf/nodata).
         input_valid = np.logical_and.reduce([np.isfinite(b) for b in bands.values()])
-        # Integer-scaled reflectance (0-10000) -> 0-1, as in snow_classifier.
-        max_val = max(float(np.max(b[input_valid])) for b in bands.values()) if input_valid.any() else 0.0
-        if max_val > 1000:
-            bands = {role: b / 10000.0 for role, b in bands.items()}
+        # Stored values -> 0-1 reflectance, decided by the source dtype.
+        divisor = reflectance_divisor(np.result_type(*dtypes), np.stack([b[input_valid] for b in bands.values()]))
+        if divisor != 1.0:
+            bands = {role: b / divisor for role, b in bands.items()}
 
         with np.errstate(divide="ignore", invalid="ignore"):
             index_array = formula(bands)

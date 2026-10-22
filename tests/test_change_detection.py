@@ -78,3 +78,22 @@ def test_run_change_detection(dummy_tifs) -> None:
     with rasterio.open(result["rasters"]["change"]["path"]) as src:
         change_data = src.read(1)
     assert np.all(change_data == 0.0)
+
+
+@pytest.mark.parametrize(
+    ("dtype", "scale", "expected"),
+    [("float32", 1, 0.084135), ("int16", 10000, 0.084135), ("uint8", 255, 0.085389)],
+)
+def test_evi_scaled_by_source_dtype(write_scaled_scene, dtype: str, scale: int, expected: float) -> None:
+    """EVI on the dark scene: int16 x10000 equals its float twin, uint8 is DN/255 (#64)."""
+    before = write_scaled_scene(dtype, scale)
+    after = write_scaled_scene("float32", 1)
+
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        result = run(RasterPathBefore=before, RasterPathAfter=after, IndexType="evi")
+
+    with rasterio.open(result["rasters"]["index_before"]["path"]) as src:
+        index_before = src.read(1).astype(float)
+    assert round(float(np.min(index_before)), 6) == round(float(np.max(index_before)), 6) == expected
+    if dtype != "uint8":
+        assert round(result["statistics"]["mean_change"], 6) == 0.0

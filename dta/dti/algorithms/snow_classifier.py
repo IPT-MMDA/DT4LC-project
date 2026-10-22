@@ -28,6 +28,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
+from dta.dti.raster import reflectance_divisor
 
 # Try to import matplotlib for visualization
 try:
@@ -215,16 +216,9 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
             nir = src.read(4, masked=True).astype(float)
             swir = src.read(src.count, masked=True).astype(float)
 
-        # Normalize to 0-1 range if needed (detect by max value)
-        max_val = max(
-            np.nanmax(green) if np.any(np.isfinite(green)) else 0,
-            np.nanmax(red) if np.any(np.isfinite(red)) else 0,
-            np.nanmax(nir) if np.any(np.isfinite(nir)) else 0,
-            np.nanmax(swir) if np.any(np.isfinite(swir)) else 0,
-        )
-
-        if max_val > 100:  # Likely in DN or scaled reflectance (0-10000)
-            scale_factor = 10000.0 if max_val > 1000 else 255.0
+        # Stored values -> 0-1 reflectance, decided by the source dtype (GeoTIFF bands share one dtype).
+        scale_factor = reflectance_divisor(np.result_type(*src.dtypes), np.ma.stack([green, red, nir, swir]))
+        if scale_factor != 1.0:
             green = green / scale_factor
             red = red / scale_factor
             nir = nir / scale_factor

@@ -233,6 +233,30 @@ def band_indices(src: Any) -> dict[str, int | None]:
     return _roles_from_count(n)
 
 
+def reflectance_divisor(dtype: Any, data: np.ndarray) -> float:
+    """Divisor that maps stored band values to 0-1 reflectance.
+
+    Decided by the source raster dtype (``src.dtypes[...]``), not by the
+    values, so dark integer scenes are scaled like bright ones:
+
+    * 1-byte integers (``uint8``): 255.
+    * Integers of 2+ bytes (``int16``, ``uint16``, ...): 10000.
+    * Floats: 10000 if the finite maximum of ``data`` is above 1000 (legacy
+      float-stored DN), else 1 (already reflectance).
+
+    Args:
+        dtype: Source band dtype, e.g. ``src.dtypes[0]``.
+        data: Band values (masked entries and non-finite values are ignored);
+            only read for float dtypes.
+    """
+    dt = np.dtype(dtype)
+    if np.issubdtype(dt, np.integer):
+        return 255.0 if dt.itemsize == 1 else 10000.0
+    values = np.ma.filled(np.ma.asarray(data, dtype=np.float64), np.nan)
+    finite = values[np.isfinite(values)]
+    return 10000.0 if finite.size and float(finite.max()) > 1000 else 1.0
+
+
 def validate_geotiff(raster_path: str | Path) -> tuple[bool, str]:
     """Validate that a file is a readable GeoTIFF.
 
