@@ -324,6 +324,33 @@ class TestSnowClassifier:
         result = run(synthetic_tif_6band)
         assert isinstance(result, dict)
 
+    @pytest.mark.parametrize(
+        ("dtype", "scale", "green"),
+        [("float32", 1, 0.008), ("int16", 10000, 0.008), ("uint8", 255, 2 / 255)],
+    )
+    def test_snow_brightness_scaled_by_source_dtype(
+        self, write_scaled_scene, dtype: str, scale: int, green: float
+    ) -> None:
+        """Dark scene: brightness is green reflectance whatever the storage dtype (#64)."""
+        from dta.dti.algorithms.snow_classifier import classify_snow
+
+        result = classify_snow(write_scaled_scene(dtype, scale))
+
+        with rasterio.open(result["rasters"]["brightness"]["path"]) as src:
+            brightness = src.read(1).astype(float)
+        assert np.allclose(brightness, green, rtol=1e-6)
+        assert result["statistics"]["pixels_meeting_brightness_threshold"] == 0
+
+    @pytest.mark.parametrize(("dtype", "scale"), [("float32", 1), ("int16", 10000)])
+    def test_dark_snow_like_scene_is_not_snow(self, write_scaled_scene, dtype: str, scale: int) -> None:
+        """NDSI 0.71 but 3 % green is below the brightness threshold, stored as float or int16."""
+        from dta.dti.algorithms.snow_classifier import classify_snow
+
+        stats = classify_snow(write_scaled_scene(dtype, scale, (0.03, 0.03, 0.01, 0.02, 0.005)))["statistics"]
+
+        assert round(stats["ndsi_stats"]["mean"], 6) == 0.714286
+        assert stats["snow_pixels"] == 0
+
 
 class TestStatisticsAlgorithm:
     """Tests for statistics extraction."""

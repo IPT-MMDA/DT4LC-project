@@ -3,8 +3,6 @@
 import base64
 import io
 import logging
-from pathlib import Path
-import tempfile
 from typing import Annotated
 import uuid
 
@@ -14,9 +12,9 @@ import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
 
-from dta.config import OUTPUTS_PATH, TEMP_PATH
 from dta.dti import artifact_files
 
+from ..paths import resolve_served_path
 from ..schemas import FileInfo, FileListResponse, UploadResponse
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
 
@@ -217,24 +215,7 @@ async def download_file(
     path: str = Query(..., description="Absolute or allowed-relative path to the file on the server"),
 ) -> FileResponse:
     """Download a generated or uploaded file (GeoPackage, GeoTIFF, PNG, JSON)."""
-    file_path = Path(path)
-
-    # Security: Only allow downloads from specific directories
-    # (OUTPUTS_PATH holds job artifacts; TEMP_PATH model outputs written by the
-    # executor and Delineate-Anything)
-    allowed_dirs = [
-        Path(tempfile.gettempdir()) / "dt4lc_delineate",
-        UPLOAD_DIR,
-        TEMP_PATH,
-        OUTPUTS_PATH,
-    ]
-
-    resolved = file_path.resolve()
-    if not any(resolved.is_relative_to(allowed_dir.resolve()) for allowed_dir in allowed_dirs):
-        raise HTTPException(status_code=403, detail="Access denied: path not in allowed directories")
-
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    file_path = resolve_served_path(path)
 
     # Determine content type based on extension
     suffix = file_path.suffix.lower()

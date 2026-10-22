@@ -20,14 +20,13 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
+from dta.dti.raster import reflectance_divisor
 
 # Try to import matplotlib for visualization, graceful fallback
 try:
-    import matplotlib
-
-    matplotlib.use("Agg")  # Non-interactive backend
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.colors import LinearSegmentedColormap
-    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
 
     HAS_MATPLOTLIB = True
 except ImportError:
@@ -243,10 +242,11 @@ def _calculate_index_array(
         if hasattr(nir_band, "filled"):
             nir_band = nir_band.filled(np.nan)
 
-        # Integer-scaled reflectance (0-10000) -> 0-1 for EVI's "+1", as in spectral_index.run.
-        evi_bands = np.stack([blue_band, red_band, nir_band])
-        if np.isfinite(evi_bands).any() and float(np.max(evi_bands[np.isfinite(evi_bands)])) > 1000:
-            blue_band, red_band, nir_band = blue_band / 10000.0, red_band / 10000.0, nir_band / 10000.0
+        # Stored values -> 0-1 reflectance for EVI's "+1", by source dtype, as in spectral_index.run.
+        dtype = np.result_type(*(src.dtypes[cast(int, bands[role]) - 1] for role in ("blue", "red", "nir")))
+        divisor = reflectance_divisor(dtype, np.stack([blue_band, red_band, nir_band]))
+        if divisor != 1.0:
+            blue_band, red_band, nir_band = blue_band / divisor, red_band / divisor, nir_band / divisor
 
         # EVI = 2.5 * (NIR - Red) / (NIR + 6*Red - 7.5*Blue + 1)
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -284,7 +284,9 @@ def _create_change_visualization(
 
     cmap = LinearSegmentedColormap.from_list(f"{index_type}_change", config["colors"], N=256)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = Figure(figsize=(10, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     # Clip change values for better visualization
     vmin, vmax = -0.5, 0.5
@@ -294,15 +296,14 @@ def _create_change_visualization(
     ax.axis("off")
 
     # Colorbar
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, aspect=30)
     cbar.set_label(f"{config['name']} Change", fontsize=10)
     cbar.set_ticks([-0.5, -0.25, 0, 0.25, 0.5])
     cbar.set_ticklabels([config["loss_label"], "", "Stable", "", config["gain_label"]])
 
     # Save to bytes
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 
@@ -332,19 +333,20 @@ def _create_index_visualization(
 
     cmap = LinearSegmentedColormap.from_list(index_type, config["index_colors"], N=256)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig = Figure(figsize=(10, 8))
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot()
 
     im = ax.imshow(index_array, cmap=cmap, vmin=config["vmin"], vmax=config["vmax"])
 
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
 
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8, aspect=30)
+    cbar = fig.colorbar(im, ax=ax, shrink=0.8, aspect=30)
     cbar.set_label(config["name"], fontsize=10)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
 
     return buf.getvalue()
 

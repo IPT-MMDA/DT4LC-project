@@ -10,7 +10,7 @@ from rasterio.transform import from_origin
 
 from dta.config import ROOT_DIR
 from dta.dti.algorithms import change_detection, ndvi
-from dta.dti.raster import band_indices
+from dta.dti.raster import _roles_from_count, band_indices
 
 # Constant reflectance by role, from the JOSS review.
 REFLECTANCE = {"blue": 0.04, "green": 0.08, "red": 0.05, "nir": 0.40, "swir": 0.20, "other": 0.10}
@@ -99,7 +99,7 @@ def test_sentinel2_b8a_when_b8_absent(tmp_path: Path) -> None:
 
 
 def test_unknown_codes_fall_back_to_band_count(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    path = _write(tmp_path / "mixed.tif", ["red", "green", "blue", "nir"], ("B2", "B3", "B4", "B11"))
+    path = _write(tmp_path / "mixed.tif", ["red", "green", "blue", "nir"], ("B2", "B3", "B4", "B13"))
 
     with caplog.at_level(logging.WARNING, logger="dta.dti.raster"):
         roles = _roles(path)
@@ -123,3 +123,61 @@ def test_hls_l30_codes_of_kahovka_crop(caplog: pytest.LogCaptureFixture) -> None
 
     assert roles == {"blue": 1, "green": 2, "red": 3, "nir": 4, "swir": 5}
     assert not any("band count" in r.getMessage() for r in caplog.records)
+
+
+LANDSAT = {"red": "B4", "nir": "B5", "green": "B3", "blue": "B2", "swir": "B6"}
+SENTINEL2 = {"red": "B4", "nir": "B8", "green": "B3", "blue": "B2", "swir": "B11"}
+
+
+def _prefixed(roles: dict[str, str], prefix: str) -> dict[str, str]:
+    return {role: prefix + code for role, code in roles.items()}
+
+
+@pytest.mark.parametrize(
+    ("descriptions", "expected"),
+    [
+        pytest.param(tuple(f"B{i}" for i in range(1, 12)), LANDSAT, id="landsat-8-9-B1..B11"),
+        pytest.param(tuple(f"SR_B{i}" for i in range(1, 8)), _prefixed(LANDSAT, "SR_"), id="SR_B1..SR_B7"),
+        pytest.param(
+            (*(f"SR_B{i}" for i in range(1, 8)), "ST_B10"), _prefixed(LANDSAT, "SR_"), id="SR_B1..SR_B7+ST_B10"
+        ),
+        pytest.param(
+            ("SR_B2", "SR_B3", "SR_B4", "SR_B5"), {**_prefixed(LANDSAT, "SR_"), "swir": None}, id="SR_B2..B5"
+        ),
+        pytest.param(("B2", "B3", "B4", "B5", "B6"), LANDSAT, id="hls-l30-B2..B6"),
+        pytest.param(
+            ("B01", "B02", "B03", "B04", "B05", "B06", "B07", "B09", "B10", "B11"),
+            {"red": "B04", "nir": "B05", "green": "B03", "blue": "B02", "swir": "B06"},
+            id="hls-l30-full",
+        ),
+        pytest.param(
+            (*(f"B{i}" for i in range(1, 9)), "B8A", *(f"B{i}" for i in range(9, 13))),
+            SENTINEL2,
+            id="sentinel2-B1..B12+B8A",
+        ),
+        pytest.param(("B2", "B3", "B4", "B8", "B11"), SENTINEL2, id="frontend-default-B2,B3,B4,B8,B11"),
+        pytest.param(("B2", "B3", "B4", "B8"), {**SENTINEL2, "swir": None}, id="B2,B3,B4,B8"),
+        pytest.param(("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B11"), SENTINEL2, id="sentinel2-red-edge-B2..B8,B11"),
+    ],
+)
+def test_band_code_families(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, descriptions: tuple[str, ...], expected: dict[str, str | None]
+) -> None:
+    path = _write(tmp_path / "codes.tif", ["other"] * len(descriptions), descriptions)
+
+    with caplog.at_level(logging.WARNING, logger="dta.dti.raster"):
+        roles = _roles(path)
+
+    assert {role: descriptions[i - 1] if i else None for role, i in roles.items()} == expected
+    assert not any("band count" in r.getMessage() for r in caplog.records)
+
+
+def test_ambiguous_band_codes_use_count_heuristic_and_warn(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    descriptions = ("B1", "B2", "B3", "B4", "B13")
+    path = _write(tmp_path / "ambiguous.tif", ["other"] * len(descriptions), descriptions)
+
+    with caplog.at_level(logging.WARNING, logger="dta.dti.raster"):
+        roles = _roles(path)
+
+    assert roles == _roles_from_count(len(descriptions))
+    assert any("band count" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)

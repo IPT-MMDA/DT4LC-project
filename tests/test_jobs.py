@@ -5,6 +5,7 @@ Tests job submission, processing, cancellation, and queue management.
 
 import asyncio
 from collections.abc import Iterator
+from datetime import datetime, timedelta
 import functools
 from pathlib import Path
 import threading
@@ -13,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from dta.dti import artifact_files
 from dta.dti.coe import planner
 from dta.dti.executor import PipelineExecutor
 from dta.dti.schemas import ContextUnderstanding, PlanStep
@@ -369,3 +371,66 @@ class TestCancelRunningJob:
             finally:
                 release_step.set()
                 await queue.stop()
+
+
+class TestCleanupOldJobs:
+    """``cleanup_old_jobs`` removes the row and ``OUTPUTS_PATH/<job_id>/`` (follow-up ``server/jobs.py:485``)."""
+
+    @staticmethod
+    def _completed(job_id: str) -> Job:
+        return Job(
+            id=job_id,
+            status=JobStatus.COMPLETED,
+            prompt="old job",
+            completed_at=datetime.now() - timedelta(minutes=1),
+        )
+
+    @pytest.fixture
+    def outputs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        outputs = tmp_path / "outputs"
+        outputs.mkdir()
+        monkeypatch.setattr(artifact_files, "OUTPUTS_PATH", outputs)
+        return outputs
+
+    @pytest.mark.asyncio
+    async def test_removes_row_and_output_dir(self, tmp_path: Path, outputs: Path) -> None:
+        store = SQLiteJobStore(tmp_path / "jobs.db")
+        queue = JobQueue(store=store, retention_hours=0)
+        store.save(self._completed("with-files"))
+        job_dir = outputs / "with-files"
+        (job_dir / "sub").mkdir(parents=True)
+        (job_dir / "step1_ndvi.tif").write_bytes(b"tif")
+        (job_dir / "sub" / "step1_ndvi.png").write_bytes(b"png")
+
+        assert await queue.cleanup_old_jobs() == 1
+
+        assert store.get("with-files") is None
+        assert not job_dir.exists()
+        assert outputs.is_dir()
+
+    @pytest.mark.asyncio
+    async def test_missing_output_dir_is_cleaned_without_error(self, tmp_path: Path, outputs: Path) -> None:
+        store = SQLiteJobStore(tmp_path / "jobs.db")
+        queue = JobQueue(store=store, retention_hours=0)
+        store.save(self._completed("no-dir"))
+
+        assert await queue.cleanup_old_jobs() == 1
+
+        assert store.get("no-dir") is None
+        assert outputs.is_dir()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("job_id", ["", "..", "../outputs"])
+    async def test_never_removes_outputs_root_or_outside(self, tmp_path: Path, outputs: Path, job_id: str) -> None:
+        store = SQLiteJobStore(tmp_path / "jobs.db")
+        queue = JobQueue(store=store, retention_hours=0)
+        store.save(self._completed(job_id))
+        (outputs / "other-job").mkdir()
+        (tmp_path / "sibling").mkdir()
+
+        assert await queue.cleanup_old_jobs() == 1
+
+        assert store.get(job_id) is None
+        assert (outputs / "other-job").is_dir()
+        assert (tmp_path / "sibling").is_dir()
+        assert (tmp_path / "jobs.db").is_file()

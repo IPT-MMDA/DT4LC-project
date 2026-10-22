@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import Enum
 import functools
@@ -17,6 +17,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 from typing import Any
 import uuid
@@ -145,6 +146,13 @@ class JobStore(ABC):
         """Return all jobs."""
 
     @abstractmethod
+    def list_summaries(self) -> list[Job]:
+        """Return all jobs without ``result``, ``context`` and ``attachments`` (``GET /v1/jobs`` fields only).
+
+        The returned jobs are partial: never ``save()`` them.
+        """
+
+    @abstractmethod
     def count(self) -> int:
         """Return total number of stored jobs."""
 
@@ -181,6 +189,9 @@ class MemoryJobStore(JobStore):
 
     def list_all(self) -> list[Job]:
         return list(self._jobs.values())
+
+    def list_summaries(self) -> list[Job]:
+        return [replace(j, result=None, context=None, attachments=[]) for j in self._jobs.values()]
 
     def count(self) -> int:
         return len(self._jobs)
@@ -278,6 +289,25 @@ class SQLiteJobStore(JobStore):
     def list_all(self) -> list[Job]:
         rows = self._conn.execute("SELECT * FROM jobs").fetchall()
         return [self._deserialize_row(row) for row in rows]
+
+    def list_summaries(self) -> list[Job]:
+        rows = self._conn.execute(
+            "SELECT id, status, prompt, plan, progress, error, created_at, started_at, completed_at FROM jobs"
+        ).fetchall()
+        return [
+            Job(
+                id=row["id"],
+                status=JobStatus(row["status"]),
+                prompt=row["prompt"],
+                plan=ExecutionPlan(**json.loads(row["plan"])) if row["plan"] else None,
+                progress=row["progress"],
+                error=row["error"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
+                completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
+            )
+            for row in rows
+        ]
 
     def count(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) FROM jobs").fetchone()
@@ -464,11 +494,11 @@ class JobQueue:
             offset: Offset for pagination
 
         Returns:
-            List of jobs
+            List of jobs; finished jobs come without ``result`` (fetch one by id for it)
         """
         async with self._lock:
             # Merge store and cache (cache has fresher state for in-flight jobs)
-            all_jobs: dict[str, Job] = {j.id: j for j in self._store.list_all()}
+            all_jobs: dict[str, Job] = {j.id: j for j in self._store.list_summaries()}
             all_jobs.update(self._jobs_cache)
             jobs = list(all_jobs.values())
 
@@ -483,26 +513,36 @@ class JobQueue:
             return jobs[offset : offset + limit]
 
     async def cleanup_old_jobs(self) -> int:
-        """Remove jobs older than retention period.
+        """Remove jobs older than retention period, with their ``OUTPUTS_PATH/<job_id>/`` artifact files.
 
         Returns:
             Number of jobs removed
         """
         cutoff = datetime.now() - timedelta(hours=self.retention_hours)
         removed = 0
+        dirs_removed = 0
 
         async with self._lock:
             # Find old jobs from store
-            old_job_ids = [j.id for j in self._store.list_all() if j.completed_at and j.completed_at < cutoff]
+            old_job_ids = [j.id for j in self._store.list_summaries() if j.completed_at and j.completed_at < cutoff]
 
             # Remove them
+            outputs_root = artifact_files.OUTPUTS_PATH.resolve()
             for job_id in old_job_ids:
                 self._store.delete(job_id)
                 self._jobs_cache.pop(job_id, None)
                 removed += 1
 
+                job_dir = artifact_files.output_dir(job_id).resolve()
+                if outputs_root not in job_dir.parents:
+                    logger.warning(f"Job {job_id}: output directory {job_dir} is outside {outputs_root}, not removed")
+                elif job_dir.is_dir():
+                    shutil.rmtree(job_dir, ignore_errors=True)
+                    if not job_dir.exists():
+                        dirs_removed += 1
+
         if removed > 0:
-            logger.info(f"Cleaned up {removed} old jobs")
+            logger.info(f"Cleaned up {removed} old jobs and {dirs_removed} output directories")
 
         return removed
 
