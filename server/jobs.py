@@ -17,6 +17,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 from typing import Any
 import uuid
@@ -483,26 +484,36 @@ class JobQueue:
             return jobs[offset : offset + limit]
 
     async def cleanup_old_jobs(self) -> int:
-        """Remove jobs older than retention period.
+        """Remove jobs older than retention period, with their ``OUTPUTS_PATH/<job_id>/`` artifact files.
 
         Returns:
             Number of jobs removed
         """
         cutoff = datetime.now() - timedelta(hours=self.retention_hours)
         removed = 0
+        dirs_removed = 0
 
         async with self._lock:
             # Find old jobs from store
             old_job_ids = [j.id for j in self._store.list_all() if j.completed_at and j.completed_at < cutoff]
 
             # Remove them
+            outputs_root = artifact_files.OUTPUTS_PATH.resolve()
             for job_id in old_job_ids:
                 self._store.delete(job_id)
                 self._jobs_cache.pop(job_id, None)
                 removed += 1
 
+                job_dir = artifact_files.output_dir(job_id).resolve()
+                if outputs_root not in job_dir.parents:
+                    logger.warning(f"Job {job_id}: output directory {job_dir} is outside {outputs_root}, not removed")
+                elif job_dir.is_dir():
+                    shutil.rmtree(job_dir, ignore_errors=True)
+                    if not job_dir.exists():
+                        dirs_removed += 1
+
         if removed > 0:
-            logger.info(f"Cleaned up {removed} old jobs")
+            logger.info(f"Cleaned up {removed} old jobs and {dirs_removed} output directories")
 
         return removed
 
