@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+import base64
+import logging
 import os
 from typing import Any
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
+
+logger = logging.getLogger(__name__)
+
+# Default model. gemini-2.0-flash(-exp) are retired (404 NOT_FOUND); this is a current
+# Flash-Lite model listed by `client.models.list()` with generateContent support that
+# answered on the free tier and fits the planner's 2000-token budget.
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+
+# Errors that belong to one model, not to the key or request: retired id (404 NOT_FOUND),
+# that model's quota (429 RESOURCE_EXHAUSTED), overloaded model (503 UNAVAILABLE).
+# On these the next configured model is tried; any other error fails at once.
+_MODEL_FALLBACK_CODES = frozenset({404, 429, 503})
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -20,13 +34,13 @@ class GeminiProvider(BaseLLMProvider):
     - Streaming (future)
 
     Example:
-        >>> provider = GeminiProvider("gemini-2.0-flash-exp")
+        >>> provider = GeminiProvider("gemini-3.5-flash-lite")
         >>> messages = [LLMMessage(role="user", content="Hello")]
         >>> response = provider.generate(messages)
         >>> print(response.text)
     """
 
-    def __init__(self, model: str = "gemini-2.0-flash-exp", **config: Any) -> None:
+    def __init__(self, model: str = DEFAULT_GEMINI_MODEL, **config: Any) -> None:
         """Initialize Gemini provider.
 
         Args:
@@ -34,10 +48,13 @@ class GeminiProvider(BaseLLMProvider):
             **config: Additional configuration
                 - api_key: Override API key (otherwise uses GEMINI_API_KEY env)
                 - timeout: Request timeout in seconds (default: 60)
+                - fallback_models: Models tried in order when ``model`` fails with
+                  404/429/503 (config.py passes the rest of GEMINI_MODELS)
         """
         super().__init__(model, **config)
         self._client: genai.Client | None = None
         self.timeout = config.get("timeout", 60)
+        self.fallback_models: list[str] = list(config.get("fallback_models", []))
 
     def _get_client(self) -> genai.Client:
         """Lazy initialization of Gemini client."""
@@ -83,7 +100,10 @@ class GeminiProvider(BaseLLMProvider):
                 # System messages prepended as text
                 contents.insert(0, msg.content)
             elif msg.role == "user":
-                # Note: Image inputs not currently used in pipeline context
+                if msg.images:
+                    for b64_str in msg.images:
+                        raw = base64.b64decode(b64_str)
+                        contents.append(types.Part.from_bytes(data=raw, mime_type="image/png"))
                 contents.append(msg.content)
             elif msg.role == "assistant":
                 # Gemini doesn't use assistant messages in the same way
@@ -100,6 +120,8 @@ class GeminiProvider(BaseLLMProvider):
         # Merge with kwargs
         gen_config.update(kwargs.get("generation_config", {}))
 
+        failures: list[str] = []  # "model: error" per model tried
+        model = self.model
         try:
             # Pass generation_config as config dict, not as types.GenerateContentConfig
             gen_kwargs: dict[str, Any] = {
@@ -121,7 +143,17 @@ class GeminiProvider(BaseLLMProvider):
                     except concurrent.futures.TimeoutError as e:
                         raise TimeoutError(f"Gemini request timed out after {self.timeout}s") from e
 
-            response = _generate_with_timeout()
+            models = [self.model, *self.fallback_models]
+            for i, model in enumerate(models):
+                gen_kwargs["model"] = model
+                try:
+                    response = _generate_with_timeout()
+                    break
+                except errors.APIError as e:
+                    if e.code not in _MODEL_FALLBACK_CODES or i + 1 == len(models):
+                        raise
+                    failures.append(f"{model}: {e}")
+                    logger.warning(f"Gemini model {model} failed, trying {models[i + 1]}: {e}")
 
             # Extract usage if available
             usage = None
@@ -134,7 +166,7 @@ class GeminiProvider(BaseLLMProvider):
 
             return LLMResponse(
                 text=response.text,
-                model=self.model,
+                model=model,
                 usage=usage,
                 provider="gemini",
                 metadata={
@@ -145,7 +177,8 @@ class GeminiProvider(BaseLLMProvider):
         except TimeoutError:
             raise  # Re-raise timeout as-is
         except Exception as e:
-            raise Exception(f"Gemini generation failed: {e}") from e
+            failures.append(f"{model}: {e}")
+            raise Exception(f"Gemini generation failed: {'; '.join(failures)}") from e
 
     def is_available(self) -> bool:
         """Check if Gemini is available based on API key presence."""

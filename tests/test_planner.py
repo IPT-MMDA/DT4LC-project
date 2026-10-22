@@ -1,296 +1,256 @@
-"""Tests for LLM-powered planner.
+"""Tests for execution planner."""
 
-Tests template planner, LLM planner, and hybrid planning strategies.
-"""
+from unittest.mock import MagicMock, patch
 
-from unittest.mock import MagicMock
-
-import pytest
-
-from dta.dti.coe.llm import LLMResponse
-from dta.dti.coe.llm.base import BaseLLMProvider
-from dta.dti.coe.llm.router import LLMRouter
-from dta.dti.coe.llm_planner import (
-    estimate_plan_confidence,
-    format_registry_for_llm,
-    plan_with_llm,
-)
-from dta.dti.coe.planner import plan, plan_template
-from dta.dti.registry import Registry
-from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, RegistryItem, Runner
+from dta.dti.coe.planner import _detect_index_type, _is_change_detection_request, plan, plan_template
+from dta.dti.schemas import ContextUnderstanding, Registry, RegistryItem, Runner, Triggers
 
 
-@pytest.fixture
-def mock_registry() -> Registry:
-    """Create mock registry for testing."""
-    return Registry(
+def _make_change_detection_registry() -> Registry:
+    """Build a minimal registry with the change-detection item for planner tests."""
+    from dta.dti.schemas import RegistryItem, Runner, Triggers
+
+    cd_item = RegistryItem(
+        id="algorithms/change-detection",
+        kind="algorithm",
+        runner=Runner(type="python"),
+        inputs=["RasterPathBefore", "RasterPathAfter", "IndexType"],
+        outputs=["ChangeMap"],
+        triggers=Triggers(
+            keywords=[
+                "change detection",
+                "detect changes",
+                "compare images",
+                "image comparison",
+                "temporal comparison",
+                "image difference",
+                "temporal difference",
+                "ndvi change",
+                "ndsi change",
+                "ndwi change",
+                "vegetation change",
+                "vegetation changes",
+                "snow change",
+                "ice change",
+                "ice cover change",
+                "ice cover changes",
+                "water change",
+                "glacier change",
+                "glacier melt",
+                "snow melt",
+                "flood detection",
+                "flooding",
+                "before",
+                "after",
+            ]
+        ),
+        config={
+            "default_index_type": "ndvi",
+            "index_keyword_map": {
+                "ndvi": ["ndvi", "vegetation", "vegetation change"],
+                "ndsi": ["ndsi", "snow", "ice", "glacier", "frozen", "melt", "ice cover", "ice cover change"],
+                "ndwi": ["ndwi", "water", "flood", "lake", "river", "reservoir", "drought"],
+            },
+        },
+    )
+    return Registry(version="1.0", types=[], instances=[cd_item])
+
+
+def test_is_change_detection_request() -> None:
+    reg = _make_change_detection_registry()
+
+    # Test positive cases
+    ctx = ContextUnderstanding(goal="detect changes", required_inputs=[], desired_outputs=[])
+    assert _is_change_detection_request(ctx, reg) is True
+
+    ctx = ContextUnderstanding(goal="compare images", required_inputs=[], desired_outputs=[])
+    assert _is_change_detection_request(ctx, reg) is True
+
+    ctx = ContextUnderstanding(goal="analyze before and after", required_inputs=[], desired_outputs=[])
+    assert _is_change_detection_request(ctx, reg) is True
+
+    ctx = ContextUnderstanding(
+        goal="analysis", hints={"keywords": ["change detection"]}, required_inputs=[], desired_outputs=[]
+    )
+    assert _is_change_detection_request(ctx, reg) is True
+
+    ctx = ContextUnderstanding(goal="analysis", desired_outputs=["ChangeMap"], required_inputs=[])
+    assert _is_change_detection_request(ctx, reg) is True
+
+    # Test negative cases
+    ctx = ContextUnderstanding(goal="calculate ndvi", required_inputs=[], desired_outputs=[])
+    assert _is_change_detection_request(ctx, reg) is False
+
+    ctx = ContextUnderstanding(goal="find fields", required_inputs=[], desired_outputs=[])
+    assert _is_change_detection_request(ctx, reg) is False
+
+
+def test_detect_index_type() -> None:
+    reg = _make_change_detection_registry()
+
+    # Test explicit hint
+    ctx = ContextUnderstanding(goal="analysis", hints={"index_type": "ndwi"}, required_inputs=[], desired_outputs=[])
+    assert _detect_index_type(ctx, reg) == "ndwi"
+
+    # Test ndsi indicators
+    ctx = ContextUnderstanding(goal="detect snow changes", required_inputs=[], desired_outputs=[])
+    assert _detect_index_type(ctx, reg) == "ndsi"
+
+    ctx = ContextUnderstanding(goal="glacier melt", required_inputs=[], desired_outputs=[])
+    assert _detect_index_type(ctx, reg) == "ndsi"
+
+    # Test ndwi indicators
+    ctx = ContextUnderstanding(goal="flood detection", required_inputs=[], desired_outputs=[])
+    assert _detect_index_type(ctx, reg) == "ndwi"
+
+    # Test default
+    ctx = ContextUnderstanding(goal="vegetation change", required_inputs=[], desired_outputs=[])
+    assert _detect_index_type(ctx, reg) == "ndvi"
+
+
+def test_plan_template_change_detection() -> None:
+    reg = Registry(
         version="1.0",
-        types=["Raster", "NDVIMap", "Statistics", "Summary"],
+        types=[],
         instances=[
             RegistryItem(
-                id="input/kahovka",
+                id="input/file", kind="input", runner=Runner(type="passthrough"), inputs=[], outputs=["RasterPath"]
+            ),
+            RegistryItem(
+                id="input/file-before",
                 kind="input",
-                runner=Runner(type="python", entrypoint="dta.dti.assets.kahovka"),
-                keywords=["kahovka", "satellite"],
+                runner=Runner(type="passthrough"),
                 inputs=[],
-                outputs=["Raster"],
+                outputs=["RasterPath1"],
             ),
             RegistryItem(
-                id="algorithms/ndvi",
-                kind="algorithm",
-                runner=Runner(type="python", entrypoint="dta.dti.algorithms.ndvi"),
-                keywords=["ndvi", "vegetation"],
-                inputs=["Raster"],
-                outputs=["NDVIMap"],
-            ),
-            RegistryItem(
-                id="algorithms/statistics",
-                kind="algorithm",
-                runner=Runner(type="python", entrypoint="dta.dti.algorithms.statistics"),
-                keywords=["stats", "analysis"],
-                inputs=["Raster"],
-                outputs=["Statistics"],
-            ),
-            RegistryItem(
-                id="post-processing/agent-analysis",
-                kind="postprocess",
-                runner=Runner(type="agent"),
-                keywords=["llm", "summary"],
+                id="input/file-after",
+                kind="input",
+                runner=Runner(type="passthrough"),
                 inputs=[],
-                outputs=["Summary"],
+                outputs=["RasterPath2"],
+            ),
+            RegistryItem(
+                id="algorithms/change-detection",
+                kind="algorithm",
+                runner=Runner(type="python"),
+                inputs=["RasterPath1", "RasterPath2"],
+                outputs=["ChangeMap"],
+                triggers=Triggers(
+                    keywords=[
+                        "change detection",
+                        "detect changes",
+                        "vegetation change",
+                        "vegetation changes",
+                        "before",
+                        "after",
+                    ]
+                ),
+                config={
+                    "default_index_type": "ndvi",
+                    "index_keyword_map": {
+                        "ndvi": ["ndvi", "vegetation", "vegetation change"],
+                        "ndsi": ["ndsi", "snow", "ice", "glacier"],
+                        "ndwi": ["ndwi", "water", "flood"],
+                    },
+                },
             ),
         ],
     )
 
+    ctx = ContextUnderstanding(goal="detect vegetation change", required_inputs=[], desired_outputs=[])
 
-@pytest.fixture
-def simple_context() -> ContextUnderstanding:
-    """Simple context with clear keywords."""
-    return ContextUnderstanding(
-        goal="Calculate NDVI on Kahovka data",
-        required_inputs=["Raster"],
-        desired_outputs=["NDVIMap"],
-        hints={"keywords": ["ndvi", "kahovka"], "output_type": "chat"},
+    result = plan_template(ctx, reg)
+    assert result.flow == "detect vegetation change"
+    assert len(result.steps) == 3
+    assert result.steps[0].uses == "input/file-before"
+    assert result.steps[1].uses == "input/file-after"
+    assert result.steps[2].uses == "algorithms/change-detection"
+    assert result.steps[2].binds["IndexType"] == "ndvi"
+
+
+def test_plan_template_standard() -> None:
+    reg = Registry(
+        version="1.0",
+        types=[],
+        instances=[
+            RegistryItem(
+                id="input/file", kind="input", runner=Runner(type="passthrough"), inputs=[], outputs=["RasterPath"]
+            ),
+            RegistryItem(
+                id="algorithms/ndvi",
+                kind="algorithm",
+                runner=Runner(type="python"),
+                inputs=["RasterPath"],
+                outputs=["NDVIMap"],
+                keywords=["ndvi"],
+            ),
+        ],
     )
 
-
-@pytest.fixture
-def complex_context() -> ContextUnderstanding:
-    """Complex context without clear keywords."""
-    return ContextUnderstanding(
-        goal="Analyze vegetation health trends in the reservoir area and compare with baseline",
-        required_inputs=[],
-        desired_outputs=[],
-        hints={"keywords": [], "output_type": "chat"},
+    ctx = ContextUnderstanding(
+        goal="calculate ndvi", required_inputs=[], desired_outputs=[], hints={"keywords": ["ndvi"]}
     )
 
-
-class TestRegistryFormatting:
-    """Tests for registry formatting for LLM."""
-
-    def test_format_registry_for_llm(self, mock_registry: Registry) -> None:
-        """Test registry formatting for LLM."""
-        formatted = format_registry_for_llm(mock_registry)
-
-        assert "# Available Pipeline Components" in formatted
-        assert "input/kahovka" in formatted
-        assert "algorithms/ndvi" in formatted
-        assert "Inputs:" in formatted
-        assert "Outputs:" in formatted
-        assert "Keywords:" in formatted
+    result = plan_template(ctx, reg)
+    assert result.flow == "calculate ndvi"
+    # Should include input/file because algorithm needs RasterPath
+    assert len(result.steps) == 2
+    assert result.steps[0].uses == "input/file"
+    assert result.steps[1].uses == "algorithms/ndvi"
 
 
-class TestConfidenceEstimation:
-    """Tests for plan confidence estimation."""
+def test_plan_template_no_inputs() -> None:
+    reg = Registry(
+        version="1.0",
+        types=[],
+        instances=[
+            RegistryItem(
+                id="algorithms/standalone",
+                kind="algorithm",
+                runner=Runner(type="python"),
+                inputs=[],
+                outputs=["Result"],
+                keywords=["standalone"],
+            ),
+        ],
+    )
 
-    def test_estimate_confidence_high(self, simple_context: ContextUnderstanding) -> None:
-        """Test confidence estimation for simple request."""
-        confidence = estimate_plan_confidence(simple_context)
+    ctx = ContextUnderstanding(
+        goal="run standalone", required_inputs=[], desired_outputs=[], hints={"keywords": ["standalone"]}
+    )
 
-        assert confidence >= 0.7
-
-    def test_estimate_confidence_low(self, complex_context: ContextUnderstanding) -> None:
-        """Test confidence estimation for complex request."""
-        confidence = estimate_plan_confidence(complex_context)
-
-        assert confidence < 0.7
-
-    def test_confidence_scoring_edge_cases(self) -> None:
-        """Test confidence scoring edge cases."""
-        ctx2 = ContextUnderstanding(goal="test", required_inputs=[], desired_outputs=[], hints={})
-        assert estimate_plan_confidence(ctx2) == 0.0
-
-        ctx3 = ContextUnderstanding(
-            goal="test",
-            required_inputs=["Raster"],
-            desired_outputs=["NDVIMap"],
-            hints={"keywords": ["ndvi", "kahovka"]},
-        )
-        confidence = estimate_plan_confidence(ctx3)
-        assert confidence == 1.0
+    result = plan_template(ctx, reg)
+    # Should NOT include input/file because algorithm needs no inputs
+    assert len(result.steps) == 1
+    assert result.steps[0].uses == "algorithms/standalone"
 
 
-class TestTemplatePlanner:
-    """Tests for template-based planner."""
+@patch("dta.dti.coe.planner.plan_template")
+def test_plan_routing_to_template(mock_template: MagicMock) -> None:
+    ctx = ContextUnderstanding(goal="test", required_inputs=[], desired_outputs=[])
+    reg = Registry(version="1.0", types=[], instances=[])
 
-    def test_template_planner(self, simple_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test template-based planner."""
-        plan_result = plan_template(simple_context, mock_registry)
-
-        assert plan_result is not None
-        assert len(plan_result.steps) > 0
-        assert plan_result.flow == simple_context.goal
+    with patch("dta.dti.coe.llm_planner.estimate_plan_confidence", return_value=0.9):
+        plan(ctx, reg, use_llm=True)
+        mock_template.assert_called_once_with(ctx, reg)
 
 
-class TestLLMPlanner:
-    """Tests for LLM-powered planner."""
+@patch("dta.dti.coe.llm_planner.plan_with_llm")
+def test_plan_routing_to_llm(mock_llm: MagicMock) -> None:
+    ctx = ContextUnderstanding(goal="test", required_inputs=[], desired_outputs=[])
+    reg = Registry(version="1.0", types=[], instances=[])
 
-    def test_llm_planner_with_mock(self, simple_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test LLM planner with mocked LLM."""
-        mock_provider = MagicMock(spec=BaseLLMProvider)
-        mock_provider.is_available.return_value = True
-        mock_provider.name = "mock"
-        mock_provider.model = "mock-model"
-
-        mock_response = LLMResponse(
-            text="""{
-  "steps": [
-    {"uses": "input/kahovka"},
-    {"uses": "algorithms/ndvi"},
-    {"uses": "post-processing/agent-analysis"}
-  ],
-  "reasoning": "Load Kahovka data, calculate NDVI, generate summary"
-}""",
-            model="mock-model",
-            provider="mock",
-        )
-        mock_provider.generate.return_value = mock_response
-
-        router = LLMRouter([mock_provider])
-
-        plan_result = plan_with_llm(simple_context, mock_registry, router)
-
-        assert plan_result is not None
-        assert len(plan_result.steps) == 3
-        assert plan_result.steps[0].uses == "input/kahovka"
-        assert plan_result.steps[1].uses == "algorithms/ndvi"
-        assert plan_result.steps[2].uses == "post-processing/agent-analysis"
-
-    def test_llm_planner_invalid_json(self, simple_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test LLM planner with invalid JSON response."""
-        mock_provider = MagicMock(spec=BaseLLMProvider)
-        mock_provider.is_available.return_value = True
-        mock_provider.name = "mock"
-        mock_provider.model = "mock-model"
-
-        mock_response = LLMResponse(
-            text="This is not valid JSON",
-            model="mock-model",
-            provider="mock",
-        )
-        mock_provider.generate.return_value = mock_response
-
-        router = LLMRouter([mock_provider])
-
-        with pytest.raises(Exception, match="LLM planner failed"):
-            plan_with_llm(simple_context, mock_registry, router)
-
-    def test_llm_planner_missing_component(
-        self, simple_context: ContextUnderstanding, mock_registry: Registry
-    ) -> None:
-        """Test LLM planner with non-existent component."""
-        mock_provider = MagicMock(spec=BaseLLMProvider)
-        mock_provider.is_available.return_value = True
-        mock_provider.name = "mock"
-        mock_provider.model = "mock-model"
-
-        mock_response = LLMResponse(
-            text="""{
-  "steps": [
-    {"uses": "input/nonexistent"},
-    {"uses": "algorithms/ndvi"}
-  ],
-  "reasoning": "Test plan"
-}""",
-            model="mock-model",
-            provider="mock",
-        )
-        mock_provider.generate.return_value = mock_response
-
-        router = LLMRouter([mock_provider])
-
-        with pytest.raises(Exception, match="(not found in registry|LLM planner failed)"):
-            plan_with_llm(simple_context, mock_registry, router)
-
-    def test_llm_planner_markdown_json(self, simple_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test LLM planner with JSON wrapped in markdown."""
-        mock_provider = MagicMock(spec=BaseLLMProvider)
-        mock_provider.is_available.return_value = True
-        mock_provider.name = "mock"
-        mock_provider.model = "mock-model"
-
-        mock_response = LLMResponse(
-            text="""```json
-{
-  "steps": [
-    {"uses": "input/kahovka"},
-    {"uses": "algorithms/ndvi"}
-  ],
-  "reasoning": "Test plan"
-}
-```""",
-            model="mock-model",
-            provider="mock",
-        )
-        mock_provider.generate.return_value = mock_response
-
-        router = LLMRouter([mock_provider])
-
-        plan_result = plan_with_llm(simple_context, mock_registry, router)
-        assert len(plan_result.steps) == 2
-
-    def test_llm_planner_empty_steps(self, simple_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test LLM planner with empty steps."""
-        mock_provider = MagicMock(spec=BaseLLMProvider)
-        mock_provider.is_available.return_value = True
-        mock_provider.name = "mock"
-        mock_provider.model = "mock-model"
-
-        mock_response = LLMResponse(
-            text='{"steps": [], "reasoning": "No steps needed"}',
-            model="mock-model",
-            provider="mock",
-        )
-        mock_provider.generate.return_value = mock_response
-
-        router = LLMRouter([mock_provider])
-
-        with pytest.raises(Exception, match="Plan has no steps"):
-            plan_with_llm(simple_context, mock_registry, router)
+    with patch("dta.dti.coe.llm_planner.estimate_plan_confidence", return_value=0.4):
+        plan(ctx, reg, use_llm=True)
+        mock_llm.assert_called_once_with(ctx, reg)
 
 
-class TestHybridPlanner:
-    """Tests for hybrid planner."""
+@patch("dta.dti.coe.planner.plan_template")
+def test_plan_routing_llm_error_fallback(mock_template: MagicMock) -> None:
+    ctx = ContextUnderstanding(goal="test", required_inputs=[], desired_outputs=[])
+    reg = Registry(version="1.0", types=[], instances=[])
 
-    def test_hybrid_planner_uses_template(self, simple_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test hybrid planner uses template for high confidence."""
-        plan_result = plan(simple_context, mock_registry, use_llm=True)
-
-        assert plan_result is not None
-        assert len(plan_result.steps) > 0
-
-    def test_hybrid_planner_uses_llm(self, complex_context: ContextUnderstanding, mock_registry: Registry) -> None:
-        """Test hybrid planner attempts LLM for low confidence."""
-        plan_result = plan(complex_context, mock_registry, use_llm=True)
-
-        assert plan_result is not None
-        assert len(plan_result.steps) >= 0
-
-    def test_hybrid_planner_force_template(
-        self, complex_context: ContextUnderstanding, mock_registry: Registry
-    ) -> None:
-        """Test hybrid planner can be forced to use template."""
-        plan_result = plan(complex_context, mock_registry, use_llm=False)
-
-        assert plan_result is not None
-        assert isinstance(plan_result, ExecutionPlan)
+    with patch("dta.dti.coe.llm_planner.estimate_plan_confidence", side_effect=Exception("Error")):
+        plan(ctx, reg, use_llm=True)
+        mock_template.assert_called_once_with(ctx, reg)

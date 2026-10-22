@@ -58,6 +58,35 @@ function createContextSummary(result?: JobResultData): string {
   return parts.join(' ');
 }
 
+// Keep only what localStorage needs: image URLs, never image bytes (#67 bug 3).
+// Attachments keep their metadata and preview URL; visualizations keep {type, label, url}
+// and are dropped when they have no URL (messages persisted before v0.5.0).
+function toPersistedMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((m) => {
+    const stripped = { ...m };
+
+    if (stripped.attachments) {
+      stripped.attachments = stripped.attachments.map((att) => ({
+        id: att.id,
+        filename: att.filename,
+        path: att.path,
+        preview_url: att.preview_url,
+      }));
+    }
+
+    if (stripped.resultData?.visualizations) {
+      stripped.resultData = {
+        ...stripped.resultData,
+        visualizations: stripped.resultData.visualizations
+          .filter((v) => typeof v.url === 'string' && v.url)
+          .map((v) => ({ type: v.type, label: v.label, url: v.url })),
+      };
+    }
+
+    return stripped;
+  });
+}
+
 // Generate a unique session ID
 function generateSessionId(): string {
   return `chat_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -400,54 +429,21 @@ export const useChatStore = create<ChatStore>()(
     {
       name: 'dt4lc-chat-storage',
       partialize: (state) => {
-        // Strip large binary data (base64 images) from messages before persisting
-        // This prevents localStorage quota issues with satellite imagery
-        const stripBinaryData = (messages: ChatMessage[]): ChatMessage[] => {
-          return messages.map((m) => {
-            const stripped = { ...m };
-
-            // Remove base64 previews from attachments (keep only metadata)
-            if (stripped.attachments) {
-              stripped.attachments = stripped.attachments.map((att) => ({
-                id: att.id,
-                filename: att.filename,
-                path: att.path,
-                // Omit preview_png_base64 - too large for localStorage
-              }));
-            }
-
-            // Remove base64 visualizations from result data (can be re-fetched from job)
-            if (stripped.resultData?.visualizations) {
-              stripped.resultData = {
-                ...stripped.resultData,
-                visualizations: stripped.resultData.visualizations.map((v) => ({
-                  type: v.type,
-                  label: v.label,
-                  // Omit base64 - too large for localStorage
-                  base64: '',
-                })),
-              };
-            }
-
-            return stripped;
-          });
-        };
-
         // Strip binary data from both current messages and all sessions
         const strippedSessions = state.sessions.map((session) => ({
           ...session,
-          messages: stripBinaryData(session.messages),
+          messages: toPersistedMessages(session.messages),
         }));
 
         return {
           sessions: strippedSessions,
           currentSessionId: state.currentSessionId,
-          messages: stripBinaryData(state.messages),
+          messages: toPersistedMessages(state.messages),
           jobToSessionMap: state.jobToSessionMap,
         };
       },
       // Storage version for migrations
-      version: 2,
+      version: 3,
       migrate: (persistedState: unknown, version: number) => {
         // Version 2: Strip binary data from storage to fix quota issues
         if (version < 2) {
@@ -459,6 +455,19 @@ export const useChatStore = create<ChatStore>()(
             messages: [],
             jobToSessionMap: {},
           };
+        }
+        // Version 3: images are URLs (#67 bug 3). v2 messages have neither a URL nor
+        // bytes, so they keep their text and statistics and render without an image.
+        if (version < 3) {
+          const state = persistedState as Pick<ChatStore, 'sessions' | 'messages'>;
+          return {
+            ...state,
+            sessions: (state.sessions ?? []).map((session) => ({
+              ...session,
+              messages: toPersistedMessages(session.messages ?? []),
+            })),
+            messages: toPersistedMessages(state.messages ?? []),
+          } as ChatStore;
         }
         return persistedState as ChatStore;
       },

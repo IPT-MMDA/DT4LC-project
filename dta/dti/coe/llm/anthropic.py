@@ -14,6 +14,7 @@ Setup:
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import anthropic
@@ -29,6 +30,10 @@ DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 # legacy `thinking: {type: "enabled", budget_tokens: N}` shape. Sending them
 # returns a 400. Adaptive thinking is the only supported thinking mode here.
 _RESTRICTED_SAMPLING_MODELS: frozenset[str] = frozenset({"claude-opus-4-7"})
+
+# Claude generation 5 and later (e.g. claude-sonnet-5-5, claude-opus-5-5) also reject
+# `temperature` ("`temperature` is deprecated for this model" -> 400).
+_RESTRICTED_SAMPLING_PATTERN = re.compile(r"^claude-[a-z]+-(?:[5-9]|\d{2,})(?:-|$)")
 
 # Per-million-token pricing in USD as (input, output). Used by estimate_cost()
 # so LLM_STRATEGY=cost can route between providers meaningfully.
@@ -128,7 +133,9 @@ class AnthropicProvider(BaseLLMProvider):
         return "\n\n".join(system_parts), api_messages
 
     def _supports_sampling(self) -> bool:
-        return self.model not in _RESTRICTED_SAMPLING_MODELS
+        if self.model in _RESTRICTED_SAMPLING_MODELS:
+            return False
+        return _RESTRICTED_SAMPLING_PATTERN.match(self.model) is None
 
     def generate(
         self,
@@ -172,7 +179,7 @@ class AnthropicProvider(BaseLLMProvider):
                 }
             ]
 
-        # Sampling params: omitted on Opus 4.7 (rejected with 400 otherwise).
+        # Sampling params: omitted on Opus 4.7 and Claude 5+ (rejected with 400 otherwise).
         if self._supports_sampling():
             req_kwargs["temperature"] = temperature
 

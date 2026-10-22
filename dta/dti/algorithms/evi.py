@@ -20,7 +20,7 @@ def _config() -> dict[str, Any]:
 def calculate_evi(raster_path: str) -> dict[str, Any]:
     """Calculate EVI from a multispectral raster.
 
-    Returns a dict with ``evi_array``, ``metadata``, ``statistics``,
+    Returns a dict with ``rasters`` (``evi``), ``metadata``, ``statistics``,
     ``visualizations``, and ``path``.
     """
     return _run_index(raster_path, _config())

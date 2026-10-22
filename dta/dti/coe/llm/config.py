@@ -111,7 +111,7 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     """Get configuration for a specific provider.
 
     Args:
-        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral)
+        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral, openai)
 
     Returns:
         Provider config dict or None if the provider is unknown or its
@@ -119,9 +119,14 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     """
     if provider == "gemini":
         if os.environ.get("GEMINI_API_KEY"):
-            models = _get_models_list("GEMINI_MODELS", "gemini-2.0-flash-exp")
+            from .gemini import DEFAULT_GEMINI_MODEL
+
+            models = _get_models_list("GEMINI_MODELS", DEFAULT_GEMINI_MODEL)
             model = _get_next_model("gemini", models)
-            return {"type": "gemini", "model": model}
+            # The router is built once per process, so a retired/zero-quota draw would fail every
+            # request: GeminiProvider falls back through the rest, in configured order after `model`.
+            i = models.index(model)
+            return {"type": "gemini", "model": model, "fallback_models": models[i + 1 :] + models[:i]}
     elif provider == "groq":
         if os.environ.get("GROQ_API_KEY"):
             model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
@@ -162,6 +167,14 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
             models = _get_models_list("MISTRAL_MODELS", DEFAULT_MISTRAL_MODEL)
             model = _get_next_model("mistral", models)
             return {"type": "mistral", "model": model}
+    elif provider == "openai":
+        # GPT_SECRET is accepted as a legacy name for OPENAI_API_KEY.
+        if os.environ.get("OPENAI_API_KEY") or os.environ.get("GPT_SECRET"):
+            from .openai import DEFAULT_OPENAI_MODEL
+
+            models = _get_models_list("OPENAI_MODELS", DEFAULT_OPENAI_MODEL)
+            model = _get_next_model("openai", models)
+            return {"type": "openai", "model": model}
     return None
 
 

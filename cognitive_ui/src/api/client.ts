@@ -1,7 +1,24 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+
+/** Resolve a server-relative URL (e.g. an artifact `url`) against the API base URL. */
+export function resolveApiUrl(url: string): string {
+  return `${API_BASE_URL}${url}`;
+}
+
+/**
+ * Server-relative `url` of an artifact reference ({kind, path, url, stats}, see
+ * docs/ARCHITECTURE.md "Job artifacts"), or undefined for anything else, such as
+ * the base64 strings of results produced before v0.5.0.
+ */
+export function artifactUrl(ref: unknown): string | undefined {
+  const url = (ref as { url?: unknown } | null | undefined)?.url;
+  return typeof url === 'string' && url ? url : undefined;
+}
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -33,9 +50,25 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem('token');
     }
 
-    const errorMessage = error.response?.data
-      ? (error.response.data as any).detail || 'An error occurred'
-      : error.message;
+    const data = error.response?.data as any;
+    let errorMessage = 'An error occurred';
+
+    if (data) {
+      if (data.error && data.error.message) {
+        // New standardized format: {"ok": false, "error": {"message": "..."}}
+        errorMessage = data.error.message;
+      } else if (data.detail) {
+        // FastAPI default or legacy format: {"detail": "..."}
+        errorMessage = Array.isArray(data.detail) 
+          ? data.detail[0]?.msg || JSON.stringify(data.detail)
+          : data.detail;
+      } else if (data.error && typeof data.error === 'string') {
+        // Simple legacy format: {"error": "..."}
+        errorMessage = data.error;
+      }
+    } else {
+      errorMessage = error.message;
+    }
 
     return Promise.reject(new Error(errorMessage));
   }

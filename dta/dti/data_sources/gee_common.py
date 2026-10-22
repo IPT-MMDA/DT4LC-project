@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 _ee_initialized = False
 
 
+def is_initialized() -> bool:
+    """Return whether GEE has been successfully initialized in this process."""
+    return _ee_initialized
+
+
 def initialize_gee() -> bool:
     """Initialize Google Earth Engine API.
 

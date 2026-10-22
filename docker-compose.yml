@@ -10,7 +10,7 @@ services:
     ports:
       - "11434:11434"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]  # the ollama image ships no curl/wget
       interval: 30s
       timeout: 10s
       retries: 5
@@ -40,6 +40,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dt4lc-backend
+    # Delineate-Anything allocates a 64 MiB SharedMemory region; Docker's default
+    # 64 MB /dev/shm is too small and the subprocess deadlocks until its timeout.
+    shm_size: "2gb"
     env_file:
       - .env
     environment:
@@ -53,7 +56,7 @@ services:
       - LLM_STRATEGY=${LLM_STRATEGY:-fallback}
       # LLM API Keys and Models
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODELS=${GEMINI_MODELS:-gemini-2.0-flash-exp}
+      - GEMINI_MODELS=${GEMINI_MODELS:-gemini-3.5-flash-lite}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       # Ollama Configuration (only used if LLM_ENABLE_OLLAMA=true)
@@ -67,6 +70,9 @@ services:
       # Cache paths - all consolidated under resources/.cache/
       - DT4LC_MODEL_CACHE=/app/resources/.cache/models
       - DT4LC_UPLOADS_PATH=/app/resources/.cache/uploads
+      # Job storage backend (memory or sqlite)
+      - JOB_STORAGE=${JOB_STORAGE:-sqlite}
+      - DT4LC_JOBS_DB=/app/resources/.cache/jobs.db
     volumes:
       # Mount resources with read-write for cache subdirectory
       - ./resources:/app/resources

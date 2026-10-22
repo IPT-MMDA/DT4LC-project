@@ -20,13 +20,14 @@ References:
 
 from __future__ import annotations
 
-import base64
 import io
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import rasterio
+
+from dta.dti import artifact_files
 
 # Try to import matplotlib for visualization
 try:
@@ -50,7 +51,7 @@ BRIGHTNESS_THRESHOLD = 0.3
 def _create_snow_classification_visualization(
     snow_mask: np.ndarray,
     title: str = "Snow Classification",
-) -> str | None:
+) -> bytes | None:
     """Create visualization of snow classification result.
 
     Args:
@@ -58,7 +59,7 @@ def _create_snow_classification_visualization(
         title: Title for the image
 
     Returns:
-        Base64 encoded PNG image, or None if matplotlib unavailable
+        PNG bytes, or None if matplotlib unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -86,9 +87,8 @@ def _create_snow_classification_visualization(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
 
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()
 
 
 def _create_criteria_visualization(
@@ -97,7 +97,7 @@ def _create_criteria_visualization(
     brightness: np.ndarray,
     snow_mask: np.ndarray,
     title: str = "Snow Classification Criteria",
-) -> str | None:
+) -> bytes | None:
     """Create multi-panel visualization showing all classification criteria.
 
     Args:
@@ -108,7 +108,7 @@ def _create_criteria_visualization(
         title: Title for the image
 
     Returns:
-        Base64 encoded PNG image, or None if matplotlib unavailable
+        PNG bytes, or None if matplotlib unavailable
     """
     if not HAS_MATPLOTLIB:
         return None
@@ -146,9 +146,8 @@ def _create_criteria_visualization(
     buf = io.BytesIO()
     plt.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    buf.seek(0)
 
-    return base64.b64encode(buf.read()).decode("utf-8")
+    return buf.getvalue()
 
 
 def classify_snow(raster_path: str) -> dict[str, Any]:
@@ -168,11 +167,10 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
 
     Returns:
         Dictionary containing:
-            - snow_mask: Binary snow classification
-            - ndsi: NDSI values
-            - ndvi: NDVI values
-            - brightness: Green band brightness
+            - rasters: GeoTIFF references ``snow_mask`` (binary snow classification),
+              ``ndsi``, ``ndvi`` and ``brightness`` (green band brightness)
             - metadata: Raster metadata
+            - visualizations: PNG references
             - statistics: Classification statistics
             - path: Input path
 
@@ -322,16 +320,18 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
                 title=f"Classification Criteria - {Path(raster_path).stem}",
             )
 
-        return {
-            "snow_mask": snow_mask.tolist(),
-            "ndsi": ndsi.tolist(),
-            "ndvi": ndvi.tolist(),
-            "brightness": brightness.tolist(),
+        result = {
             "metadata": metadata,
             "statistics": stats,
-            "visualizations": visualizations,
             "path": str(raster_path),
         }
+        rasters = {
+            "snow_mask": np.where(valid_mask, snow_mask, np.nan),
+            "ndsi": ndsi,
+            "ndvi": ndvi,
+            "brightness": brightness,
+        }
+        return artifact_files.save(result, rasters, visualizations, crs=src.crs, transform=src.transform)
 
 
 # Convenience function for registry integration

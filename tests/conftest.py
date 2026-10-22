@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+import functools
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,12 +20,49 @@ except Exception:
 load_dotenv(ROOT / ".env")
 
 
+@functools.cache
+def _no_llm_provider_reason() -> str | None:
+    """Return a skip reason if the router has no available provider, else None."""
+    from dta.dti.coe.llm.config import create_router_from_env
+
+    router = create_router_from_env()
+    if router.get_available_providers():
+        return None
+    checked = ", ".join(p.name for p in router.providers) or "none"
+    return (
+        f"no LLM provider available (checked: {checked}); set an API key such as "
+        "GEMINI_API_KEY or GROQ_API_KEY, or run Ollama with OLLAMA_MODEL pulled"
+    )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _outputs_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    """Write job artifact files (GeoTIFF/PNG) under a temp dir instead of resources/.cache/outputs."""
+    import dta.dti.artifact_files
+    import server.routes.files
+
+    outputs = tmp_path_factory.mktemp("outputs")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(dta.dti.artifact_files, "OUTPUTS_PATH", outputs)
+        mp.setattr(server.routes.files, "OUTPUTS_PATH", outputs)
+        yield outputs
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip ``llm``-marked tests, instead of failing them, when no provider is configured."""
+    if item.get_closest_marker("llm") and (reason := _no_llm_provider_reason()):
+        pytest.skip(reason)
+
+
 # --- Synthetic raster fixtures for demo-flow smoke tests ---------------------
 #
-# resources/kahovka_data/ is empty in the repo (vendored samples not committed).
-# These fixtures generate small Landsat-8-like 7-band GeoTIFFs on disk so
-# Layer-A demo tests can exercise the full algorithm + executor pipeline in CI
-# without depending on outside data.
+# resources/kahovka_data/ holds two committed HLS L30 crops of the lower Dnipro
+# around Kherson, downstream of the Kakhovka dam (hlsl_20230601.tif,
+# hlsl_20230609.tif: 768x768 px, 30 m, EPSG:32636, 5 bands B2..B6, int16
+# reflectance x10000, nodata -9999) used by the real-data tests. These
+# fixtures generate small Landsat-8-like 7-band GeoTIFFs on disk so
+# Layer-A demo tests can exercise the full algorithm + executor pipeline with
+# controllable signals.
 #
 # Layout: 7 bands, Landsat 8 / 9 surface-reflectance convention.
 #   B1 coastal, B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1, B7 SWIR2

@@ -8,7 +8,7 @@ readme = "README.md"
 license = "AGPL-3.0-or-later"
 requires-python = ">=3.10"
 
-dependencies = ["numpy>=2.2.5", "torch>=2.6.0", "python-dotenv>=1.1.0"]
+dependencies = ["numpy>=2.2.5", "torch>=2.6.0", "python-dotenv>=1.1.0", "pyyaml>=6.0.2", "pydantic>=2.8"]
 
 [project.optional-dependencies]
 # Development tools (linting, testing, type-checking)
@@ -16,7 +16,7 @@ dev = [
     "mypy>=1.15.0",
     "ruff>=0.11.6",
     "pytest>=8.3.4",
-    "pytest-asyncio>=0.23.0",
+    "pytest-asyncio>=1.3.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "ipdb>=0.13.13",
@@ -42,6 +42,9 @@ server = [
     "timm>=1.0.15",
     "ultralytics>=8.3.0",
     "huggingface-hub>=0.25.0",
+    # Imported directly by upstream Delineate-Anything (methods/main)
+    "psutil>=5.9.0",
+    "scipy>=1.10.0",
     # Geo processing
     "shapely>=2.0.0",
     "pystac-client>=0.8.5",
@@ -53,10 +56,23 @@ server = [
     # LLM agents
     "google-genai>=1.35.0,<2.0.0",
     "anthropic>=0.40,<1.0",
+    "openai>=3.0,<4.0",
     # Utils
     "numba>=0.60.0",
     "tqdm>=4.66.0",
     "requests>=2.32.3",
+]
+
+# Delineate-Anything field boundaries: its upstream delineate.py imports osgeo.gdal.
+# GDAL's Python package builds from source against the system libgdal: install
+# libgdal-dev (provides gdal-config) first. The binding must match the system
+# libgdal, but uv.lock pins one gdal sdist version, so `uv sync --extra delineate`
+# only builds where libgdal is that version. Otherwise skip this extra and install
+# the matching binding as the Dockerfile does:
+#   uv pip install gdal==$(gdal-config --version)
+# (a later plain `uv sync` removes it again; use `uv sync --inexact`).
+delineate = [
+    "gdal",
 ]
 
 [project.scripts]

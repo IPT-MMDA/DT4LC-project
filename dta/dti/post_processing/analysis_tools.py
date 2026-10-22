@@ -15,6 +15,15 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def _png_bytes(image: dict[str, Any] | str) -> bytes:
+    """PNG bytes of a visualization: a ``png`` artifact reference (read from its path) or base64."""
+    import base64
+
+    if isinstance(image, dict):
+        return Path(image["path"]).read_bytes()
+    return base64.b64decode(image)
+
+
 # Tool definitions for LLM function calling
 AVAILABLE_TOOLS = [
     {
@@ -68,14 +77,14 @@ AVAILABLE_TOOLS = [
 
 
 def compute_image_similarity(
-    visualizations: dict[str, str],
+    visualizations: dict[str, Any],
     image1_key: str,
     image2_key: str,
 ) -> dict[str, Any]:
     """Compute similarity metrics between two images.
 
     Args:
-        visualizations: Dict of image key -> base64 PNG data
+        visualizations: Dict of image key -> ``png`` artifact reference (or base64 PNG data)
         image1_key: Key for first image
         image2_key: Key for second image
 
@@ -83,7 +92,6 @@ def compute_image_similarity(
         Dictionary with MSE, SSIM, PSNR metrics
     """
     try:
-        import base64
         import io
 
         from PIL import Image
@@ -93,9 +101,8 @@ def compute_image_similarity(
         if image2_key not in visualizations:
             return {"error": f"Image '{image2_key}' not found. Available: {list(visualizations.keys())}"}
 
-        # Decode base64 images
-        img1_data = base64.b64decode(visualizations[image1_key])
-        img2_data = base64.b64decode(visualizations[image2_key])
+        img1_data = _png_bytes(visualizations[image1_key])
+        img2_data = _png_bytes(visualizations[image2_key])
 
         img1 = np.array(Image.open(io.BytesIO(img1_data)).convert("RGB"))
         img2 = np.array(Image.open(io.BytesIO(img2_data)).convert("RGB"))
@@ -268,18 +275,17 @@ def compute_band_statistics(file_path: str) -> dict[str, Any]:
         return {"error": str(e)}
 
 
-def analyze_spatial_patterns(visualizations: dict[str, str], image_key: str) -> dict[str, Any]:
+def analyze_spatial_patterns(visualizations: dict[str, Any], image_key: str) -> dict[str, Any]:
     """Analyze spatial patterns in an image.
 
     Args:
-        visualizations: Dict of image key -> base64 PNG data
+        visualizations: Dict of image key -> ``png`` artifact reference (or base64 PNG data)
         image_key: Key for the image
 
     Returns:
         Dictionary with spatial pattern metrics
     """
     try:
-        import base64
         import io
 
         from PIL import Image
@@ -287,7 +293,7 @@ def analyze_spatial_patterns(visualizations: dict[str, str], image_key: str) -> 
         if image_key not in visualizations:
             return {"error": f"Image '{image_key}' not found. Available: {list(visualizations.keys())}"}
 
-        img_data = base64.b64decode(visualizations[image_key])
+        img_data = _png_bytes(visualizations[image_key])
         img = np.array(Image.open(io.BytesIO(img_data)).convert("L"))  # Grayscale
         img_norm = img.astype(np.float64) / 255.0
 

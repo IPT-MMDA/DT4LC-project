@@ -59,10 +59,12 @@ class TestUploadContract:
         body = r.json()
         # Keys the frontend Attachment interface reads (some optional in TS,
         # but required at the API boundary for the chat-with-attachment flow).
-        for key in ("id", "filename", "path", "preview_png_base64"):
+        for key in ("id", "filename", "path", "preview_png_base64", "preview_url"):
             assert key in body, f"frontend reads .{key} from /v1/upload"
         # The path must point at a real file the executor can later read.
         assert Path(body["path"]).exists()
+        # The preview is a PNG file next to the upload, served by /v1/download (#65).
+        assert client.get(body["preview_url"]).status_code == 200
 
 
 class TestJobSubmitContract:
@@ -124,3 +126,64 @@ class TestJobListContract:
             assert key in body, f"frontend reads .{key} from /v1/jobs (list)"
         assert isinstance(body["jobs"], list)
         assert isinstance(body["total"], int)
+
+    def test_list_items_are_summaries_without_result(self, client: TestClient) -> None:
+        client.post("/v1/jobs", json={"prompt": "what can you do?", "attachments": []})
+        jobs = client.get("/v1/jobs?limit=5").json()["jobs"]
+        assert jobs
+        for job in jobs:
+            for key in ("id", "status", "progress", "plan", "error", "created_at"):
+                assert key in job, f"frontend reads .{key} from /v1/jobs (list item)"
+            # Results only come from GET /v1/jobs/{id} (#65).
+            assert "result" not in job
+
+
+class TestErrorContract:
+    """HTTP errors — ``ErrorResponse`` parsed by ``cognitive_ui/src/api/client.ts``."""
+
+    @pytest.mark.parametrize(
+        ("method", "url", "status", "code"),
+        [
+            ("get", "/v1/jobs/does-not-exist", 404, "not_found"),
+            ("get", "/v1/jobs?status=bogus", 400, "bad_request"),
+        ],
+    )
+    def test_error_shape(self, client: TestClient, method: str, url: str, status: int, code: str) -> None:
+        r = getattr(client, method)(url)
+        assert r.status_code == status, r.text
+        body = r.json()
+        assert body["ok"] is False
+        assert body["error"]["code"] == code
+        assert isinstance(body["error"]["message"], str) and body["error"]["message"]
+        assert body["error"]["details"] == {}
+        assert "detail" not in body
+
+
+class TestGEEFetchContract:
+    """``POST /v1/gee/{sentinel2,modis,landsat}`` — request shape sent by ``useGEEData.ts``.
+
+    The hooks put ``start_date``/``end_date``/``data_type``/``cloud_cover_max``
+    in the query string and post the bare ``bbox`` array as the JSON body.
+    """
+
+    @pytest.mark.parametrize(
+        ("route", "target"),
+        [
+            ("sentinel2", "dta.dti.data_sources.gee_sentinel2.fetch_sentinel2_composite"),
+            ("modis", "dta.dti.data_sources.gee_modis.fetch_modis_composite"),
+            ("landsat", "dta.dti.data_sources.gee_landsat.fetch_landsat_composite"),
+        ],
+    )
+    def test_frontend_request_shape(self, client: TestClient, route: str, target: str) -> None:
+        from unittest.mock import patch
+
+        bbox = [30.0, 46.0, 31.0, 47.0]
+        with patch(target, return_value={"ok": True, "tile_url": "https://example.invalid/{z}/{x}/{y}"}) as fetch:
+            r = client.post(
+                f"/v1/gee/{route}?start_date=2023-06-01&end_date=2023-06-09&data_type=rgb&cloud_cover_max=20",
+                json=bbox,
+            )
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+        fetch.assert_called_once()
+        assert fetch.call_args.args[:3] == (bbox, "2023-06-01", "2023-06-09")

@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import rasterio
 
+from dta.dti import artifact_files
 from dta.dti.algorithms.spectral_index import run as _run_index
 from dta.dti.registry import get_item, load_registry
 
@@ -22,8 +24,8 @@ def _config() -> dict[str, Any]:
 def calculate_ndvi(raster_path: str) -> dict[str, Any]:
     """Calculate NDVI from a multispectral raster.
 
-    Returns a dict with ``ndvi_array``, ``metadata``, ``statistics``,
-    ``visualizations``, and ``path`` (compatible with the legacy API).
+    Returns a dict with ``rasters`` (``ndvi``), ``metadata``, ``statistics``,
+    ``visualizations``, and ``path``.
     """
     return _run_index(raster_path, _config())
 
@@ -32,9 +34,12 @@ def ndvi_change(
     ndvi_before: dict[str, Any],
     ndvi_after: dict[str, Any],
 ) -> dict[str, Any]:
-    """Compute NDVI change between two pre-computed NDVI results."""
-    arr_before = np.asarray(ndvi_before["ndvi_array"], dtype=float)
-    arr_after = np.asarray(ndvi_after["ndvi_array"], dtype=float)
+    """Compute NDVI change between two pre-computed NDVI results (read from their ``rasters["ndvi"]`` files)."""
+    with rasterio.open(ndvi_before["rasters"]["ndvi"]["path"]) as src:
+        arr_before = src.read(1).astype(float)
+    with rasterio.open(ndvi_after["rasters"]["ndvi"]["path"]) as src:
+        arr_after = src.read(1).astype(float)
+        crs, transform = src.crs, src.transform
     if arr_before.shape != arr_after.shape:
         raise ValueError(f"NDVI arrays must have same shape; got {arr_before.shape} and {arr_after.shape}.")
 
@@ -53,13 +58,13 @@ def ndvi_change(
             "stable_pixels": int(np.sum(np.abs(valid) <= 0.1)),
             "total_valid_pixels": int(valid.size),
         }
-    return {
-        "change_array": change,
+    result = {
         "statistics": stats,
         "metadata": ndvi_after["metadata"],
         "before_path": ndvi_before.get("path"),
         "after_path": ndvi_after.get("path"),
     }
+    return artifact_files.save(result, {"change": change}, None, crs=crs, transform=transform)
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

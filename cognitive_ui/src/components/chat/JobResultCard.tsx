@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Job, JobResultData } from '../../types';
 import { useCancelJob } from '../../api/hooks/useJobs';
+import { artifactUrl, resolveApiUrl } from '../../api/client';
 
 interface JobResultCardProps {
   job: Job;
@@ -57,12 +58,13 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       },
     };
 
-    if (ndviMap.visualizations?.ndvi_map) {
+    const ndviMapUrl = artifactUrl(ndviMap.visualizations?.ndvi_map);
+    if (ndviMapUrl) {
       resultData.visualizations = [
         {
           type: 'ndvi_map',
           label: 'NDVI Map',
-          base64: ndviMap.visualizations.ndvi_map,
+          url: ndviMapUrl,
         },
       ];
     }
@@ -82,20 +84,22 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       },
     };
 
-    if (ndwiMap.visualizations?.ndwi_map) {
+    const ndwiMapUrl = artifactUrl(ndwiMap.visualizations?.ndwi_map);
+    if (ndwiMapUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'ndwi_map',
         label: 'NDWI Map',
-        base64: ndwiMap.visualizations.ndwi_map,
+        url: ndwiMapUrl,
       });
     }
-    if (ndwiMap.visualizations?.water_mask) {
+    const waterMaskUrl = artifactUrl(ndwiMap.visualizations?.water_mask);
+    if (waterMaskUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'water_mask',
         label: 'Water Detection',
-        base64: ndwiMap.visualizations.water_mask,
+        url: waterMaskUrl,
       });
     }
   }
@@ -114,12 +118,13 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       },
     };
 
-    if (ndsiMap.visualizations?.ndsi_map) {
+    const ndsiMapUrl = artifactUrl(ndsiMap.visualizations?.ndsi_map);
+    if (ndsiMapUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'ndsi_map',
         label: 'NDSI Map',
-        base64: ndsiMap.visualizations.ndsi_map,
+        url: ndsiMapUrl,
       });
     }
   }
@@ -140,20 +145,22 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       resultData.classification = lulcMap.class_statistics;
     }
 
-    if (lulcMap.visualizations?.classification_map) {
+    const classificationMapUrl = artifactUrl(lulcMap.visualizations?.classification_map);
+    if (classificationMapUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'lulc_map',
         label: 'Land Cover Classification',
-        base64: lulcMap.visualizations.classification_map,
+        url: classificationMapUrl,
       });
     }
-    if (lulcMap.visualizations?.distribution_chart) {
+    const distributionChartUrl = artifactUrl(lulcMap.visualizations?.distribution_chart);
+    if (distributionChartUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'lulc_distribution',
         label: 'Land Cover Distribution',
-        base64: lulcMap.visualizations.distribution_chart,
+        url: distributionChartUrl,
       });
     }
   }
@@ -170,20 +177,22 @@ export function parseJobResult(job: Job): JobResultData | undefined {
       },
     };
 
-    if (snowClassification.visualizations?.snow_classification) {
+    const snowClassificationUrl = artifactUrl(snowClassification.visualizations?.snow_classification);
+    if (snowClassificationUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'snow_classification',
         label: 'Snow Classification',
-        base64: snowClassification.visualizations.snow_classification,
+        url: snowClassificationUrl,
       });
     }
-    if (snowClassification.visualizations?.criteria_analysis) {
+    const criteriaAnalysisUrl = artifactUrl(snowClassification.visualizations?.criteria_analysis);
+    if (criteriaAnalysisUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'criteria_analysis',
         label: 'Criteria Analysis',
-        base64: snowClassification.visualizations.criteria_analysis,
+        url: criteriaAnalysisUrl,
       });
     }
   }
@@ -204,25 +213,28 @@ export function parseJobResult(job: Job): JobResultData | undefined {
     }
 
     const visualizations: JobResultData['visualizations'] = [];
-    if (changeMap.visualizations?.change_map) {
+    const changeMapUrl = artifactUrl(changeMap.visualizations?.change_map);
+    if (changeMapUrl) {
       visualizations.push({
         type: 'change_map',
         label: 'Change Map',
-        base64: changeMap.visualizations.change_map,
+        url: changeMapUrl,
       });
     }
-    if (changeMap.visualizations?.ndvi_before) {
+    const ndviBeforeUrl = artifactUrl(changeMap.visualizations?.ndvi_before);
+    if (ndviBeforeUrl) {
       visualizations.push({
         type: 'ndvi_before',
         label: 'NDVI Before',
-        base64: changeMap.visualizations.ndvi_before,
+        url: ndviBeforeUrl,
       });
     }
-    if (changeMap.visualizations?.ndvi_after) {
+    const ndviAfterUrl = artifactUrl(changeMap.visualizations?.ndvi_after);
+    if (ndviAfterUrl) {
       visualizations.push({
         type: 'ndvi_after',
         label: 'NDVI After',
-        base64: changeMap.visualizations.ndvi_after,
+        url: ndviAfterUrl,
       });
     }
     if (visualizations.length > 0) {
@@ -260,12 +272,13 @@ export function parseJobResult(job: Job): JobResultData | undefined {
     };
 
     // Add visualization if available
-    if (fieldBoundaries.visualizations?.field_boundaries) {
+    const fieldBoundariesUrl = artifactUrl(fieldBoundaries.visualizations?.field_boundaries);
+    if (fieldBoundariesUrl) {
       resultData.visualizations = resultData.visualizations || [];
       resultData.visualizations.push({
         type: 'field_boundaries',
         label: 'Detected Field Boundaries',
-        base64: fieldBoundaries.visualizations.field_boundaries,
+        url: fieldBoundariesUrl,
       });
     }
   }
@@ -288,12 +301,13 @@ export function parseJobResult(job: Job): JobResultData | undefined {
         masked_rgb_t0: 'Masked Image',
         predicted_rgb_t0: 'Reconstructed Image',
       };
-      for (const [key, base64] of Object.entries(reconstruction.visualizations)) {
-        if (typeof base64 === 'string') {
+      for (const [key, ref] of Object.entries(reconstruction.visualizations)) {
+        const url = artifactUrl(ref);
+        if (url) {
           resultData.visualizations.push({
             type: key,
             label: labelMap[key] || key.replace(/_/g, ' '),
-            base64: base64,
+            url,
           });
         }
       }
@@ -624,7 +638,7 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
                       <button
                         onClick={() => {
                           const link = document.createElement('a');
-                          link.href = `data:image/png;base64,${viz.base64}`;
+                          link.href = resolveApiUrl(viz.url);
                           link.download = `${viz.type}_${job.id}.png`;
                           link.click();
                         }}
@@ -635,7 +649,7 @@ export function JobResultCard({ job, resultData, compact = false }: JobResultCar
                       </button>
                     </div>
                     <img
-                      src={`data:image/png;base64,${viz.base64}`}
+                      src={resolveApiUrl(viz.url)}
                       alt={viz.label}
                       className="w-full h-auto"
                     />
