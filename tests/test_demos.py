@@ -298,7 +298,7 @@ class TestPrithviReconstruction:
         assert len(scaled_paths) == 1
         with rasterio.open(scaled_paths[0]) as scaled:
             bands = scaled.read()
-        np.testing.assert_array_equal(bands, (hls_bands * 10000).astype(np.int16))
+        np.testing.assert_array_equal(bands, np.rint(hls_bands.astype(np.float64) * 10000).astype(np.int16))
 
 
 class TestDelineateAnything:

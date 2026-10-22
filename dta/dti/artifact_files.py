@@ -18,7 +18,7 @@ import uuid
 import numpy as np
 import rasterio
 
-from dta.config import OUTPUTS_PATH
+from dta.config import OUTPUTS_PATH as OUTPUTS_PATH
 
 # (output directory, file-name prefix) of the pipeline step being executed.
 _step: ContextVar[tuple[Path, str] | None] = ContextVar("dt4lc_artifact_step", default=None)

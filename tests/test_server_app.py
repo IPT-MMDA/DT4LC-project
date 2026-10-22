@@ -103,7 +103,7 @@ class TestHealthEndpoint:
 
     def test_served_versions_match_package_version(self, client: TestClient) -> None:
         """Health and OpenAPI report the release version from dta.__version__."""
-        assert dta.__version__ == "0.5.0"
+        assert dta.__version__ == "0.5.1"
         assert client.get("/v1/health").json()["version"] == dta.__version__
         assert client.get("/openapi.json").json()["info"]["version"] == dta.__version__
 
@@ -381,10 +381,10 @@ class TestDownloadEndpoint:
     def test_job_artifact_file_returns_200(self, client: TestClient) -> None:
         import uuid
 
-        from server.routes import files
+        from server import paths
 
         # Job artifacts live in OUTPUTS_PATH/<job_id>/ (#65)
-        out_dir = files.OUTPUTS_PATH / f"test-{uuid.uuid4().hex}"
+        out_dir = paths.OUTPUTS_PATH / f"test-{uuid.uuid4().hex}"
         out_dir.mkdir(parents=True)
         out = out_dir / "1_NDVIMap_ndvi.tif"
         out.write_bytes(b"tif")

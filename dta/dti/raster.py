@@ -128,7 +128,7 @@ _SEMANTIC_ROLES = {
 # Band codes per sensor family -> role.
 _SENTINEL2_CODES = {"blue": "2", "green": "3", "red": "4", "nir": "8", "swir": "11"}
 _LANDSAT_CODES = {"blue": "2", "green": "3", "red": "4", "nir": "5", "swir": "6"}
-_BAND_CODE = re.compile(r"^b0*(\d+a?)$")
+_BAND_CODE = re.compile(r"^(?:sr_|st_)?b0*(\d+a?)$")
 
 
 def _roles_from_count(n: int) -> dict[str, int | None]:
@@ -175,11 +175,16 @@ def _roles_from_descriptions(descriptions: Any, count: int) -> dict[str, int | N
     codes = {m.group(1): i for i, n in enumerate(names, start=1) if (m := _BAND_CODE.match(n))}
     if not codes:
         return None
-    if "8" in codes or "8a" in codes:
+    # Decided by the whole code set: Landsat 8/9 B8 is panchromatic, B5-B7 are NIR/SWIR and
+    # B10 is thermal (TIRS1); Sentinel-2 B5-B7 are red edge and L2A has no B10. B8 with B5-B7
+    # is Landsat only if B10 is present, so a Landsat stack without B10 (e.g. B1..B9) still
+    # reads as Sentinel-2 (known limitation).
+    landsat_full = any(c in codes for c in ("5", "6", "7")) and "10" in codes
+    if "8a" in codes or "12" in codes or ("8" in codes and not landsat_full):
         scheme = dict(_SENTINEL2_CODES)
         if "8" not in codes:
             scheme["nir"] = "8a"
-    elif all(c.isdigit() and 1 <= int(c) <= 7 for c in codes):
+    elif "8" in codes or all(c.isdigit() and (1 <= int(c) <= 7 or 9 <= int(c) <= 11) for c in codes):
         scheme = _LANDSAT_CODES
     else:
         return None
@@ -199,10 +204,13 @@ def band_indices(src: Any) -> dict[str, int | None]:
       ``red`` / ``R``, ``nir`` / ``nir08``, ``swir`` / ``swir1`` / ``swir16``
       (SWIR1). Roles not named take the count heuristic's band below,
       with a warning, unless that band is named as another role; else ``None``.
-    * ``Bn`` band codes, resolved by sensor family. If ``B8`` or ``B8A`` is
-      present: Sentinel-2 (B2 blue, B3 green, B4 red, B8 NIR (B8A if B8 is
-      absent), B11 SWIR1). Else, if all codes are within B1-B7: Landsat 8/9 /
-      HLS L30 (B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1).
+    * ``Bn`` band codes (optionally ``SR_Bn`` / ``ST_Bn``), resolved by
+      sensor family from the whole code set. Sentinel-2 (B2 blue, B3 green,
+      B4 red, B8 NIR (B8A if B8 is absent), B11 SWIR1) if ``B8A`` or ``B12``
+      is present, or ``B8`` without both B10 and any of B5-B7. Landsat 8/9 /
+      HLS L30 (B2 blue, B3 green, B4 red, B5 NIR, B6 SWIR1) if ``B8`` is
+      present with B10 and any of B5-B7, or if there is no ``B8`` and all
+      codes are within B1-B7 or B9-B11. Any other code set identifies no band.
 
     If the descriptions identify no band, a warning is logged and the layout
     is guessed from ``src.count``:
@@ -231,6 +239,30 @@ def band_indices(src: Any) -> dict[str, int | None]:
         n,
     )
     return _roles_from_count(n)
+
+
+def reflectance_divisor(dtype: Any, data: np.ndarray) -> float:
+    """Divisor that maps stored band values to 0-1 reflectance.
+
+    Decided by the source raster dtype (``src.dtypes[...]``), not by the
+    values, so dark integer scenes are scaled like bright ones:
+
+    * 1-byte integers (``uint8``): 255.
+    * Integers of 2+ bytes (``int16``, ``uint16``, ...): 10000.
+    * Floats: 10000 if the finite maximum of ``data`` is above 1000 (legacy
+      float-stored DN), else 1 (already reflectance).
+
+    Args:
+        dtype: Source band dtype, e.g. ``src.dtypes[0]``.
+        data: Band values (masked entries and non-finite values are ignored);
+            only read for float dtypes.
+    """
+    dt = np.dtype(dtype)
+    if np.issubdtype(dt, np.integer):
+        return 255.0 if dt.itemsize == 1 else 10000.0
+    values = np.ma.filled(np.ma.asarray(data, dtype=np.float64), np.nan)
+    finite = values[np.isfinite(values)]
+    return 10000.0 if finite.size and float(finite.max()) > 1000 else 1.0
 
 
 def validate_geotiff(raster_path: str | Path) -> tuple[bool, str]:
