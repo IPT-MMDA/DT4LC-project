@@ -3,12 +3,14 @@ import { ChatColumn } from '../components/shell/ChatColumn';
 import { DockedMap } from '../components/shell/DockedMap';
 import { useConversationRetention } from '../hooks/useConversationRetention';
 import { DOCKED_MAP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
+import { usePromptFromQuery } from '../hooks/usePromptFromQuery';
 import { useSampleFromQuery } from '../hooks/useSample';
 
 /** /app: conversation list, chat column and, at ≥1440 px, the docked map. */
 export function Workspace() {
   const docked = useMediaQuery(DOCKED_MAP_QUERY);
   useSampleFromQuery();
+  usePromptFromQuery();
   useConversationRetention();
 
   return (
