@@ -25,12 +25,12 @@ from dta.dti.coe import context_agent
 from dta.dti.coe.context_agent import analyze
 from dta.dti.coe.llm import BaseLLMProvider, LLMResponse, LLMRouter, get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
-from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate
+from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate, single_image_attachment
 from dta.dti.coe.plan_validator import validate
 from dta.dti.coe.planner import plan
 from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
+from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, RasterMetadata
 from server.jobs import JobQueue, JobStatus, SQLiteJobStore
 
 BEFORE = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
@@ -133,6 +133,79 @@ def test_outage_orchestrate_plans(prompt: str, files: list[str], steps: list[str
         assert binds["IndexType"] == index_type
     else:
         assert binds["RasterPath"] == BEFORE
+
+
+def _dated(*paths: str) -> list[Attachment]:
+    """Attachments with the upload metadata's date, as the UI sends them."""
+    dates = {BEFORE: "2023-06-01", AFTER: "2023-06-09"}
+    return [
+        Attachment(
+            id="sample",
+            filename=Path(p).name,
+            mime_type="image/tiff",
+            path=p,
+            metadata=RasterMetadata(date=dates[p]),
+        )
+        for p in paths
+    ]
+
+
+@pytest.mark.parametrize(
+    ("prompt", "item_id"),
+    [
+        ("Calculate EVI", "algorithms/evi"),
+        ("Calculate NDVI", "algorithms/ndvi"),
+        ("Classify land cover in this image", "algorithms/lulc-classifier"),
+        ("Give me statistics for every band", "algorithms/statistics"),
+    ],
+)
+@pytest.mark.parametrize("order", [(BEFORE, AFTER), (AFTER, BEFORE)], ids=["0601-0609", "0609-0601"])
+def test_single_image_prompt_on_two_files_reads_the_later_one(
+    prompt: str, item_id: str, order: tuple[str, str]
+) -> None:
+    """D1: two attachments planned every prompt as change detection; only a change request compares them."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(*order)))
+
+    assert out["ok"], out.get("error")
+    steps = out["plan"]["steps"]
+    assert [s["uses"] for s in steps] == ["input/file", item_id, "post-processing/agent-analysis"]
+    assert steps[0]["binds"] == {"RasterPath": AFTER}  # by metadata.date, not by position
+
+
+@pytest.mark.parametrize(
+    ("prompt", "index_type"),
+    [
+        ("Compare water before and after the dam breach", "ndwi"),
+        ("What changed between the dates?", "ndvi"),
+        ("Where was vegetation lost?", "ndvi"),
+        ("Show the difference in snow cover", "ndsi"),
+        ("Map water gained between the two dates", "ndwi"),
+        ("Compare NDWI instead of NDVI", "ndwi"),
+    ],
+)
+def test_change_prompt_on_two_files_plans_change_detection(prompt: str, index_type: str) -> None:
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(BEFORE, AFTER)))
+
+    assert out["ok"], out.get("error")
+    steps = out["plan"]["steps"]
+    assert [s["uses"] for s in steps] == [
+        "input/file-before",
+        "input/file-after",
+        "algorithms/change-detection",
+        "post-processing/agent-analysis",
+    ]
+    binds = {k: v for s in steps for k, v in s["binds"].items()}
+    assert binds == {"RasterPathBefore": BEFORE, "RasterPathAfter": AFTER, "IndexType": index_type}
+
+
+def test_single_image_attachment_without_dates_is_the_last() -> None:
+    files = _attachments(AFTER, BEFORE)
+
+    assert single_image_attachment(files) is files[-1]
+    assert single_image_attachment(_dated(AFTER, BEFORE)).path == AFTER
+    # Only dated files compete: an undated one is never "later".
+    mixed = [_attachments(BEFORE)[0], _dated(AFTER)[0], _attachments(BEFORE)[0]]
+    assert single_image_attachment(mixed) is mixed[1]
 
 
 # --- U2: a reply that fails the structural check -----------------------------

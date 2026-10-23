@@ -8,7 +8,8 @@ no change to this file.
 Routing logic:
 1. Capability question framing → CONVERSATION with per-item capability response.
 1b. A conversational rule (``coe/conversation.py``: greeting, thanks, a deictic "here",
-    or a question about methods without an analysis verb, file or region) → CONVERSATION
+    an explanatory question about a method or result, even with a file or region, or another
+    question without an analysis verb, file or region) → CONVERSATION
     (``rule`` names it; no ``response`` for a question, which ``POST /v1/chat`` answers).
 2. Attachments (or a region from the map, ``metadata["region"]``) + action keyword,
    or a named index to compose (NDMI, NBR, ...; ``coe/named_indices.py``) → PIPELINE

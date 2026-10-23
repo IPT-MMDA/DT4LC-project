@@ -228,7 +228,11 @@ def intent_text(
 
     Dates come from the upload metadata (``attachment["metadata"]["date"]``) when present. Without
     attachments, a ``region`` (the job's region echo) is the source, with its start and end dates.
+    When the plan's input steps are bound, only the attachments they read count: a single-image
+    analysis on the sample pair names one date ("I'll compute EVI for 9 June from the sample.").
     """
+    bound = {v for s in plan.steps for k, v in s.binds.items() if k.startswith("RasterPath")}
+    attachments = [a for a in attachments if a.get("path") in bound] or attachments
     names = [str(a.get("filename") or "") for a in attachments]
     if names and all(n in _sample_names() for n in names):
         source = "the sample"

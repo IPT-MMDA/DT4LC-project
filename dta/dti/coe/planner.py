@@ -8,7 +8,7 @@ Intelligently chooses between:
 import logging
 
 from dta.dti.coe.plan_validator import BAND_MATH_ENTRYPOINT
-from dta.dti.coe.triggers import phrase_in
+from dta.dti.coe.triggers import phrase_in, without_rejected
 from dta.dti.registry import find_items_by_keywords, find_items_producing
 from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep, Registry, RegistryItem
 
@@ -122,7 +122,7 @@ def _detect_index_type(ctx: ContextUnderstanding, reg: Registry) -> str:
             return index_type
 
     keywords = ctx.hints.get("keywords", []) if ctx.hints else []
-    goal_lower = (ctx.goal or "").lower()
+    goal_lower = without_rejected((ctx.goal or "").lower())  # "ndwi change instead of ndvi"
     keywords_lower = " ".join(kw.lower() for kw in keywords)
     combined = goal_lower + " " + keywords_lower
 
@@ -191,7 +191,7 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     kw_ranked = find_items_by_keywords(reg, ctx.hints.get("keywords", []))
     keywords = ctx.hints.get("keywords", []) if ctx.hints else []
     keywords_lower = [kw.lower() for kw in keywords]
-    goal_lower = (ctx.goal or "").lower()
+    goal_lower = without_rejected((ctx.goal or "").lower())  # "use evi instead of ndvi" names only EVI
 
     def mentions(phrase: str) -> bool:
         return phrase_in(phrase, goal_lower) or any(phrase_in(phrase, uk) for uk in keywords_lower)

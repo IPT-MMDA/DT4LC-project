@@ -30,6 +30,7 @@ PRITHVI_STEP = "models/prithvi-reconstruction"
 PRITHVI_BYTES = AVAILABLE_MODELS[PRITHVI].size_mb * 1024 * 1024
 SAMPLE = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
 _FIX_KINDS = {"prompt", "retry", "upload", "open_map"}
+_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
 
 
 class FakeModelManager:
@@ -292,6 +293,60 @@ async def test_prithvi_on_the_sample_fails_on_bands_before_any_download(
         {"label": "Use my own image", "kind": "upload"},
         {"label": "Run NDWI change instead", "kind": "prompt", "prompt": "Map NDWI change between the two dates"},
     ]
+    assert manager.downloads == []
+
+
+@pytest.fixture
+def providers_down(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """The real router with Ollama on a closed port as its only provider: the deterministic planner plans."""
+    from dta.dti.coe.llm import get_llm_router, reset_llm_router
+    from dta.dti.coe.llm.ollama import OllamaProvider
+
+    for var in (
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "OPENAI_API_KEY",
+        "GPT_SECRET",
+        "ANTHROPIC_API_KEY",
+        "MISTRAL_API_KEY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("LLM_PROVIDER_ORDER", "ollama")
+    monkeypatch.setenv("LLM_ENABLE_OLLAMA", "true")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:9")
+    reset_llm_router()
+    assert all(isinstance(p, OllamaProvider) for p in get_llm_router().providers)
+    yield
+    reset_llm_router()
+
+
+@pytest.mark.parametrize(
+    ("role", "code"), [("guest", "MODEL_GATED"), ("member", "BAND_MISSING")], ids=["guest", "member"]
+)
+async def test_the_capabilities_prithvi_example_reaches_prithvi(
+    queue: JobQueue, manager: FakeModelManager, providers_down: None, role: str, code: str
+) -> None:
+    """D4: "Fill the cloud gaps in the 9 June image" with the sample pair planned NDVI change detection
+    (one file: no analysis). Planned by the real orchestrator, it reaches Prithvi on 9 June and fails clearly."""
+    from dta.dti.registry import get_item, load_registry
+
+    item = get_item(load_registry(), PRITHVI_STEP)
+    assert item.ui is not None and item.ui.prompt == "Fill the cloud gaps in the 9 June image"
+    pair = [str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif"), SAMPLE]
+    attachments = [{"id": "s", "filename": Path(p).name, "mime_type": "image/tiff", "path": p} for p in pair]
+
+    job_id = await queue.submit_job(item.ui.prompt, attachments=attachments, owner_role=role)
+    events = await _wait(queue, job_id)
+
+    assert events[-1]["type"] == "failed" and events[-1]["data"]["code"] == code, events[-1]
+    if code == "BAND_MISSING":
+        assert (
+            events[-1]["data"]["message"] == "Prithvi needs six HLS bands (B2–B7); this file has five (B2–B6, no B7)."
+        )
+    job = await queue.get_job(job_id)
+    assert job is not None and job.plan is not None
+    assert [s.uses for s in job.plan.steps][:2] == ["input/file", PRITHVI_STEP]
+    assert job.plan.steps[0].binds == {"RasterPath": SAMPLE}  # 9 June: the later file (no metadata: the last)
     assert manager.downloads == []
 
 

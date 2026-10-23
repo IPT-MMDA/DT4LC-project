@@ -195,13 +195,19 @@ def _accept(data: Any, registry_types: list[str]) -> ContextUnderstanding | None
 def _deterministic_context(req: ChatRequest) -> ContextUnderstanding:
     """Context from the registry triggers, used when no LLM reply is usable.
 
-    Two or more attachments, or a prompt matching a ChangeMap producer, ask for a
-    ChangeMap from before/after rasters with no keywords, so the planner takes the
-    index type from the goal. Another matched item gives its first output, its
-    inputs and its trigger keywords. No match keeps only the uploaded raster.
+    A prompt matching a ChangeMap producer, or two or more attachments with a prompt
+    that asks for change (a change-detection trigger: "compare", "change", "before",
+    "difference", ...), asks for a ChangeMap from before/after rasters with no keywords,
+    so the planner takes the index type from the goal. Another matched item gives its
+    first output, its inputs and its trigger keywords: a single-image analysis, which
+    reads one of the attachments (the later-dated one, see
+    :func:`~dta.dti.coe.orchestrator.single_image_attachment`). No match keeps only the
+    uploaded raster.
     """
-    item = get_trigger_index().find_matching_item(req.prompt)
-    if len(req.attachments) >= 2 or (item is not None and "ChangeMap" in item.outputs):
+    index = get_trigger_index()
+    item = index.find_matching_item(req.prompt)
+    change = len(req.attachments) >= 2 and index.asks_for_change(req.prompt)
+    if change or (item is not None and "ChangeMap" in item.outputs):
         return ContextUnderstanding(
             goal=req.prompt,
             desired_outputs=["ChangeMap"],

@@ -39,6 +39,15 @@ _DEICTIC = re.compile(
 )
 # Verbs that make a question an analysis request ("how do I compute NDVI?" is not a method question).
 ANALYSIS_VERBS: frozenset[str] = GENERIC_ACTION_VERBS | {"analyse", "delineate"}
+# Imperative verbs that make an explanatory question an analysis request even with a file attached.
+_EXPLANATORY_VETO: frozenset[str] = ANALYSIS_VERBS | {"map", "show", "compare"}
+# An explanatory question asks about a method or a result, not about the data: conversation even with
+# attachments or a region. "what is" / "what are" count only before a method or index name.
+_EXPLANATORY = re.compile(
+    r"^(why|explain|describe|tell me about|what would you do differently|how does|how do|is it\b.*\bbetter)\b"
+    r"|^what does\b.*\bmean\b"
+)
+_WHAT_IS = re.compile(r"^what (is|are)\b")
 
 
 def _normalize(text: str) -> str:
@@ -66,15 +75,46 @@ def is_resume_message(text: str) -> bool:
     return not any(phrase_in(k, text) for k in keywords) and match_named_index(text) is None
 
 
+def _method_names() -> set[str]:
+    """Names of the methods and indices a "what is ..." question can ask about: each analysis's id
+    ("ndvi", "change-detection", "change detection"), a model's first word ("prithvi") and the
+    named indices (NDMI, NBR, SAVI, NDBI)."""
+    from dta.dti.coe.named_indices import NAMED_INDICES
+
+    names = {i.name.lower() for i in NAMED_INDICES}
+    for item in get_trigger_index().user_runnable_items:
+        tail = item.id.rsplit("/", 1)[-1]
+        names |= {tail, tail.replace("-", " ")}
+        if item.kind == "model":
+            names.add(tail.split("-")[0])
+    return names
+
+
+def is_explanatory_question(prompt: str) -> bool:
+    """True for a question about a method or a result, which is conversation even with files attached:
+    it starts with why, explain, describe, tell me about, what would you do differently, how does,
+    how do, "is it ... better", "what does ... mean", or "what is/are" + a method or index name; and
+    it has no imperative analysis verb (:data:`_EXPLANATORY_VETO`, whole words). Locating and
+    quantifying questions ("where is", "how much", "how many", "what changed", "which areas") are not
+    explanatory: with a file they run an analysis."""
+    text = _normalize(prompt)
+    if any(phrase_in(v, text) for v in _EXPLANATORY_VETO):
+        return False
+    if _EXPLANATORY.match(text):
+        return True
+    return _WHAT_IS.match(text) is not None and any(phrase_in(n, text) for n in _method_names())
+
+
 def conversational_rule(prompt: str, has_input: bool) -> Rule | None:
     """The deterministic conversational rule ``prompt`` matches, or ``None``.
 
     - ``greeting``: the whole message is a greeting ("hello", "hi there", "good morning, how are you?");
     - ``thanks``: the whole message is thanks ("thanks", "ok thanks", "thank you very much");
     - ``deictic``: empty, or only points at a file ("here", "this one", "here you go");
-    - ``question``: no file or region (``has_input``), a question form (starts with what, how, why,
-      when, where, which, explain, describe or "tell me about", or ends with ``?``) and no analysis
-      verb (:data:`ANALYSIS_VERBS`, whole words).
+    - ``question``: an explanatory question (:func:`is_explanatory_question`), with or without a file
+      or region; or, with no file or region (``has_input``), a question form (starts with what, how,
+      why, when, where, which, explain, describe or "tell me about", or ends with ``?``) and no
+      analysis verb (:data:`ANALYSIS_VERBS`, whole words).
 
     Capability questions ("what can you do?") are matched before this, by
     :func:`~dta.dti.coe.triggers.is_capability_question`.
@@ -86,6 +126,8 @@ def conversational_rule(prompt: str, has_input: bool) -> Rule | None:
         return "thanks"
     if is_deictic(prompt):
         return "deictic"
+    if is_explanatory_question(prompt):
+        return "question"
     if has_input:
         return None
     question = looks_like_explanation_question(prompt) or prompt.strip().endswith("?")
@@ -174,10 +216,15 @@ _CHANGE_WORDS = ("change", "between", "compare", "difference", "before", "two da
 def input_needs(prompt: str) -> tuple[str | None, list[str]]:
     """``(item_id, needs)`` for an analysis request that came without a file: the analysis it names
     (``None`` if none) and the inputs it waits for, ``["RasterPath"]`` or
-    ``["RasterPathBefore", "RasterPathAfter"]``, from the template plan of the registry triggers."""
+    ``["RasterPathBefore", "RasterPathAfter"]``: a named index first, as the orchestrator plans it,
+    else from the template plan of the registry triggers."""
     from dta.dti.coe.context_agent import _deterministic_context
     from dta.dti.coe.planner import plan_template
 
+    if match_named_index(prompt) is not None:
+        if any(phrase_in(w, prompt) for w in _CHANGE_WORDS):
+            return "algorithms/band-math-change", ["RasterPathBefore", "RasterPathAfter"]
+        return "algorithms/band-math", ["RasterPath"]
     reg = load_registry()
     template = plan_template(_deterministic_context(ChatRequest(prompt=prompt)), reg)
     uses = [s.uses for s in template.steps]
@@ -186,9 +233,5 @@ def input_needs(prompt: str) -> tuple[str | None, list[str]]:
         return (analysis[0] if analysis else None), ["RasterPathBefore", "RasterPathAfter"]
     if "input/file" in uses:
         return (analysis[0] if analysis else None), ["RasterPath"]
-    if match_named_index(prompt) is not None:
-        if any(phrase_in(w, prompt) for w in _CHANGE_WORDS):
-            return "algorithms/band-math-change", ["RasterPathBefore", "RasterPathAfter"]
-        return "algorithms/band-math", ["RasterPath"]
     item = get_trigger_index().find_matching_item(prompt)
     return (item.id if item else None), ["RasterPath"]

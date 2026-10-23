@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import cache, lru_cache
 import re
 
 from dta.dti.registry import load_registry
@@ -66,16 +66,36 @@ _CAPABILITY_QUESTION_PATTERNS = [
 _PLEASANTRY_PREFIX = re.compile(r"^(so|ok|okay|well|hey|hi|hello),?\s*", re.I)
 
 
+@cache
+def _phrase_pattern(phrase: str) -> re.Pattern[str]:
+    """Whole-word pattern for a lowercased ``phrase``: see :func:`phrase_in`."""
+    if phrase.endswith("e"):  # "compare": compares, compared, comparing
+        body = rf"{re.escape(phrase[:-1])}(?:e|es|ed|ing)"
+    else:  # "flood": floods, flooded, flooding
+        body = rf"{re.escape(phrase)}(?:e?s|ed|ing)?"
+    return re.compile(rf"(?<![a-z0-9]){body}(?![a-z0-9])")
+
+
 def phrase_in(phrase: str, text: str) -> bool:
     """True if ``phrase`` occurs in ``text`` as whole words, case-insensitively.
 
-    A trailing plural ``s``/``es`` is allowed ("water change" matches "water changes"),
-    nothing else: "detect" does not match "detection", nor "land" "landsat" or "landscape".
+    Its last word may take a plural ``s``/``es`` or an ``-ed``/``-ing`` ending, a final ``e``
+    dropped before them ("water change" matches "water changes" and "water changed", "flood"
+    "flooded"), nothing else: "detect" does not match "detection", nor "land" "landsat" or "landscape".
     """
     phrase = phrase.strip().lower()
     if not phrase:
         return False
-    return re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?:e?s)?(?![a-z0-9])", text.lower()) is not None
+    return _phrase_pattern(phrase).search(text.lower()) is not None
+
+
+# "Use EVI instead of NDVI": the term right after "instead of" or "rather than" is the one not wanted.
+_REJECTED = re.compile(r"\b(instead of|rather than)\s+(?:(?:the|an?)\s+)?[a-z0-9-]+", re.I)
+
+
+def without_rejected(text: str) -> str:
+    """``text`` without the term the user turns down: "use evi instead of ndvi" → "use evi instead of"."""
+    return _REJECTED.sub(r"\1", text)
 
 
 def _strip_pleasantries(prompt: str) -> str:
@@ -194,27 +214,54 @@ class TriggerIndex:
         """Return the user-runnable item whose triggers best match the prompt,
         or None if no item matches. Score = number of distinct trigger keywords
         appearing in the prompt as whole words (:func:`phrase_in`); tie-broken by
-        length of the longest match.
+        the earliest match in the prompt, then by the length of the longest match.
+
+        A match inside a longer match of another item's trigger does not count
+        ("snow" in "classify snow and ice"), nor the term after "instead of" or
+        "rather than" (:func:`without_rejected`: "use EVI instead of NDVI").
         """
-        p = prompt.lower()
-        best: RegistryItem | None = None
-        best_score = 0
-        best_max_len = 0
+        p = without_rejected(prompt.lower())
+        spans: list[tuple[RegistryItem, str, int, int]] = []
         for item in self.user_runnable_items:
             if item.triggers is None:
                 continue
-            keywords = [k.lower() for k in item.triggers.keywords]
-            phrases = [k.lower() for k in item.triggers.action_phrases]
-            matches = [kw for kw in keywords + phrases if phrase_in(kw, p)]
+            for kw in item.triggers.keywords + item.triggers.action_phrases:
+                kw = kw.strip().lower()
+                if kw:
+                    spans += [(item, kw, *m.span()) for m in _phrase_pattern(kw).finditer(p)]
+
+        def inside_longer(item: RegistryItem, start: int, end: int) -> bool:
+            return any(o is not item and s <= start and end <= e and e - s > end - start for o, _, s, e in spans)
+
+        best: RegistryItem | None = None
+        best_key: tuple[int, int, int] = (0, 0, 0)
+        for item in self.user_runnable_items:
+            if item.triggers is None:
+                continue
+            first: dict[str, int] = {}
+            for o, kw, start, end in spans:
+                if o is item and not inside_longer(item, start, end):
+                    first[kw] = min(first.get(kw, start), start)
+            keywords = [k.strip().lower() for k in item.triggers.keywords + item.triggers.action_phrases]
+            matches = [kw for kw in keywords if kw in first]
             if not matches:
                 continue
-            score = len(matches)
-            max_len = max((len(m) for m in matches), default=0)
-            if score > best_score or (score == best_score and max_len > best_max_len):
+            key = (len(matches), -min(first.values()), max(len(m) for m in matches))
+            if best is None or key > best_key:
                 best = item
-                best_score = score
-                best_max_len = max_len
+                best_key = key
         return best
+
+    def asks_for_change(self, prompt: str) -> bool:
+        """True if the prompt names a trigger of an item producing a ChangeMap (change detection's
+        "compare", "change", "before", "difference", "between the two dates", "gained", "lost", ...)."""
+        p = without_rejected(prompt.lower())
+        return any(
+            phrase_in(t, p)
+            for item in self.user_runnable_items
+            if item.triggers is not None and "ChangeMap" in item.outputs
+            for t in item.triggers.keywords + item.triggers.action_phrases
+        )
 
     # --- Response rendering -----------------------------------------------
 

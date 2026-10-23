@@ -19,7 +19,7 @@ from dta.dti.coe.llm import get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.coe.planner import plan_template
-from dta.dti.coe.triggers import phrase_in
+from dta.dti.coe.triggers import get_trigger_index, phrase_in
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
 
@@ -77,10 +77,67 @@ def _llm_like_context(prompt: str) -> ContextUnderstanding:
         ("after", "the afternoon pass", False),
         ("field boundaries", "Detect field boundaries in this image", True),
         ("burn", "Map burn severity", True),
+        # -ed and -ing endings (F-1), a final e dropped before them; nothing longer.
+        ("flood", "Find the flooded areas", True),
+        ("flood", "flooding after the breach", True),
+        ("flood", "the floodplain", False),
+        ("detect", "detected parcels", True),
+        ("detect", "detecting parcels", True),
+        ("detect", "a detector", False),
+        ("change", "what changed?", True),
+        ("change", "changing water", True),
+        ("water change", "where has the water changed", True),
+        ("compare", "compared with June", True),
+        ("compare", "comparing the dates", True),
+        ("compare", "a comparison", False),
+        ("land", "landed", True),
+        ("land", "the landsat archive", False),
+        ("ice", "icing", True),
+        ("ice", "a notice", False),
+        ("snow", "a snowy ridge", False),
     ],
 )
 def test_phrase_in_matches_whole_words(phrase: str, text: str, expected: bool) -> None:
     assert phrase_in(phrase, text) is expected
+
+
+@pytest.mark.parametrize(
+    ("prompt", "item_id"),
+    [
+        # "instead of" turns the next term down; else the index named first wins.
+        ("Use EVI instead of NDVI for the forest", "algorithms/evi"),
+        ("Use NDVI rather than EVI", "algorithms/ndvi"),
+        ("Calculate EVI or NDVI", "algorithms/evi"),
+        ("Calculate NDVI or EVI", "algorithms/ndvi"),
+        # A match inside another item's longer match does not count: "snow" in "classify snow".
+        ("Classify snow and ice robustly", "algorithms/snow-classifier"),
+        ("Map snow cover with NDSI", "algorithms/ndsi"),
+        ("Compare with NDVI change between the same dates", "algorithms/change-detection"),
+        # Prithvi only for its own phrases (D3, D4).
+        ("Fill the cloud gaps in the 9 June image", "models/prithvi-reconstruction"),
+        ("Reconstruct the masked pixels", "models/prithvi-reconstruction"),
+        ("Extract the main features of this scene", None),
+        ("Compute embeddings for this image", None),
+        # Delineate only for boundaries, parcels or delineation, not for any "fields".
+        ("Detect field boundaries east of the river", "models/delineate-anything"),
+        ("Classify land cover on the flooded fields", "algorithms/lulc-classifier"),
+        ("In these fields, map vegetation health", "algorithms/ndvi"),
+    ],
+)
+def test_find_matching_item(prompt: str, item_id: str | None) -> None:
+    item = get_trigger_index().find_matching_item(prompt)
+
+    assert (item.id if item else None) == item_id
+
+
+@pytest.mark.parametrize("prompt", ["Extract the main features of this scene", "Compute embeddings for this image"])
+@pytest.mark.parametrize("files", [[SAMPLE_0601], [SAMPLE_0601, SAMPLE_0609]], ids=["one-file", "two-files"])
+def test_generic_words_never_plan_prithvi(prompt: str, files: list[str]) -> None:
+    """D3: "features" planned Prithvi, so a member's unrelated prompt would start a 450 MB download."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_attachments(*files)))
+
+    planned = out.get("plan") or out.get("candidate") or {"steps": []}
+    assert "models/prithvi-reconstruction" not in [s["uses"] for s in planned["steps"]], out
 
 
 @pytest.mark.parametrize("prompt", UNRELATED)

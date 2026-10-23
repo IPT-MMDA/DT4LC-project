@@ -490,6 +490,15 @@ instances:
         - "flooding"
         - "before"
         - "after"
+        # Change words: with two files attached, only a prompt naming a trigger compares them.
+        - "change"
+        - "compare"
+        - "difference"
+        - "gained"
+        - "lost"
+        - "between the dates"
+        - "between the two dates"
+        - "between the same dates"
       action_phrases:
         - "change detection"
         - "ndvi change"
@@ -685,7 +694,7 @@ instances:
     outputs: [Reconstruction]
     model_id: prithvi-eo-v1-100m
     triggers:
-      keywords: [prithvi, reconstruction, mae, "masked autoencoder", "foundation model", embedding, embeddings, features]
+      keywords: [prithvi, reconstruction, reconstruct, mae, "masked autoencoder", "foundation model", "cloud gaps", "fill gaps", "fill the gaps", "gap filling", "masked pixels", "cloudy pixels"]
       action_phrases:
         - "reconstruct image"
         - "reconstruct this image"
@@ -750,7 +759,7 @@ instances:
     outputs: [FieldBoundaries]
     model_id: delineate-anything-small
     triggers:
-      keywords: [delineate, delineation, field, fields, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
+      keywords: [delineate, delineation, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
       action_phrases:
         - "detect field boundaries"
         - "find field boundaries"
