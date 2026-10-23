@@ -21,7 +21,7 @@ import shutil
 import sqlite3
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 import uuid
 
 import numpy as np
@@ -30,13 +30,14 @@ from dta.dti import artifact_files
 from dta.dti.coe.context_agent import _deterministic_context
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.coe.planner import plan_template
-from dta.dti.executor import PipelineExecutor
+from dta.dti.executor import PipelineExecutor, model_not_installed_error
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment as COEAttachment
 from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
 from .job_events import TERMINAL_EVENTS, classify_failure, done_summary, intent_text, step_skeleton
+from .sessions import ROLES, Role, can_download_models
 
 logger = logging.getLogger(__name__)
 
@@ -916,9 +917,33 @@ class JobQueue:
         job.plan = ExecutionPlan(**plan_result["plan"])
         job.progress = 0.4
         logger.debug(f"Executing plan with {len(job.plan.steps)} steps")
+
+        # Create a fresh executor for this job (executor has mutable state - artifacts dict)
+        executor = PipelineExecutor(self._registry)
+
+        # Missing weights: refuse now, before the skeleton and any download, unless the owner's role may
+        # download them (MODEL_DOWNLOAD_ON_DEMAND; a job without a role counts as a guest's).
+        to_prepare = executor.models_to_prepare(job.plan)
+        role = cast(Role, job.owner_role if job.owner_role in ROLES else "guest")
+        if to_prepare and not can_download_models(role):
+            plan_index, model_id = next(iter(to_prepare.items()))
+            step_id = job.plan.steps[plan_index - 1].uses
+            downloads_off = not any(can_download_models(r) for r in ROLES)
+            raise model_not_installed_error(step_id, model_id, None if downloads_off else role)
+
         filenames = {a.path: a.filename for a in coe_attachments if a.path}
-        skeleton = step_skeleton(job.plan, self._registry, filenames)
+        skeleton = step_skeleton(job.plan, self._registry, filenames, to_prepare)
         names = {row["index"]: row["name"] for row in skeleton}
+        # Executor indices are plan indices; preparation rows shift the skeleton's.
+        row_of: dict[int, int] = {}
+        prepare_row_of: dict[int, int] = {}
+        plan_index = 1
+        for row in skeleton:
+            if row["kind"] == "prepare":
+                prepare_row_of[plan_index] = row["index"]
+            else:
+                row_of[plan_index] = row["index"]
+                plan_index += 1
         self._emit(
             job, "planning", phase="ready", steps=skeleton, composed=bool(plan_result["plan"].get("composed", False))
         )
@@ -926,17 +951,21 @@ class JobQueue:
 
         def on_progress(event: dict[str, Any]) -> None:
             """Executor step events -> job events; keeps ``job.progress`` between 0.4 and 0.8."""
-            index = event.get("index")
-            if not isinstance(index, int):
+            kind = str(event.get("event", ""))
+            rows = prepare_row_of if kind.startswith("prepare_") else row_of
+            index = rows.get(event["index"]) if isinstance(event.get("index"), int) else None
+            if index is None:
                 return
-            if event.get("event") == "step_start":
+            if kind in ("step_start", "prepare_start"):
                 step_t0[index] = time.monotonic()
-                self._emit(job, "step_started", index=index, id=event["step_id"], name=names.get(index))
-            elif event.get("event") == "step_complete":
+                step_id = event["step_id"] if kind == "step_start" else f"prepare/{event['model_id']}"
+                self._emit(job, "step_started", index=index, id=step_id, name=names.get(index))
+            elif kind in ("step_complete", "prepare_complete"):
                 job.progress = 0.4 + 0.4 * index / max(len(skeleton), 1)
                 elapsed = time.monotonic() - step_t0.get(index, time.monotonic())
-                self._emit(job, "step_finished", index=index, id=event["step_id"], elapsed_s=round(elapsed, 2))
-            elif event.get("event") == "step_progress":
+                step_id = event["step_id"] if kind == "step_complete" else f"prepare/{event['model_id']}"
+                self._emit(job, "step_finished", index=index, id=step_id, elapsed_s=round(elapsed, 2))
+            elif kind in ("step_progress", "prepare_progress"):
                 keys = ("fraction", "message", "bytes", "total_bytes", "eta_s")
                 self._emit(job, "step_progress", index=index, **{k: event.get(k) for k in keys})
 
@@ -945,15 +974,13 @@ class JobQueue:
             """Check if job was cancelled (sync version for executor)."""
             return job.status == JobStatus.CANCELLED
 
-        # Create a fresh executor for this job (executor has mutable state - artifacts dict)
-        executor = PipelineExecutor(self._registry)
-
         # Execute plan with cancellation support; artifact files go to OUTPUTS_PATH/<job_id>/
         execution_result = executor.execute(
             job.plan,
             on_progress=on_progress,
             is_cancelled=check_cancelled,
             output_dir=artifact_files.output_dir(job_id),
+            download_models=True,
         )
 
         job.progress = 0.8

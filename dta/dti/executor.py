@@ -67,9 +67,10 @@ class ModelNotInstalledError(ExecutionError):
         self.model_name = model_name
         self.size_mb = size_mb
         self.description = description
-        super().__init__(
-            f"Model '{model_name}' ({size_mb} MB) is required but not installed. Please download it first."
-        )
+        super().__init__(self._message())
+
+    def _message(self) -> str:
+        return f"{self.model_name} isn't installed on this server ({self.size_mb} MB) — ask an operator to install it."
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for JSON serialization."""
@@ -86,11 +87,51 @@ class ModelNotInstalledError(ExecutionError):
         }
 
 
+class ModelGatedError(ModelNotInstalledError):
+    """A required model isn't installed and the job owner's role may not download it
+    (``MODEL_DOWNLOAD_ON_DEMAND``); raised before anything is downloaded."""
+
+    def __init__(
+        self, step_id: str, model_id: str, model_name: str, size_mb: int, description: str, role: str
+    ) -> None:
+        self.role = role
+        super().__init__(step_id, model_id, model_name, size_mb, description)
+
+    def _message(self) -> str:
+        return (
+            f"{self.model_name} isn't installed on this server and isn't available for {self.role}s — ask an operator."
+        )
+
+
+class InputBandsError(ExecutionError):
+    """The input raster has fewer bands than a model step needs; raised before any step runs."""
+
+
 # Mapping from registry step IDs to model manager model IDs
 STEP_TO_MODEL_MAP = {
     "models/prithvi-reconstruction": "prithvi-eo-v1-100m",
     "models/delineate-anything": "delineate-anything-small",
 }
+
+# Bands a model step needs in its input raster: step id -> (short model name, HLS L30 band codes).
+MODEL_INPUT_BANDS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "models/prithvi-reconstruction": ("Prithvi", ("B2", "B3", "B4", "B5", "B6", "B7")),
+}
+
+_COUNT_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+
+
+def _count_word(n: int) -> str:
+    return _COUNT_WORDS[n] if 0 <= n < len(_COUNT_WORDS) else str(n)
+
+
+def model_not_installed_error(step_id: str, model_id: str, role: str | None = None) -> ModelNotInstalledError:
+    """:class:`ModelNotInstalledError` for ``model_id``, or :class:`ModelGatedError` when ``role`` is given."""
+    from dta.dti.models import AVAILABLE_MODELS
+
+    info = AVAILABLE_MODELS[model_id]
+    args = (step_id, model_id, info.name, info.size_mb, info.description)
+    return ModelGatedError(*args, role=role) if role else ModelNotInstalledError(*args)
 
 
 class PipelineExecutor:
@@ -122,8 +163,16 @@ class PipelineExecutor:
         on_progress: Callable[[dict[str, Any]], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
         output_dir: Path | None = None,
+        download_models: bool = False,
     ) -> dict[str, Any]:
         """Execute a pipeline plan step by step.
+
+        Before any step runs, :meth:`check_inputs` checks the input bands of model steps, and
+        a model whose weights are missing raises :class:`ModelNotInstalledError` unless
+        ``download_models``. With ``download_models``, the weights are downloaded right before
+        the first step that needs them, reported as ``prepare_start``, ``prepare_progress``
+        (``fraction``, ``bytes``, ``total_bytes``, ``eta_s``, ``message``) and
+        ``prepare_complete`` events carrying that step's ``index``.
 
         Args:
             plan: Execution plan from COE planner
@@ -132,6 +181,7 @@ class PipelineExecutor:
             output_dir: Directory for the steps' GeoTIFF/PNG artifacts, named
                 ``<step index>_<output type>_<key>.<tif|png>``. The job queue
                 passes ``OUTPUTS_PATH/<job_id>``; default ``OUTPUTS_PATH/run-<uuid hex>``.
+            download_models: Download missing model weights instead of failing.
 
         Returns:
             Dictionary with:
@@ -142,6 +192,8 @@ class PipelineExecutor:
 
         Raises:
             ExecutionError: If any step fails
+            InputBandsError: If a model step's input lacks bands
+            ModelNotInstalledError: If a model is missing and ``download_models`` is false
             CancellationError: If execution is cancelled
         """
         self.artifacts = {}  # Reset for each execution
@@ -149,10 +201,19 @@ class PipelineExecutor:
         executed_steps: list[str] = []
         output_dir = output_dir or artifact_files.output_dir()
 
+        self.check_inputs(plan)
+        to_prepare = self.models_to_prepare(plan)
+        if to_prepare and not download_models:
+            idx, model_id = next(iter(to_prepare.items()))
+            raise model_not_installed_error(plan.steps[idx - 1].uses, model_id)
+
         for idx, step in enumerate(plan.steps, start=1):
             # Check for cancellation before each step
             if is_cancelled and is_cancelled():
                 raise CancellationError("Execution cancelled by user")
+
+            if idx in to_prepare:
+                self._prepare_model(idx, to_prepare[idx], on_progress, is_cancelled)
 
             if on_progress:
                 on_progress(
@@ -192,6 +253,8 @@ class PipelineExecutor:
                             "error": str(e),
                         }
                     )
+                if isinstance(e, ModelNotInstalledError):
+                    raise  # the job queue reports the model, so keep the type
                 raise ExecutionError(f"Step {step.uses} failed: {e}") from e
 
         # Collect final outputs
@@ -211,6 +274,104 @@ class PipelineExecutor:
             "artifacts": self.artifacts,
             "outputs": final_outputs,
         }
+
+    def models_to_prepare(self, plan: ExecutionPlan) -> dict[int, str]:
+        """``{step index (1-based): model id}`` for the first step needing each model whose weights are missing."""
+        from dta.dti.models import get_model_manager
+
+        missing: dict[int, str] = {}
+        for idx, step in enumerate(plan.steps, start=1):
+            model_id = STEP_TO_MODEL_MAP.get(step.uses)
+            if model_id and model_id not in missing.values() and not get_model_manager().is_model_available(model_id):
+                missing[idx] = model_id
+        return missing
+
+    def check_inputs(self, plan: ExecutionPlan) -> None:
+        """Cheap preconditions, checked before any step runs or any weights are downloaded.
+
+        A model step listed in :data:`MODEL_INPUT_BANDS` needs at least that many bands in the
+        raster bound to its inputs (directly, or by an earlier input step).
+
+        Raises:
+            InputBandsError: e.g. "Prithvi needs six HLS bands (B2–B7); this file has five (B2–B6, no B7)."
+        """
+        bound: dict[str, str] = {}
+        for step in plan.steps:
+            bound.update(step.binds)
+            need = MODEL_INPUT_BANDS.get(step.uses)
+            if need is None:
+                continue
+            item = get_item(self.registry, step.uses)
+            for input_type in item.inputs:
+                path = bound.get(input_type)
+                if path and Path(path).is_file():
+                    self._check_bands(path, *need)
+
+    @staticmethod
+    def _check_bands(path: str, model: str, codes: tuple[str, ...]) -> None:
+        import rasterio
+
+        from dta.dti.raster import _band_summary, describe_raster
+
+        with rasterio.open(path) as src:
+            if src.count >= len(codes):
+                return
+            have = [b.code for b in describe_raster(src, Path(path).name).bands]
+        detail = ""
+        if all(have):
+            absent = [c for c in codes if c not in have]
+            detail = f" ({_band_summary(have)}" + (f", no {', '.join(absent)}" if absent else "") + ")"
+        raise InputBandsError(
+            f"{model} needs {_count_word(len(codes))} HLS bands ({_band_summary(list(codes))}); "
+            f"this file has {_count_word(len(have))}{detail}."
+        )
+
+    def _prepare_model(
+        self,
+        idx: int,
+        model_id: str,
+        on_progress: Callable[[dict[str, Any]], None] | None,
+        is_cancelled: Callable[[], bool] | None,
+    ) -> None:
+        """Download ``model_id`` before step ``idx``, reporting ``prepare_*`` events."""
+        from dta.dti.models import (
+            AVAILABLE_MODELS,
+            DownloadProgress,
+            ModelStatus,
+            estimated_download_s,
+            get_model_manager,
+        )
+
+        info = AVAILABLE_MODELS[model_id]
+        total = info.size_mb * 1024 * 1024
+        message = f"Downloading {info.name} · {info.size_mb} MB"
+        emit = on_progress or (lambda _event: None)
+
+        def report(progress: DownloadProgress) -> None:
+            size = progress.total_bytes or total
+            done = min(progress.downloaded_bytes, size)
+            emit(
+                {
+                    "event": "prepare_progress",
+                    "index": idx,
+                    "model_id": model_id,
+                    "fraction": round(done / size, 3),
+                    "bytes": done,
+                    "total_bytes": size,
+                    "eta_s": estimated_download_s(size - done, progress.speed_bps),
+                    "message": message,
+                }
+            )
+
+        emit({"event": "prepare_start", "index": idx, "model_id": model_id, "name": f"Preparing model · {info.name}"})
+        report(DownloadProgress(model_id=model_id, total_bytes=total))
+        logger.info(f"Downloading model {model_id} before step {idx}")
+        result = get_model_manager().download(model_id, progress_callback=report, is_cancelled=is_cancelled)
+        if is_cancelled and is_cancelled():
+            raise CancellationError("Execution cancelled while preparing a model")
+        if result.status != ModelStatus.AVAILABLE:
+            raise ExecutionError(f"Downloading {info.name} failed: {result.error or result.status.value}")
+        emit({"event": "prepare_complete", "index": idx, "model_id": model_id})
 
     def _execute_step(self, step: PlanStep, item: RegistryItem) -> None:
         """Execute a single pipeline step.
