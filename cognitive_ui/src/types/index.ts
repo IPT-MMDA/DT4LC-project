@@ -34,6 +34,7 @@ export interface UploadMetadata {
   size_label?: string;
   crs?: string;
   bounds_wgs84?: [number, number, number, number];
+  footprint_wgs84?: [number, number][];  // the raster's corners NW, NE, SE, SW (a UTM raster is rotated)
   line?: string;  // chip text without the size; "" when nothing could be read
 }
 
@@ -65,6 +66,7 @@ export interface ChatRegion {
   start_date: string;  // YYYY-MM-DD
   end_date: string;
   cloud_max: number;
+  bands?: string[];  // band codes; the server takes the dataset's defaults without
   area_km2: number;
   line?: string;
 }
