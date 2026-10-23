@@ -3,7 +3,7 @@ import { cn } from '../../../utils/cn';
 import { activeResultLayer, legendOf } from './layers';
 
 const TOKEN_GRADIENT = 'bg-gradient-to-r from-legend-lost via-legend-no-change to-legend-gained';
-const TONE_TEXT = { gained: 'text-legend-gained', lost: 'text-lost', neutral: '' } as const;
+const TONE_TEXT = { gained: 'text-gained', lost: 'text-lost', neutral: '' } as const;
 
 /** The active result layer's legend, bottom left: title, ramp with its range, class areas. */
 export function MapLegend() {

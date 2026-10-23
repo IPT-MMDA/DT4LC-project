@@ -89,7 +89,7 @@ export function EmptyState({ onSend, onOpenFilePicker, sending }: EmptyStateProp
               className="w-full px-[14px] py-3 border border-border rounded-[9px] bg-surface flex justify-between items-center gap-3 text-left text-body hover:border-border2 hover:bg-surface2/40 disabled:cursor-wait"
             >
               <span>{s.prompt}</span>
-              <span className="flex items-center gap-[6px] text-[12px] text-faint whitespace-nowrap">
+              <span className="flex items-center gap-[6px] text-[12px] text-muted whitespace-nowrap">
                 {s.badge && (
                   <span className="px-[6px] py-[1px] rounded-pill bg-accent-tint text-accent-ink font-semibold text-[10.5px]">
                     {s.badge}

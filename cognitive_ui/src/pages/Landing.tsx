@@ -252,7 +252,7 @@ function Footer() {
         <div className="flex gap-5 text-[12.5px] text-text2 border-t border-border2 pt-4 flex-wrap">
           <span>
             Open source · AGPL-3.0 ·{' '}
-            <External href={GITHUB} className="text-accent">
+            <External href={GITHUB} className="text-accent underline underline-offset-2">
               GitHub ↗
             </External>
           </span>

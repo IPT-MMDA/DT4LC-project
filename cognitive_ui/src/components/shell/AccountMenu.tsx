@@ -138,7 +138,7 @@ export function AccountMenu({ placement = 'side' }: { placement?: 'side' | 'up' 
             </a>
           )}
           {session && !user && !session.sign_in?.configured && (
-            <p data-testid="sign-in-unavailable" className="px-3 py-[7px] text-control text-faint">
+            <p data-testid="sign-in-unavailable" className="px-3 py-[7px] text-control text-muted">
               Sign-in not configured on this server
             </p>
           )}

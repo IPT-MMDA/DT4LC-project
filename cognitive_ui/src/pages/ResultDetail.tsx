@@ -143,7 +143,7 @@ function MapPanel({ title, meta, view, legend, height, actions }: { title: strin
         {shown ? (
           <img data-testid="detail-image" src={resolveApiUrl(shown.url)} alt={title} className="absolute inset-0 w-full h-full object-contain" />
         ) : (
-          <p className="absolute inset-0 flex items-center justify-center text-control text-faint">No image for this view</p>
+          <p className="absolute inset-0 flex items-center justify-center text-control text-muted">No image for this view</p>
         )}
         {legend && (
           <div data-testid="detail-legend" className="absolute left-[10px] bottom-[10px] bg-surface/95 rounded-[6px] px-[10px] py-[7px] flex flex-wrap items-center gap-[10px] text-[11.5px] text-text2">

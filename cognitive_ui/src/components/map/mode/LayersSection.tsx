@@ -83,7 +83,7 @@ export function LayersSection() {
         <ExportMenu />
       </div>
       {rows.length === 0 ? (
-        <p className="text-[11.5px] leading-[1.45] text-faint">Results from the chat appear here as layers.</p>
+        <p className="text-[11.5px] leading-[1.45] text-muted">Results from the chat appear here as layers.</p>
       ) : (
         <ul className="flex flex-col gap-[6px]">
           {rows.map((row, i) => (

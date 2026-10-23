@@ -137,7 +137,7 @@ export function ConversationList({ className, onCollapse }: { className?: string
       </div>
 
       {conversations.length === 0 ? (
-        <p className="px-5 py-[30px] text-control leading-[1.5] text-faint text-center" data-testid="no-conversations">
+        <p className="px-5 py-[30px] text-control leading-[1.5] text-muted text-center" data-testid="no-conversations">
           {emptyListText(keptHours)}
         </p>
       ) : (

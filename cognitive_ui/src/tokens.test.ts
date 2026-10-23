@@ -45,6 +45,11 @@ describe('design tokens in index.css', () => {
     expect(light.get('region')).not.toBe(light.get('canc'));
   });
 
+  it('has a text token for water gained: the legend blue in light, a lighter blue in dark', () => {
+    expect(light.get('gained')).toBe('#2d5f9e');
+    expect(dark.get('gained')).toMatch(/^oklch\(0\.7\d? /);
+  });
+
   it('uses the DESIGN values for accent and the inverted monogram ink', () => {
     expect(light.get('accent')).toBe('oklch(0.5 0.16 265)');
     expect(dark.get('accent')).toBe('oklch(0.72 0.12 265)');

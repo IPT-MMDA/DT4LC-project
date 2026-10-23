@@ -179,6 +179,9 @@ describe('Capabilities page, offline laptop', () => {
 
     expect(tier('ask').dataset.dimmed).toBe('true');
     expect(tier('composed').dataset.dimmed).toBe('true');
+    // Dimmed by colour, not opacity, so the text keeps AA contrast.
+    expect(tier('ask').className).not.toMatch(/opacity/);
+    expect(tier('ask').className).toContain('!text-muted');
     for (const id of ['builtin', 'models', 'data']) expect(tier(id).dataset.dimmed).toBe('false');
     // Greyed, not hidden, and still usable.
     expect(within(tier('ask')).getAllByTestId('example-prompt')).toHaveLength(3);

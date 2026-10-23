@@ -114,12 +114,12 @@ function Steps({ view, now }: { view: AnalysisView; now: number }) {
               <span
                 className={cn(
                   'flex-1 min-w-0',
-                  quiet ? 'text-faint' : s.status === 'done' ? 'text-muted' : 'font-medium',
+                  quiet || s.status === 'done' ? 'text-muted' : 'font-medium',
                 )}
               >
                 {s.name}
               </span>
-              <span className={cn('font-mono text-[11.5px]', quiet ? 'text-faint' : 'text-muted')}>{rowTime(s, view, now)}</span>
+              <span className="font-mono text-[11.5px] text-muted">{rowTime(s, view, now)}</span>
             </div>
             {downloading && (
               <div className="ml-[23px] flex flex-col gap-1" data-testid="download-progress">
