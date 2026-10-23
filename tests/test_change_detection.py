@@ -114,7 +114,8 @@ def test_ndwi_on_the_sample_reports_water_and_class_areas() -> None:
         result = run(RasterPathBefore=SAMPLE_BEFORE, RasterPathAfter=SAMPLE_AFTER, IndexType="ndwi")
     stats = result["statistics"]
 
-    assert stats["areas_km2"] == {"increase": 325.227, "decrease": 9.948, "stable": 195.665}
+    # Clipping each date to [-1, 1] moved 58 pixels to stable (51 from decrease, 7 from increase).
+    assert stats["areas_km2"] == {"increase": 325.22, "decrease": 9.902, "stable": 195.718}
     assert stats["water"] == {
         "before_km2": 13.881,
         "after_km2": 170.039,
@@ -142,6 +143,53 @@ def test_ndvi_on_the_sample_reports_vegetation() -> None:
         "threshold": 0.3,
     }
     assert "water" not in stats
+
+
+def test_sample_indices_are_clipped_before_differencing() -> None:
+    """Negative stored reflectance gave the sample's NDWI change -223 .. +318; each date is now in [-1, 1]."""
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        result = run(RasterPathBefore=SAMPLE_BEFORE, RasterPathAfter=SAMPLE_AFTER, IndexType="ndwi")
+    stats, index_stats = result["statistics"], result["index_statistics"]
+
+    assert -2 <= stats["min_change"] < stats["max_change"] <= 2
+    assert (round(stats["min_change"], 4), round(stats["max_change"], 4)) == (-1.6024, 2.0)
+    assert round(stats["mean_change"], 4) == 0.3533
+    for when in ("before", "after"):
+        assert -1 <= index_stats[when]["min"] < index_stats[when]["max"] <= 1
+    means = {name: c["mean_change"] for name, c in result["class_statistics"].items()}
+    assert means == {"Water gained": 0.806, "Water lost": -0.233, "No change": 0.1642}
+    assert result["rasters"]["change"]["stats"]["max"] <= 2
+
+
+def test_index_beyond_its_range_is_clipped_and_zero_denominator_is_nan(tmp_path: Path) -> None:
+    """NDVI of red -3, NIR 4 is 7 (clipped to 1); red -2, NIR 2 has no NDVI (NaN), as band math."""
+    transform = from_origin(0, 0, 10, 10)
+    paths = []
+    for name, red, nir in (("before", [[-3.0, -2.0, 1.0]], [[4.0, 2.0, 3.0]]), ("after", [[1.0] * 3], [[1.0] * 3])):
+        path = tmp_path / f"{name}.tif"
+        with rasterio.open(
+            path,
+            "w",
+            driver="GTiff",
+            height=1,
+            width=3,
+            count=2,
+            dtype="float32",
+            crs="EPSG:32636",
+            transform=transform,
+        ) as dst:
+            dst.write(np.array([red, nir], dtype=np.float32))
+        paths.append(str(path))
+
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        result = run(RasterPathBefore=paths[0], RasterPathAfter=paths[1], IndexType="ndvi")
+    with rasterio.open(result["rasters"]["index_before"]["path"]) as src:
+        before = src.read(1, masked=True).filled(np.nan)
+    with rasterio.open(result["rasters"]["change"]["path"]) as src:
+        change = src.read(1, masked=True).filled(np.nan)
+
+    np.testing.assert_allclose(before[0], [1.0, np.nan, 0.5])
+    np.testing.assert_allclose(change[0], [-1.0, np.nan, -0.5])
 
 
 def test_areas_are_null_for_a_geographic_crs(dummy_tifs) -> None:
