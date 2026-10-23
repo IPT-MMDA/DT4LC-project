@@ -37,6 +37,8 @@ from typing import Annotated, Any, Literal
 from fastapi import Depends, Request
 from starlette.datastructures import MutableHeaders
 
+from dta.config.overrides import getenv
+
 from .github_oauth import sign_in_configured
 
 logger = logging.getLogger(__name__)
@@ -55,14 +57,14 @@ _FALLBACK_SECRET = secrets.token_bytes(32)
 
 def _env_int(name: str, default: int) -> int:
     try:
-        return int(os.environ.get(name, "").strip() or default)
+        return int(getenv(name, "").strip() or default)
     except ValueError:
         logger.warning(f"{name} is not an integer; using {default}")
         return default
 
 
 def _env_list(name: str) -> frozenset[str]:
-    return frozenset(item.strip().lower() for item in os.environ.get(name, "").split(",") if item.strip())
+    return frozenset(item.strip().lower() for item in getenv(name, "").split(",") if item.strip())
 
 
 def guest_analyses_per_hour() -> int:
@@ -124,7 +126,7 @@ def can_download_models(role: Role) -> bool:
     ``members`` (default): members and operators; ``operators``: operators only;
     ``all``: everyone; ``none``: nobody.
     """
-    policy = os.environ.get("MODEL_DOWNLOAD_ON_DEMAND", "").strip().lower() or "members"
+    policy = getenv("MODEL_DOWNLOAD_ON_DEMAND", "").strip().lower() or "members"
     allowed = {
         "all": ROLES,
         "members": ("member", "operator"),
