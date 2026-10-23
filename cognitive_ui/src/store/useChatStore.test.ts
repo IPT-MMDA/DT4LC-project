@@ -5,7 +5,6 @@ import {
   CHAT_STORAGE_VERSION,
   conversationMeta,
   findConversationByJobId,
-  getContextForBackend,
   selectActiveMessages,
   selectContextTokens,
 } from './useChatStore';
@@ -371,22 +370,6 @@ describe('context counter', () => {
     expect(selectContextTokens(store.getState())).toBe(2);
     store.getState().selectConversation(first);
     expect(selectContextTokens(store.getState())).toBe(10);
-  });
-});
-
-describe('getContextForBackend', () => {
-  it('lists earlier attachments with server paths once and summarises the history', async () => {
-    const store = await loadFreshStore();
-    const att = { id: 'a1', filename: 'scene.tif', path: '/app/uploads/a1_scene.tif' };
-    store.getState().addMessage({ kind: 'user', text: 'calculate ndvi', attachments: [att] });
-    store.getState().addMessage(analysis('job-1'));
-    store.getState().updateAnalysis('job-1', { status: 'done', result: { summary: 'Mean NDVI 0.41.' } });
-    store.getState().addMessage({ kind: 'user', text: 'and ndwi', attachments: [att, { id: 'a2', filename: 'no-path.tif' }] });
-
-    expect(getContextForBackend(selectActiveMessages(store.getState()))).toEqual({
-      previous_attachments: [{ id: 'a1', filename: 'scene.tif', path: '/app/uploads/a1_scene.tif', mime_type: 'image/tiff' }],
-      history: 'User: calculate ndvi\nAssistant: Mean NDVI 0.41.\nUser: and ndwi',
-    });
   });
 });
 

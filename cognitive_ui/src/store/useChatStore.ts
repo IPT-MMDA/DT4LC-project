@@ -94,34 +94,6 @@ export function estimateTokens(messages: ChatMessage[]): number {
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 
-/** Context for POST /v1/jobs: earlier attachments with server paths, plus a compact history. */
-export function getContextForBackend(messages: ChatMessage[]): {
-  previous_attachments: Array<{ id: string; filename: string; path: string; mime_type?: string }>;
-  history: string;
-} {
-  const previousAttachments: Array<{ id: string; filename: string; path: string; mime_type?: string }> = [];
-  const seenIds = new Set<string>();
-
-  for (const message of messages) {
-    if (message.kind !== 'user' || !message.attachments) continue;
-    for (const att of message.attachments) {
-      if (att.path && !seenIds.has(att.id)) {
-        seenIds.add(att.id);
-        previousAttachments.push({ id: att.id, filename: att.filename, path: att.path, mime_type: 'image/tiff' });
-      }
-    }
-  }
-
-  const history = messages
-    .slice(-10)
-    .map((m) => ({ prefix: m.kind === 'user' ? 'User' : 'Assistant', text: messageText(m) }))
-    .filter((m) => m.text)
-    .map((m) => `${m.prefix}: ${m.text.slice(0, 200)}`)
-    .join('\n');
-
-  return { previous_attachments: previousAttachments, history };
-}
-
 // Keep only what localStorage needs to restore a conversation: image URLs, never
 // image bytes (#67 bug 3). Attachments keep their metadata and preview URL;
 // visualizations keep {type, label, url} and are dropped without a URL; per-tick
