@@ -11,7 +11,7 @@ from rasterio.transform import from_origin
 
 from dta.config import ROOT_DIR
 from dta.dti.algorithms import band_math, spectral_index
-from dta.dti.coe.plan_validator import validate
+from dta.dti.coe.plan_validator import PlanError, validate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ExecutionPlan, PlanStep
@@ -262,6 +262,31 @@ def _change_plan(config: dict) -> ExecutionPlan:
         ],
         outputs=["publish: chat"],
     )
+
+
+@pytest.mark.parametrize(
+    ("config", "message"),
+    [
+        ({"formula": "abs(B5)"}, "Formula not allowed"),
+        ({"formula": "__import__('os').system('true')"}, "Formula not allowed"),
+        ({"name": "NDMI"}, "needs a formula"),
+        ({"formula": "(B5 - B7) / (B5 + B7)"}, r"Band B7 is not in this file \(B2–B6\)"),
+    ],
+)
+def test_plan_validation_rejects_bad_band_math(config: dict, message: str) -> None:
+    with pytest.raises(PlanError, match=message):
+        validate(_change_plan(config), load_registry())
+
+
+def test_plan_validation_rejects_config_on_other_steps() -> None:
+    plan = ExecutionPlan(
+        steps=[
+            PlanStep(uses="input/file", binds={"RasterPath": BEFORE}),
+            PlanStep(uses="algorithms/ndvi", config={"formula": "B5"}),
+        ]
+    )
+    with pytest.raises(PlanError, match="takes no config"):
+        validate(plan, load_registry())
 
 
 def test_executor_runs_composed_ndmi_change(_outputs_in_tmp: Path) -> None:
