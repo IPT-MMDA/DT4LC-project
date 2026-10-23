@@ -114,6 +114,30 @@ class Source(BaseModel):  # type: ignore[misc]
     install: str | None = None
 
 
+class UIModel(BaseModel):  # type: ignore[misc]
+    """How the Capabilities page names the model a step needs."""
+
+    title: str  # Models tier card and the summary line, e.g. "Delineate-Anything"
+    short: str  # label on the built-in analysis card, e.g. "Prithvi EO v1"
+    description: str
+
+
+class UI(BaseModel):  # type: ignore[misc]
+    """Capabilities page fields (``GET /v1/capabilities``); items without one are not listed."""
+
+    tier: Literal["builtin", "coming"]
+    group: Literal["spectral", "change", "models"] | None = None  # builtin only
+    order: int = 0  # position within the group (or the coming list)
+    title: str
+    formula: str | None = None
+    description: str | None = None
+    inputs: list[str] = []  # empty: derived from config.required_bands
+    outputs: list[str] = []
+    time: str | None = None  # e.g. "~10 s"
+    prompt: str | None = None  # full prompt for the composer
+    model: UIModel | None = None
+
+
 class RegistryItem(BaseModel):  # type: ignore[misc]
     id: str
     kind: Literal["input", "algorithm", "model", "postprocess", "preprocessor"]
@@ -134,6 +158,7 @@ class RegistryItem(BaseModel):  # type: ignore[misc]
     config: dict[str, Any] = {}  # runner-consumed config block (formula, bands, colormap, ...)
     model_id: str | None = None  # model-manager id for locally-managed models
     source: Source | None = None  # third-party plugin source (reserved)
+    ui: UI | None = None  # Capabilities page card (tier, group, time, prompt, ...)
 
 
 class Registry(BaseModel):  # type: ignore[misc]
