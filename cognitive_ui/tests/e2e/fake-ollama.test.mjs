@@ -69,4 +69,19 @@ describe('fake Ollama', () => {
     expect((await fetch(`${fake.url}/__e2e/reset`, { method: 'POST' })).status).toBe(200);
     expect(await chat(fake.url, [{ role: 'user', content: 'hello' }])).toBe('Hi from the fake');
   });
+
+  it('holds a rule\'s reply back for its delay_ms; other rules answer at once', async () => {
+    await fetch(`${fake.url}/__e2e/rules`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ default: 'fast', rules: [{ match: 'interpret', reply: 'slow', delay_ms: 300 }] }),
+    });
+    let started = Date.now();
+    expect(await chat(fake.url, [{ role: 'user', content: 'Provide your interpretation' }])).toBe('slow');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(290);
+    started = Date.now();
+    expect(await chat(fake.url, [{ role: 'user', content: 'hello' }])).toBe('fast');
+    expect(Date.now() - started).toBeLessThan(250);
+    await fetch(`${fake.url}/__e2e/reset`, { method: 'POST' });
+  });
 });

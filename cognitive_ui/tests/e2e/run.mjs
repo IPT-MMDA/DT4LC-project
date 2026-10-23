@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchBrowserServer } from './browser.mjs';
+import { startFakeHF } from './fake-hf.mjs';
 import { FAKE_MODEL, startFakeOllama } from './fake-ollama.mjs';
 import { startStaticServer } from './static-server.mjs';
 
@@ -68,7 +69,7 @@ function resolveFlows(args) {
   });
 }
 
-function apiEnv(stateDir, fakeURL) {
+function apiEnv(stateDir, fakeURL, fakeHFURL) {
   const env = {
     ...process.env,
     PYTHONUNBUFFERED: '1',
@@ -85,6 +86,11 @@ function apiEnv(stateDir, fakeURL) {
     // E2E_DEV_ROLE=member|operator and E2E_GUEST_LIMIT override them for one run.
     DEV_ROLE: process.env.E2E_DEV_ROLE || 'guest',
     GUEST_ANALYSES_PER_HOUR: process.env.E2E_GUEST_LIMIT || '1000',
+    // Model weights come from the fake Hub (fake-hf.mjs), never from huggingface.co: a
+    // member's Preparing model step downloads zeros slowly into the temp model cache.
+    HF_ENDPOINT: fakeHFURL,
+    HF_HUB_OFFLINE: '0',
+    HF_HOME: path.join(stateDir, 'hf'),
   };
   if (llmMode === 'live') return env;
   // server/app.py calls load_dotenv() without override, so a variable that is
@@ -202,6 +208,9 @@ async function main() {
   const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dt4lc-e2e-'));
   cleanups.push(async () => fs.rmSync(stateDir, { recursive: true, force: true }));
 
+  const fakeHF = await startFakeHF();
+  cleanups.push(fakeHF.close);
+
   let fakeURL;
   if (llmMode === 'fake') {
     const fake = await startFakeOllama({ rules: JSON.parse(fs.readFileSync(rulesFile, 'utf8')) });
@@ -209,11 +218,13 @@ async function main() {
     fakeURL = fake.url;
   }
 
-  const apiURL = await startApi(apiEnv(stateDir, fakeURL), path.join(outDir, 'api.log'));
+  const apiURL = await startApi(apiEnv(stateDir, fakeURL, fakeHF.url), path.join(outDir, 'api.log'));
   const ui = await startStaticServer({ distDir: path.join(uiDir, 'dist'), apiURL });
   cleanups.push(ui.close);
 
-  console.log(`e2e: UI ${ui.url}, API ${apiURL}, LLM ${llmMode}${fakeURL ? ` (fake Ollama ${fakeURL})` : ''}, out ${outDir}`);
+  console.log(
+    `e2e: UI ${ui.url}, API ${apiURL} (${process.env.E2E_DEV_ROLE || 'guest'}), LLM ${llmMode}${fakeURL ? ` (fake Ollama ${fakeURL})` : ''}, fake HF ${fakeHF.url}, out ${outDir}`,
+  );
   return runFlows(flows, {
     E2E_BASE_URL: ui.url,
     E2E_API_URL: apiURL,
@@ -221,6 +232,8 @@ async function main() {
     E2E_OUT: outDir,
     E2E_LLM: llmMode,
     E2E_FAKE_LLM_URL: fakeURL ?? '',
+    E2E_FAKE_HF_URL: fakeHF.url,
+    E2E_DEV_ROLE: process.env.E2E_DEV_ROLE || 'guest',
   });
 }
 

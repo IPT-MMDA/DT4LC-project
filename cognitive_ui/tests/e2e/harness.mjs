@@ -45,14 +45,17 @@ function fakeLLMURL() {
 /**
  * Replace the fake Ollama's rules until resetLLMRules(). The first rule whose
  * `match` matches the last user or system message wins; otherwise `default`.
- * @param {{default?: string, rules: Array<{match: RegExp | string, reply: string}>}} rules
+ * `delay_ms` holds that rule's reply back, e.g. to catch a step mid-run.
+ * @param {{default?: string, rules: Array<{match: RegExp | string, reply: string, delay_ms?: number}>}} rules
  */
 export async function setLLMRules({ default: fallback = '', rules }) {
   const body = {
     default: fallback,
-    rules: rules.map(({ match, reply }) =>
-      match instanceof RegExp ? { match: match.source, flags: match.flags, reply } : { match, reply },
-    ),
+    rules: rules.map(({ match, reply, delay_ms }) => ({
+      ...(match instanceof RegExp ? { match: match.source, flags: match.flags } : { match }),
+      reply,
+      ...(delay_ms ? { delay_ms } : {}),
+    })),
   };
   const res = await fetch(`${fakeLLMURL()}/__e2e/rules`, {
     method: 'PUT',
