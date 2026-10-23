@@ -334,13 +334,13 @@ export function CapabilitiesView({ doc }: { doc: CapabilitiesDoc }) {
             Live for this installation: {doc.summary.line}.
           </p>
         </div>
-        <nav aria-label="Tiers" className="flex gap-[6px]">
+        <nav aria-label="Tiers" className="flex flex-wrap gap-[6px]">
           {CHIPS.map(([id, label]) => (
             <button
               key={id}
               type="button"
               onClick={() => scrollTo(id)}
-              className="px-[9px] py-[5px] border border-border rounded-control text-[12px] text-muted hover:text-text hover:bg-surface2"
+              className="px-[9px] py-[5px] border border-border rounded-control text-[12px] text-muted whitespace-nowrap hover:text-text hover:bg-surface2"
             >
               {label}
             </button>
