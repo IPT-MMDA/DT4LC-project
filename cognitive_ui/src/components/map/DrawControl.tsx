@@ -1,7 +1,85 @@
-import { useRef, useImperativeHandle, forwardRef } from 'react';
-import { useControl } from 'react-map-gl/maplibre';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useControl, useMap } from 'react-map-gl/maplibre';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
+import { useMapColours, type MapColours } from './mapColours';
+
+// Styling for drawn features, from the design tokens (see mapColours.ts).
+function drawStyles(c: MapColours) {
+  return [
+    // Polygon fill while drawing
+    {
+      id: 'gl-draw-polygon-fill-inactive',
+      type: 'fill',
+      filter: ['all', ['==', 'active', 'false'], ['==', '$type', 'Polygon']],
+      paint: {
+        'fill-color': c.regionSelected,
+        'fill-outline-color': c.regionSelected,
+        'fill-opacity': 0.1
+      }
+    },
+    {
+      id: 'gl-draw-polygon-fill-active',
+      type: 'fill',
+      filter: ['all', ['==', 'active', 'true'], ['==', '$type', 'Polygon']],
+      paint: {
+        'fill-color': c.drawing,
+        'fill-outline-color': c.drawing,
+        'fill-opacity': 0.1
+      }
+    },
+    // Polygon outline
+    {
+      id: 'gl-draw-polygon-stroke-inactive',
+      type: 'line',
+      filter: ['all', ['==', 'active', 'false'], ['==', '$type', 'Polygon']],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round'
+      },
+      paint: {
+        'line-color': c.regionSelected,
+        'line-width': 2
+      }
+    },
+    {
+      id: 'gl-draw-polygon-stroke-active',
+      type: 'line',
+      filter: ['all', ['==', 'active', 'true'], ['==', '$type', 'Polygon']],
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round'
+      },
+      paint: {
+        'line-color': c.drawing,
+        'line-width': 2
+      }
+    },
+    // Vertex points
+    {
+      id: 'gl-draw-polygon-and-line-vertex-inactive',
+      type: 'circle',
+      filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point']],
+      paint: {
+        'circle-radius': 5,
+        'circle-color': c.vertexFill,
+        'circle-stroke-color': c.regionSelected,
+        'circle-stroke-width': 2
+      }
+    },
+    {
+      id: 'gl-draw-polygon-and-line-vertex-active',
+      type: 'circle',
+      filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point'], ['==', 'active', 'true']],
+      paint: {
+        'circle-radius': 6,
+        'circle-color': c.vertexFill,
+        'circle-stroke-color': c.drawing,
+        'circle-stroke-width': 3
+      }
+    }
+  ];
+}
 
 interface DrawControlProps {
   onCreate?: (features: any) => void;
@@ -17,6 +95,8 @@ export interface DrawControlRef {
 export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
   ({ onCreate, onUpdate, onDelete }, ref) => {
     const drawRef = useRef<MapboxDraw | null>(null);
+    const colours = useMapColours();
+    const { current: mapRef } = useMap();
 
     useControl<MapboxDraw | any>(
       () => {
@@ -29,79 +109,7 @@ export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
             ...MapboxDraw.modes,
           },
           // Styling for drawn features
-          styles: [
-            // Polygon fill while drawing
-            {
-              id: 'gl-draw-polygon-fill-inactive',
-              type: 'fill',
-              filter: ['all', ['==', 'active', 'false'], ['==', '$type', 'Polygon']],
-              paint: {
-                'fill-color': '#3b82f6',
-                'fill-outline-color': '#3b82f6',
-                'fill-opacity': 0.1
-              }
-            },
-            {
-              id: 'gl-draw-polygon-fill-active',
-              type: 'fill',
-              filter: ['all', ['==', 'active', 'true'], ['==', '$type', 'Polygon']],
-              paint: {
-                'fill-color': '#fbbf24',
-                'fill-outline-color': '#fbbf24',
-                'fill-opacity': 0.1
-              }
-            },
-            // Polygon outline
-            {
-              id: 'gl-draw-polygon-stroke-inactive',
-              type: 'line',
-              filter: ['all', ['==', 'active', 'false'], ['==', '$type', 'Polygon']],
-              layout: {
-                'line-cap': 'round',
-                'line-join': 'round'
-              },
-              paint: {
-                'line-color': '#3b82f6',
-                'line-width': 2
-              }
-            },
-            {
-              id: 'gl-draw-polygon-stroke-active',
-              type: 'line',
-              filter: ['all', ['==', 'active', 'true'], ['==', '$type', 'Polygon']],
-              layout: {
-                'line-cap': 'round',
-                'line-join': 'round'
-              },
-              paint: {
-                'line-color': '#fbbf24',
-                'line-width': 2
-              }
-            },
-            // Vertex points
-            {
-              id: 'gl-draw-polygon-and-line-vertex-inactive',
-              type: 'circle',
-              filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point']],
-              paint: {
-                'circle-radius': 5,
-                'circle-color': '#fff',
-                'circle-stroke-color': '#3b82f6',
-                'circle-stroke-width': 2
-              }
-            },
-            {
-              id: 'gl-draw-polygon-and-line-vertex-active',
-              type: 'circle',
-              filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point'], ['==', 'active', 'true']],
-              paint: {
-                'circle-radius': 6,
-                'circle-color': '#fff',
-                'circle-stroke-color': '#fbbf24',
-                'circle-stroke-width': 3
-              }
-            }
-          ]
+          styles: drawStyles(colours),
         });
         drawRef.current = instance;
         return instance as any;
@@ -117,6 +125,21 @@ export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
         if (onDelete) map.off('draw.delete', onDelete as any);
       }
     );
+
+    // MapboxDraw takes its styles once; repaint its layers (`<id>.cold` / `<id>.hot`)
+    // when the theme changes.
+    useEffect(() => {
+      const map = mapRef?.getMap();
+      if (!map) return;
+      for (const style of drawStyles(colours)) {
+        for (const id of [`${style.id}.cold`, `${style.id}.hot`]) {
+          if (!map.getLayer(id)) continue;
+          for (const [property, value] of Object.entries(style.paint)) {
+            map.setPaintProperty(id, property, value);
+          }
+        }
+      }
+    }, [mapRef, colours]);
 
     useImperativeHandle(ref, () => ({
       changeMode: (mode: string) => {

@@ -7,6 +7,7 @@ import { DrawToolbar } from './DrawToolbar';
 import { LocationQuickAccess } from './LocationQuickAccess';
 import { JobLayersManager } from './JobLayersManager';
 import { OblastBoundaries } from './OblastBoundaries';
+import { useMapColours } from './mapColours';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export function MapContainer() {
@@ -20,6 +21,7 @@ export function MapContainer() {
   const selectedRegion = useAppStore((state) => state.selectedRegion);
   const useNewDatasetPanel = useAppStore((state) => state.useNewDatasetPanel);
   const setMapInstance = useAppStore((state) => state.setMapInstance);
+  const colours = useMapColours();
   const [viewState, setViewState] = useState({
     longitude: 33.4,  // Ukraine - Kahovka region
     latitude: 46.8,
@@ -170,7 +172,7 @@ export function MapContainer() {
                 id={`region-fill-${region.id}`}
                 type="fill"
                 paint={{
-                  'fill-color': isSelected ? '#3b82f6' : '#10b981',
+                  'fill-color': isSelected ? colours.regionSelected : colours.region,
                   'fill-opacity': isSelected ? 0.3 : 0.15
                 }}
               />
@@ -179,7 +181,7 @@ export function MapContainer() {
                 id={`region-outline-${region.id}`}
                 type="line"
                 paint={{
-                  'line-color': isSelected ? '#2563eb' : '#059669',
+                  'line-color': isSelected ? colours.regionSelected : colours.region,
                   'line-width': isSelected ? 3 : 2,
                   'line-opacity': isSelected ? 0.9 : 0.6
                 }}

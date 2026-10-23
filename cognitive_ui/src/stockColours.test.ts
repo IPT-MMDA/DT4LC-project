@@ -2,6 +2,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import tailwindColors from 'tailwindcss/colors';
 
 // Old pages and job cards that Phase 2 of v0.6.0 replaces; they keep their stock
 // colours until they are deleted. Everything else must use the design tokens.
@@ -24,6 +25,22 @@ const HUES =
 // `text-white`. `bg-black/50` modal scrims are allowed.
 const STOCK = new RegExp(`(?<![\\w-])(?:[a-z-]+:)*[a-z]+(?:-[a-z]+)*-(?:${HUES})(?:-\\d+)?(?:/\\d+)?(?![\\w-])`, 'g');
 
+// Every hex value of the stock Tailwind palette (`#3b82f6`, `#2563eb`, ...), e.g. a
+// MapLibre paint colour copied from blue-500. White and black are not stock hues.
+// The renamed palettes (lightBlue, ...) are getters that only log a warning.
+const RENAMED = new Set(['lightBlue', 'warmGray', 'trueGray', 'coolGray', 'blueGray']);
+const STOCK_HEX = new Set(
+  Object.keys(tailwindColors)
+    .filter((name) => !RENAMED.has(name))
+    .flatMap((name) => {
+      const shades = (tailwindColors as unknown as Record<string, unknown>)[name];
+      return typeof shades === 'object' && shades ? Object.values(shades as Record<string, string>) : [];
+    })
+    .map((hex) => hex.toLowerCase()),
+);
+const HEX = /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g;
+const stockHex = (text: string) => (text.match(HEX) ?? []).filter((hex) => STOCK_HEX.has(hex.toLowerCase()));
+
 const srcDir = fileURLToPath(new URL('.', import.meta.url));
 const surviving = (readdirSync(srcDir, { recursive: true }) as string[])
   .map((f) => f.split('\\').join('/'))
@@ -38,6 +55,22 @@ describe('surviving components use design tokens, not the stock Tailwind palette
   it.each(surviving)('%s has no stock palette classes', (file) => {
     const text = readFileSync(srcDir + file, 'utf8');
     expect(text.match(STOCK) ?? []).toEqual([]);
+  });
+
+  it.each(surviving)('%s has no stock palette hex values', (file) => {
+    const text = readFileSync(srcDir + file, 'utf8');
+    expect(stockHex(text)).toEqual([]);
+  });
+
+  it('the hex check catches stock blue but not the design tokens', () => {
+    expect(STOCK_HEX.has('#3b82f6')).toBe(true);
+    expect(stockHex("'fill-color': isSelected ? '#3b82f6' : '#10B981', '#2563eb'")).toEqual([
+      '#3b82f6',
+      '#10B981',
+      '#2563eb',
+    ]);
+    // Legend colours and the monogram ink from design/DESIGN.md section 2.
+    expect(stockHex("'#2d5f9e' '#8c4a2f' '#c4cad6' '#f1efe8' '#1a1d23' '#fff' '#000'")).toEqual([]);
   });
 
   it('the pattern catches stock blue', () => {
