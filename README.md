@@ -570,6 +570,8 @@ Each reference has `kind` (`geotiff` or `png`), `path`, `url` and `stats`; the k
 
 ## Docker Deployment
 
+To run the public demo (GitHub sign-in, rate limits, pre-installed models, behind a TLS proxy), follow the runbook in [docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md).
+
 ### Services
 
 | Service | Port | Description |
