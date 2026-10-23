@@ -4,13 +4,15 @@ import io
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 import mercantile
 import numpy as np
 from PIL import Image
 import rasterio
+from rasterio.enums import Resampling
+from rasterio.transform import from_bounds
+from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_bounds
-from rasterio.windows import from_bounds
 
 from dta.dti import artifact_files
 
@@ -23,14 +25,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/tiles", tags=["tiles"])
 
 TILE_SIZE = 256
+WEB_MERCATOR = "EPSG:3857"
 
 
-def _png(rgba: np.ndarray) -> StreamingResponse:
-    """An RGBA uint8 array as a PNG response."""
+def _png(rgba: np.ndarray) -> Response:
+    """An RGBA uint8 array as a PNG response.
+
+    One body, not a stream: streaming a ``BytesIO`` sends it line by line, ~1800 chunks a tile.
+    Compression level 1 encodes in a quarter of the default's time for ~13 % more bytes.
+    """
     img_bytes = io.BytesIO()
-    Image.fromarray(rgba, mode="RGBA").save(img_bytes, format="PNG")
-    img_bytes.seek(0)
-    return StreamingResponse(img_bytes, media_type="image/png")
+    Image.fromarray(rgba, mode="RGBA").save(img_bytes, format="PNG", compress_level=1)
+    return Response(img_bytes.getvalue(), media_type="image/png")
 
 
 def _untagged_rgb(data: np.ndarray, valid: np.ndarray, data_type: str) -> np.ndarray:
@@ -46,6 +52,33 @@ def _untagged_rgb(data: np.ndarray, valid: np.ndarray, data_type: str) -> np.nda
     return apply_colormap(stretched.astype(np.uint8), "viridis")
 
 
+def _warped_tile(
+    src: rasterio.DatasetReader, tile: mercantile.Tile, bands: list[int], resampling: Resampling
+) -> np.ndarray:
+    """``bands`` of ``src`` reprojected onto ``tile``'s 256×256 Web Mercator grid, as float32; NaN off the raster
+    and where a band is nodata (each band's own nodata, so one band's nodata never blends into its neighbours)."""
+    bounds = mercantile.xy_bounds(tile)
+    with WarpedVRT(
+        src,
+        crs=WEB_MERCATOR,
+        transform=from_bounds(bounds.left, bounds.bottom, bounds.right, bounds.top, TILE_SIZE, TILE_SIZE),
+        width=TILE_SIZE,
+        height=TILE_SIZE,
+        resampling=resampling,
+        dtype="float32",
+        nodata=np.nan,
+        UNIFIED_SRC_NODATA="NO",
+    ) as vrt:
+        return np.asarray(vrt.read(bands))
+
+
+def _overlaps(src: rasterio.DatasetReader, tile: mercantile.Tile) -> bool:
+    """Whether ``tile`` meets the raster's Web Mercator bounding box."""
+    west, south, east, north = transform_bounds(src.crs, WEB_MERCATOR, *src.bounds, densify_pts=21)
+    b = mercantile.xy_bounds(tile)
+    return bool(b.left < east and b.right > west and b.bottom < north and b.top > south)
+
+
 @router.get(  # type: ignore[misc]
     "/{z}/{x}/{y}",
     summary="GeoTIFF map tile",
@@ -57,12 +90,11 @@ async def get_tile(
     y: int,
     session: CurrentSession,
     path: str = Query(..., description="Server path to the GeoTIFF file"),
-) -> StreamingResponse:
-    """Serve a GeoTIFF as an XYZ map tile (PNG); another owner's job artifact or upload is 404."""
+) -> Response:
+    """Serve a GeoTIFF as an XYZ map tile (PNG), reprojected to Web Mercator; another owner's job artifact
+    or upload is 404."""
     try:
-        # Get tile bounds in Web Mercator (EPSG:3857)
         tile = mercantile.Tile(x, y, z)
-        tile_bounds_wgs84 = mercantile.bounds(tile)
 
         # Open GeoTIFF
         file_path = resolve_served_path(path)
@@ -72,39 +104,21 @@ async def get_tile(
         data_type = detect_data_type(file_path.name)
 
         with rasterio.open(str(file_path)) as src:
-            # Transform tile bounds from WGS84 to source CRS
-            src_bounds = transform_bounds(
-                "EPSG:4326",
-                src.crs,
-                tile_bounds_wgs84.west,
-                tile_bounds_wgs84.south,
-                tile_bounds_wgs84.east,
-                tile_bounds_wgs84.north,
-            )
-
-            # Read window from GeoTIFF
-            window = from_bounds(*src_bounds, src.transform)
-
-            # Tile pixels whose centre lies on the raster; the rest stays transparent.
-            cols = window.col_off + (np.arange(TILE_SIZE) + 0.5) * window.width / TILE_SIZE
-            rows = window.row_off + (np.arange(TILE_SIZE) + 0.5) * window.height / TILE_SIZE
-            inside = ((rows >= 0) & (rows < src.height))[:, None] & ((cols >= 0) & (cols < src.width))[None, :]
-            if not inside.any():
+            style = artifact_files.read_style(src.tags())
+            if not _overlaps(src, tile):
                 return _png(np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype=np.uint8))
 
-            # Boundless: the part of the window off the raster is filled, not stretched over the tile.
             bands = [1, 2, 3] if src.count >= 3 else [1]
-            read = src.read(
-                bands, window=window, out_shape=(len(bands), TILE_SIZE, TILE_SIZE), boundless=True, masked=True
-            )
-            data = np.ma.filled(read.astype(np.float64), np.nan)
-            valid = inside & ~np.ma.getmaskarray(read).any(axis=0) & np.isfinite(data).all(axis=0)
+            # Class values must not blend into in-between values; everything else is continuous.
+            is_class = style is not None and style["kind"] == "class"
+            resampling = Resampling.nearest if is_class else Resampling.bilinear
+            data = _warped_tile(src, tile, bands, resampling).astype(np.float64)
+            valid = np.isfinite(data).all(axis=0)
             if not valid.any():
                 return _png(np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype=np.uint8))
 
             rgba = np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype=np.uint8)
             rgba[..., 3] = np.where(valid, 255, 0)
-            style = artifact_files.read_style(src.tags())
             if src.count >= 3:
                 # RGB data: the first 3 bands, 2-98 % stretch unless already 8-bit
                 rgb = np.transpose(data, (1, 2, 0))  # CHW to HWC
