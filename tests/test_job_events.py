@@ -1,4 +1,4 @@
-"""Job event log: the events a job emits (v0.6.0 story "Job event stream").
+"""Job event stream: ``GET /v1/jobs/{id}/events`` (v0.6.0 story "Job event stream").
 
 The jobs run the real orchestrator with every LLM provider down (Ollama on a
 closed port, API keys removed), so the hybrid-deterministic fallbacks make the
@@ -8,14 +8,16 @@ plan and the event sequence deterministic.
 import asyncio
 from collections.abc import AsyncIterator, Iterator
 import functools
+import json
 import os
 from pathlib import Path
 import sqlite3
 import threading
 import time
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 import rasterio
 
@@ -25,8 +27,10 @@ from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.executor import ExecutionError, MissingInputError, PipelineExecutor
 from dta.dti.raster import describe_raster
 from dta.dti.schemas import PlanStep
+from server import jobs as jobs_mod
 from server.job_events import KEEPALIVE_FRAME, classify_failure, done_summary, sse_event_frame
 from server.jobs import Job, JobQueue, JobStatus, SQLiteJobStore
+from server.routes import jobs as job_routes
 
 SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
 SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
@@ -82,6 +86,25 @@ async def _collect(q: JobQueue, job_id: str, after: int = 0, timeout: float = 60
     return events
 
 
+def _parse_sse(body: str) -> list[dict[str, Any]]:
+    """SSE frames back into ``{seq, type, data}``; comments are dropped."""
+    events = []
+    for frame in body.split("\n\n"):
+        fields = dict(line.split(": ", 1) for line in frame.splitlines() if line and not line.startswith(":"))
+        if fields:
+            events.append({"seq": int(fields["id"]), "type": fields["event"], "data": json.loads(fields["data"])})
+    return events
+
+
+@pytest.fixture
+def api(queue: JobQueue, monkeypatch: pytest.MonkeyPatch) -> httpx.AsyncClient:
+    """HTTP client on the app (no lifespan) with ``queue`` as the job queue."""
+    from server.app import app
+
+    monkeypatch.setattr(jobs_mod, "_job_queue", queue)
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+
+
 # --- Wire format ---------------------------------------------------------------
 
 
@@ -91,6 +114,22 @@ def test_sse_frame_format() -> None:
         b'id: 7\nevent: step_started\ndata: {"index":2,"id":"algorithms/ndvi","name":"NDVI \xc2\xb7 1 June"}\n\n'
     )
     assert KEEPALIVE_FRAME == b": keep-alive\n\n"
+
+
+async def test_keepalive_then_terminal_ends_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(job_routes, "KEEPALIVE_S", 0.05)
+    live: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+    owner = MagicMock()
+    backlog = [{"seq": 1, "type": "intent", "data": {"text": "I'll compute NDVI."}}]
+    frames = job_routes._event_frames(owner, "job1", backlog, live)
+
+    assert await anext(frames) == sse_event_frame(backlog[0])
+    assert await anext(frames) == KEEPALIVE_FRAME
+    done = {"seq": 2, "type": "done", "data": {"elapsed_s": 1.0, "summary": "1 step · 1 s"}}
+    live.put_nowait(done)
+    rest = [f async for f in frames if f != KEEPALIVE_FRAME]
+    assert rest == [sse_event_frame(done)]
+    owner.unsubscribe.assert_called_once_with("job1", live)
 
 
 def test_done_summary_collapses_repeats() -> None:
@@ -157,6 +196,43 @@ async def test_ndvi_job_yields_full_ordered_sequence(queue: JobQueue) -> None:
     assert job is not None
     assert job.status == JobStatus.COMPLETED
     assert job.progress == 1.0
+
+
+async def test_replay_after_completion_and_reconnect(queue: JobQueue, api: httpx.AsyncClient, tmp_path: Path) -> None:
+    await queue.start()
+    job_id = await queue.submit_job("calculate NDVI", attachments=[_sample_attachment(SAMPLE_0601)])
+    live = await _collect(queue, job_id)
+    assert live[-1]["type"] == "done"
+
+    async with api:
+        r = await api.get(f"/v1/jobs/{job_id}/events")
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/event-stream")
+        assert r.headers["x-accel-buffering"] == "no"
+        assert r.headers["cache-control"] == "no-cache"
+        assert _parse_sse(r.text) == live
+
+        r = await api.get(f"/v1/jobs/{job_id}/events", headers={"Last-Event-ID": "4"})
+        assert _parse_sse(r.text) == live[4:]
+        r = await api.get(f"/v1/jobs/{job_id}/events", params={"after": 8}, headers={"Last-Event-ID": "2"})
+        assert _parse_sse(r.text) == live[8:]
+        r = await api.get(f"/v1/jobs/{job_id}/events", params={"after": len(live)})
+        assert _parse_sse(r.text) == []
+
+        r = await api.get(f"/v1/jobs/{job_id}")
+        assert r.json()["events"] == live
+        r = await api.get("/v1/jobs")
+        assert all("events" not in j for j in r.json()["jobs"])
+
+        r = await api.get("/v1/jobs/nope/events")
+        assert r.status_code == 404
+
+    # The log is persisted with the job: a new store on the same file (a server restart) replays it.
+    reopened = JobQueue(max_workers=1, store=SQLiteJobStore(tmp_path / "jobs.db"))
+    try:
+        assert await _collect(reopened, job_id) == live
+    finally:
+        await reopened.stop()
 
 
 async def test_intent_for_change_detection_on_the_sample(queue: JobQueue) -> None:
