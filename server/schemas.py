@@ -235,7 +235,7 @@ class JobRecord(JobSummary):
     """Async job status and results (``GET /v1/jobs/{id}``)."""
 
     result: dict[str, Any] | None = Field(
-        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats}"
+        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats, size_bytes}"
     )
     events: list[dict[str, Any]] = Field(
         default_factory=list,

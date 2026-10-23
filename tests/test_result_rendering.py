@@ -86,7 +86,7 @@ def _scene(path: Path, height: int = 40, width: int = 100) -> str:
 
 
 def _open_bare(ref: dict) -> np.ndarray:
-    assert ref["kind"] == "png" and set(ref) == {"kind", "path", "url", "stats"}
+    assert ref["kind"] == "png" and set(ref) == {"kind", "path", "url", "stats", "size_bytes"}
     img = Image.open(ref["path"])
     assert img.mode == "RGBA"
     assert img.size == (ref["stats"]["width"], ref["stats"]["height"])
