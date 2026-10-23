@@ -499,7 +499,7 @@ async def test_periodic_cleanup_runs_in_the_lifespan(monkeypatch: pytest.MonkeyP
     async def fake_run(queue: JobQueue) -> None:
         calls.append(queue)
 
-    monkeypatch.setattr(app_mod, "CLEANUP_INTERVAL_S", 0.01)
+    monkeypatch.setattr(app_mod, "cleanup_interval_s", lambda: 0.01)
     monkeypatch.setattr(app_mod, "run_cleanup", fake_run)
     queue = JobQueue(max_workers=1, store=MemoryJobStore())
     task = asyncio.create_task(app_mod._cleanup_periodically(queue))
@@ -507,6 +507,17 @@ async def test_periodic_cleanup_runs_in_the_lifespan(monkeypatch: pytest.MonkeyP
     task.cancel()
     queue._thread_pool.shutdown(wait=False)
     assert len(calls) >= 2
+
+
+def test_cleanup_interval_is_hourly_unless_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GUEST_CLEANUP_MINUTES", raising=False)
+    assert app_mod.cleanup_interval_s() == 3600.0
+    monkeypatch.setenv("GUEST_CLEANUP_MINUTES", "15")
+    assert app_mod.cleanup_interval_s() == 900.0
+    monkeypatch.setenv("GUEST_CLEANUP_MINUTES", "0")  # never a busy loop
+    assert app_mod.cleanup_interval_s() == 60.0
+    monkeypatch.setenv("GUEST_CLEANUP_MINUTES", "soon")
+    assert app_mod.cleanup_interval_s() == 3600.0
 
 
 @pytest.mark.asyncio
