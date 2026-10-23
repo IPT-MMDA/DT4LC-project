@@ -12,6 +12,9 @@ const GITHUB = 'https://github.com/IPT-MMDA/DT4LC-project';
 // The JOSS paper is in review and has no DOI yet: link its source in the repository.
 const PAPER = `${GITHUB}/blob/master/paper.md`;
 const HERO = '/landing/kakhovka_water_change_06-01_to_06-09';
+// The caption's figure is the bundled crop's; the hero shows the full scene (DESIGN §8).
+const FULL_SCENE =
+  'Computed by the app on the bundled 768 × 768 px crop. The full scene in this image shows more: +428 km² of water gained and 43 km² lost (ΔNDWI > 0.3).';
 
 const TIERS = [
   {
@@ -100,9 +103,16 @@ function Hero() {
           </Link>
         </div>
       </div>
-      {/* The sample's computed NDWI change (+157 km²), not the design's +428 km² (DESIGN §8). */}
+      {/* The bundled crop's NDWI change as the app computes it (+157 km², DESIGN §8); the full scene in the image differs. */}
       <div data-testid="landing-caption" className="absolute left-[80px] bottom-6 flex items-center gap-3 font-mono text-[12.5px] text-[rgba(255,255,255,.85)]">
-        <span>Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach · NASA HLS L30</span>
+        <span>
+          Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach{' '}
+          <span data-testid="landing-caption-crop" title={FULL_SCENE} className="underline decoration-dotted underline-offset-2 cursor-help">
+            (bundled crop)
+          </span>{' '}
+          · NASA HLS L30
+          <span className="sr-only">. {FULL_SCENE}</span>
+        </span>
         <span className="flex items-center gap-[5px]">
           <span className="w-[10px] h-[10px] rounded-[2px] bg-legend-gained" />
           gained

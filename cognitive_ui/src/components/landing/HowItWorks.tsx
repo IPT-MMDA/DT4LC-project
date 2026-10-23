@@ -21,8 +21,8 @@ const STEPS: { step: Exclude<DemoStep, 0>; title: string; text: string }[] = [
   },
 ];
 
-// The sample's own NDWI change result (src/test/fixtures/jobs/ndwi-change.json,
-// stats.water), in the result card's km² format: not the design's +428 km² (DESIGN §8).
+// The bundled crop's own NDWI change result (src/test/fixtures/jobs/ndwi-change.json,
+// stats.water), in the result card's km² format: not the full scene's +428 km² (DESIGN §8).
 const WATER = { before: '13.9 km²', after: '170 km²', gained: '+157 km²' };
 
 const Monogram = ({ size }: { size: 20 | 22 }) => (
@@ -178,7 +178,7 @@ function Demo({ demo }: { demo: ReturnType<typeof useDemo> }) {
               </div>
             </div>
             <div data-anim="interp" className="leading-[1.55] text-[13.5px]">
-              Open water in the floodplain grew from 13.9 to 170 km² in eight days: 157 km² gained below the dam.
+              On the bundled crop, open water grew from 13.9 to 170 km² in eight days: 157 km² gained, 0.6 km² lost.
             </div>
             <div data-anim="follow" className="flex flex-wrap gap-[6px]">
               {['Zoom to the largest change', 'Classify the exposed bed', 'Export GeoTIFF'].map((text) => (

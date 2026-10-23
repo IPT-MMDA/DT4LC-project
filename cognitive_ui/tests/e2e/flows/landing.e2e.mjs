@@ -71,8 +71,10 @@ test('a first-time guest sees hero B at /', guest, async () => {
     await page.getByText('Digital Twin for Land Cover · open-source research software').waitFor();
     assert.match(
       await page.getByTestId('landing-caption').innerText(),
-      /^Example · Lower Dnipro, 1 → 9 June 2023 · \+157 km² of water after the Kakhovka dam breach · NASA HLS L30/,
+      /^Example · Lower Dnipro, 1 → 9 June 2023 · \+157 km² of water after the Kakhovka dam breach \(bundled crop\) · NASA HLS L30/,
     );
+    // The figure is the crop's; the hero image is the full scene, which shows more (DESIGN §8).
+    assert.match(await page.getByTestId('landing-caption-crop').getAttribute('title'), /The full scene in this image shows more/);
     const hero = page.getByRole('img', { name: 'Water change layer over the lower Dnipro' });
     assert.match(await hero.evaluate((img) => img.currentSrc), /kakhovka_water_change_06-01_to_06-09_1920\.jpg$/);
     // The headline has settled; the image keeps drifting.

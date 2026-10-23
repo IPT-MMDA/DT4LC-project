@@ -106,15 +106,19 @@ describe('Landing', () => {
     return screen.findByTestId('landing');
   }
 
-  it('hero B: headline, both buttons as real links, the caption with the sample figure', async () => {
+  it("hero B: headline, both buttons as real links, the caption with the bundled crop's figure", async () => {
     await openLanding();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('What changed on the ground?Ask in plain language.');
     expect(screen.getByText('Digital Twin for Land Cover · open-source research software')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Try with the Kakhovka sample' }).getAttribute('href')).toBe('/app?sample=1');
     expect(screen.getByRole('link', { name: 'Describe your own analysis' }).getAttribute('href')).toBe('/app?sample=0');
     expect(screen.getByTestId('landing-caption').textContent).toContain(
-      'Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach · NASA HLS L30',
+      'Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach (bundled crop) · NASA HLS L30',
     );
+    // The full scene in the hero differs (DESIGN §8): a tooltip on "(bundled crop)", read out to screen readers.
+    const crop = screen.getByTestId('landing-caption-crop');
+    expect(crop.getAttribute('title')).toMatch(/^Computed by the app on the bundled 768 × 768 px crop\. The full scene in this image shows more: \+428 km²/);
+    expect(screen.getByTestId('landing-caption').textContent).toContain(`NASA HLS L30. ${crop.getAttribute('title')}`);
     const hero = screen.getByRole('img', { name: 'Water change layer over the lower Dnipro' });
     expect(hero.getAttribute('srcset')).toContain('_960.jpg 960w');
   });
@@ -148,6 +152,16 @@ describe('Landing', () => {
       'https://github.com/IPT-MMDA/DT4LC-project/blob/master/paper.md',
     );
     expect(footer.getByText('Imagery: NASA HLS, Copernicus Sentinel-2')).toBeTruthy();
+  });
+
+  it("the demo quotes the bundled crop's figures, as the app computes them (DESIGN §8)", async () => {
+    await openLanding();
+    const demo = within(screen.getByTestId('landing-demo'));
+    expect(demo.getByText('13.9 km²')).toBeTruthy();
+    expect(demo.getByText('170 km²')).toBeTruthy();
+    expect(demo.getByText('+157 km²')).toBeTruthy();
+    expect(demo.getByText('On the bundled crop, open water grew from 13.9 to 170 km² in eight days: 157 km² gained, 0.6 km² lost.')).toBeTruthy();
+    expect(screen.getByTestId('landing-demo').textContent).not.toMatch(/428|256 km²/);
   });
 
   it('a step button scrubs the demo to that step', async () => {
