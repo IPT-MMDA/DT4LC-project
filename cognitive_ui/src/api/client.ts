@@ -17,6 +17,12 @@ export function artifactUrl(ref: unknown): string | undefined {
   return typeof url === 'string' && url ? url : undefined;
 }
 
+/** An error response: `{ok: false, error: {message}}`, FastAPI's `{detail}`, or a legacy `{error: "..."}`. */
+interface ErrorBody {
+  error?: { message?: string } | string;
+  detail?: string | { msg?: string }[];
+}
+
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -50,11 +56,11 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem('token');
     }
 
-    const data = error.response?.data as any;
+    const data = error.response?.data as ErrorBody | undefined;
     let errorMessage = 'An error occurred';
 
     if (data) {
-      if (data.error && data.error.message) {
+      if (data.error && typeof data.error === 'object' && data.error.message) {
         // New standardized format: {"ok": false, "error": {"message": "..."}}
         errorMessage = data.error.message;
       } else if (data.detail) {

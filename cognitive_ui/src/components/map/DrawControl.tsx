@@ -1,8 +1,10 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { useControl, useMap } from 'react-map-gl/maplibre';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
+import type { IControl } from 'maplibre-gl';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import { useMapColours, type MapColours } from './mapColours';
+import { RECTANGLE_MODE, rectangleMode } from './rectangleMode';
 
 // Styling for drawn features, from the design tokens (see mapColours.ts).
 function drawStyles(c: MapColours) {
@@ -81,14 +83,24 @@ function drawStyles(c: MapColours) {
   ];
 }
 
-interface DrawControlProps {
-  onCreate?: (features: any) => void;
-  onUpdate?: (features: any) => void;
-  onDelete?: (features: any) => void;
+/** A draw.create / draw.update / draw.delete event: the features concerned. */
+export interface DrawFeaturesEvent {
+  features: GeoJSON.Feature[];
 }
 
+type DrawListener = (event: DrawFeaturesEvent) => void;
+
+interface DrawControlProps {
+  onCreate?: DrawListener;
+  onUpdate?: DrawListener;
+  onDelete?: DrawListener;
+}
+
+/** The draw modes the map's toolbar uses: Pan, Polygon, Rectangle. */
+export type DrawToolMode = 'simple_select' | 'draw_polygon' | typeof RECTANGLE_MODE;
+
 export interface DrawControlRef {
-  changeMode: (mode: string) => void;
+  changeMode: (mode: DrawToolMode) => void;
   deleteAll: () => void;
 }
 
@@ -98,31 +110,33 @@ export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
     const colours = useMapColours();
     const { current: mapRef } = useMap();
 
-    useControl<MapboxDraw | any>(
+    useControl<IControl>(
       () => {
-        const instance = new (MapboxDraw as any)({
+        const instance = new MapboxDraw({
           displayControlsDefault: false,
           controls: {},
           defaultMode: 'simple_select',
           // Configure drawing behavior
           modes: {
             ...MapboxDraw.modes,
+            [RECTANGLE_MODE]: rectangleMode,
           },
           // Styling for drawn features
           styles: drawStyles(colours),
         });
         drawRef.current = instance;
-        return instance as any;
+        // MapboxDraw is typed against mapbox-gl's IControl; MapLibre's has the same shape.
+        return instance as unknown as IControl;
       },
       ({ map }) => {
-        if (onCreate) map.on('draw.create', onCreate as any);
-        if (onUpdate) map.on('draw.update', onUpdate as any);
-        if (onDelete) map.on('draw.delete', onDelete as any);
+        if (onCreate) map.on('draw.create', onCreate);
+        if (onUpdate) map.on('draw.update', onUpdate);
+        if (onDelete) map.on('draw.delete', onDelete);
       },
       ({ map }) => {
-        if (onCreate) map.off('draw.create', onCreate as any);
-        if (onUpdate) map.off('draw.update', onUpdate as any);
-        if (onDelete) map.off('draw.delete', onDelete as any);
+        if (onCreate) map.off('draw.create', onCreate);
+        if (onUpdate) map.off('draw.update', onUpdate);
+        if (onDelete) map.off('draw.delete', onDelete);
       }
     );
 
@@ -142,15 +156,15 @@ export const DrawControl = forwardRef<DrawControlRef, DrawControlProps>(
     }, [mapRef, colours]);
 
     useImperativeHandle(ref, () => ({
-      changeMode: (mode: string) => {
-        if (drawRef.current) {
-          (drawRef.current as any).changeMode(mode);
-        }
+      changeMode: (mode: DrawToolMode) => {
+        const draw = drawRef.current;
+        if (!draw) return;
+        if (mode === 'simple_select') draw.changeMode('simple_select');
+        else if (mode === 'draw_polygon') draw.changeMode('draw_polygon');
+        else draw.changeMode(RECTANGLE_MODE);
       },
       deleteAll: () => {
-        if (drawRef.current) {
-          (drawRef.current as any).deleteAll();
-        }
+        drawRef.current?.deleteAll();
       }
     }));
 

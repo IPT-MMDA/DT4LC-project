@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 
 /** WGS84 [west, south, east, north]. */
 export type LngLatBounds = [number, number, number, number];
@@ -37,8 +38,8 @@ interface AppStore {
   // Map State
   currentBasemap: string;
   mapLayers: Layer[];
-  selectedFeature: any | null;
-  mapInstance: any | null; // MapLibre map instance
+  selectedFeature: GeoJSON.Feature | null;
+  mapInstance: MapLibreMap | null;
   fitRequest: LngLatBounds | null;  // bounds the mounted map should zoom to next
 
   // Map Regions
@@ -75,7 +76,7 @@ interface AppStore {
 
   // Map Actions
   setBasemap: (basemap: string) => void;
-  setMapInstance: (instance: any | null) => void;
+  setMapInstance: (instance: MapLibreMap | null) => void;
   addLayer: (layer: Layer) => void;
   /** Add a result layer, or replace the one with the same id, and zoom the map to it. */
   addResultLayer: (layer: Layer) => void;
@@ -84,7 +85,7 @@ interface AppStore {
   removeLayer: (layerId: string) => void;
   toggleLayerVisibility: (layerId: string) => void;
   setLayerOpacity: (layerId: string, opacity: number) => void;
-  setSelectedFeature: (feature: any | null) => void;
+  setSelectedFeature: (feature: GeoJSON.Feature | null) => void;
 
   // Map Region Actions
   addRegion: (region: DrawnRegion) => void;

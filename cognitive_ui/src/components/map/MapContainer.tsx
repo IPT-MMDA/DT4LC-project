@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react';
 import Map, { MapRef, NavigationControl, ScaleControl, Source, Layer } from 'react-map-gl/maplibre';
+import type { StyleSpecification } from 'maplibre-gl';
 import * as turf from '@turf/turf';
 import { useAppStore } from '../../store/useAppStore';
-import { DrawControl, DrawControlRef } from './DrawControl';
+import { DrawControl, type DrawControlRef, type DrawFeaturesEvent } from './DrawControl';
 import { DrawToolbar } from './DrawToolbar';
 import { LocationQuickAccess } from './LocationQuickAccess';
 import { JobLayersManager } from './JobLayersManager';
@@ -33,13 +34,6 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
   });
   const [drawMode, setDrawMode] = useState<'select' | 'draw' | 'delete'>('select');
 
-  // Set map instance in store when map loads
-  useEffect(() => {
-    if (mapRef.current) {
-      setMapInstance(mapRef.current.getMap());
-    }
-  }, [mapRef.current, setMapInstance]);
-
   // Zoom to a result once the map can (On map, Fit to result): the request outlives a
   // navigation to /app/map, whose map consumes it after loading.
   useEffect(() => {
@@ -63,7 +57,7 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [drawMode]);
 
-  const handleDrawCreate = (event: any) => {
+  const handleDrawCreate = (event: DrawFeaturesEvent) => {
     // Prevent duplicate processing if event fires multiple times
     if (isProcessingDraw.current) {
       console.log('Ignoring duplicate draw.create event');
@@ -137,7 +131,7 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
 
   // Basemap style URLs
   // Using free basemaps that don't require API keys
-  const basemapStyles: Record<string, any> = {
+  const basemapStyles: Record<string, string | StyleSpecification> = {
     streets: 'https://demotiles.maplibre.org/style.json',
     satellite: {
       version: 8,
@@ -171,6 +165,7 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
         onLoad={() => {
+          setMapInstance(mapRef.current?.getMap() ?? null);
           if (docked) collapseAttribution();
           setLoaded(true);
         }}

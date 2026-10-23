@@ -175,8 +175,8 @@ export interface Plan {
   tags: string[];
   goals: string[];
   pipeline: string[];
-  inputs: Record<string, any>;
-  meta: Record<string, any>;
+  inputs: Record<string, unknown>;
+  meta: Record<string, unknown>;
 }
 
 export interface Attachment {
@@ -222,8 +222,8 @@ export interface SessionInfo {
 export interface ExecutionResult {
   ok: boolean;
   plan?: Plan;
-  result?: any;
-  progress?: any[];
+  result?: unknown;
+  progress?: unknown[];
   error?: string;
-  candidate?: any;
+  candidate?: unknown;
 }

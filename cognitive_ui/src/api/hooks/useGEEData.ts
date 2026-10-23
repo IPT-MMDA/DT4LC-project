@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import apiClient from '../client';
+import type { UploadMetadata } from '../../types';
 
 interface FetchSentinel2Request {
   bbox: [number, number, number, number];
@@ -19,7 +20,7 @@ interface Sentinel2Response {
   cloud_cover_max?: number;
   data_type?: string;
   index_type?: string;
-  vis_params?: Record<string, any>;
+  vis_params?: Record<string, unknown>;
   error?: string;
 }
 
@@ -141,7 +142,7 @@ export interface LayerMetadata {
   bands?: string[];
   index_type?: string;
   image_count?: number;
-  vis_params?: Record<string, any>;
+  vis_params?: Record<string, unknown>;
 }
 
 export interface BulkFetchResponse {
@@ -205,7 +206,7 @@ export interface ExportLayerResponse {
     mime_type: string;
     size_bytes: number;
     source: string;
-    metadata: Record<string, any>;
+    metadata: UploadMetadata;
   };
   size_mb: number;
   source?: string;
