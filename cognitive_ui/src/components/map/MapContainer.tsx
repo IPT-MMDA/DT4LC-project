@@ -116,6 +116,12 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
     });
   };
 
+  // Docked, the pane is at most 640 px wide, so MapLibre opens its compact
+  // attribution over the Layers panel. Start it collapsed; (i) still opens it.
+  const collapseAttribution = () => {
+    mapRef.current?.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+  };
+
   // Basemap style URLs
   // Using free basemaps that don't require API keys
   const basemapStyles: Record<string, any> = {
@@ -151,6 +157,7 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onLoad={docked ? collapseAttribution : undefined}
         mapStyle={basemapStyles[currentBasemap] || basemapStyles.streets}
         style={{ width: '100%', height: '100%' }}
       >
