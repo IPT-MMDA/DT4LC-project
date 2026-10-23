@@ -6,7 +6,7 @@ import apiClient from '../../api/client';
 import { AppRoutes } from '../../routes';
 import { useAppStore } from '../../store/useAppStore';
 import { useChatStore } from '../../store/useChatStore';
-import { GUEST_SESSION, OPERATOR_SESSION, SAMPLE } from '../../test/fixtures';
+import { GUEST_SESSION, MEMBER_SESSION, OPERATOR_SESSION, SAMPLE } from '../../test/fixtures';
 import type { SessionInfo } from '../../types';
 
 // jsdom has no WebGL: the map panes render a stand-in.
@@ -23,6 +23,7 @@ function mockApi(session: SessionInfo = GUEST_SESSION) {
   });
   const post = vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
     if (url === '/v1/sample') return SAMPLE as never;
+    if (url === '/v1/auth/logout') return GUEST_SESSION as never;
     throw new Error(`unexpected POST ${url}`);
   });
   return { get, post };
@@ -45,8 +46,7 @@ function LocationProbe() {
   return null;
 }
 
-function renderApp(url: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderApp(url: string, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[url]}>
@@ -225,17 +225,22 @@ describe('routes', () => {
 });
 
 describe('account menu', () => {
-  it('shows the role from GET /v1/session and toggles the theme', async () => {
+  const openMenu = async (name: string) => {
+    fireEvent.click(await screen.findByRole('button', { name }));
+    return screen.getByRole('menu', { name: 'Account' });
+  };
+
+  it('guest without sign-in on the server: the role, the theme, and no sign-in button', async () => {
     mockApi();
     renderApp('/app');
-    fireEvent.click(screen.getByRole('button', { name: 'Account: Guest' }));
+    const menu = await openMenu('Account: Guest');
 
-    const menu = screen.getByRole('menu', { name: 'Account' });
     expect((await within(menu).findByTestId('role-badge')).textContent).toBe('Guest');
     expect(within(menu).queryByRole('menuitem', { name: 'Settings' })).toBeNull();
-    const signIn = within(menu).getByRole('menuitem', { name: /Sign in/ });
-    expect((signIn as HTMLButtonElement).disabled).toBe(true);
-    expect(signIn.textContent).toContain('Coming soon');
+    expect(within(menu).getByTestId('sign-in-unavailable').textContent).toBe('Sign-in not configured on this server');
+    expect(within(menu).queryByRole('menuitem', { name: /Sign in/ })).toBeNull();
+    expect(within(menu).queryByRole('button', { name: /Sign in/ })).toBeNull();
+    expect(within(menu).queryByRole('menuitem', { name: 'Sign out' })).toBeNull();
 
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Dark theme' }));
     expect(useAppStore.getState().theme).toBe('dark');
@@ -248,14 +253,77 @@ describe('account menu', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('offers Settings to operators', async () => {
+  it('guest with sign-in configured: a real link to the GitHub login route', async () => {
+    mockApi({ ...GUEST_SESSION, sign_in: { configured: true } });
+    renderApp('/app');
+    const menu = await openMenu('Account: Guest');
+    const link = await within(menu).findByRole('menuitem', { name: 'Sign in with GitHub' });
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toBe('/v1/auth/github/login');
+    expect(within(menu).queryByTestId('sign-in-unavailable')).toBeNull();
+  });
+
+  it('member: name, login, email and the Member badge; sign out, no Settings', async () => {
+    mockApi(MEMBER_SESSION);
+    renderApp('/app');
+    const button = await screen.findByRole('button', { name: 'Account: Mira Member (Member)' });
+    expect(button.getAttribute('title')).toBe('Mira Member');
+    expect(button.textContent).toBe('M');
+    const menu = await openMenu('Account: Mira Member (Member)');
+    const user = within(menu).getByTestId('account-user');
+    expect(user.textContent).toContain('Mira Member');
+    expect(user.textContent).toContain('@mira');
+    expect(user.textContent).toContain('mira@unige.ch');
+    expect(within(menu).getByTestId('role-badge').textContent).toBe('Member');
+    expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeTruthy();
+    expect(within(menu).queryByRole('menuitem', { name: 'Settings' })).toBeNull();
+    expect(within(menu).queryByRole('menuitem', { name: /Sign in/ })).toBeNull();
+    expect(within(menu).queryByTestId('sign-in-unavailable')).toBeNull();
+  });
+
+  it('a user without a name: the login stands in', async () => {
+    mockApi({ ...MEMBER_SESSION, user: { ...MEMBER_SESSION.user!, name: null } });
+    renderApp('/app');
+    expect(await screen.findByRole('button', { name: 'Account: mira (Member)' })).toBeTruthy();
+  });
+
+  it('operator: Settings opens /app/settings', async () => {
     mockApi(OPERATOR_SESSION);
     renderApp('/app');
-    fireEvent.click(await screen.findByRole('button', { name: 'Account: Operator' }));
-    const menu = screen.getByRole('menu', { name: 'Account' });
+    const menu = await openMenu('Account: Oscar Operator (Operator)');
     expect(within(menu).getByTestId('role-badge').textContent).toBe('Operator');
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Settings' }));
     expect(location.current).toBe('/app/settings');
+  });
+
+  it('Sign out: POST /v1/auth/logout, refetch session, capabilities, jobs and files, then go to /', async () => {
+    const { get, post } = mockApi(MEMBER_SESSION);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    renderApp('/app/library', client);
+    const menu = await openMenu('Account: Mira Member (Member)');
+    get.mockImplementation(async (url: string) => {
+      if (url === '/v1/session') return GUEST_SESSION as never;
+      if (url === '/v1/health') return HEALTH as never;
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Sign out' }));
+    await waitFor(() => expect(location.current).toBe('/'));
+    expect(post).toHaveBeenCalledWith('/v1/auth/logout');
+    const keys = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+    for (const key of [['session'], ['capabilities'], ['jobs'], ['files']]) expect(keys).toContain(JSON.stringify(key));
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('a failed sign-out says so and keeps the user', async () => {
+    const { post } = mockApi(MEMBER_SESSION);
+    post.mockRejectedValue(new Error('offline'));
+    renderApp('/app');
+    const menu = await openMenu('Account: Mira Member (Member)');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Sign out' }));
+    expect((await within(menu).findByRole('alert')).textContent).toBe('Could not sign out — try again.');
+    expect(location.current).toBe('/app');
   });
 
   it('the rail theme button toggles the theme too', () => {
@@ -290,5 +358,40 @@ describe('?sample=1', () => {
     await act(async () => {});
     expect(post).not.toHaveBeenCalled();
     expect(screen.queryByTestId('attachment-chip')).toBeNull();
+  });
+});
+
+describe('sign-in notices (?signin= from the callback)', () => {
+  it('not on the allowlist: a dismissible notice, and the params leave the URL', async () => {
+    mockApi();
+    renderApp('/app?signin=denied&reason=not_allowlisted&email=olga%40outside.e2e');
+    const notice = await screen.findByTestId('signin-notice');
+    expect(notice.textContent).toContain('olga@outside.e2e is not on the allowlist for this server');
+    expect(notice.getAttribute('data-tone')).toBe('denied');
+    await waitFor(() => expect(location.current).toBe('/app'));
+    expect(screen.getByTestId('signin-notice')).toBeTruthy();
+
+    fireEvent.click(within(notice).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByTestId('signin-notice')).toBeNull();
+  });
+
+  it('unverified email and failure; other params stay', async () => {
+    mockApi();
+    renderApp('/app?signin=denied&reason=email_unverified');
+    expect((await screen.findByTestId('signin-notice')).textContent).toContain('Your primary GitHub email is not verified');
+    await waitFor(() => expect(location.current).toBe('/app'));
+    cleanup();
+
+    renderApp('/app/capabilities?signin=error&keep=1');
+    const notice = await screen.findByTestId('signin-notice');
+    expect(notice.textContent).toContain('Sign-in failed — try again');
+    expect(notice.getAttribute('data-tone')).toBe('error');
+    await waitFor(() => expect(location.current).toBe('/app/capabilities?keep=1'));
+  });
+
+  it('no notice without signin', () => {
+    mockApi();
+    renderApp('/app');
+    expect(screen.queryByTestId('signin-notice')).toBeNull();
   });
 });

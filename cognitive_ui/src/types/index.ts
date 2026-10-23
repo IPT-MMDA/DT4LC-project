@@ -207,9 +207,20 @@ export interface HealthResponse {
 }
 
 /** GET /v1/session: the caller's role, guest quota and retention (docs/API.md). */
+/** The signed-in GitHub account of GET /v1/session; null for a guest. */
+export interface SessionUser {
+  id: string;  // github:<numeric id>
+  login: string;
+  name: string | null;
+  email: string;
+  avatar_url: string | null;
+}
+
 export interface SessionInfo {
   role: 'guest' | 'member' | 'operator';
   guest: boolean;
+  user: SessionUser | null;
+  sign_in: { configured: boolean };  // GitHub sign-in is set up on this server
   analyses: {
     limit: number | null;  // null: no limit (members, operators)
     used: number;

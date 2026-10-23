@@ -24,6 +24,8 @@ export const SAMPLE: SampleResponse = {
 export const GUEST_SESSION: SessionInfo = {
   role: 'guest',
   guest: true,
+  user: null,
+  sign_in: { configured: false },
   analyses: { limit: 5, used: 1, remaining: 4, resets_at: '2026-10-23T06:58:27+00:00' },
   kept_hours: 24,
   expires_at: '2026-10-24T05:58:02+00:00',
@@ -33,10 +35,16 @@ export const GUEST_SESSION: SessionInfo = {
 export const MEMBER_SESSION: SessionInfo = {
   role: 'member',
   guest: false,
+  user: { id: 'github:1001', login: 'mira', name: 'Mira Member', email: 'mira@unige.ch', avatar_url: null },
+  sign_in: { configured: true },
   analyses: { limit: null, used: 0, remaining: null, resets_at: null },
   kept_hours: null,
   expires_at: '2026-10-24T06:00:18+00:00',
   can_download_models: true,
 };
 
-export const OPERATOR_SESSION: SessionInfo = { ...MEMBER_SESSION, role: 'operator' };
+export const OPERATOR_SESSION: SessionInfo = {
+  ...MEMBER_SESSION,
+  role: 'operator',
+  user: { id: 'github:1002', login: 'oscar', name: 'Oscar Operator', email: 'oscar@unige.ch', avatar_url: null },
+};
