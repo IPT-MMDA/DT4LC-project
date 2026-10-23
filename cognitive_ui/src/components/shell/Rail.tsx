@@ -11,11 +11,11 @@ interface RailItem {
   isActive: (pathname: string) => boolean;
 }
 
-// The four destinations of design/DESIGN.md section 1. A result opens in the Workspace.
+// The four destinations of design/DESIGN.md section 1. Result detail is under the Library (its breadcrumb).
 const ITEMS: RailItem[] = [
-  { to: '/app', label: 'Chat', icon: MessageSquare, isActive: (p) => p === '/app' || p.startsWith('/app/results') },
+  { to: '/app', label: 'Chat', icon: MessageSquare, isActive: (p) => p === '/app' },
   { to: '/app/map', label: 'Map', icon: MapIcon, isActive: (p) => p.startsWith('/app/map') },
-  { to: '/app/library', label: 'Library', icon: Library, isActive: (p) => p.startsWith('/app/library') },
+  { to: '/app/library', label: 'Library', icon: Library, isActive: (p) => p.startsWith('/app/library') || p.startsWith('/app/results') },
   { to: '/app/capabilities', label: 'Can do', icon: LayoutGrid, isActive: (p) => p.startsWith('/app/capabilities') },
 ];
 

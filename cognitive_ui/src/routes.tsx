@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { useSession } from './api/hooks/useSession';
 import { landingDecision } from './components/landing/landingDecision';
 import { Shell } from './components/shell/Shell';
@@ -8,8 +7,9 @@ import { Landing } from './pages/Landing';
 import { Library } from './pages/Library';
 import { MapPage } from './pages/MapPage';
 import { Placeholder } from './pages/Placeholder';
+import { ResultDetail } from './pages/ResultDetail';
 import { Workspace } from './pages/Workspace';
-import { findConversationByJobId, useChatStore } from './store/useChatStore';
+import { useChatStore } from './store/useChatStore';
 
 /** Redirect that keeps the query string, e.g. `/?sample=1` to `/app?sample=1`. */
 function RedirectTo({ to }: { to: string }) {
@@ -21,25 +21,6 @@ function RedirectTo({ to }: { to: string }) {
 function LegacyJobRedirect() {
   const { jobId } = useParams();
   return <RedirectTo to={`/app/results/${jobId}`} />;
-}
-
-/**
- * `/app/results/:id`: until the result page exists (Phase 4), open the Workspace
- * conversation that holds the job, or the placeholder when this browser has none.
- */
-function ResultRoute() {
-  const { id = '' } = useParams();
-  const navigate = useNavigate();
-  const conversation = useChatStore((state) => findConversationByJobId(state.conversations, id));
-  const selectConversation = useChatStore((state) => state.selectConversation);
-
-  useEffect(() => {
-    if (!conversation) return;
-    selectConversation(conversation.id);
-    navigate('/app', { replace: true });
-  }, [conversation, selectConversation, navigate]);
-
-  return conversation ? null : <Placeholder title="Result" />;
 }
 
 /**
@@ -80,7 +61,7 @@ export function AppRoutes() {
         <Route path="map" element={<MapPage />} />
         <Route path="library" element={<Library />} />
         <Route path="capabilities" element={<Capabilities />} />
-        <Route path="results/:id" element={<ResultRoute />} />
+        <Route path="results/:id" element={<ResultDetail />} />
         <Route path="settings" element={<SettingsRoute />} />
         <Route path="*" element={<Navigate to="/app" replace />} />
       </Route>
