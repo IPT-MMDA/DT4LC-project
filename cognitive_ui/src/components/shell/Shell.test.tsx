@@ -115,7 +115,7 @@ describe('Workspace shell', () => {
       text: 'Kakhovka reservoir — water change after breach',
       attachments: [{ id: 's', filename: 'a.tif', path: '/u/a.tif', group: { name: 'kakhovka_hls_l30', line: '' } }],
     });
-    store.addMessage({ kind: 'analysis', jobId: 'job-1', status: 'done', text: '', events: [] });
+    store.addMessage({ kind: 'analysis', jobId: 'job-1', status: 'done', text: '', events: [], result: { card: 'change' } });
     renderApp('/app');
 
     const list = screen.getByRole('complementary', { name: 'Conversations' });

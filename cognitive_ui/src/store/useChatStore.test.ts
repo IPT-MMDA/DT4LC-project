@@ -190,7 +190,7 @@ describe('the sample pair in the composer', () => {
 });
 
 describe('conversationMeta', () => {
-  it('counts a group once and finished analyses as results', async () => {
+  it('counts a group once and finished analyses that show a card as results', async () => {
     const store = await loadFreshStore();
     const group = { name: 'kakhovka_hls_l30', line: '' };
     const { conversationId } = store.getState().addMessage({
@@ -207,9 +207,12 @@ describe('conversationMeta', () => {
     store.getState().addMessage(analysis('job-1'));
     store.getState().addMessage(analysis('job-2'));
     store.getState().updateAnalysis('job-1', { status: 'done' });
+    // Done, but its result card isn't known yet (or it has none).
+    expect(conversationMeta(conversation())).toBe('1 file');
+    store.getState().updateAnalysis('job-1', { result: { card: 'change' } });
     expect(conversationMeta(conversation())).toBe('1 file · 1 result');
 
-    store.getState().updateAnalysis('job-2', { status: 'done' });
+    store.getState().updateAnalysis('job-2', { status: 'done', result: { card: 'index' } });
     store.getState().addMessage({ kind: 'user', text: 'and this', attachments: [{ id: 'c', filename: 'c.tif', path: '/u/c.tif' }] });
     expect(conversationMeta(conversation())).toBe('2 files · 2 results');
   });

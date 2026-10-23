@@ -13,18 +13,21 @@ import { Avatar } from '../Avatar';
 import { analysisReducer, isTerminal, type AnalysisView, type Fix, type StepRow } from './analysisReducer';
 import { downloadLine, formatDuration } from './format';
 import { changeDraft, EXPLAIN_PROPOSAL } from './proposal';
-import { ResultSlot } from './ResultSlot';
+import { ResultCard } from '../result/ResultCard';
+import type { AnalysedContext } from '../result/resultModel';
 import { StatusGlyph, StatusPill, type PillStatus } from './StatusPill';
 
 // One assistant message narrates one analysis (DESIGN §4): intent, proposal with
 // Run · Change · Explain, the Planning skeleton, the running timeline with Cancel,
-// then the collapsed Done line with the result slot, interpretation and follow-ups,
+// then the collapsed Done line with the result card, interpretation and follow-ups,
 // or the open Failed timeline with its fixes.
 
 export interface AnalysisMessageProps {
   message: AnalysisMessageData;
   /** The user message that started the analysis: what `retry` and `sample` resend. */
   prompt: string;
+  /** The files or region the analysis was asked about: the result card's source, dates and bounds. */
+  context?: AnalysedContext;
   onSend: (text: string, options?: { params?: Record<string, unknown> }) => void;
   onOpenFilePicker: () => void;
 }
@@ -69,7 +72,7 @@ function ProposalText({ text }: { text: string }) {
   );
 }
 
-/** The result card's title until F4: the analysis steps, e.g. "Change Detection · NDWI". */
+/** The title of a result card of no known kind: the analysis steps, e.g. "Prithvi Reconstruction". */
 function resultTitle(view: AnalysisView): string {
   const names = view.steps.filter((s) => s.kind === 'algorithm' || s.kind === 'model').map((s) => s.name);
   return names.join(' → ') || 'Result';
@@ -257,7 +260,9 @@ function Timeline({
   );
 }
 
-export function AnalysisMessage({ message, prompt, onSend, onOpenFilePicker }: AnalysisMessageProps) {
+const NO_CONTEXT: AnalysedContext = { attachments: [] };
+
+export function AnalysisMessage({ message, prompt, context = NO_CONTEXT, onSend, onOpenFilePicker }: AnalysisMessageProps) {
   const view = useMemo(() => analysisReducer(message.events), [message.events]);
   const terminal = isTerminal(view);
   useJobEvents(message.jobId, terminal || Boolean(message.error));
@@ -344,7 +349,7 @@ export function AnalysisMessage({ message, prompt, onSend, onOpenFilePicker }: A
               )}
             </div>
             {showSteps && <Timeline view={view} now={now} header={false} />}
-            <ResultSlot jobId={message.jobId} title={resultTitle(view)} />
+            <ResultCard jobId={message.jobId} context={context} fallbackTitle={resultTitle(view)} />
             {message.result?.summary && (
               <p className="text-body" data-testid="interpretation">
                 {message.result.summary}
