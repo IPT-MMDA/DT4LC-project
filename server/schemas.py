@@ -216,6 +216,27 @@ class JobStatus(BaseModel):  # type: ignore[misc]
 # --- Jobs ---
 
 
+class JobCardAnalysis(BaseModel):  # type: ignore[misc]
+    id: str = Field(description="Registry id of the main analysis step, e.g. 'algorithms/change-detection'")
+    label: str = Field(description="e.g. 'Change detection', 'Band math', 'Statistics', 'Delineate-Anything'")
+
+
+class JobCardError(BaseModel):  # type: ignore[misc]
+    code: str = Field(description="The failed event's code, e.g. 'EE_NOT_CONFIGURED'")
+    message: str
+
+
+class JobCard(BaseModel):  # type: ignore[misc]
+    """A Library row without the result (server/library.py), stored when the job reaches a terminal state."""
+
+    title: str = Field(description="e.g. 'Water change · NDWI difference', 'NDVI · 2023-06-01'")
+    analysis: JobCardAnalysis | None = None
+    kind: Literal["change", "index", "classification", "fields", "statistics", "composed", "image"] | None = None
+    thumbnail_url: str | None = Field(None, description="Download URL of the main map-only PNG (*_bare)")
+    duration_s: float | None = Field(None, description="completed_at - started_at, seconds")
+    error: JobCardError | None = Field(None, description="Failed jobs: the failed event's code and message")
+
+
 class JobSummary(BaseModel):  # type: ignore[misc]
     """Async job status without results (``GET /v1/jobs`` list item)."""
 
@@ -229,6 +250,9 @@ class JobSummary(BaseModel):  # type: ignore[misc]
     started_at: str | None = None
     completed_at: str | None = None
     owner: str | None = Field(default=None, description="Submitter's session id; null for jobs from before v0.6.0")
+    card: JobCard | None = Field(
+        default=None, description="Library row summary once the job is finished; null before, and for older jobs"
+    )
 
 
 class JobRecord(JobSummary):
