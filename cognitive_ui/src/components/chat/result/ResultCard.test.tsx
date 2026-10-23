@@ -72,7 +72,7 @@ describe('change card (NDWI on the sample)', () => {
     expect(card.dataset.kind).toBe('change');
     // The bare map, full-bleed.
     const image = screen.getByTestId('result-image');
-    expect(image.getAttribute('src')).toMatch(/^\/v1\/download\?path=.*change_map_bare\.png$/);
+    expect(image.getAttribute('src')).toMatch(/^\/v1\/download\?path=.*change_map_bare\.png&name=water-change_ndwi_2023-06-01_2023-06-09_map\.png$/);
     expect(image.className).toContain('object-cover');
     expect(screen.getByTestId('image-overlay').textContent).toBe('difference · 06-01 → 06-09');
     const legend = screen.getByTestId('legend');
@@ -98,25 +98,31 @@ describe('change card (NDWI on the sample)', () => {
 
     fireEvent.click(toggle.getByRole('button', { name: 'Before' }));
     expect(pressed()).toEqual([['Difference', 'false'], ['Before', 'true'], ['After', 'false']]);
-    expect(screen.getByTestId('result-image').getAttribute('src')).toMatch(/ndwi_before_bare\.png$/);
+    expect(screen.getByTestId('result-image').getAttribute('src')).toMatch(/ndwi_before_bare\.png&name=ndwi_2023-06-01_map\.png$/);
     expect(screen.getByTestId('image-overlay').textContent).toBe('NDWI before · 2023-06-01');
-    expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/index_before\.tif$/);
+    expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/index_before\.tif&name=ndwi_2023-06-01\.tif$/);
+    expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('download')).toBe('ndwi_2023-06-01.tif');
     // PNG is still the full figure, with its title and colour bar.
-    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/ndwi_before\.png$/);
+    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/ndwi_before\.png&name=ndwi_2023-06-01\.png$/);
 
     fireEvent.click(toggle.getByRole('button', { name: 'After' }));
     expect(screen.getByTestId('image-overlay').textContent).toBe('NDWI after · 2023-06-09');
 
     fireEvent.click(toggle.getByRole('button', { name: 'Difference' }));
     expect(screen.getByTestId('image-overlay').textContent).toBe('difference · 06-01 → 06-09');
-    expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/2_ChangeMap_change\.tif$/);
+    expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/2_ChangeMap_change\.tif&name=water-change_ndwi_2023-06-01_2023-06-09\.tif$/);
   });
 
   it('offers On map, GeoTIFF, PNG and Details, with download links and no GeoPackage for a raster', () => {
     renderCard(ndwiChange);
     expect(actionNames()).toEqual(['● On map', 'GeoTIFF', 'PNG', 'Details ›']);
     expect(actions().queryByRole('link', { name: 'GeoPackage' })).toBeNull();
-    for (const name of ['GeoTIFF', 'PNG']) expect(actions().getByRole('link', { name }).hasAttribute('download')).toBe(true);
+    // Saved under the readable download_name, which the tooltip shows too.
+    expect(['GeoTIFF', 'PNG'].map((name) => actions().getByRole('link', { name }).getAttribute('download'))).toEqual([
+      'water-change_ndwi_2023-06-01_2023-06-09.tif',
+      'water-change_ndwi_2023-06-01_2023-06-09.png',
+    ]);
+    expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('title')).toBe('water-change_ndwi_2023-06-01_2023-06-09.tif');
     expect(actions().getByRole('link', { name: 'Details ›' }).getAttribute('href')).toBe('/app/results/job-1');
   });
 
@@ -179,13 +185,15 @@ describe('older jobs and fallbacks', () => {
     const swatches = [...screen.getByTestId('legend').querySelectorAll<HTMLElement>('[aria-hidden]')];
     expect(swatches.map((el) => el.className.match(/bg-legend-\S+/)?.[0])).toEqual(['bg-legend-gained', 'bg-legend-lost', 'bg-legend-no-change']);
     expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/2_ChangeMap_change_map\.png$/);
+    // No download_name on an older job: the stored name.
+    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('download')).toBe('2_ChangeMap_change_map.png');
   });
 
   it('PNG offers the bare map when there is no full figure', () => {
     const job = structuredClone(ndwiChange) as unknown as { result: { execution: { artifacts: { ChangeMap: { visualizations: Record<string, unknown> } } } } };
     delete job.result.execution.artifacts.ChangeMap.visualizations.change_map;
     renderCard(job);
-    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/change_map_bare\.png$/);
+    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/change_map_bare\.png&name=water-change_ndwi_2023-06-01_2023-06-09_map\.png$/);
   });
 });
 

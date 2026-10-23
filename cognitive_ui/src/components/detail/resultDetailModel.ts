@@ -5,7 +5,7 @@ import type { Attachment, ChatRegion, MessageAttachment } from '../../types';
 import type { PillStatus } from '../chat/analysis/StatusPill';
 import { analysisReducer, type AnalysisView, type StepStatus } from '../chat/analysis/analysisReducer';
 import { formatDuration } from '../chat/analysis/format';
-import { asRef, prettyFormula, type AnalysedContext, type ArtifactRef, type BandRow, type ResultCardModel, type Stat } from '../chat/result/resultModel';
+import { asRef, downloadName, prettyFormula, type AnalysedContext, type ArtifactRef, type BandRow, type ResultCardModel, type Stat } from '../chat/result/resultModel';
 import { formatRunTime } from '../library/libraryModel';
 
 // Result detail (design/screens/result-detail.png) from GET /v1/jobs/{id}: the plan
@@ -302,7 +302,7 @@ export function statisticsTable(job: Pick<JobRecord, 'result'>, model: ResultCar
 // --- Downloads ----------------------------------------------------------------------
 
 export interface DownloadItem {
-  name: string;  // the file name, e.g. "2_ChangeMap_change.tif"
+  name: string;  // the download's file name, e.g. "water-change_ndwi_2023-06-01_2023-06-09.tif"
   detail: string;  // "GeoTIFF · 2.0 MB"
   url: string;
 }
@@ -317,8 +317,6 @@ export function formatBytes(bytes: number | null | undefined): string {
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
-
-const baseName = (path: string) => path.split('/').pop() || path;
 
 function collectRefs(value: unknown, depth: number, into: ArtifactRef[]) {
   const ref = asRef(value);
@@ -344,7 +342,7 @@ export function downloadsOf(job: Pick<JobRecord, 'result'>): DownloadItem[] {
     .sort((a, b) => rank(a.kind) - rank(b.kind))
     .map((r) => {
       const size = (r as ArtifactRef & { size_bytes?: number }).size_bytes;
-      return { name: baseName(r.path), detail: [KIND_LABELS[r.kind] ?? r.kind.toUpperCase(), formatBytes(size)].filter(Boolean).join(' · '), url: r.url };
+      return { name: downloadName(r), detail: [KIND_LABELS[r.kind] ?? r.kind.toUpperCase(), formatBytes(size)].filter(Boolean).join(' · '), url: r.url };
     });
 }
 

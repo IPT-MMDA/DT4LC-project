@@ -13,6 +13,7 @@ import snow from '../../../test/fixtures/jobs/snow.json';
 import statistics from '../../../test/fixtures/jobs/statistics.json';
 import {
   dayMonth,
+  downloadName,
   formatKm2,
   formatPercent,
   formatValue,
@@ -63,12 +64,14 @@ describe('card selection by artifact kind', () => {
       ['after', 'After', 'NDWI after · 2023-06-09'],
     ]);
     // The bare map is shown; the full figure stays the PNG download.
-    expect(c.views[0].bare?.url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change_map_bare\.png$/);
-    expect(c.views[0].image?.url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change_map\.png$/);
+    expect(c.views[0].bare?.url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change_map_bare\.png&name=water-change_ndwi_2023-06-01_2023-06-09_map\.png$/);
+    expect(c.views[0].image?.url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change_map\.png&name=water-change_ndwi_2023-06-01_2023-06-09\.png$/);
     expect(c.views[0].raster?.path).toMatch(/2_ChangeMap_change\.tif$/);
-    expect(c.views[1].bare?.url).toMatch(/ndwi_before_bare\.png$/);
-    expect(c.views[1].image?.url).toMatch(/ndwi_before\.png$/);
-    expect(c.views[2].bare?.url).toMatch(/ndwi_after_bare\.png$/);
+    // Downloads are named readably; the stored paths stay.
+    expect(downloadName(c.views[0].raster!)).toBe('water-change_ndwi_2023-06-01_2023-06-09.tif');
+    expect(c.views[1].bare?.url).toMatch(/ndwi_before_bare\.png&name=ndwi_2023-06-01_map\.png$/);
+    expect(c.views[1].image?.url).toMatch(/ndwi_before\.png&name=ndwi_2023-06-01\.png$/);
+    expect(c.views[2].bare?.url).toMatch(/ndwi_after_bare\.png&name=ndwi_2023-06-09_map\.png$/);
     expect(c.views[2].raster?.path).toMatch(/index_after\.tif$/);
     // Layer legends: the styles the tiles are drawn in.
     // The difference layer's legend: the change style and the class areas (class_statistics).
@@ -89,7 +92,7 @@ describe('card selection by artifact kind', () => {
     });
     expect(c.source).toBe('NASA HLS L30 (Landsat 8/9) · 30 m');
     expect(c.bounds).toEqual([32.388779, 46.455331, 32.691118, 46.663879]);
-    expect(c.gpkgUrl).toBeUndefined();
+    expect(c.gpkg).toBeUndefined();
   });
 
   it('a job from before the bare maps (v0.5.0): the full figures, token swatches, no index ramp', () => {
@@ -99,6 +102,8 @@ describe('card selection by artifact kind', () => {
     expect(c.views.map((v) => v.bare)).toEqual([undefined, undefined, undefined]);
     expect(c.views[0].image?.url).toMatch(/2_ChangeMap_change_map\.png$/);
     expect(c.views[1].image?.url).toMatch(/ndwi_before\.png$/);
+    // No download_name: the download keeps the stored name.
+    expect(downloadName(c.views[0].image!)).toBe('2_ChangeMap_change_map.png');
     expect(c.legend).toEqual([
       { label: 'water gained', tone: 'gained' },
       { label: 'water lost', tone: 'lost' },
@@ -301,7 +306,8 @@ describe('card selection by artifact kind', () => {
       { label: 'Total area', value: '487 km²' },
       { label: 'Mean size', value: '37.9 ha' },
     ]);
-    expect(c.gpkgUrl).toBe('/v1/download?path=%2Fapp%2Fresources%2F.cache%2Ftmp%2Fdelineate_outputs%2Fhlsl_20230609_fields.gpkg');
+    expect(c.gpkg?.url).toBe('/v1/download?path=%2Fapp%2Fresources%2F.cache%2Ftmp%2Fdelineate_outputs%2Fhlsl_20230609_fields.gpkg');
+    expect(downloadName(c.gpkg!)).toBe('hlsl_20230609_fields.gpkg');
     expect(c.views[0].raster).toBeUndefined();
   });
 

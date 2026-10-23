@@ -48,7 +48,7 @@
    "label": "Change detection"
   },
   "kind": "change",
-  "thumbnail_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change_map_bare.png",
+  "thumbnail_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change_map_bare.png&name=water-change_ndwi_2023-06-01_2023-06-09_map.png",
   "duration_s": 1.6,
   "error": null
  },
@@ -214,28 +214,31 @@
       "change_map": {
        "kind": "png",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_change_map.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change_map.png&name=water-change_ndwi_2023-06-01_2023-06-09.png",
        "stats": {},
-       "size_bytes": 1286534
+       "size_bytes": 1286534,
+       "download_name": "water-change_ndwi_2023-06-01_2023-06-09.png"
       },
       "ndwi_before": {
        "kind": "png",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_ndwi_before.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_before.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_before.png&name=ndwi_2023-06-01.png",
        "stats": {},
-       "size_bytes": 911876
+       "size_bytes": 911876,
+       "download_name": "ndwi_2023-06-01.png"
       },
       "ndwi_after": {
        "kind": "png",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_ndwi_after.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_after.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_after.png&name=ndwi_2023-06-09.png",
        "stats": {},
-       "size_bytes": 1579855
+       "size_bytes": 1579855,
+       "download_name": "ndwi_2023-06-09.png"
       },
       "change_map_bare": {
        "kind": "png",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_change_map_bare.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change_map_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change_map_bare.png&name=water-change_ndwi_2023-06-01_2023-06-09_map.png",
        "stats": {
         "width": 768,
         "height": 768,
@@ -252,12 +255,13 @@
          ]
         }
        },
-       "size_bytes": 845633
+       "size_bytes": 845633,
+       "download_name": "water-change_ndwi_2023-06-01_2023-06-09_map.png"
       },
       "ndwi_before_bare": {
        "kind": "png",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_ndwi_before_bare.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_before_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_before_bare.png&name=ndwi_2023-06-01_map.png",
        "stats": {
         "width": 768,
         "height": 768,
@@ -277,12 +281,13 @@
          ]
         }
        },
-       "size_bytes": 535263
+       "size_bytes": 535263,
+       "download_name": "ndwi_2023-06-01_map.png"
       },
       "ndwi_after_bare": {
        "kind": "png",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_ndwi_after_bare.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_after_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_ndwi_after_bare.png&name=ndwi_2023-06-09_map.png",
        "stats": {
         "width": 768,
         "height": 768,
@@ -302,7 +307,8 @@
          ]
         }
        },
-       "size_bytes": 1128576
+       "size_bytes": 1128576,
+       "download_name": "ndwi_2023-06-09_map.png"
       }
      },
      "index_type": "ndwi",
@@ -311,38 +317,41 @@
       "change": {
        "kind": "geotiff",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_change.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_change.tif&name=water-change_ndwi_2023-06-01_2023-06-09.tif",
        "stats": {
         "min": -1.6023651361465454,
         "max": 2.0,
         "mean": 0.3532549995969714,
         "valid_pixels": 589822
        },
-       "size_bytes": 2130012
+       "size_bytes": 2130012,
+       "download_name": "water-change_ndwi_2023-06-01_2023-06-09.tif"
       },
       "index_before": {
        "kind": "geotiff",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_index_before.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_index_before.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_index_before.tif&name=ndwi_2023-06-01.tif",
        "stats": {
         "min": -1.0,
         "max": 1.0,
         "mean": -0.5109416938976671,
         "valid_pixels": 589822
        },
-       "size_bytes": 2094135
+       "size_bytes": 2094135,
+       "download_name": "ndwi_2023-06-01.tif"
       },
       "index_after": {
        "kind": "geotiff",
        "path": "/app/resources/.cache/outputs/00ff7c4d/2_ChangeMap_index_after.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_index_after.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F00ff7c4d%2F2_ChangeMap_index_after.tif&name=ndwi_2023-06-09.tif",
        "stats": {
         "min": -1.0,
         "max": 1.0,
         "mean": -0.15768370311049532,
         "valid_pixels": 589824
        },
-       "size_bytes": 2133633
+       "size_bytes": 2133633,
+       "download_name": "ndwi_2023-06-09.tif"
       }
      }
     },

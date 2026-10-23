@@ -14,7 +14,7 @@ import { Failure } from '../components/chat/analysis/AnalysisMessage';
 import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/analysis/StatusPill';
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
-import { resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
+import { downloadName, resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -128,12 +128,12 @@ function MapPanel({ title, meta, view, legend, height, actions }: { title: strin
             </span>
           )}
           {actions && png && (
-            <a href={resolveApiUrl(png.url)} download className={small}>
+            <a href={resolveApiUrl(png.url)} download={downloadName(png)} title={downloadName(png)} className={small}>
               PNG
             </a>
           )}
           {actions && view.raster && (
-            <a href={resolveApiUrl(view.raster.url)} download className={small}>
+            <a href={resolveApiUrl(view.raster.url)} download={downloadName(view.raster)} title={downloadName(view.raster)} className={small}>
               GeoTIFF
             </a>
           )}
@@ -547,7 +547,7 @@ export function ResultDetail() {
               <ul className="flex flex-col">
                 {downloads.map((d) => (
                   <li key={d.url} className="border-b border-border2 last:border-b-0">
-                    <a data-testid="download-row" href={resolveApiUrl(d.url)} download className="flex items-baseline justify-between gap-3 py-[6px] text-control hover:text-accent-ink">
+                    <a data-testid="download-row" href={resolveApiUrl(d.url)} download={d.name} className="flex items-baseline justify-between gap-3 py-[6px] text-control hover:text-accent-ink">
                       <span className="font-mono truncate min-w-0" title={d.name}>
                         {d.name}
                       </span>

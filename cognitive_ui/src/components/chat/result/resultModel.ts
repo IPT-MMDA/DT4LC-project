@@ -13,8 +13,14 @@ import type { ChatRegion, MessageAttachment } from '../../../types';
 export interface ArtifactRef {
   kind: string;
   path: string;
-  url: string;
+  url: string;  // carries `&name=<download_name>` when the job has one
   stats?: Record<string, unknown>;
+  download_name?: string;  // the readable file name; older jobs have none
+}
+
+/** The file name a download gets: the ref's `download_name`, else its stored name (older jobs). */
+export function downloadName(ref: Pick<ArtifactRef, 'path' | 'download_name'>): string {
+  return ref.download_name || ref.path.split('/').pop() || ref.path;
 }
 
 /** How a raster is drawn: a bare map PNG's `stats.style`, the same as its tiles. */
@@ -71,7 +77,7 @@ interface CardBase {
   note?: string;
   source: string | null;
   bounds?: LngLatBounds;
-  gpkgUrl?: string;
+  gpkg?: Pick<ArtifactRef, 'path' | 'url' | 'download_name'>;
 }
 
 export type ResultCardModel =
@@ -248,12 +254,12 @@ function boundsOf(files: MessageAttachment[]): LngLatBounds | undefined {
 }
 
 /** A GeoPackage download: a `gpkg` reference, or a model's `output_path` ending in .gpkg. */
-function gpkgUrlOf(artifact: Obj): string | undefined {
+function gpkgOf(artifact: Obj): CardBase['gpkg'] {
   const refs = [...Object.values(obj(artifact.rasters)), ...Object.values(obj(artifact.vectors)), artifact.gpkg].map(asRef);
   const ref = refs.find((r) => r && (r.kind === 'gpkg' || r.path.endsWith('.gpkg')));
-  if (ref) return ref.url;
+  if (ref) return ref;
   const out = artifact.output_path;
-  return typeof out === 'string' && out.toLowerCase().endsWith('.gpkg') ? `/v1/download?path=${encodeURIComponent(out)}` : undefined;
+  return typeof out === 'string' && out.toLowerCase().endsWith('.gpkg') ? { path: out, url: `/v1/download?path=${encodeURIComponent(out)}` } : undefined;
 }
 
 const titled = (...parts: string[]) => parts.filter(Boolean).join(' · ');
@@ -502,7 +508,7 @@ function fieldsCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     note: 'Delineate-Anything',
     source: sourceLine({ ...context, attachments: files }),
     bounds: boundsOf(files),
-    gpkgUrl: gpkgUrlOf(artifact),
+    gpkg: gpkgOf(artifact),
     stats,
     views: [{ key: 'map', label: 'Map', layerName: title, overlay: '', image: asRef(obj(artifact.visualizations).field_boundaries) }],
   };
@@ -543,7 +549,7 @@ function imageCard(artifact: Obj, context: AnalysedContext, title: string): Resu
     title,
     source: sourceLine(context),
     bounds: boundsOf(context.attachments),
-    gpkgUrl: gpkgUrlOf(artifact),
+    gpkg: gpkgOf(artifact),
     views: [{ key: 'map', label: 'Map', layerName: title, overlay: '', image, raster: firstRef(artifact.rasters, 'geotiff') }],
   };
 }

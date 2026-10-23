@@ -111,7 +111,7 @@ describe('result detail of a change', () => {
     expect(meta.endsWith(ndwiChange.id)).toBe(true);
 
     expect(screen.getAllByTestId('detail-map').map((m) => m.dataset.view)).toEqual(['difference', 'before', 'after']);
-    expect(screen.getAllByTestId('detail-image').map((i) => i.getAttribute('src')?.split('%2F').pop())).toEqual([
+    expect(screen.getAllByTestId('detail-image').map((i) => i.getAttribute('src')?.split('&name=')[0].split('%2F').pop())).toEqual([
       '2_ChangeMap_change_map_bare.png',
       '2_ChangeMap_ndwi_before_bare.png',
       '2_ChangeMap_ndwi_after_bare.png',
@@ -120,8 +120,9 @@ describe('result detail of a change', () => {
     expect(screen.getByRole('region', { name: 'NDWI · before' })).toBeTruthy();
     expect(screen.getByTestId('detail-legend').textContent).toBe('−0.5 · 0 · +0.5 ΔNDWIwater gainedwater lost');
     const difference = screen.getByRole('region', { name: 'Difference map' });
-    expect(within(difference).getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/2_ChangeMap_change_map\.png$/);
-    expect(within(difference).getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/2_ChangeMap_change\.tif$/);
+    expect(within(difference).getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/2_ChangeMap_change_map\.png&name=water-change_ndwi_2023-06-01_2023-06-09\.png$/);
+    expect(within(difference).getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/2_ChangeMap_change\.tif&name=water-change_ndwi_2023-06-01_2023-06-09\.tif$/);
+    expect(within(difference).getByRole('link', { name: 'GeoTIFF' }).getAttribute('download')).toBe('water-change_ndwi_2023-06-01_2023-06-09.tif');
 
     const table = screen.getByTestId('statistics-table');
     expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Class', 'Area km²', '% of region', 'Mean ΔNDWI']);
@@ -138,7 +139,8 @@ describe('result detail of a change', () => {
     expect(screen.queryByTestId('interpretation')).toBeNull();
 
     await waitFor(() => expect(texts('download-row')).toHaveLength(10));
-    expect(texts('download-row')[0]).toBe('2_ChangeMap_change.tifGeoTIFF · 2.0 MB');
+    expect(texts('download-row')[0]).toBe('water-change_ndwi_2023-06-01_2023-06-09.tifGeoTIFF · 2.0 MB');
+    expect(screen.getAllByTestId('download-row')[0].getAttribute('download')).toBe('water-change_ndwi_2023-06-01_2023-06-09.tif');
     expect(texts('download-row')[9]).toBe('statistics.csvCSV · 1 KB');
     expect(screen.getByRole('button', { name: 'Open on map' })).toBeTruthy();
   });

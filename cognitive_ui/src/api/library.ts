@@ -50,5 +50,6 @@ export const deleteFile = (fileId: string) => remove(`/v1/files/${encodeURICompo
 /** GET /v1/jobs/{id}/statistics.csv, as a download link. */
 export const statisticsCsvUrl = (jobId: string) => `${API_BASE_URL}/v1/jobs/${encodeURIComponent(jobId)}/statistics.csv`;
 
-/** GET /v1/download of a server path (a file's own `path`). */
-export const downloadUrl = (path: string) => `${API_BASE_URL}/v1/download?path=${encodeURIComponent(path)}`;
+/** GET /v1/download of a server path (a file's own `path`); `name` names the download (Content-Disposition). */
+export const downloadUrl = (path: string, name?: string) =>
+  `${API_BASE_URL}/v1/download?path=${encodeURIComponent(path)}${name ? `&name=${encodeURIComponent(name)}` : ''}`;
