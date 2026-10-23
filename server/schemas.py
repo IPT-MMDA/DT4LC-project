@@ -290,12 +290,22 @@ class DiskUsage(BaseModel):  # type: ignore[misc]
     error: str | None = None
 
 
+class AssistantStatus(BaseModel):  # type: ignore[misc]
+    """Whether a conversational assistant (LLM provider) is reachable."""
+
+    connected: bool = Field(description="At least one configured LLM provider is available")
+    offline: bool = Field(description="No provider is available: analyses still run, answers come from the catalog")
+    provider: str | None = Field(None, description="First available provider in LLM_PROVIDER_ORDER, e.g. 'gemini'")
+    model: str | None = Field(None, description="That provider's model, e.g. 'gemini-2.5-flash'")
+
+
 class HealthResponse(BaseModel):  # type: ignore[misc]
     """Health check response."""
 
     ok: bool = True
     service: str = "DT4LC"
     version: str = __version__
+    assistant: AssistantStatus | None = None
     llm_providers: list[LLMProviderStatus] | None = None
     gee: GEEStatus | None = None
     models: ModelsInfo | None = None
