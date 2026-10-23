@@ -231,7 +231,7 @@ ChatRequest
 | 5 | `plan_validator.py` | `PlanValidator.check_resources` (`dta/dti/validation.py`): at most 50 steps, 600 s and 4096 MB estimated (per step: algorithm 5 s / 256 MB, model 30 s / 1024 MB, other 1 s / 50 MB); then every step's inputs must come from earlier outputs or binds. A failing plan is not executed; the orchestrator then tries the template plan once and uses it only if it passes and has an algorithm or model step |
 | 6 | `executor.py` | `input/file` passes the bound `RasterPath` through; imports `dta.dti.algorithms.ndvi` and calls `run(RasterPath=...)` |
 
-**API wiring:** `server/routes/chat.py` (`/v1/execute`, `/v1/chat`) calls `orchestrate()` then `PipelineExecutor().execute()` on the validated plan; `/v1/plan` stops after `orchestrate()`. Async jobs (`POST /v1/jobs`) use the same flow in `server/jobs.py`.
+**API wiring:** in `server/routes/chat.py`, `/v1/execute` calls `orchestrate()` then `PipelineExecutor().execute()` on the validated plan, and `/v1/plan` stops after `orchestrate()`. Async jobs (`POST /v1/jobs`) use the same flow in `server/jobs.py`. `/v1/chat` classifies the message, answers conversation itself and submits an analysis as `POST /v1/jobs` does (see [API.md](API.md#post-v1chat)).
 
 **Verify:** `pytest tests/test_orchestrator.py tests/test_intent_classifier.py -v`
 

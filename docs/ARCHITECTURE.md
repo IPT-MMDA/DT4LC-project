@@ -202,8 +202,10 @@ for a 1000×1000 raster, `GET /v1/jobs?limit=20` under 200 KB, and the SQLite
 - Job output directory: `OUTPUTS_PATH/<job_id>/`, with
   `OUTPUTS_PATH = resources/.cache/outputs` (inside the `./resources` volume
   in Docker, so files survive restarts). Executor runs outside the job queue
-  (`POST /v1/execute`, `POST /v1/chat`, direct `PipelineExecutor.execute()`
-  calls) write to `OUTPUTS_PATH/run-<uuid hex>/`, one directory per run.
+  (`POST /v1/execute`, direct `PipelineExecutor.execute()` calls) write to
+  `OUTPUTS_PATH/run-<uuid hex>/`, one directory per run. `POST /v1/chat` runs
+  no pipeline itself: it submits analyses to the job queue (see
+  [API.md](API.md#post-v1chat)).
 - File name: `<step index>_<output type>_<key>.<tif|png>`, where the step
   index is the step's 0-based position in the plan and the output type is the
   step's first registry output. The standard NDVI plan (`input/file`,
