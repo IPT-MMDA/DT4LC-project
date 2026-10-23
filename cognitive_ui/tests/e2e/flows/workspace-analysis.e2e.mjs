@@ -133,7 +133,7 @@ test('composed done: Run confirms the proposal, the same message runs it and car
       'DRIER 42.0 km² WETTER +37.9 km² THRESHOLD ΔNDMI 0.2',
     );
     assert.equal(await card.getByTestId('legend').innerText(), 'drier\nwetter\nno change');
-    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png$/);
+    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png&name=ndmi-change_2023-06-01_2023-06-09_map\.png$/);
     const followups = message.getByRole('list', { name: 'Follow-ups' }).getByRole('button');
     assert.ok((await followups.count()) >= 2, 'two or three follow-ups');
 

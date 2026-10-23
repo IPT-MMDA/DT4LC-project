@@ -83,7 +83,7 @@ test('done with a result card: NDWI change, toggle, downloads, On map into the d
     assert.match(stats, /^OPEN WATER BEFORE 13\.9 km² OPEN WATER AFTER 170 km² GAINED \+157 km² LOST 0\.6 km²$/);
     assert.equal(await card.getByTestId('image-overlay').innerText(), 'difference · 06-01 → 06-09');
     // The bare map, full-bleed; the legend swatches in the change style's colours.
-    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png$/);
+    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png&name=water-change_ndwi_2023-06-01_2023-06-09_map\.png$/);
     assert.ok((await imageWidth(card)) > 0, 'the difference PNG loads');
     assert.deepEqual(
       await card.getByTestId('legend').locator('[aria-hidden]').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor)),
@@ -95,7 +95,7 @@ test('done with a result card: NDWI change, toggle, downloads, On map into the d
     await toggle.getByRole('button', { name: 'Before' }).click();
     assert.equal(await toggle.getByRole('button', { name: 'Before' }).getAttribute('aria-pressed'), 'true');
     assert.equal(await card.getByTestId('image-overlay').innerText(), 'NDWI before · 2023-06-01');
-    assert.match(await card.getByTestId('result-image').getAttribute('src'), /ndwi_before_bare\.png$/);
+    assert.match(await card.getByTestId('result-image').getAttribute('src'), /ndwi_before_bare\.png&name=ndwi_2023-06-01_map\.png$/);
     assert.ok((await imageWidth(card)) > 0, 'the before PNG loads');
     await toggle.getByRole('button', { name: 'Difference' }).click();
     assert.equal(await card.getByTestId('image-overlay').innerText(), 'difference · 06-01 → 06-09');
