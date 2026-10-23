@@ -681,7 +681,7 @@ class JobQueue:
         named = named_index_request(req.prompt, req.attachments, self._registry)
         plan = named.plan if named else plan_template(_deterministic_context(req), self._registry)
         if named is None:
-            _inject_file_bindings(plan, req.attachments)  # names the file a single-image analysis reads
+            _inject_file_bindings(plan, req.attachments, req.prompt)  # names the file a single-image analysis reads
         return plan, attachments, region
 
     def _intent_text(self, job: Job) -> str:
@@ -815,7 +815,7 @@ class JobQueue:
         if region is not None:
             inject_region_fetch(plan, region)
         else:
-            _inject_file_bindings(plan, self._coe_attachments(job))
+            _inject_file_bindings(plan, self._coe_attachments(job), job.prompt)
         try:
             return require_analysis_step(validate(plan, self._registry), self._registry)
         except KeyError as e:  # get_item: a component id that is not in the registry

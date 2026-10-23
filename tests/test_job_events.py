@@ -263,6 +263,20 @@ async def test_single_image_analysis_on_the_sample_pair_reads_9_june(queue: JobQ
     assert job.plan.steps[0].binds == {"RasterPath": SAMPLE_0609}
 
 
+async def test_a_date_in_the_prompt_picks_that_file_of_the_pair(queue: JobQueue) -> None:
+    """ "Calculate EVI for 1 June" on the pair reads 1 June, and the intent sentence names it."""
+    job_id = await queue.submit_job(
+        "Calculate EVI for 1 June", attachments=[_sample_attachment(SAMPLE_0609), _sample_attachment(SAMPLE_0601)]
+    )
+    events, _ = await asyncio.gather(_collect(queue, job_id), queue.start())
+
+    assert events[0]["data"]["text"] == "I'll compute EVI for 1 June from the sample."
+    assert events[-1]["type"] == "done", events[-1]
+    job = await queue.get_job(job_id)
+    assert job is not None and job.plan is not None
+    assert job.plan.steps[0].binds == {"RasterPath": SAMPLE_0601}
+
+
 # --- Cancel ----------------------------------------------------------------------
 
 

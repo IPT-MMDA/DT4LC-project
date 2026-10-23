@@ -12,6 +12,7 @@ from .intent_classifier import IntentType, classify_intent
 from .named_indices import named_index_request, proposal_text
 from .plan_validator import PlanError, validate
 from .planner import plan
+from .prompt_dates import attachments_named_by_date
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
 
     # Inject file paths from attachments into input steps
     if req.attachments:
-        _inject_file_bindings(candidate, req.attachments)
+        _inject_file_bindings(candidate, req.attachments, req.prompt)
     elif region:
         inject_region_fetch(candidate, region)
     else:
@@ -94,7 +95,7 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         # Retry once with the template planner; keep the original error if it doesn't help.
         fallback = plan(ctx, reg, use_llm=False)
         if req.attachments:
-            _inject_file_bindings(fallback, req.attachments)
+            _inject_file_bindings(fallback, req.attachments, req.prompt)
         elif region:
             inject_region_fetch(fallback, region)
         if fallback.model_dump() == candidate.model_dump():
@@ -149,14 +150,18 @@ def is_composed(plan: ExecutionPlan, reg: Registry) -> bool:
     return plan.composed or len(analysis) != 1 or analysis[0].startswith("algorithms/band-math")
 
 
-def single_image_attachment(attachments: list[Attachment]) -> Attachment:
-    """The file a single-image analysis reads when several are attached: the one with the latest
+def single_image_attachment(attachments: list[Attachment], prompt: str = "") -> Attachment:
+    """The file a single-image analysis reads when several are attached: the only one whose
+    ``metadata.date`` the prompt names ("NDVI for 1 June"), else the one with the latest
     ``metadata.date`` (ISO dates), else the last attachment. On the sample pair that is 9 June."""
+    named = attachments_named_by_date(prompt, attachments)
+    if len(named) == 1:
+        return named[0]
     dated = [(a.metadata.date, i) for i, a in enumerate(attachments) if a.metadata and a.metadata.date]
     return attachments[max(dated)[1]] if dated else attachments[-1]
 
 
-def _inject_file_bindings(candidate: Any, attachments: list[Any]) -> None:
+def _inject_file_bindings(candidate: Any, attachments: list[Any], prompt: str = "") -> None:
     """Inject file paths from attachments into input step bindings.
 
     Handles multiple attachment scenarios:
@@ -164,15 +169,20 @@ def _inject_file_bindings(candidate: Any, attachments: list[Any]) -> None:
     - Two files: binds to input/file-before and input/file-after steps
     - Two or more files and a plan with one input/file step and no before/after steps (a
       single-image analysis): binds :func:`single_image_attachment`
+    - A before/after plan whose prompt names exactly two attachments' dates ("between 1 and
+      9 June"): binds those two, the earlier as before
 
     Args:
         candidate: Execution plan candidate
         attachments: List of file attachments
+        prompt: The request, for the dates it names
     """
     uses = [step.uses for step in candidate.steps]
     two_dates = "input/file-before" in uses or "input/file-after" in uses
     if len(attachments) > 1 and uses.count("input/file") == 1 and not two_dates:
-        attachments = [single_image_attachment(attachments)]
+        attachments = [single_image_attachment(attachments, prompt)]
+    elif two_dates and len(named := attachments_named_by_date(prompt, attachments)) == 2:
+        attachments = named
 
     # Track which attachments have been used
     attachment_index = 0

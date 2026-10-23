@@ -198,6 +198,40 @@ def test_change_prompt_on_two_files_plans_change_detection(prompt: str, index_ty
     assert binds == {"RasterPathBefore": BEFORE, "RasterPathAfter": AFTER, "IndexType": index_type}
 
 
+@pytest.mark.parametrize(
+    "prompt", ["Calculate NDVI for 1 June", "Calculate NDVI for June 1st", "Calculate NDVI on 2023-06-01"]
+)
+@pytest.mark.parametrize("order", [(BEFORE, AFTER), (AFTER, BEFORE)], ids=["0601-0609", "0609-0601"])
+def test_single_image_prompt_naming_a_date_reads_that_file(prompt: str, order: tuple[str, str]) -> None:
+    """A date in the prompt that one attachment's metadata.date matches picks that file, not the later one."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(*order)))
+
+    assert out["ok"], out.get("error")
+    assert out["plan"]["steps"][0]["binds"] == {"RasterPath": BEFORE}
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    ["Compare NDVI between 1 and 9 June", "Compare NDVI between June 9 and June 1", "NDVI change 06-01 to 06-09"],
+)
+def test_change_prompt_naming_dates_keeps_before_and_after_by_date(prompt: str) -> None:
+    """Named dates bind the earlier file as before, whatever the attachment order and the words' order."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(AFTER, BEFORE)))
+
+    assert out["ok"], out.get("error")
+    binds = {k: v for s in out["plan"]["steps"] for k, v in s["binds"].items()}
+    assert (binds["RasterPathBefore"], binds["RasterPathAfter"]) == (BEFORE, AFTER)
+
+
+def test_single_image_attachment_with_an_unmatched_date_keeps_the_rule() -> None:
+    files = _dated(BEFORE, AFTER)
+
+    assert single_image_attachment(files, "Calculate NDVI for 5 June").path == AFTER  # no file is dated 5 June
+    assert single_image_attachment(files, "NDVI for 1 and 9 June").path == AFTER  # two match: not one file
+    assert single_image_attachment(files, "Calculate NDVI on the 1st").path == BEFORE
+    assert single_image_attachment(_attachments(BEFORE, AFTER), "NDVI for 1 June").path == AFTER  # undated
+
+
 def test_single_image_attachment_without_dates_is_the_last() -> None:
     files = _attachments(AFTER, BEFORE)
 

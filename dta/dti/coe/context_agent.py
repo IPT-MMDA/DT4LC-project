@@ -200,7 +200,7 @@ def _deterministic_context(req: ChatRequest) -> ContextUnderstanding:
     "difference", ...), asks for a ChangeMap from before/after rasters with no keywords,
     so the planner takes the index type from the goal. Another matched item gives its
     first output, its inputs and its trigger keywords: a single-image analysis, which
-    reads one of the attachments (the later-dated one, see
+    reads one of the attachments (the one whose date the prompt names, else the later-dated one, see
     :func:`~dta.dti.coe.orchestrator.single_image_attachment`). No match keeps only the
     uploaded raster.
     """
