@@ -57,7 +57,8 @@ export function ChatColumn({ className }: { className?: string }) {
       className={cn('relative flex flex-col min-w-0 min-h-0 bg-bg border-r border-border', className)}
     >
       {conversation && (
-        <header className="h-[52px] flex-none flex items-center gap-3 px-5 border-b border-border bg-surface">
+        // On a phone the Shell's top bar carries the title.
+        <header className="h-[52px] flex-none flex items-center gap-3 px-5 border-b border-border bg-surface max-md:hidden">
           <h1 className="flex-1 min-w-0 truncate text-card">{conversation.title}</h1>
           <span className="text-[11.5px] text-muted font-mono">{conversationMeta(conversation)}</span>
         </header>

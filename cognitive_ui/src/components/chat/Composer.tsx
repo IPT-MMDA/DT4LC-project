@@ -57,7 +57,7 @@ export function Composer({ hasMessages, sending, onSend, onOpenFilePicker, note 
   const control = 'h-7 px-[9px] rounded-control border border-border text-[12px] text-muted hover:text-text hover:bg-surface2';
 
   return (
-    <div className="flex-none px-5 pb-4">
+    <div className="flex-none px-5 pb-4 max-md:px-3 max-md:pb-3">
       <div className="bg-surface border border-border rounded-composer shadow-composer pt-[10px] px-3 pb-2 flex flex-col gap-2">
         {(chips.length > 0 || region) && (
           <ul aria-label="Attachments" className="flex flex-wrap gap-2">
@@ -124,7 +124,7 @@ export function Composer({ hasMessages, sending, onSend, onOpenFilePicker, note 
             {libraryOpen && <LibraryPicker onClose={closeLibrary} within={libraryRef} />}
           </div>
           <div className="flex-1" />
-          <span className="text-[11px] text-muted">Enter to send · Shift+Enter newline</span>
+          <span className="text-[11px] text-muted max-md:hidden">Enter to send · Shift+Enter newline</span>
           <button
             type="button"
             onClick={onSend}
