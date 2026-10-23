@@ -2,7 +2,8 @@
 
 The table holds every registry ``ui.prompt`` (the Capabilities examples), every ``ui.followups``
 entry (the chips under a result), every ``example_prompts`` entry of ``GET /v1/capabilities`` and
-the Workspace's empty-state suggestions (``design/screens/workspace-empty-*.png``). Each runs with
+the Workspace's empty-state suggestions (``design/screens/workspace-empty-*.png``) and the
+proposal's Explain questions. Each runs with
 the attachments the UI sends:
 
 - ``pair``: the bundled sample (1 and 9 June). The Workspace sends both files with every message
@@ -61,6 +62,9 @@ EMPTY_STATE = (
     "Detect field boundaries east of the river",
     "Classify land cover on the flooded fields",
 )
+# The proposal card's Explain button (DESIGN §4.2) and a typed question about the proposal: the
+# Workspace sends them with the conversation's files, and they must stay conversation.
+PROPOSAL_QUESTIONS = ("Explain this proposal", "Explain why you chose NDMI")
 
 CD = "algorithms/change-detection"
 NDMI = "algorithms/band-math-change:NDMI"
@@ -151,21 +155,17 @@ ROUTES: dict[str, dict[str, str]] = {
     "Redo the moisture map with a 0.1 threshold": {"pair": NDMI, "none": "ask:algorithms/band-math"},
     "Redo the water map with a 0.1 threshold": {"pair": f"{CD}:ndwi", "none": "ask:algorithms/ndwi"},
     "Track water weekly through June": {"pair": f"{CD}:ndwi", "none": "ask:algorithms/ndwi"},
-    # Questions.
+    # Questions. Explanatory ones are conversation even with the sample attached; "Where is open
+    # water on 9 June?" (above) locates, so it runs NDWI.
     "What else can you do with this data?": {"pair": "reply", "one": "reply", "none": "reply"},
     "Why is NDWI better than NDVI for water?": {"pair": "reply", "none": "reply"},
     "Explain the last result in two sentences": {"pair": "reply", "none": "reply"},
     "What would you do differently with Landsat?": {"pair": "reply", "none": "reply"},
+    "Explain this proposal": {"pair": "reply", "none": "reply"},
+    "Explain why you chose NDMI": {"pair": "reply", "none": "reply"},
 }
 
-_QUESTION_WITH_FILES = (
-    "a question with files attached is planned as an analysis: the conversational question rule "
-    "applies only without a file or region (dta/dti/coe/conversation.py conversational_rule)"
-)
 XFAIL: dict[tuple[str, str], str] = {
-    ("Why is NDWI better than NDVI for water?", "pair"): _QUESTION_WITH_FILES,
-    ("Explain the last result in two sentences", "pair"): _QUESTION_WITH_FILES,
-    ("What would you do differently with Landsat?", "pair"): _QUESTION_WITH_FILES,
     ("Redo the water map with a 0.1 threshold", "pair"): (
         "composed tier (needs the assistant): re-running the last water analysis with a new threshold; "
         "without it the prompt plans a single-date NDWI and the threshold is not applied"
@@ -205,7 +205,7 @@ ATTACHMENTS = {"pair": ("0601", "0609"), "one": ("0609",), "none": ()}
 
 def ui_prompts() -> set[str]:
     """Every prompt the Workspace can send from a chip: registry, capabilities and empty states."""
-    prompts: set[str] = set(EMPTY_STATE)
+    prompts: set[str] = set(EMPTY_STATE) | set(PROPOSAL_QUESTIONS)
     for item in load_registry().instances:
         if item.ui is None:
             continue

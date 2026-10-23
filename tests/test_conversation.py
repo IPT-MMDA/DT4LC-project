@@ -445,6 +445,63 @@ def test_question_rule_needs_no_input() -> None:
 
 
 @pytest.mark.parametrize(
+    ("prompt", "rule"),
+    [
+        # Explanatory: conversation even with a file or region (the Workspace re-sends the files).
+        ("Why is NDWI better than NDVI for water?", "question"),
+        ("Explain the last result in two sentences", "question"),
+        ("What would you do differently with Landsat?", "question"),
+        ("Explain this proposal", "question"),
+        ("Explain why you chose NDMI", "question"),
+        ("Describe the snow classifier", "question"),
+        ("Tell me about change detection", "question"),
+        ("How does change detection work?", "question"),
+        ("What is NDVI?", "question"),
+        ("What are the snow classifier thresholds?", "question"),
+        ("What does a negative NDWI mean?", "question"),
+        ("Is it better to use EVI here?", "question"),
+        # An imperative analysis verb makes it a request.
+        ("Explain and map the water", None),
+        ("Why not compare the dates?", None),
+        ("How do I compute NDVI?", None),
+        # Locating and quantifying questions run an analysis on the files.
+        ("Where is open water on 9 June?", None),
+        ("Where are the flooded fields?", None),
+        ("How much water was gained?", None),
+        ("How many parcels are there?", None),
+        ("What changed between the dates?", None),
+        ("Which areas flooded?", None),
+        ("What is in this image?", None),  # "what is" without a method or index name
+    ],
+)
+def test_explanatory_questions_are_conversation_with_files(prompt: str, rule: str | None) -> None:
+    assert conversational_rule(prompt, has_input=True) == rule
+
+
+async def test_explain_the_last_result_with_the_sample_attached_uses_history(
+    queue: JobQueue, llm: _StubRouter
+) -> None:
+    """The Workspace re-sends the sample pair with the follow-up; the question is still answered, not run."""
+    history = [
+        {"role": "user", "text": "Compare water before and after the dam breach"},
+        {"role": "assistant", "text": "Open water grew from 13.9 km² to 170.0 km²: 156.8 km² gained, 0.6 km² lost."},
+    ]
+    both = [_attachment(SAMPLE_0601), _attachment(SAMPLE_0609)]
+    async with _client() as client:
+        reply = await _chat(
+            client, message="Explain the last result in two sentences", history=history, attachments=both
+        )
+        assert reply == {"kind": "reply", "text": llm.text}
+        assert await _job_count(client, queue) == (0, 0)
+    (messages,) = llm.calls
+    assert messages[0].content.endswith(
+        "User: Compare water before and after the dam breach\n\n"
+        "Assistant: Open water grew from 13.9 km² to 170.0 km²: 156.8 km² gained, 0.6 km² lost."
+    )
+    assert messages[1].content == "Explain the last result in two sentences"
+
+
+@pytest.mark.parametrize(
     ("message", "resumes"),
     [
         ("here", True),
