@@ -60,7 +60,8 @@ export function useUploadFile() {
   });
 }
 
-export function useListFiles({ enabled = true }: { enabled?: boolean } = {}) {
+/** `fresh`: refetch whenever the caller mounts (the Library; files arrive from chat and the sample too). */
+export function useListFiles({ enabled = true, fresh = false }: { enabled?: boolean; fresh?: boolean } = {}) {
   return useQuery({
     queryKey: FILES_QUERY_KEY,
     enabled,
@@ -74,7 +75,7 @@ export function useListFiles({ enabled = true }: { enabled?: boolean } = {}) {
       const data: ListFilesResponse = await response.json();
       return data.files;
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: fresh ? 0 : 30000, // Consider data fresh for 30 seconds
     refetchOnWindowFocus: true,
   });
 }

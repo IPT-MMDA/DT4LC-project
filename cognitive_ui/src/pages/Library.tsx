@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { clsx as cn } from 'clsx';
 import { resolveApiUrl } from '../api/client';
 import { useSession } from '../api/hooks/useSession';
 import { FILES_QUERY_KEY, useListFiles, useUploadFile } from '../api/hooks/useUpload';
@@ -21,15 +22,16 @@ import {
 } from '../components/library/libraryModel';
 import { useLibraryActions } from '../components/library/useLibraryActions';
 import { useChatStore } from '../store/useChatStore';
-import { cn } from '../utils/cn';
 
 // /app/library (design/screens/library.png): every analysis and file from this
 // session in one table, newest first, with filters and one action per row. Replaces
-// v0.5's Jobs and Data pages.
+// v0.5's Jobs and Data pages. Classes join with clsx: utils/cn's tailwind-merge
+// doesn't know the type-scale tokens and drops `text-control` before a text colour.
 
 const GEOTIFF = /\.tiff?$/i;
 const outline = 'px-[10px] py-[5px] rounded-control border border-border bg-surface text-text text-control hover:bg-surface2';
 const chip = 'px-[11px] py-[5px] rounded-pill border text-control';
+const menuButton = 'px-[10px] py-[5px] rounded-control border border-border bg-surface text-text2 text-control hover:bg-surface2';
 
 /** A dropdown of exclusive choices: "Type: any ▾", "Last 7 days ▾". */
 function ChoiceMenu<T extends string | null>({
@@ -60,7 +62,7 @@ function ChoiceMenu<T extends string | null>({
   }, [open]);
   return (
     <div ref={ref} className="relative">
-      <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={cn(outline, 'text-text2')}>
+      <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={menuButton}>
         {label} ▾
       </button>
       {open && (
@@ -199,8 +201,9 @@ function RowActionButton({ row, onAction }: { row: LibraryRow; onAction: () => v
 export function Library() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const jobs = useQuery({ queryKey: JOBS_QUERY_KEY, queryFn: listJobs, staleTime: 10_000 });
-  const files = useListFiles();
+  // Both refetch on every visit: analyses and files are added from the chat.
+  const jobs = useQuery({ queryKey: JOBS_QUERY_KEY, queryFn: listJobs, staleTime: 0 });
+  const files = useListFiles({ fresh: true });
   const conversations = useChatStore((s) => s.conversations);
   const actions = useLibraryActions();
   const upload = useUploadFile();

@@ -80,12 +80,15 @@ export function useLibraryActions() {
   /** Retry: the prompt again in the analysis's conversation (a new one if this browser has none). */
   const retry = useCallback(
     (row: AnalysisRow): string | null => {
-      const { conversations, selectConversation, newConversation } = useChatStore.getState();
+      const { conversations, selectConversation, newConversation, clearAttachments, setPendingRegion } = useChatStore.getState();
       const { conversation, prompt } = analysisContext(conversations, row.job.id);
       const text = row.job.prompt?.trim() || prompt;
       if (!text) return `Nothing to retry: ${row.title} has no prompt.`;
       if (conversation) selectConversation(conversation.id);
       else newConversation();
+      // The conversation's own files or region, not whatever the composer holds.
+      clearAttachments();
+      setPendingRegion(null);
       navigate('/app');
       void send(text);
       return null;

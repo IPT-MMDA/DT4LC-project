@@ -138,13 +138,15 @@ describe('row actions', () => {
     expect(location.current).toBe('/app/map');
   });
 
-  it('Retry resends the prompt in its conversation', async () => {
+  it("Retry resends the prompt in its conversation, with the conversation's files, not the composer's", async () => {
     const actions = setup();
+    useChatStore.setState({ pendingAttachments: [{ id: 'x', filename: 'other.tif', path: '/u/other.tif' }] });
     act(() => {
       expect(actions.current.retry(rowOf(FAILED))).toBeNull();
     });
     expect(useChatStore.getState().activeConversationId).toBe('k1');
     expect(sendMessage).toHaveBeenCalledWith('Compare water before and after the dam breach');
+    expect(useChatStore.getState().pendingAttachments).toEqual([]);
     expect(location.current).toBe('/app');
   });
 
