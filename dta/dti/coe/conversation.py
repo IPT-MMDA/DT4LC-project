@@ -174,10 +174,15 @@ _CHANGE_WORDS = ("change", "between", "compare", "difference", "before", "two da
 def input_needs(prompt: str) -> tuple[str | None, list[str]]:
     """``(item_id, needs)`` for an analysis request that came without a file: the analysis it names
     (``None`` if none) and the inputs it waits for, ``["RasterPath"]`` or
-    ``["RasterPathBefore", "RasterPathAfter"]``, from the template plan of the registry triggers."""
+    ``["RasterPathBefore", "RasterPathAfter"]``: a named index first, as the orchestrator plans it,
+    else from the template plan of the registry triggers."""
     from dta.dti.coe.context_agent import _deterministic_context
     from dta.dti.coe.planner import plan_template
 
+    if match_named_index(prompt) is not None:
+        if any(phrase_in(w, prompt) for w in _CHANGE_WORDS):
+            return "algorithms/band-math-change", ["RasterPathBefore", "RasterPathAfter"]
+        return "algorithms/band-math", ["RasterPath"]
     reg = load_registry()
     template = plan_template(_deterministic_context(ChatRequest(prompt=prompt)), reg)
     uses = [s.uses for s in template.steps]
@@ -186,9 +191,5 @@ def input_needs(prompt: str) -> tuple[str | None, list[str]]:
         return (analysis[0] if analysis else None), ["RasterPathBefore", "RasterPathAfter"]
     if "input/file" in uses:
         return (analysis[0] if analysis else None), ["RasterPath"]
-    if match_named_index(prompt) is not None:
-        if any(phrase_in(w, prompt) for w in _CHANGE_WORDS):
-            return "algorithms/band-math-change", ["RasterPathBefore", "RasterPathAfter"]
-        return "algorithms/band-math", ["RasterPath"]
     item = get_trigger_index().find_matching_item(prompt)
     return (item.id if item else None), ["RasterPath"]

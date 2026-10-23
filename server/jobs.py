@@ -653,12 +653,15 @@ class JobQueue:
                         filename=a.get("filename", ""),
                         mime_type=a.get("mime_type", "image/tiff"),
                         path=a["path"],
+                        metadata=a.get("metadata"),
                     )
                     for a in attachments
                 ],
             )
             named = named_index_request(req.prompt, req.attachments, self._registry)
             plan = named.plan if named else plan_template(_deterministic_context(req), self._registry)
+            if named is None:
+                _inject_file_bindings(plan, req.attachments)  # names the file a single-image analysis reads
             return intent_text(plan, self._registry, attachments, region)
         except Exception as e:
             logger.warning(f"Job {job.id}: no intent sentence from the template plan ({e})")
@@ -759,6 +762,7 @@ class JobQueue:
                 filename=a.get("filename", ""),
                 mime_type=a.get("mime_type", "image/tiff"),
                 path=a["path"],
+                metadata=a.get("metadata"),
             )
             for a in attachments
         ]
@@ -981,6 +985,7 @@ class JobQueue:
                         filename=att.get("filename", ""),
                         mime_type=att.get("mime_type", "image/tiff"),
                         path=path,
+                        metadata=att.get("metadata"),
                     )
                 )
             else:
@@ -1001,6 +1006,7 @@ class JobQueue:
                             filename=att.get("filename", ""),
                             mime_type=att.get("mime_type", "image/tiff"),
                             path=att.get("path"),
+                            metadata=att.get("metadata"),
                         )
                     )
             if coe_attachments:

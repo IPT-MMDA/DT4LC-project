@@ -252,6 +252,17 @@ class TriggerIndex:
                 best_key = key
         return best
 
+    def asks_for_change(self, prompt: str) -> bool:
+        """True if the prompt names a trigger of an item producing a ChangeMap (change detection's
+        "compare", "change", "before", "difference", "between the two dates", "gained", "lost", ...)."""
+        p = without_rejected(prompt.lower())
+        return any(
+            phrase_in(t, p)
+            for item in self.user_runnable_items
+            if item.triggers is not None and "ChangeMap" in item.outputs
+            for t in item.triggers.keywords + item.triggers.action_phrases
+        )
+
     # --- Response rendering -----------------------------------------------
 
     def render_capability_response(self, prompt: str) -> str:

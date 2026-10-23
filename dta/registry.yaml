@@ -490,6 +490,15 @@ instances:
         - "flooding"
         - "before"
         - "after"
+        # Change words: with two files attached, only a prompt naming a trigger compares them.
+        - "change"
+        - "compare"
+        - "difference"
+        - "gained"
+        - "lost"
+        - "between the dates"
+        - "between the two dates"
+        - "between the same dates"
       action_phrases:
         - "change detection"
         - "ndvi change"

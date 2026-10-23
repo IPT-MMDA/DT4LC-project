@@ -5,7 +5,7 @@ from typing import Any
 
 from dta.dti.data_sources.gee_region import inject_region_fetch
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import ChatRequest, ExecutionPlan, Registry
+from dta.dti.schemas import Attachment, ChatRequest, ExecutionPlan, Registry
 
 from .context_agent import analyze
 from .intent_classifier import IntentType, classify_intent
@@ -149,17 +149,31 @@ def is_composed(plan: ExecutionPlan, reg: Registry) -> bool:
     return plan.composed or len(analysis) != 1 or analysis[0].startswith("algorithms/band-math")
 
 
+def single_image_attachment(attachments: list[Attachment]) -> Attachment:
+    """The file a single-image analysis reads when several are attached: the one with the latest
+    ``metadata.date`` (ISO dates), else the last attachment. On the sample pair that is 9 June."""
+    dated = [(a.metadata.date, i) for i, a in enumerate(attachments) if a.metadata and a.metadata.date]
+    return attachments[max(dated)[1]] if dated else attachments[-1]
+
+
 def _inject_file_bindings(candidate: Any, attachments: list[Any]) -> None:
     """Inject file paths from attachments into input step bindings.
 
     Handles multiple attachment scenarios:
     - Single file: binds to input/file step
     - Two files: binds to input/file-before and input/file-after steps
+    - Two or more files and a plan with one input/file step and no before/after steps (a
+      single-image analysis): binds :func:`single_image_attachment`
 
     Args:
         candidate: Execution plan candidate
         attachments: List of file attachments
     """
+    uses = [step.uses for step in candidate.steps]
+    two_dates = "input/file-before" in uses or "input/file-after" in uses
+    if len(attachments) > 1 and uses.count("input/file") == 1 and not two_dates:
+        attachments = [single_image_attachment(attachments)]
+
     # Track which attachments have been used
     attachment_index = 0
 

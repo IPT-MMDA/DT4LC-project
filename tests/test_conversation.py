@@ -285,6 +285,22 @@ async def test_calculate_ndvi_asks_for_the_file_then_here_resumes_it(
         assert job["events"][-1]["data"]["summary"].endswith("NDVI")
 
 
+async def test_here_with_the_sample_pair_resumes_calculate_ndvi_on_9_june(queue: JobQueue) -> None:
+    """D1: "here" + both sample files after "Calculate NDVI" ran NDVI change detection."""
+    async with _client() as client:
+        ask = await _chat(client, message="Calculate NDVI")
+        both = [_attachment(SAMPLE_0601), _attachment(SAMPLE_0609)]
+        started = await _chat(client, message="here", attachments=both, pending=ask["pending"])
+        assert started["kind"] == "analysis"
+        assert started["job"]["events"][0]["data"]["text"] == "I'll compute NDVI for 9 June from the sample."
+
+        job = await _wait(queue, started["job_id"], {"completed", "failed", "cancelled"})
+        assert job["status"] == "completed", job["error"]
+        steps = job["plan"]["steps"]
+        assert [s["uses"] for s in steps] == ["input/file", "algorithms/ndvi", "post-processing/agent-analysis"]
+        assert steps[0]["binds"] == {"RasterPath": SAMPLE_0609}
+
+
 async def test_here_without_pending_is_a_conversational_reply(queue: JobQueue) -> None:
     async with _client() as client:
         bare = await _chat(client, message="here")

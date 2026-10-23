@@ -247,6 +247,22 @@ async def test_intent_for_change_detection_on_the_sample(queue: JobQueue) -> Non
     )
 
 
+async def test_single_image_analysis_on_the_sample_pair_reads_9_june(queue: JobQueue) -> None:
+    """D1: the Workspace sends both sample files; "Calculate EVI" runs EVI on the later one, and says so."""
+    job_id = await queue.submit_job(
+        "Calculate EVI", attachments=[_sample_attachment(SAMPLE_0601), _sample_attachment(SAMPLE_0609)]
+    )
+    events, _ = await asyncio.gather(_collect(queue, job_id), queue.start())
+
+    assert events[0]["data"]["text"] == "I'll compute EVI for 9 June from the sample."
+    assert events[-1]["type"] == "done", events[-1]
+    assert events[-1]["data"]["summary"].endswith("EVI")
+    job = await queue.get_job(job_id)
+    assert job is not None and job.plan is not None
+    assert [s.uses for s in job.plan.steps] == ["input/file", "algorithms/evi", "post-processing/agent-analysis"]
+    assert job.plan.steps[0].binds == {"RasterPath": SAMPLE_0609}
+
+
 # --- Cancel ----------------------------------------------------------------------
 
 
