@@ -101,6 +101,10 @@ class Job:
     completed_at: datetime | None = None
     # Event log, ``{"seq", "type", "data"}`` per event (see server/job_events.py); metadata only, no arrays.
     events: list[dict[str, Any]] = field(default_factory=list)
+    # Session id of the submitter (a stable user id once sign-in exists) and its role then;
+    # ``None`` for jobs from before v0.6.0, which only operators see.
+    owner: str | None = None
+    owner_role: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary.
@@ -120,6 +124,7 @@ class Job:
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "events": list(self.events),
+            "owner": self.owner,
         }
 
     @property
@@ -160,6 +165,11 @@ class JobStore(ABC):
 
         The returned jobs are partial: never ``save()`` them.
         """
+
+    def get_owner(self, job_id: str) -> str | None:
+        """The job's ``owner`` (``None`` if unknown or ownerless) without loading its result."""
+        job = self.get(job_id)
+        return job.owner if job else None
 
     @abstractmethod
     def count(self) -> int:
@@ -215,7 +225,7 @@ class MemoryJobStore(JobStore):
 class SQLiteJobStore(JobStore):
     """SQLite-backed persistent job storage."""
 
-    _ADDED_COLUMNS = {"events": "TEXT NOT NULL DEFAULT '[]'"}
+    _ADDED_COLUMNS = {"events": "TEXT NOT NULL DEFAULT '[]'", "owner": "TEXT", "owner_role": "TEXT"}
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path)
@@ -265,6 +275,8 @@ class SQLiteJobStore(JobStore):
             job.started_at.isoformat() if job.started_at else None,
             job.completed_at.isoformat() if job.completed_at else None,
             json.dumps(list(job.events)),
+            job.owner,
+            job.owner_role,
         )
 
     def _deserialize_row(self, row: sqlite3.Row) -> Job:
@@ -283,14 +295,16 @@ class SQLiteJobStore(JobStore):
             started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
             events=json.loads(row["events"]),
+            owner=row["owner"],
+            owner_role=row["owner_role"],
         )
 
     def save(self, job: Job) -> None:
         self._conn.execute(
             """INSERT OR REPLACE INTO jobs
                (id, status, prompt, attachments, context, plan, result,
-                progress, error, created_at, started_at, completed_at, events)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                progress, error, created_at, started_at, completed_at, events, owner, owner_role)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             self._serialize_job(job),
         )
         self._conn.commit()
@@ -310,7 +324,8 @@ class SQLiteJobStore(JobStore):
 
     def list_summaries(self) -> list[Job]:
         rows = self._conn.execute(
-            "SELECT id, status, prompt, plan, progress, error, created_at, started_at, completed_at FROM jobs"
+            "SELECT id, status, prompt, plan, progress, error, created_at, started_at, completed_at, owner, owner_role"
+            " FROM jobs"
         ).fetchall()
         return [
             Job(
@@ -323,9 +338,15 @@ class SQLiteJobStore(JobStore):
                 created_at=datetime.fromisoformat(row["created_at"]),
                 started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
                 completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
+                owner=row["owner"],
+                owner_role=row["owner_role"],
             )
             for row in rows
         ]
+
+    def get_owner(self, job_id: str) -> str | None:
+        row = self._conn.execute("SELECT owner FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        return row["owner"] if row else None
 
     def count(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) FROM jobs").fetchone()
@@ -360,7 +381,7 @@ class JobQueue:
         self,
         max_workers: int = 3,
         max_queue_size: int = 100,
-        retention_hours: int = 1,
+        retention_hours: float | None = 1,
         store: JobStore | None = None,
     ) -> None:
         """Initialize job queue.
@@ -368,7 +389,8 @@ class JobQueue:
         Args:
             max_workers: Maximum concurrent workers
             max_queue_size: Maximum queue size
-            retention_hours: Job retention time in hours
+            retention_hours: Job retention time in hours; ``None`` keeps jobs (guest jobs
+                still expire, see :meth:`cleanup_old_jobs`)
             store: Job storage backend (defaults to MemoryJobStore)
         """
         self.max_workers = max_workers
@@ -425,6 +447,8 @@ class JobQueue:
         mode: str = "hybrid",
         attachments: list[dict[str, Any]] | None = None,
         context: dict[str, Any] | None = None,
+        owner: str | None = None,
+        owner_role: str | None = None,
     ) -> str:
         """Submit a new job.
 
@@ -433,6 +457,8 @@ class JobQueue:
             mode: Planning mode (hybrid/llm/template)
             attachments: Optional file attachments
             context: Optional context
+            owner: Submitter's session id
+            owner_role: Submitter's role (guest jobs expire with the guest session)
 
         Returns:
             Job ID
@@ -451,6 +477,8 @@ class JobQueue:
             prompt=prompt,
             attachments=attachments or [],
             context=context,
+            owner=owner,
+            owner_role=owner_role,
         )
         self._emit(job, "intent", text=self._intent_text(job))
 
@@ -477,6 +505,14 @@ class JobQueue:
             if cached is not None:
                 return cached
             return self._store.get(job_id)
+
+    async def get_owner(self, job_id: str) -> str | None:
+        """The job's ``owner`` without loading its result; ``None`` for an unknown or ownerless job."""
+        async with self._lock:
+            cached = self._jobs_cache.get(job_id)
+            if cached is not None:
+                return cached.owner
+            return self._store.get_owner(job_id)
 
     # --- Event log -------------------------------------------------------------
 
@@ -616,6 +652,7 @@ class JobQueue:
         status: JobStatus | None = None,
         limit: int = 20,
         offset: int = 0,
+        owner: str | None = None,
     ) -> list[Job]:
         """List jobs with optional filtering.
 
@@ -623,6 +660,7 @@ class JobQueue:
             status: Filter by status
             limit: Maximum results
             offset: Offset for pagination
+            owner: Only this owner's jobs; ``None`` lists every job (operators)
 
         Returns:
             List of jobs; finished jobs come without ``result`` (fetch one by id for it)
@@ -632,6 +670,9 @@ class JobQueue:
             all_jobs: dict[str, Job] = {j.id: j for j in self._store.list_summaries()}
             all_jobs.update(self._jobs_cache)
             jobs = list(all_jobs.values())
+
+            if owner is not None:
+                jobs = [j for j in jobs if j.owner == owner]
 
             # Filter by status
             if status:
@@ -643,39 +684,55 @@ class JobQueue:
             # Paginate
             return jobs[offset : offset + limit]
 
-    async def cleanup_old_jobs(self) -> int:
-        """Remove jobs older than retention period, with their ``OUTPUTS_PATH/<job_id>/`` artifact files.
+    async def cleanup_old_jobs(self, guest_hours: float | None = None) -> int:
+        """Remove old finished jobs with their ``OUTPUTS_PATH/<job_id>/`` artifact files.
+
+        A job is old when it finished more than ``retention_hours`` ago (unless that is
+        ``None``) or, with ``guest_hours``, when a guest submitted it more than
+        ``guest_hours`` ago. The rows go under the lock; the directories are deleted in
+        a thread so the event loop keeps serving.
 
         Returns:
             Number of jobs removed
         """
-        cutoff = datetime.now() - timedelta(hours=self.retention_hours)
-        removed = 0
-        dirs_removed = 0
+        now = datetime.now()
+        cutoff = now - timedelta(hours=self.retention_hours) if self.retention_hours is not None else None
+        guest_cutoff = now - timedelta(hours=guest_hours) if guest_hours is not None else None
+
+        def expired(job: Job) -> bool:
+            if job.completed_at is None:
+                return False
+            if cutoff is not None and job.completed_at < cutoff:
+                return True
+            return guest_cutoff is not None and job.owner_role == "guest" and job.created_at < guest_cutoff
 
         async with self._lock:
-            # Find old jobs from store
-            old_job_ids = [j.id for j in self._store.list_summaries() if j.completed_at and j.completed_at < cutoff]
-
-            # Remove them
-            outputs_root = artifact_files.OUTPUTS_PATH.resolve()
+            old_job_ids = [j.id for j in self._store.list_summaries() if expired(j)]
             for job_id in old_job_ids:
                 self._store.delete(job_id)
                 self._jobs_cache.pop(job_id, None)
-                removed += 1
 
-                job_dir = artifact_files.output_dir(job_id).resolve()
-                if outputs_root not in job_dir.parents:
-                    logger.warning(f"Job {job_id}: output directory {job_dir} is outside {outputs_root}, not removed")
-                elif job_dir.is_dir():
-                    shutil.rmtree(job_dir, ignore_errors=True)
-                    if not job_dir.exists():
-                        dirs_removed += 1
-
+        removed = len(old_job_ids)
+        dirs_removed = await asyncio.to_thread(self._remove_output_dirs, old_job_ids) if old_job_ids else 0
         if removed > 0:
             logger.info(f"Cleaned up {removed} old jobs and {dirs_removed} output directories")
 
         return removed
+
+    @staticmethod
+    def _remove_output_dirs(job_ids: list[str]) -> int:
+        """Delete ``OUTPUTS_PATH/<job_id>/`` for each id, never anything outside OUTPUTS_PATH. Blocking."""
+        outputs_root = artifact_files.OUTPUTS_PATH.resolve()
+        dirs_removed = 0
+        for job_id in job_ids:
+            job_dir = artifact_files.output_dir(job_id).resolve()
+            if outputs_root not in job_dir.parents:
+                logger.warning(f"Job {job_id}: output directory {job_dir} is outside {outputs_root}, not removed")
+            elif job_dir.is_dir():
+                shutil.rmtree(job_dir, ignore_errors=True)
+                if not job_dir.exists():
+                    dirs_removed += 1
+        return dirs_removed
 
     def get_stats(self) -> dict[str, Any]:
         """Get queue statistics.
@@ -711,13 +768,20 @@ class JobQueue:
             ids.update(self._jobs_cache.keys())
             return list(ids)
 
-    async def get_total_count(self) -> int:
+    async def get_total_count(self, owner: str | None = None) -> int:
         """Return total job count.
+
+        Args:
+            owner: Count only this owner's jobs; ``None`` counts every job
 
         Returns:
             Total number of jobs
         """
         async with self._lock:
+            if owner is not None:
+                jobs: dict[str, Job] = {j.id: j for j in self._store.list_summaries()}
+                jobs.update(self._jobs_cache)
+                return sum(1 for j in jobs.values() if j.owner == owner)
             ids = set(self._store.keys())
             ids.update(self._jobs_cache.keys())
             return len(ids)
@@ -1005,5 +1069,7 @@ def get_job_queue() -> JobQueue:
         else:
             store = MemoryJobStore()
             logger.info("Using in-memory job storage")
-        _job_queue = JobQueue(max_workers=3, max_queue_size=100, retention_hours=1, store=store)
+        # retention_hours=None: members' and operators' jobs are kept; guest jobs expire
+        # after GUEST_SESSION_HOURS (the periodic cleanup in server/app.py).
+        _job_queue = JobQueue(max_workers=3, max_queue_size=100, retention_hours=None, store=store)
     return _job_queue

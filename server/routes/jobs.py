@@ -19,6 +19,7 @@ from ..schemas import (
     JobSummary,
     QueueStatsResponse,
 )
+from ..sessions import CurrentSession, Session, enforce_analysis_quota
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,12 @@ def _job_record(job_dict: dict[str, Any]) -> JobRecord:
     return JobRecord.model_validate(job_dict)  # type: ignore[no-any-return]
 
 
+async def _ensure_visible(queue: JobQueue, job_id: str, session: Session) -> None:
+    """404, as for an unknown job, unless ``session`` may see ``job_id`` (its owner, or an operator)."""
+    if not session.operator and not session.can_see(await queue.get_owner(job_id)):
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+
 @router.post(  # type: ignore[misc]
     "/jobs",
     status_code=202,
@@ -36,12 +43,14 @@ def _job_record(job_dict: dict[str, Any]) -> JobRecord:
     summary="Submit async job",
     response_description="Created job queued for background processing",
 )
-async def submit_job(req: JobSubmitRequest) -> JobRecord:
+async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecord:
     """Submit a new async job.
 
     The job is queued and processed in the background.
     Poll ``GET /v1/jobs/{job_id}`` for status and results.
+    A guest beyond ``GUEST_ANALYSES_PER_HOUR`` gets 429 with code ``GUEST_QUOTA``.
     """
+    enforce_analysis_quota(session)
     try:
         queue = get_job_queue()
 
@@ -49,7 +58,12 @@ async def submit_job(req: JobSubmitRequest) -> JobRecord:
         logger.info(f"Job submit: {len(req.attachments)} attachments received: {attachments_dict}")
 
         job_id = await queue.submit_job(
-            prompt=req.prompt, mode=req.mode, attachments=attachments_dict, context=req.context
+            prompt=req.prompt,
+            mode=req.mode,
+            attachments=attachments_dict,
+            context=req.context,
+            owner=session.id,
+            owner_role=session.role,
         )
 
         job = await queue.get_job(job_id)
@@ -70,13 +84,13 @@ async def submit_job(req: JobSubmitRequest) -> JobRecord:
     response_model=JobRecord,
     summary="Get job status",
 )
-async def get_job_status(job_id: str) -> JobRecord:
+async def get_job_status(job_id: str, session: CurrentSession) -> JobRecord:
     """Return job status, progress, plan, results (when completed) and the event log (``events``)."""
     try:
         queue = get_job_queue()
         job = await queue.get_job(job_id)
 
-        if not job:
+        if not job or not session.can_see(job.owner):
             available_jobs = await queue.get_job_ids()
             logger.warning(f"Job {job_id} not found. Available jobs: {available_jobs}")
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -123,6 +137,7 @@ async def _event_frames(
 )
 async def stream_job_events(
     job_id: str,
+    session: CurrentSession,
     after: int | None = Query(None, ge=0, description="Replay only events with a larger id (wins over Last-Event-ID)"),
     last_event_id: str | None = Header(None, alias="Last-Event-ID"),
 ) -> StreamingResponse:
@@ -139,6 +154,7 @@ async def stream_job_events(
         except ValueError:
             after = 0
     queue = get_job_queue()
+    await _ensure_visible(queue, job_id, session)
     subscription = queue.subscribe(job_id, after)
     if subscription is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -155,7 +171,7 @@ async def stream_job_events(
     response_model=CancelJobResponse,
     summary="Cancel job",
 )
-async def cancel_job(job_id: str) -> CancelJobResponse:
+async def cancel_job(job_id: str, session: CurrentSession) -> CancelJobResponse:
     """Cancel a running or pending job.
 
     The status becomes ``cancelled`` immediately, but a running job stops only at the
@@ -164,6 +180,7 @@ async def cancel_job(job_id: str) -> CancelJobResponse:
     """
     try:
         queue = get_job_queue()
+        await _ensure_visible(queue, job_id, session)
         cancelled = await queue.cancel_job(job_id)
 
         if not cancelled:
@@ -187,11 +204,15 @@ async def cancel_job(job_id: str) -> CancelJobResponse:
     summary="List jobs",
 )
 async def list_jobs(
+    session: CurrentSession,
     status: str | None = Query(None, description="Filter by status: pending, running, completed, failed, cancelled"),
     limit: int = Query(20, ge=1, le=100, description="Maximum results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ) -> JobListResponse:
-    """List job summaries (no ``result``) with optional status filter and pagination."""
+    """List the caller's job summaries (no ``result``) with optional status filter and pagination.
+
+    Operators see every job, including those from before v0.6.0 that have no owner.
+    """
     try:
         queue = get_job_queue()
 
@@ -205,8 +226,9 @@ async def list_jobs(
                     detail=f"Invalid status: {status}. Must be one of: {', '.join(s.value for s in JobStatus)}",
                 ) from None
 
-        jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset)
-        total = await queue.get_total_count()
+        owner = None if session.operator else session.id
+        jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset, owner=owner)
+        total = await queue.get_total_count(owner=owner)
 
         return JobListResponse(
             jobs=[JobSummary.model_validate(j.to_dict()) for j in jobs],

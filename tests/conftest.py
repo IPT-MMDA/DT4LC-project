@@ -49,6 +49,19 @@ def _outputs_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
         yield outputs
 
 
+@pytest.fixture(autouse=True)
+def _dev_role_operator(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Run every request as an operator: no guest quota, and ownerless rows (as most tests store
+    them) stay visible. Session tests opt into ``guest`` or ``member`` with ``monkeypatch.setenv``.
+    The in-memory analysis counter starts empty for each test."""
+    from server.sessions import analysis_counter
+
+    monkeypatch.setenv("DEV_ROLE", "operator")
+    analysis_counter.clear()
+    yield
+    analysis_counter.clear()
+
+
 def pytest_runtest_setup(item: pytest.Item) -> None:
     """Skip ``llm``-marked tests, instead of failing them, when no provider is configured."""
     if item.get_closest_marker("llm") and (reason := _no_llm_provider_reason()):
