@@ -137,6 +137,35 @@ INDEX_CONFIG: dict[str, dict[str, Any]] = {
 }
 
 
+# Cover classes whose before/after/gained/lost areas the result reports, per index:
+# (result key, threshold). Open water is NDWI > 0.2; vegetation is NDVI > 0.3, the lower
+# bound of the LULC classifier's cropland/grassland and dense-vegetation classes.
+COVER_THRESHOLDS: dict[str, tuple[str, float]] = {"ndwi": ("water", 0.2), "ndvi": ("vegetation", 0.3)}
+
+
+def _pixel_km2(src: rasterio.DatasetReader) -> float | None:
+    """Area of one pixel in km² for a projected CRS, else ``None``."""
+    if src.crs is None or not src.crs.is_projected:
+        return None
+    return float(abs(src.transform.a * src.transform.e) * src.crs.linear_units_factor[1] ** 2 / 1e6)
+
+
+def _cover_areas(
+    index_before: np.ndarray, index_after: np.ndarray, valid: np.ndarray, threshold: float, pixel_km2: float
+) -> dict[str, float]:
+    """Cover (index > ``threshold``) in km² before and after, and gained / lost, on pixels valid on both dates."""
+    with np.errstate(invalid="ignore"):
+        before = valid & (index_before > threshold)
+        after = valid & (index_after > threshold)
+    return {
+        "before_km2": round(int(before.sum()) * pixel_km2, 3),
+        "after_km2": round(int(after.sum()) * pixel_km2, 3),
+        "gained_km2": round(int((after & ~before).sum()) * pixel_km2, 3),
+        "lost_km2": round(int((before & ~after).sum()) * pixel_km2, 3),
+        "threshold": threshold,
+    }
+
+
 def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int | None]:
     """Get band indices for different sensors.
 
@@ -370,7 +399,11 @@ def calculate_change(
         Dictionary containing:
             - rasters: GeoTIFF references ``change`` (after - before),
               ``index_before`` and ``index_after``
-            - statistics: Change statistics
+            - statistics: Change statistics; with a projected CRS also
+              ``areas_km2: {increase, decrease, stable}`` (change > 0.05,
+              < -0.05, within ±0.05) and, for NDWI ``water`` and for NDVI
+              ``vegetation``, ``{before_km2, after_km2, gained_km2, lost_km2,
+              threshold}`` (see :data:`COVER_THRESHOLDS`); ``None`` otherwise
             - classification: Pixel classification counts
             - metadata: Raster metadata
             - visualizations: PNG references (if matplotlib available)
@@ -415,7 +448,7 @@ def calculate_change(
         valid_mask = np.isfinite(change)
         valid_change = change[valid_mask]
 
-        statistics = {}
+        statistics: dict[str, Any] = {}
         classification = {}
 
         if valid_change.size > 0:
@@ -460,6 +493,25 @@ def calculate_change(
                 },
                 "total_valid_pixels": int(total),
             }
+
+            # Areas of the gain / loss / stable classes above, and of the index's cover class.
+            pixel_km2 = _pixel_km2(src_after)
+            statistics["areas_km2"] = (
+                {
+                    "increase": round(int(moderate_gain + strong_gain) * pixel_km2, 3),
+                    "decrease": round(int(severe_loss + moderate_loss) * pixel_km2, 3),
+                    "stable": round(int(stable) * pixel_km2, 3),
+                }
+                if pixel_km2 is not None
+                else None
+            )
+            if index_type in COVER_THRESHOLDS:
+                key, threshold = COVER_THRESHOLDS[index_type]
+                statistics[key] = (
+                    _cover_areas(index_before, index_after, valid_mask, threshold, pixel_km2)
+                    if pixel_km2 is not None
+                    else None
+                )
 
         # Index statistics for each image
         valid_before = index_before[np.isfinite(index_before)]
