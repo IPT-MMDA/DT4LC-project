@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   EE_FAILED,
   EE_FIXES,
+  MODEL_GATED,
+  MODEL_GATED_MESSAGE,
   NDMI_CONFIRMED,
   NDMI_PLAN,
   NDMI_PROPOSAL,
@@ -13,7 +15,7 @@ import {
   PRITHVI_PREPARING,
 } from '../../../test/jobEvents';
 import type { JobEvent } from '../../../types';
-import { analysisReducer, isTerminal, lastSeq, mergeEvents, statusOf, type AnalysisView } from './analysisReducer';
+import { analysisReducer, isTerminal, lastSeq, mergeEvents, refusalOf, statusOf, type AnalysisView } from './analysisReducer';
 
 const statuses = (v: AnalysisView) => v.steps.map((s) => s.status);
 
@@ -71,6 +73,20 @@ describe('analysisReducer over the server sequences', () => {
     expect(midRun?.stepIndex).toBe(2);
     expect(midRun?.fixes.map((f) => f.kind)).toEqual(['retry', 'prompt', 'open_map']);
     expect(midRun?.fixes[0].params).toEqual({ mode: 'template' });
+  });
+
+  it('a gated or missing model is a refusal; other failures are not', () => {
+    const gated = analysisReducer(MODEL_GATED);
+    expect(gated.phase).toBe('failed');
+    expect(refusalOf(gated)).toMatchObject({ code: 'MODEL_GATED', message: MODEL_GATED_MESSAGE });
+    expect(refusalOf(gated)?.fixes.map((f) => f.label)).toEqual(['See what I can do', 'Use a built-in analysis instead']);
+    const missing = MODEL_GATED.map((e) =>
+      e.type === 'failed' ? { ...e, data: { ...e.data, code: 'MODEL_NOT_INSTALLED' } } : e,
+    );
+    expect(refusalOf(analysisReducer(missing))?.code).toBe('MODEL_NOT_INSTALLED');
+    expect(refusalOf(analysisReducer(EE_FAILED))).toBeNull();
+    expect(refusalOf(analysisReducer(NDVI_FAILED_AT_2))).toBeNull();
+    expect(refusalOf(analysisReducer(MODEL_GATED.slice(0, 2)))).toBeNull();
   });
 
   it('the Preparing model row carries bytes, total and time left', () => {

@@ -10,7 +10,7 @@ import { useChatStore } from '../../../store/useChatStore';
 import type { AnalysisMessage as AnalysisMessageData } from '../../../types';
 import { cn } from '../../../utils/cn';
 import { Avatar } from '../Avatar';
-import { analysisReducer, isTerminal, type AnalysisView, type Fix, type StepRow } from './analysisReducer';
+import { analysisReducer, isTerminal, refusalOf, type AnalysisView, type Fix, type StepRow } from './analysisReducer';
 import { downloadLine, formatDuration } from './format';
 import { changeDraft, EXPLAIN_PROPOSAL } from './proposal';
 import { ResultCard } from '../result/ResultCard';
@@ -20,7 +20,8 @@ import { StatusGlyph, StatusPill, type PillStatus } from './StatusPill';
 // One assistant message narrates one analysis (DESIGN §4): intent, proposal with
 // Run · Change · Explain, the Planning skeleton, the running timeline with Cancel,
 // then the collapsed Done line with the result card, interpretation and follow-ups,
-// or the open Failed timeline with its fixes.
+// or the open Failed timeline with its fixes. A refusal about this server (a model
+// gated or not installed) is one plain sentence with its fixes instead.
 
 export interface AnalysisMessageProps {
   message: AnalysisMessageData;
@@ -204,16 +205,21 @@ function Failure({ view, onFix }: { view: AnalysisView; onFix: (fix: Fix) => voi
           </pre>
         )}
       </div>
-      {failure.fixes.length > 0 && (
-        <div aria-label="Fixes" role="group" className="flex flex-wrap gap-2 text-control">
-          {failure.fixes.map((fix, i) => (
-            <button key={`${fix.kind}-${fix.label}`} type="button" onClick={() => onFix(fix)} className={i === 0 ? primary : outline}>
-              {fix.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <Fixes fixes={failure.fixes} onFix={onFix} />
     </>
+  );
+}
+
+function Fixes({ fixes, onFix }: { fixes: Fix[]; onFix: (fix: Fix) => void }) {
+  if (fixes.length === 0) return null;
+  return (
+    <div aria-label="Fixes" role="group" className="flex flex-wrap gap-2 text-control">
+      {fixes.map((fix, i) => (
+        <button key={`${fix.kind}-${fix.label}`} type="button" onClick={() => onFix(fix)} className={i === 0 ? primary : outline}>
+          {fix.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -335,7 +341,19 @@ export function AnalysisMessage({ message, prompt, context = NO_CONTEXT, onSend,
     </p>
   );
 
-  const analysis = (
+  const refusal = refusalOf(view);
+  const analysis = refusal ? (
+    <div className="flex gap-3 min-w-0">
+      <Avatar />
+      <div className="flex-1 min-w-0 flex flex-col gap-3">
+        <p className="text-body" data-testid="analysis-refusal">
+          {refusal.message}
+        </p>
+        <Fixes fixes={refusal.fixes} onFix={(fix) => void onFix(fix)} />
+        {alert}
+      </div>
+    </div>
+  ) : (
     <div className="flex gap-3 min-w-0">
       <Avatar />
       <div className="flex-1 min-w-0 flex flex-col gap-3">

@@ -8,6 +8,8 @@ import { useChatStore } from '../../../store/useChatStore';
 import { SAMPLE } from '../../../test/fixtures';
 import {
   EE_FAILED,
+  MODEL_GATED,
+  MODEL_GATED_MESSAGE,
   NDMI_CONFIRMED,
   NDMI_PROPOSAL,
   NDVI_CANCELLED,
@@ -263,6 +265,35 @@ describe('failed', () => {
     expect(post).toHaveBeenCalledWith('/v1/sample');
     expect(useChatStore.getState().pendingAttachments.map((a) => a.path)).toEqual(SAMPLE.attachments.map((a) => a.path));
     expect(onSend).toHaveBeenCalledWith(PROMPT);
+  });
+});
+
+describe('model gated for a guest (workspace-model-gated-for-guest.png)', () => {
+  it('one assistant sentence with its fixes: no Failed pill, timeline, code or show raw', () => {
+    renderAnalysis(MODEL_GATED);
+    expect(message().dataset.phase).toBe('failed');
+    expect(screen.getByTestId('analysis-refusal').textContent).toBe(MODEL_GATED_MESSAGE);
+    expect(screen.queryByText("I'll run Prithvi MAE Reconstruction on the sample.")).toBeNull();
+    expect(screen.queryByTestId('status-pill')).toBeNull();
+    expect(screen.queryByTestId('analysis-timeline')).toBeNull();
+    expect(screen.queryByTestId('failure-code')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'show raw' })).toBeNull();
+    const fixes = within(screen.getByRole('group', { name: 'Fixes' })).getAllByRole('button');
+    expect(fixes.map((b) => b.textContent)).toEqual(['See what I can do', 'Use a built-in analysis instead']);
+    fireEvent.click(fixes[0]);
+    expect(onSend).toHaveBeenCalledWith('What can you do?');
+  });
+
+  it('a model not installed (member) reads the same way', () => {
+    renderAnalysis(
+      MODEL_GATED.map((e) =>
+        e.type === 'failed'
+          ? { ...e, data: { ...e.data, code: 'MODEL_NOT_INSTALLED', message: "Prithvi EO v1 (100M) isn't installed on this server (450 MB) — ask an operator to install it." } }
+          : e,
+      ),
+    );
+    expect(screen.getByTestId('analysis-refusal').textContent).toMatch(/^Prithvi EO v1 \(100M\) isn't installed on this server/);
+    expect(screen.queryByTestId('status-pill')).toBeNull();
   });
 });
 
