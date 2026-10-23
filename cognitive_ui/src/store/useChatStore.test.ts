@@ -3,6 +3,7 @@ import type { AnalysisMessage, Attachment, JobResultData, NewChatMessage, UserMe
 import {
   CHAT_STORAGE_KEY,
   CHAT_STORAGE_VERSION,
+  conversationMeta,
   findConversationByJobId,
   getContextForBackend,
   selectActiveMessages,
@@ -160,6 +161,61 @@ describe('composer', () => {
     store.getState().setPendingRegion(null);
     expect(store.getState().pendingAttachments).toEqual([]);
     expect(store.getState().pendingRegion).toBeNull();
+  });
+});
+
+describe('the sample pair in the composer', () => {
+  const group = { name: 'kakhovka_hls_l30', line: 'HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09' };
+  const before: Attachment = { id: '6774daf7', filename: 'hlsl_20230601.tif', path: '/u/6774daf7_hlsl_20230601.tif', group };
+  const after: Attachment = { id: '6774daf7', filename: 'hlsl_20230609.tif', path: '/u/6774daf7_hlsl_20230609.tif', group };
+
+  it('keys attachments by path: both files share one id, and attaching again adds nothing', async () => {
+    const store = await loadFreshStore();
+    store.getState().addAttachment(before);
+    store.getState().addAttachment(after);
+    store.getState().addAttachment(before);
+    store.getState().addAttachment(after);
+    expect(store.getState().pendingAttachments).toEqual([before, after]);
+  });
+
+  it('keeps the group on a sent message across a reload', async () => {
+    const store = await loadFreshStore();
+    store.getState().addMessage({ kind: 'user', text: 'Compare water', attachments: [before, after] });
+    const reloaded = await loadFreshStore();
+    const [sent] = selectActiveMessages(reloaded.getState()) as [UserMessage];
+    expect(sent.attachments?.map((a) => a.group)).toEqual([group, group]);
+  });
+});
+
+describe('conversationMeta', () => {
+  it('counts a group once and finished analyses as results', async () => {
+    const store = await loadFreshStore();
+    const group = { name: 'kakhovka_hls_l30', line: '' };
+    const { conversationId } = store.getState().addMessage({
+      kind: 'user',
+      text: 'Compare water',
+      attachments: [
+        { id: 's', filename: 'a.tif', path: '/u/a.tif', group },
+        { id: 's', filename: 'b.tif', path: '/u/b.tif', group },
+      ],
+    });
+    const conversation = () => store.getState().conversations.find((c) => c.id === conversationId)!;
+    expect(conversationMeta(conversation())).toBe('1 file');
+
+    store.getState().addMessage(analysis('job-1'));
+    store.getState().addMessage(analysis('job-2'));
+    store.getState().updateAnalysis('job-1', { status: 'done' });
+    expect(conversationMeta(conversation())).toBe('1 file · 1 result');
+
+    store.getState().updateAnalysis('job-2', { status: 'done' });
+    store.getState().addMessage({ kind: 'user', text: 'and this', attachments: [{ id: 'c', filename: 'c.tif', path: '/u/c.tif' }] });
+    expect(conversationMeta(conversation())).toBe('2 files · 2 results');
+  });
+
+  it('is empty for a conversation without files or results', async () => {
+    const store = await loadFreshStore();
+    store.getState().addMessage(user('hello'));
+    expect(conversationMeta(store.getState().conversations[0])).toBe('');
   });
 });
 

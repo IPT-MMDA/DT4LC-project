@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
+import type { UploadMetadata } from '../../types';
 
-interface UploadResponse {
+export interface UploadResponse {
   id: string;
   filename: string;
   path: string;
@@ -8,6 +9,7 @@ interface UploadResponse {
   crs: string | null;
   bounds: [number, number, number, number];
   preview_url: string;
+  metadata?: UploadMetadata;
 }
 
 export interface GeoTIFFFile {
