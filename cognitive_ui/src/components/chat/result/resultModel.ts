@@ -1,5 +1,5 @@
 import type { JobRecord } from '../../../api/jobs';
-import type { LayerLegend, LngLatBounds } from '../../../store/useAppStore';
+import type { LayerLegend, LegendClass, LngLatBounds } from '../../../store/useAppStore';
 import type { ChatRegion, MessageAttachment } from '../../../types';
 
 // What a finished analysis shows as its result card (design/DESIGN.md §4), read from
@@ -328,7 +328,9 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
   const beforeBare = bareOf(vis, 'index_before', `${key}_before`);
   const afterBare = bareOf(vis, 'index_after', `${key}_after`);
   // Swatches from the change ramp: its first stop is lost, the middle no change, the last gained.
-  const stops = rampOf(styleOf(changeBare))?.stops;
+  const changeRamp = rampOf(styleOf(changeBare));
+  const stops = changeRamp?.stops;
+  const classes = changeClasses(artifact);
   const colour = (tone: Tone) => stops && (tone === 'lost' ? stops[0] : tone === 'gained' ? stops[stops.length - 1] : stops[(stops.length - 1) >> 1]);
   const item = (label: string, tone: Tone): LegendItem => ({ label, tone, ...(stops && { colour: colour(tone) }) });
   const legend: LegendItem[] = bandMath
@@ -357,7 +359,11 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
         image: asRef(vis.change_map),
         bare: changeBare,
         raster: asRef(rasters.change),
-        legend: stops ? { kind: 'change', stops } : { kind: 'change' },
+        legend: {
+          kind: 'change',
+          ...(changeRamp && { stops: changeRamp.stops, range: changeRamp.range }),
+          ...(classes.length > 0 && { classes }),
+        },
       },
       {
         key: 'before',
@@ -381,6 +387,30 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
       },
     ],
   };
+}
+
+const TONE_ORDER: Record<Tone, number> = { lost: 0, neutral: 1, gained: 2 };
+
+/**
+ * A change result's classes from `class_statistics` (`{name: {name, colour, area_km2, ...}}`):
+ * "Water gained" → gained, "Drier" → lost, "No change" / "Stable" → neutral; lost first.
+ * The label drops the subject ("gained"), as the map legend reads "lost 0.6 km²".
+ */
+function changeClasses(artifact: Obj): LegendClass[] {
+  return Object.values(obj(artifact.class_statistics))
+    .map(obj)
+    .filter((c) => typeof c.name === 'string')
+    .map((c): LegendClass => {
+      const name = String(c.name);
+      const tone: Tone = /gain|wetter|increase/i.test(name) ? 'gained' : /lost|loss|drier|decrease/i.test(name) ? 'lost' : 'neutral';
+      return {
+        label: name.toLowerCase().replace(/^(water|vegetation) /, ''),
+        tone,
+        ...(isHex(c.colour) && { colour: c.colour }),
+        ...(isNum(c.area_km2) && { area_km2: c.area_km2 }),
+      };
+    })
+    .sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone]);
 }
 
 function singleFile(context: AnalysedContext, artifacts: Obj, artifact: Obj) {

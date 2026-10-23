@@ -11,6 +11,7 @@ const ROLES = {
   drawing: 'canc',
   vertexFill: 'surface',
   boundaries: 'canc',
+  footprint: 'canc',  // a raster's outline (the sample's footprint)
 } as const;
 
 export type MapColours = Record<keyof typeof ROLES, string>;

@@ -9,7 +9,12 @@ import { MapContainer } from './MapContainer';
 const fitBounds = vi.fn();
 vi.mock('react-map-gl/maplibre', () => ({
   default: forwardRef(({ children, onLoad }: { children?: ReactNode; onLoad?: () => void }, ref) => {
-    useImperativeHandle(ref, () => ({ getMap: () => null, fitBounds, getContainer: () => document.createElement('div') }));
+    useImperativeHandle(ref, () => ({
+      getMap: () => null,
+      fitBounds,
+      cameraForBounds: () => ({ center: { lng: 32.54, lat: 46.56 }, zoom: 11.2 }),
+      getContainer: () => document.createElement('div'),
+    }));
     // A map loads once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => onLoad?.(), []);
@@ -26,6 +31,7 @@ vi.mock('react-map-gl/maplibre', () => ({
 // Minimal stand-in for the MapboxDraw wrapper: it holds features until deleteAll(),
 // as the real control does. MapContainer calls deleteAll() after every draw.create.
 let drawFeatures: unknown[] = [];
+const changeMode = vi.fn();
 let fireCreate: (event: { features: unknown[] }) => void = () => {};
 vi.mock('./DrawControl', () => ({
   DrawControl: forwardRef(
@@ -35,7 +41,7 @@ vi.mock('./DrawControl', () => ({
         onCreate(event);
       };
       useImperativeHandle(ref, () => ({
-        changeMode: () => {},
+        changeMode,
         deleteAll: () => {
           drawFeatures = [];
         },
@@ -46,9 +52,13 @@ vi.mock('./DrawControl', () => ({
   ),
 }));
 
-vi.mock('./JobLayersManager', () => ({ JobLayersManager: () => null }));
+vi.mock('./JobLayersManager', () => ({ JobLayersManager: () => null, RasterAnchor: () => null }));
 vi.mock('./OblastBoundaries', () => ({ OblastBoundaries: () => null }));
-vi.mock('./LocationQuickAccess', () => ({ LocationQuickAccess: () => null }));
+// Map mode's overlays other than the toolbar need a real map.
+vi.mock('./mode/MapControls', () => ({ MapControls: () => null }));
+vi.mock('./mode/MapLegend', () => ({ MapLegend: () => null }));
+vi.mock('./mode/RegionLabel', () => ({ RegionLabel: () => null }));
+vi.mock('./mode/CompareSwipe', () => ({ CompareSwipe: () => null }));
 
 const polygon = {
   type: 'Feature',
@@ -61,8 +71,9 @@ const polygon = {
 
 beforeEach(() => {
   localStorage.clear();
-  useAppStore.setState({ drawnRegions: [], selectedRegion: null, fitRequest: null });
+  useAppStore.setState({ drawnRegions: [], selectedRegion: null, fitRequest: null, mapTool: 'pan', mapView: null });
   fitBounds.mockClear();
+  changeMode.mockClear();
 });
 
 afterEach(() => {
@@ -92,6 +103,8 @@ describe('MapContainer fit requests (On map, Fit to result)', () => {
     render(<MapContainer docked />);
     expect(fitBounds).toHaveBeenCalledWith([[32.38, 46.45], [32.69, 46.66]], expect.objectContaining({ padding: 48 }));
     expect(useAppStore.getState().fitRequest).toBeNull();
+    // The target view is kept, so map mode opens there even if this map goes mid-animation.
+    expect(useAppStore.getState().mapView).toEqual({ longitude: 32.54, latitude: 46.56, zoom: 11.2 });
   });
 
   it('zooms to a request made while it is shown', () => {
@@ -100,5 +113,33 @@ describe('MapContainer fit requests (On map, Fit to result)', () => {
     act(() => useAppStore.getState().requestFit([1, 2, 3, 4]));
     expect(fitBounds).toHaveBeenCalledWith([[1, 2], [3, 4]], expect.anything());
     expect(useAppStore.getState().fitRequest).toBeNull();
+  });
+});
+
+describe('MapContainer toolbar (map mode)', () => {
+  it('switches the draw control with Pan / Polygon / Rectangle and goes back to Pan after a drawing', () => {
+    render(<MapContainer />);
+    fireEvent.click(screen.getByRole('button', { name: 'Rectangle' }));
+    expect(useAppStore.getState().mapTool).toBe('rectangle');
+    expect(changeMode).toHaveBeenLastCalledWith('draw_rectangle');
+    expect(screen.getByRole('button', { name: 'Rectangle' }).getAttribute('aria-pressed')).toBe('true');
+
+    act(() => fireCreate({ features: [polygon] }));
+    expect(useAppStore.getState().drawnRegions).toHaveLength(1);
+    expect(useAppStore.getState().mapTool).toBe('pan');
+    expect(changeMode).toHaveBeenLastCalledWith('simple_select');
+
+    // Draw new in the panel sets the tool; Escape cancels it.
+    act(() => useAppStore.getState().setMapTool('polygon'));
+    expect(changeMode).toHaveBeenLastCalledWith('draw_polygon');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(useAppStore.getState().mapTool).toBe('pan');
+  });
+
+  it('the docked map has no toolbar and ignores the tool', () => {
+    render(<MapContainer docked />);
+    expect(screen.queryByRole('toolbar', { name: 'Draw' })).toBeNull();
+    act(() => useAppStore.getState().setMapTool('rectangle'));
+    expect(changeMode).not.toHaveBeenCalled();
   });
 });

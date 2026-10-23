@@ -247,6 +247,9 @@ function Actions({ jobId, model, view }: { jobId: string; model: ResultCardModel
       url: raster.path,
       bounds: model.bounds,
       legend: view.legend,
+      source: 'chat',
+      subtitle: 'from chat',
+      addedAt: new Date().toISOString(),
     });
     // Below 1440 px there is no docked map: open the map with the layer on it.
     if (!docked) navigate('/app/map');

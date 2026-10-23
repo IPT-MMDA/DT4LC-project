@@ -3,13 +3,8 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useChatStore, conversationMeta } from '../../store/useChatStore';
 import type { Conversation } from '../../types';
 import { cn } from '../../utils/cn';
+import { emptyListText } from './emptyListText';
 import { SessionBadge } from './SessionBadge';
-
-/** The empty list's line: a guest's conversations stay for `keptHours`, a member's until deleted. */
-export function emptyListText(keptHours: number | null): string {
-  const kept = keptHours === null ? '' : ` and stay for ${keptHours} h`;
-  return `No conversations yet. They appear here as you work${kept}.`;
-}
 
 const iconButton = 'w-6 h-6 flex items-center justify-center rounded-[5px] text-muted hover:text-text hover:bg-surface';
 

@@ -7,7 +7,8 @@ import { useConversationRetention } from '../../hooks/useConversationRetention';
 import { useChatStore } from '../../store/useChatStore';
 import { GUEST_SESSION, MEMBER_SESSION, OPERATOR_SESSION } from '../../test/fixtures';
 import type { SessionInfo } from '../../types';
-import { ConversationList, emptyListText } from './ConversationList';
+import { ConversationList } from './ConversationList';
+import { emptyListText } from './emptyListText';
 
 const assistant = (connected: boolean) => ({
   connected,

@@ -70,7 +70,17 @@ describe('card selection by artifact kind', () => {
     expect(c.views[2].bare?.url).toMatch(/ndwi_after_bare\.png$/);
     expect(c.views[2].raster?.path).toMatch(/index_after\.tif$/);
     // Layer legends: the styles the tiles are drawn in.
-    expect(c.views[0].legend).toEqual({ kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'] });
+    // The difference layer's legend: the change style and the class areas (class_statistics).
+    expect(c.views[0].legend).toEqual({
+      kind: 'change',
+      stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'],
+      range: [-0.5, 0.5],
+      classes: [
+        { label: 'lost', tone: 'lost', colour: '#8c4a2f', area_km2: 0.603 },
+        { label: 'no change', tone: 'neutral', colour: '#c4cad6', area_km2: 373.476 },
+        { label: 'gained', tone: 'gained', colour: '#2d5f9e', area_km2: 156.761 },
+      ],
+    });
     expect(c.views[1].legend).toEqual({
       kind: 'ramp',
       stops: ['#996633', '#ccb280', '#f2f2f2', '#99ccff', '#3380e6', '#003399'],
@@ -131,8 +141,8 @@ describe('card selection by artifact kind', () => {
     expect(c.views[0].bare?.url).toMatch(/2_BandMathChangeMap_change_map_bare\.png$/);
     expect(c.views[1].bare?.url).toMatch(/index_before_bare\.png$/);
     expect(c.views[1].image?.url).toMatch(/index_before\.png$/);
-    // Band-math change is drawn over ±display_range[1]; the layer legend keeps the ramp.
-    expect(c.views[0].legend).toEqual({ kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'] });
+    // Band-math change is drawn over ±display_range[1]; the layer legend keeps the ramp and that range.
+    expect(c.views[0].legend).toEqual({ kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'], range: [-0.41093224674729933, 0.41093224674729933] });
     expect(c.views[1].legend).toMatchObject({ kind: 'ramp', range: [-1, 1] });
   });
 

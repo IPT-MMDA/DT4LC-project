@@ -28,6 +28,7 @@ export interface ChatRegionRequest {
   start_date: string;
   end_date: string;
   cloud_max: number;
+  bands?: string[];
 }
 
 export interface ChatRequest {
@@ -85,6 +86,7 @@ export function toChatRegion(r: ChatRegion): ChatRegionRequest {
     start_date: r.start_date,
     end_date: r.end_date,
     cloud_max: r.cloud_max,
+    ...(r.bands && r.bands.length > 0 ? { bands: r.bands } : {}),
   };
 }
 

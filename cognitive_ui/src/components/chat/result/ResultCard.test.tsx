@@ -133,7 +133,19 @@ describe('change card (NDWI on the sample)', () => {
         opacity: 0.8,
         url: expect.stringMatching(/^\/app\/resources\/\.cache\/outputs\/.*2_ChangeMap_change\.tif$/),
         bounds: BOUNDS,
-        legend: { kind: 'change', stops: CHANGE_RAMP },
+        legend: {
+          kind: 'change',
+          stops: CHANGE_RAMP,
+          range: [-0.5, 0.5],
+          classes: [
+            { label: 'lost', tone: 'lost', colour: '#8c4a2f', area_km2: 0.603 },
+            { label: 'no change', tone: 'neutral', colour: '#c4cad6', area_km2: 373.476 },
+            { label: 'gained', tone: 'gained', colour: '#2d5f9e', area_km2: 156.761 },
+          ],
+        },
+        source: 'chat',
+        subtitle: 'from chat',
+        addedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       },
     ]);
     expect(fitRequest).toEqual(BOUNDS);

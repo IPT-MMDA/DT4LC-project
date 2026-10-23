@@ -1,12 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { RegionDataset } from '../types';
 
 /** WGS84 [west, south, east, north]. */
 export type LngLatBounds = [number, number, number, number];
 
-/** The colour key a result layer shows in the docked map's Layers panel. */
+/** A class of a change result with its area: "lost 0.6 km²" in the map legend. */
+export interface LegendClass {
+  label: string;  // lost, no change, gained; wetter, drier; increase, stable
+  tone: 'gained' | 'lost' | 'neutral';
+  colour?: string;  // the class colour from `class_statistics`
+  area_km2?: number;
+}
+
+/** The colour key a result layer shows in the Layers panel and the map legend. */
 export type LayerLegend =
-  | { kind: 'change'; stops?: string[] }  // lost · same · gained: the raster style's ramp, else the legend-* tokens
+  // lost · same · gained: the raster style's ramp (else the legend-* tokens), its range and the class areas
+  | { kind: 'change'; stops?: string[]; range?: [number, number]; classes?: LegendClass[] }
   | { kind: 'ramp'; stops: string[]; range: [number, number] };  // an index colour ramp
 
 export interface Layer {
@@ -18,6 +28,36 @@ export interface Layer {
   url?: string; // Optional URL for GeoTIFF layers
   bounds?: LngLatBounds;  // result layers: what Fit to result zooms to
   legend?: LayerLegend;
+  source?: 'chat' | 'sample' | 'earth-engine';  // where it came from: a result card's On map, the sample, Fetch to map
+  subtitle?: string;  // map mode's second line, e.g. "HLS L30 · true colour · 2023-06-09"
+  addedAt?: string;  // ISO 8601: "from chat · just now"
+  footprint?: [number, number][];  // the raster's WGS84 corners (metadata.footprint_wgs84), drawn as its outline
+  thumbnail?: string;  // server-relative preview URL: the swatch of imagery without a ramp
+}
+
+/** Map mode's drawing tool: Pan, Polygon or Rectangle. */
+export type MapTool = 'pan' | 'polygon' | 'rectangle';
+
+/** The imagery panel's request: the region fields of POST /v1/jobs and /v1/chat. */
+export interface Imagery {
+  dataset: RegionDataset;
+  start_date: string;  // YYYY-MM-DD
+  end_date: string;
+  cloud_max: number;  // percent
+  bands: string[];  // band codes of the dataset
+}
+
+export interface MapView {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+}
+
+/** Compare: `left` shows left of the divider, `right` right of it; `split` is the divider's place, 0..1. */
+export interface CompareState {
+  left: string;
+  right: string;
+  split: number;
 }
 
 export interface DrawnRegion {
@@ -32,51 +72,33 @@ export interface DrawnRegion {
 interface AppStore {
   // UI State
   theme: 'light' | 'dark' | 'auto';
-  useNewDatasetPanel: boolean; // Feature flag for new dataset selection panel
 
   // Map State
   currentBasemap: string;
   mapLayers: Layer[];
-  selectedFeature: any | null;
-  mapInstance: any | null; // MapLibre map instance
+  selectedFeature: GeoJSON.Feature | null;
   fitRequest: LngLatBounds | null;  // bounds the mounted map should zoom to next
+  mapTool: MapTool;
+  regionOpacity: number;  // the drawn regions' layer row, 0..1
+  compare: CompareState | null;  // null: no divider
+  mapView: MapView | null;  // the last view of either map, so map mode opens where the docked map was
 
   // Map Regions
   drawnRegions: DrawnRegion[];
   selectedRegion: DrawnRegion | null;
 
-  // Dataset Selection State
-  selectedDatasetId: string; // 'sentinel-2' | 'modis' | 'landsat-8' | 'custom'
-  selectedBands: string[];
-  selectedIndices: ('ndvi' | 'ndwi' | 'ndsi')[];
-  prePeriod: { start: string; end: string };
-  postPeriod: { start: string; end: string };
-  useNowForPost: boolean;
-  cloudCoverMax: number;
-  isFetchingDatasets: boolean;
-  fetchError: string | null;
+  // Map mode's imagery panel; null until edited (the panel shows its defaults)
+  imagery: Imagery | null;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'auto') => void;
-  toggleDatasetPanelVersion: () => void;
-
-  // Dataset Selection Actions
-  setSelectedDataset: (datasetId: string) => void;
-  toggleBand: (bandId: string) => void;
-  setBands: (bands: string[]) => void;
-  toggleIndex: (index: 'ndvi' | 'ndwi' | 'ndsi') => void;
-  setPrePeriod: (start: string, end: string) => void;
-  setPostPeriod: (start: string, end: string) => void;
-  setUseNowForPost: (useNow: boolean) => void;
-  setCloudCoverMax: (max: number) => void;
-  setIsFetchingDatasets: (isFetching: boolean) => void;
-  setFetchError: (error: string | null) => void;
-  resetSelection: () => void;
+  setImagery: (imagery: Imagery) => void;
 
   // Map Actions
   setBasemap: (basemap: string) => void;
-  setMapInstance: (instance: any | null) => void;
   addLayer: (layer: Layer) => void;
+  /** Add a layer under all others unless one with its id is there (the sample's true colour). */
+  addBaseLayer: (layer: Layer) => void;
   /** Add a result layer, or replace the one with the same id, and zoom the map to it. */
   addResultLayer: (layer: Layer) => void;
   requestFit: (bounds: LngLatBounds) => void;
@@ -84,10 +106,15 @@ interface AppStore {
   removeLayer: (layerId: string) => void;
   toggleLayerVisibility: (layerId: string) => void;
   setLayerOpacity: (layerId: string, opacity: number) => void;
-  setSelectedFeature: (feature: any | null) => void;
+  setRegionOpacity: (opacity: number) => void;
+  setSelectedFeature: (feature: GeoJSON.Feature | null) => void;
+  setMapTool: (tool: MapTool) => void;
+  setCompare: (compare: CompareState | null) => void;
+  setMapView: (view: MapView) => void;
 
   // Map Region Actions
   addRegion: (region: DrawnRegion) => void;
+  /** Also updates the selected region when it is this one (Rename). */
   updateRegion: (id: string, updates: Partial<DrawnRegion>) => void;
   deleteRegion: (id: string) => void;
   setSelectedRegion: (region: DrawnRegion | null) => void;
@@ -95,122 +122,39 @@ interface AppStore {
 
 }
 
-// Helper to calculate default dates
-function getDefaultDates() {
-  const today = new Date();
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(today.getDate() - 30);
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(today.getDate() - 7);
-
-  return {
-    preStart: thirtyDaysAgo.toISOString().split('T')[0],
-    preEnd: today.toISOString().split('T')[0],
-    postStart: sevenDaysAgo.toISOString().split('T')[0],
-    postEnd: today.toISOString().split('T')[0],
-  };
-}
-
 export const useAppStore = create<AppStore>()(
   persist(
-    (set) => {
-      const defaultDates = getDefaultDates();
-
-      return {
+    (set) => ({
       // Initial state
       theme: 'light',
-      useNewDatasetPanel: true, // Default to new panel for new users
       currentBasemap: 'satellite',
       mapLayers: [],
       selectedFeature: null,
-      mapInstance: null,
       fitRequest: null,
+      mapTool: 'pan',
+      regionOpacity: 1,
+      compare: null,
+      mapView: null,
       drawnRegions: [],
       selectedRegion: null,
-
-      // Dataset Selection Initial State
-      selectedDatasetId: 'sentinel-2',
-      selectedBands: ['B2', 'B3', 'B4', 'B8', 'B11'], // Include NIR+SWIR for indices
-      selectedIndices: [],
-      prePeriod: { start: defaultDates.preStart, end: defaultDates.preEnd },
-      postPeriod: { start: defaultDates.postStart, end: defaultDates.postEnd },
-      useNowForPost: true,
-      cloudCoverMax: 20,
-      isFetchingDatasets: false,
-      fetchError: null,
+      imagery: null,
 
   // UI Actions
   setTheme: (theme) =>
     set({ theme }),
 
-  toggleDatasetPanelVersion: () =>
-    set((state) => ({ useNewDatasetPanel: !state.useNewDatasetPanel })),
-
-  // Dataset Selection Actions
-  setSelectedDataset: (datasetId) =>
-    set({ selectedDatasetId: datasetId }),
-
-  toggleBand: (bandId) =>
-    set((state) => {
-      const bands = state.selectedBands.includes(bandId)
-        ? state.selectedBands.filter((b) => b !== bandId)
-        : [...state.selectedBands, bandId];
-      return { selectedBands: bands };
-    }),
-
-  setBands: (bands) =>
-    set({ selectedBands: bands }),
-
-  toggleIndex: (index) =>
-    set((state) => {
-      const indices = state.selectedIndices.includes(index)
-        ? state.selectedIndices.filter((i) => i !== index)
-        : [...state.selectedIndices, index];
-      return { selectedIndices: indices };
-    }),
-
-  setPrePeriod: (start, end) =>
-    set({ prePeriod: { start, end } }),
-
-  setPostPeriod: (start, end) =>
-    set({ postPeriod: { start, end } }),
-
-  setUseNowForPost: (useNow) =>
-    set({ useNowForPost: useNow }),
-
-  setCloudCoverMax: (max) =>
-    set({ cloudCoverMax: max }),
-
-  setIsFetchingDatasets: (isFetching) =>
-    set({ isFetchingDatasets: isFetching }),
-
-  setFetchError: (error) =>
-    set({ fetchError: error }),
-
-  resetSelection: () => {
-    const defaultDates = getDefaultDates();
-    set({
-      selectedDatasetId: 'sentinel-2',
-      selectedBands: ['B2', 'B3', 'B4', 'B8', 'B11'], // Include NIR+SWIR for indices
-      selectedIndices: [],
-      prePeriod: { start: defaultDates.preStart, end: defaultDates.preEnd },
-      postPeriod: { start: defaultDates.postStart, end: defaultDates.postEnd },
-      useNowForPost: true,
-      cloudCoverMax: 20,
-      isFetchingDatasets: false,
-      fetchError: null,
-    });
-  },
+  setImagery: (imagery) =>
+    set({ imagery }),
 
   // Map Actions
   setBasemap: (basemap) =>
     set({ currentBasemap: basemap }),
 
-  setMapInstance: (instance) =>
-    set({ mapInstance: instance }),
-
   addLayer: (layer) =>
     set((state) => ({ mapLayers: [...state.mapLayers, layer] })),
+
+  addBaseLayer: (layer) =>
+    set((state) => (state.mapLayers.some((l) => l.id === layer.id) ? {} : { mapLayers: [layer, ...state.mapLayers] })),
 
   addResultLayer: (layer) =>
     set((state) => ({
@@ -243,8 +187,20 @@ export const useAppStore = create<AppStore>()(
       ),
     })),
 
+  setRegionOpacity: (opacity) =>
+    set({ regionOpacity: opacity }),
+
   setSelectedFeature: (feature) =>
     set({ selectedFeature: feature }),
+
+  setMapTool: (tool) =>
+    set({ mapTool: tool }),
+
+  setCompare: (compare) =>
+    set({ compare }),
+
+  setMapView: (view) =>
+    set({ mapView: view }),
 
   // Map Region Actions
   addRegion: (region) =>
@@ -258,6 +214,7 @@ export const useAppStore = create<AppStore>()(
       drawnRegions: state.drawnRegions.map((r) =>
         r.id === id ? { ...r, ...updates } : r
       ),
+      selectedRegion: state.selectedRegion?.id === id ? { ...state.selectedRegion, ...updates } : state.selectedRegion,
     })),
 
   deleteRegion: (id) =>
@@ -272,8 +229,7 @@ export const useAppStore = create<AppStore>()(
   clearRegions: () =>
     set({ drawnRegions: [], selectedRegion: null }),
 
-    };
-  },
+    }),
     {
       name: 'dt4lc-app-storage',
       partialize: (state) => ({
@@ -281,12 +237,7 @@ export const useAppStore = create<AppStore>()(
         selectedRegion: state.selectedRegion,
         currentBasemap: state.currentBasemap,
         theme: state.theme,
-        useNewDatasetPanel: state.useNewDatasetPanel,
-        selectedDatasetId: state.selectedDatasetId,
-        prePeriod: state.prePeriod,
-        postPeriod: state.postPeriod,
-        useNowForPost: state.useNowForPost,
-        cloudCoverMax: state.cloudCoverMax,
+        imagery: state.imagery,
       }),
     }
   )

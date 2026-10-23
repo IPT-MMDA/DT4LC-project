@@ -51,6 +51,7 @@ describe('map colours follow the theme tokens (QA D2)', () => {
       drawing: '#ffaa00',
       vertexFill: '#ffffff',
       boundaries: '#ffaa00',
+      footprint: '#ffaa00',
     });
   });
 
