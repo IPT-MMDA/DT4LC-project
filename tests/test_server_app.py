@@ -267,6 +267,60 @@ class TestExecuteEndpoint:
         assert error["code"] == "internal_error"
         assert error["message"] == message
 
+    PLAN = {"flow": "ndvi", "steps": [{"uses": "input/file", "binds": {"RasterPath": "/fake.tif"}}], "outputs": []}
+    BODY = {"messages": [{"role": "user", "content": "calculate ndvi"}]}
+
+    def _execute(self, client: TestClient, orchestrated: dict, n: int) -> tuple[list[int], MagicMock, dict]:
+        with (
+            patch("server.routes.chat.orchestrate", return_value=orchestrated),
+            patch("server.routes.chat.PipelineExecutor") as executor_class,
+        ):
+            executor_class.return_value.execute.return_value = {"flow": "ndvi", "steps": [], "artifacts": {}}
+            responses = [client.post("/v1/execute", json=self.BODY) for _ in range(n)]
+        return [r.status_code for r in responses], executor_class.return_value.execute, responses[-1].json()
+
+    def test_sixth_guest_execute_in_an_hour_is_refused(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DEV_ROLE", "guest")
+
+        statuses, execute, body = self._execute(client, {"ok": True, "plan": self.PLAN}, 6)
+
+        assert statuses == [200] * 5 + [429]
+        assert execute.call_count == 5
+        assert body["error"]["code"] == "GUEST_QUOTA"
+        assert body["error"]["details"]["used"] == 5
+        assert client.post("/v1/jobs", json={"prompt": "Compute NDVI"}).status_code == 429  # one shared quota
+
+    @pytest.mark.parametrize("role", ["member", "operator"])
+    def test_members_execute_without_limit(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, role: str
+    ) -> None:
+        monkeypatch.setenv("DEV_ROLE", role)
+        statuses, _, _ = self._execute(client, {"ok": True, "plan": self.PLAN}, 8)
+        assert statuses == [200] * 8
+
+    def test_composed_plan_is_not_run_without_confirmation(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DEV_ROLE", "guest")
+        proposal = {"ok": True, "plan": {**self.PLAN, "composed": True}, "proposal": "I can compute NDMI… run that?"}
+
+        statuses, execute, body = self._execute(client, proposal, 6)
+
+        assert statuses == [409] * 6  # refused before running, and not counted
+        execute.assert_not_called()
+        assert body == {
+            "ok": False,
+            "error": {
+                "code": "CONFIRMATION_REQUIRED",
+                "message": "This request composes a new analysis, which runs only after you confirm it: "
+                "submit it with POST /v1/jobs, then confirm with POST /v1/jobs/{job_id}/confirm.",
+                "details": {},
+            },
+        }
+        assert client.get("/v1/session").json()["analyses"]["used"] == 0
+
 
 class TestDownloadEndpoint:
     """Tests for GET /v1/download."""

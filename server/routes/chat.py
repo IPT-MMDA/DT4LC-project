@@ -33,7 +33,7 @@ from ..schemas import (
     PendingIntent,
     PlanResponse,
 )
-from ..sessions import CurrentSession, Session
+from ..sessions import CurrentSession, Session, enforce_analysis_quota, release_analysis
 from .jobs import submit_job
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,12 @@ def _planning_failed(result: dict[str, Any]) -> JSONResponse:
         details={"candidate": result.get("candidate")},
     )
     return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=400)
+
+
+CONFIRMATION_REQUIRED = (
+    "This request composes a new analysis, which runs only after you confirm it: "
+    "submit it with POST /v1/jobs, then confirm with POST /v1/jobs/{job_id}/confirm."
+)
 
 
 @router.post(  # type: ignore[misc]
@@ -79,12 +85,21 @@ async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
     "/execute",
     response_model=ExecuteResponse,
     summary="Plan and execute pipeline",
+    responses={
+        409: {"model": ErrorResponse, "description": "CONFIRMATION_REQUIRED"},
+        429: {"model": ErrorResponse, "description": "GUEST_QUOTA"},
+    },
 )
-async def execute_plan(req: ChatRequest) -> ExecuteResponse | JSONResponse:
-    """Plan via COE and execute the pipeline synchronously."""
+async def execute_plan(req: ChatRequest, session: CurrentSession) -> ExecuteResponse | JSONResponse:
+    """Plan via COE and execute the pipeline synchronously.
+
+    Counts against the guest quota like ``POST /v1/jobs`` (429 ``GUEST_QUOTA``). A composed plan
+    (a proposal) is not run: 409 ``CONFIRMATION_REQUIRED``, uncounted; submit it as a job and confirm it.
+    """
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
 
+    counted_at = enforce_analysis_quota(session)
     try:
         prompt = req.messages[-1].content
         coe_req = COEChatRequest(prompt=prompt, attachments=[])
@@ -92,6 +107,10 @@ async def execute_plan(req: ChatRequest) -> ExecuteResponse | JSONResponse:
         orch_result = orchestrate(coe_req)
         if not orch_result.get("ok"):
             return _planning_failed(orch_result)
+        if orch_result.get("proposal"):
+            release_analysis(session, counted_at)
+            error = ErrorDetail(code="CONFIRMATION_REQUIRED", message=CONFIRMATION_REQUIRED)
+            return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=409)
 
         plan_dict = orch_result["plan"]
         plan = ExecutionPlan(**plan_dict)
