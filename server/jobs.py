@@ -1274,6 +1274,10 @@ class JobQueue:
                     )
                     return
                 job.result = {**result, "followups": followups(job.plan, self._registry)}
+                try:
+                    library.name_downloads(job, self._registry)
+                except Exception as e:  # a download keeps its stored name; the job still completes
+                    logger.warning(f"Job {job_id}: no download names ({e})", exc_info=True)
                 job.status = JobStatus.COMPLETED
                 job.progress = 1.0
                 job.completed_at = datetime.now()

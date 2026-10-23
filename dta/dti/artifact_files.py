@@ -2,7 +2,8 @@
 
 Results never carry pixel data: rasters are written as single-band float32
 GeoTIFFs (nodata NaN) and visualizations as PNG files, and the result holds a
-``{kind, path, url, stats, size_bytes}`` reference per file.
+``{kind, path, url, stats, size_bytes}`` reference per file. A finished job adds each
+reference's ``download_name`` and puts it in the ``url`` (``server.library.name_downloads``).
 
 A raster saved with a *style* carries it in its GeoTIFF tags (``DT4LC_KIND``
 ``change|index|class``; ``DT4LC_VMIN``, ``DT4LC_VMAX``, ``DT4LC_RAMP`` for change
@@ -52,6 +53,12 @@ def step_outputs(directory: Path, prefix: str) -> Iterator[None]:
         _step.reset(token)
 
 
+def download_url(path: str, name: str | None = None) -> str:
+    """``/v1/download?path=<path>``, plus ``&name=<name>`` (the file name the download gets)."""
+    url = "/v1/download?path=" + quote(path, safe="")
+    return f"{url}&name={quote(name, safe='')}" if name else url
+
+
 def ref(kind: str, path: Path | str, stats: dict[str, Any] | None = None) -> dict[str, Any]:
     """Artifact reference for a file the API serves through ``/v1/download``.
 
@@ -63,7 +70,7 @@ def ref(kind: str, path: Path | str, stats: dict[str, Any] | None = None) -> dic
     return {
         "kind": kind,
         "path": path,
-        "url": "/v1/download?path=" + quote(path, safe=""),
+        "url": download_url(path),
         "stats": stats or {},
         "size_bytes": size,
     }

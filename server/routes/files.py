@@ -7,6 +7,8 @@ import io
 import logging
 from pathlib import Path
 from typing import Annotated
+import unicodedata
+from urllib.parse import quote
 import uuid
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -344,10 +346,12 @@ async def delete_file(file_id: str, session: CurrentSession) -> FileDeleteRespon
 async def download_file(
     session: CurrentSession,
     path: str = Query(..., description="Absolute or allowed-relative path to the file on the server"),
+    name: str | None = Query(None, description="File name for the download (an artifact's download_name)"),
 ) -> FileResponse:
     """Download a generated or uploaded file (GeoPackage, GeoTIFF, PNG, JSON).
 
-    Another owner's job artifact or upload is 404.
+    Another owner's job artifact or upload is 404. ``name`` only names the download
+    (``Content-Disposition``, see :func:`attachment_name`); ``path`` alone decides the file served.
     """
     file_path = resolve_served_path(path)
     await ensure_served_owner(file_path, session)
@@ -363,8 +367,31 @@ async def download_file(
     }
     media_type = content_types.get(suffix, "application/octet-stream")
 
+    filename = attachment_name(name, file_path)
     return FileResponse(
         path=str(file_path),
         media_type=media_type,
-        filename=file_path.name,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename.encode("ascii", "replace").decode().replace("?", "_")}"; '
+                f"filename*=UTF-8''{quote(filename, safe='')}"
+            )
+        },
     )
+
+
+# Path separators, quotes and the other characters a file name may not hold on Windows.
+_NAME_UNSAFE = set('/\\"<>:|?*')
+
+
+def attachment_name(name: str | None, served: Path) -> str:
+    """The download's file name: ``name`` with path separators, quotes and control characters replaced
+    by ``-``, no leading or trailing dots, dashes or spaces, at most 200 characters, ending in the
+    served file's extension (appended if it ends in another); the stored name without ``name``."""
+    text = "".join("-" if c in _NAME_UNSAFE or unicodedata.category(c)[0] == "C" else c for c in name or "")
+    text = text.strip(" .-")[:200].rstrip(" .-")
+    if not text:
+        return served.name
+    if served.suffix and not text.lower().endswith(served.suffix.lower()):
+        text += served.suffix
+    return text
