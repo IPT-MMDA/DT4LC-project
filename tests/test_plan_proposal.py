@@ -79,15 +79,18 @@ class ScriptedLLM:
 
     providers: list[Any] = []
 
-    def __init__(self, plan_steps: list[dict[str, Any]], context: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self, plan_steps: list[dict[str, Any]], context: dict[str, Any] | None = None, intent: str = "pipeline"
+    ) -> None:
         self.plan_steps = plan_steps
+        self.intent = intent
         self.context = context or {"goal": "x", "desired_outputs": [], "required_inputs": ["RasterPath"]}
         self.stages: list[str] = []
 
     def generate(self, messages: Any, *args: Any, **kwargs: Any) -> LLMResponse:
         system = messages[0].content
         if system.startswith("You are an Intent Classifier"):
-            stage, text = "intent", json.dumps({"intent": "pipeline", "reason": "analysis request"})
+            stage, text = "intent", json.dumps({"intent": self.intent, "reason": "scripted", "response": "Chat."})
         elif system.startswith("You are a Context Understanding Agent"):
             stage, text = "context", json.dumps({**self.context, "hints": {"keywords": []}})
         elif system.startswith("You are a pipeline planner"):
@@ -179,6 +182,18 @@ def test_ndmi_on_one_file_is_a_single_date_proposal() -> None:
     )
     assert [s["uses"] for s in out["plan"]["steps"]] == ["input/file", "algorithms/band-math", POST]
     assert out["plan"]["steps"][1]["config"] == {"formula": NDMI_FORMULA, "name": "NDMI"}
+
+
+def test_ndmi_is_an_analysis_even_if_the_llm_would_chat() -> None:
+    """Live, Gemini classified the NDMI prompt as conversation: no registry keyword matched it."""
+    llm = ScriptedLLM([], intent="conversation")
+    with _with_llm(llm):
+        out = orchestrate(ChatRequest(prompt=NDMI_PROMPT, attachments=_attachments(SAMPLE_0601, SAMPLE_0609)))
+        question = orchestrate(ChatRequest(prompt="What is NDMI?", attachments=_attachments(SAMPLE_0601)))
+
+    assert out["intent"] == "pipeline"
+    assert out["proposal"] == NDMI_TEXT
+    assert question["intent"] == "conversation"  # a question about an index is still answered
 
 
 # --- Burn severity is refused (B7) ------------------------------------------------------
