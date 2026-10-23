@@ -9,6 +9,7 @@ import { findConversationByJobId, useChatStore } from '../../../store/useChatSto
 import type { AnalysisMessage } from '../../../types';
 import { cn } from '../../../utils/cn';
 import {
+  downloadName,
   formatRangeEnd,
   resultCardOf,
   resultLayerOf,
@@ -252,17 +253,17 @@ function Actions({ jobId, model, view }: { jobId: string; model: ResultCardModel
         </button>
       )}
       {raster && (
-        <a href={resolveApiUrl(raster.url)} download className={outline}>
+        <a href={resolveApiUrl(raster.url)} download={downloadName(raster)} title={downloadName(raster)} className={outline}>
           GeoTIFF
         </a>
       )}
       {image && (
-        <a href={resolveApiUrl(image.url)} download className={outline}>
+        <a href={resolveApiUrl(image.url)} download={downloadName(image)} title={downloadName(image)} className={outline}>
           PNG
         </a>
       )}
-      {model.gpkgUrl && (
-        <a href={resolveApiUrl(model.gpkgUrl)} download className={outline}>
+      {model.gpkg && (
+        <a href={resolveApiUrl(model.gpkg.url)} download={downloadName(model.gpkg)} title={downloadName(model.gpkg)} className={outline}>
           GeoPackage
         </a>
       )}

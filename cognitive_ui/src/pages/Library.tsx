@@ -174,7 +174,14 @@ function RowActionButton({ row, onAction }: { row: LibraryRow; onAction: () => v
       ) : null;
     case 'download':
       return row.kind === 'file' ? (
-        <a href={downloadUrl(row.files[0].path)} download onClick={stop} aria-label={`Download ${row.title}`} className={outline}>
+        <a
+          href={downloadUrl(row.files[0].path, row.files[0].filename)}
+          download={row.files[0].filename}
+          title={row.files[0].filename}
+          onClick={stop}
+          aria-label={`Download ${row.title}`}
+          className={outline}
+        >
           ↓
         </a>
       ) : null;

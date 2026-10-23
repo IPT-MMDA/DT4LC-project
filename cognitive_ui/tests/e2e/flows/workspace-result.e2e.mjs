@@ -83,7 +83,7 @@ test('done with a result card: NDWI change, toggle, downloads, On map into the d
     assert.match(stats, /^OPEN WATER BEFORE 13\.9 km² OPEN WATER AFTER 170 km² GAINED \+157 km² LOST 0\.6 km²$/);
     assert.equal(await card.getByTestId('image-overlay').innerText(), 'difference · 06-01 → 06-09');
     // The bare map, full-bleed; the legend swatches in the change style's colours.
-    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png$/);
+    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png&name=water-change_ndwi_2023-06-01_2023-06-09_map\.png$/);
     assert.ok((await imageWidth(card)) > 0, 'the difference PNG loads');
     assert.deepEqual(
       await card.getByTestId('legend').locator('[aria-hidden]').evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor)),
@@ -95,25 +95,29 @@ test('done with a result card: NDWI change, toggle, downloads, On map into the d
     await toggle.getByRole('button', { name: 'Before' }).click();
     assert.equal(await toggle.getByRole('button', { name: 'Before' }).getAttribute('aria-pressed'), 'true');
     assert.equal(await card.getByTestId('image-overlay').innerText(), 'NDWI before · 2023-06-01');
-    assert.match(await card.getByTestId('result-image').getAttribute('src'), /ndwi_before_bare\.png$/);
+    assert.match(await card.getByTestId('result-image').getAttribute('src'), /ndwi_before_bare\.png&name=ndwi_2023-06-01_map\.png$/);
     assert.ok((await imageWidth(card)) > 0, 'the before PNG loads');
     await toggle.getByRole('button', { name: 'Difference' }).click();
     assert.equal(await card.getByTestId('image-overlay').innerText(), 'difference · 06-01 → 06-09');
 
-    // Downloads: real links, 200 for the owner with the right type; no GeoPackage for a raster.
-    // PNG is the full figure (title and colour bar), not the bare map.
+    // Downloads: real links, 200 for the owner with the right type and a readable name; no
+    // GeoPackage for a raster. PNG is the full figure (title and colour bar), not the bare map.
     const actions = card.getByRole('group', { name: 'Result actions' });
-    assert.match(await actions.getByRole('link', { name: 'PNG' }).getAttribute('href'), /change_map\.png$/);
+    assert.match(await actions.getByRole('link', { name: 'PNG' }).getAttribute('href'), /change_map\.png&name=water-change_ndwi_2023-06-01_2023-06-09\.png$/);
     assert.deepEqual(
       (await actions.locator('a, button').allInnerTexts()).map((t) => t.trim()),
       ['● On map', 'GeoTIFF', 'PNG', 'Details ›'],
     );
-    for (const [name, type] of [['GeoTIFF', 'image/tiff'], ['PNG', 'image/png']]) {
+    for (const [name, type, file] of [
+      ['GeoTIFF', 'image/tiff', 'water-change_ndwi_2023-06-01_2023-06-09.tif'],
+      ['PNG', 'image/png', 'water-change_ndwi_2023-06-01_2023-06-09.png'],
+    ]) {
       const link = actions.getByRole('link', { name });
-      assert.equal(await link.getAttribute('download'), '');
+      assert.equal(await link.getAttribute('download'), file);
       const res = await page.request.get(new URL(await link.getAttribute('href'), h.baseURL).href);
       assert.equal(res.status(), 200, name);
       assert.equal(res.headers()['content-type'], type, name);
+      assert.match(res.headers()['content-disposition'], new RegExp(`^attachment; filename="${file.replace(/\./g, '\\.')}"`), name);
     }
     // Another session gets 404 for the same file.
     const other = await h.browser.newContext();

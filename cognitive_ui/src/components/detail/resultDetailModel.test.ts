@@ -7,6 +7,7 @@ import lulc from '../../test/fixtures/jobs/lulc.json';
 import ndmiChange from '../../test/fixtures/jobs/ndmi-change.json';
 import ndviSingle from '../../test/fixtures/jobs/ndvi-single.json';
 import ndwiChange from '../../test/fixtures/jobs/ndwi-change.json';
+import ndwiChangeV050 from '../../test/fixtures/jobs/ndwi-change-v050.json';
 import regionFailed from '../../test/fixtures/jobs/region-failed.json';
 import sample from '../../test/fixtures/jobs/sample.json';
 import statistics from '../../test/fixtures/jobs/statistics.json';
@@ -161,17 +162,29 @@ describe('downloads', () => {
   it('every file of the NDWI change once, rasters first, with kind and size', () => {
     const d = downloadsOf(job(ndwiChange));
     expect(d.map((f) => `${f.name} · ${f.detail}`)).toEqual([
-      '2_ChangeMap_change.tif · GeoTIFF · 2.0 MB',
-      '2_ChangeMap_index_before.tif · GeoTIFF · 2.0 MB',
-      '2_ChangeMap_index_after.tif · GeoTIFF · 2.0 MB',
-      '2_ChangeMap_change_map.png · PNG · 1.2 MB',
-      '2_ChangeMap_ndwi_before.png · PNG · 891 KB',
-      '2_ChangeMap_ndwi_after.png · PNG · 1.5 MB',
-      '2_ChangeMap_change_map_bare.png · PNG · 826 KB',
-      '2_ChangeMap_ndwi_before_bare.png · PNG · 523 KB',
-      '2_ChangeMap_ndwi_after_bare.png · PNG · 1.1 MB',
+      'water-change_ndwi_2023-06-01_2023-06-09.tif · GeoTIFF · 2.0 MB',
+      'ndwi_2023-06-01.tif · GeoTIFF · 2.0 MB',
+      'ndwi_2023-06-09.tif · GeoTIFF · 2.0 MB',
+      'water-change_ndwi_2023-06-01_2023-06-09.png · PNG · 1.2 MB',
+      'ndwi_2023-06-01.png · PNG · 891 KB',
+      'ndwi_2023-06-09.png · PNG · 1.5 MB',
+      'water-change_ndwi_2023-06-01_2023-06-09_map.png · PNG · 826 KB',
+      'ndwi_2023-06-01_map.png · PNG · 523 KB',
+      'ndwi_2023-06-09_map.png · PNG · 1.1 MB',
     ]);
-    expect(d[0].url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change\.tif$/);
+    // The stored path stays; the url names the download.
+    expect(d[0].url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change\.tif&name=water-change_ndwi_2023-06-01_2023-06-09\.tif$/);
+  });
+
+  it('an older job without download_name: the stored file names', () => {
+    expect(downloadsOf(job(ndwiChangeV050)).map((f) => f.name)).toEqual([
+      '2_ChangeMap_change.tif',
+      '2_ChangeMap_index_before.tif',
+      '2_ChangeMap_index_after.tif',
+      '2_ChangeMap_change_map.png',
+      '2_ChangeMap_ndwi_before.png',
+      '2_ChangeMap_ndwi_after.png',
+    ]);
   });
 
   it('statistics wrote no file; a ref without size_bytes (older job) has the kind alone', () => {

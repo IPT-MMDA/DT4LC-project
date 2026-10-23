@@ -3,7 +3,7 @@ import { useAppStore } from '../../../store/useAppStore';
 import { formatArea } from '../../chat/regionChip';
 import { regionAreaKm2 } from './imagery';
 
-/** "Reservoir-north · 412 km²" in mono above the selected region's north-west corner. */
+/** "Dnipro floodplain · Kherson · 412 km²" in mono above the selected region's north-west corner. */
 export function RegionLabel() {
   const region = useAppStore((s) => s.selectedRegion);
   const opacity = useAppStore((s) => s.regionOpacity);

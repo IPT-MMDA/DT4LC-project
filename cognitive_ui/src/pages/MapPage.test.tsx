@@ -93,10 +93,10 @@ describe('map mode imagery panel', () => {
 
     fireEvent.click(within(card).getByRole('button', { name: 'Rename' }));
     const input = within(card).getByRole('textbox', { name: 'Region name' });
-    fireEvent.change(input, { target: { value: 'Reservoir-north' } });
+    fireEvent.change(input, { target: { value: 'Dnipro floodplain · Kherson' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(useAppStore.getState().selectedRegion?.name).toBe('Reservoir-north');
-    expect(useAppStore.getState().drawnRegions[0].name).toBe('Reservoir-north');
+    expect(useAppStore.getState().selectedRegion?.name).toBe('Dnipro floodplain · Kherson');
+    expect(useAppStore.getState().drawnRegions[0].name).toBe('Dnipro floodplain · Kherson');
   });
 
   it('the presets add a selectable region each and zoom to it; picking one again reselects it', () => {

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient from '../api/client';
-import type { JobSummary } from '../api/library';
+import { downloadUrl, type JobSummary } from '../api/library';
 import { useChatStore } from '../store/useChatStore';
 import { GUEST_SESSION, MEMBER_SESSION } from '../test/fixtures';
 import type { SessionInfo } from '../types';
@@ -120,5 +120,16 @@ describe('Library page', () => {
     fireEvent.click(within(confirm).getByRole('button', { name: 'Keep' }));
     expect(within(row).queryByRole('alertdialog')).toBeNull();
     expect(vi.mocked(fetch).mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toBe(false);
+  });
+
+  it("an export's ↓ downloads it under its file name", async () => {
+    const exported = { ...FILES[0], id: 'gee_ndwi', upload_id: null, filename: 'gee_ndwi 2023.tif', path: '/c/gee_exports/gee_ndwi 2023.tif', source: 'export', kind: 'export' };
+    mockApi(GUEST_SESSION, [], [exported]);
+    renderLibrary();
+    const link = await screen.findByRole('link', { name: 'Download gee_ndwi 2023.tif' });
+    expect(link.getAttribute('href')).toBe('/v1/download?path=%2Fc%2Fgee_exports%2Fgee_ndwi%202023.tif&name=gee_ndwi%202023.tif');
+    expect(link.getAttribute('download')).toBe('gee_ndwi 2023.tif');
+    // Without a name the server names it after the stored file.
+    expect(downloadUrl('/c/x.tif')).toBe('/v1/download?path=%2Fc%2Fx.tif');
   });
 });

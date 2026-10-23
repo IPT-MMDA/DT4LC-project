@@ -37,7 +37,7 @@ function resultLayer(addedAt: string): Layer {
 
 const region: DrawnRegion = {
   id: 'region-1',
-  name: 'Reservoir-north',
+  name: 'Dnipro floodplain · Kherson',
   type: 'bbox',
   geometry: {
     type: 'Feature',
@@ -78,7 +78,7 @@ describe('the Layers list', () => {
     const rows = layerRows(layers, region, 1, NOW);
     expect(rows.map((r) => [r.name, r.subtitle, r.opacity])).toEqual([
       ['Water change · NDWI', 'from chat · 48 s ago', 80],
-      ['Reservoir-north', 'region · 427 km²', 100],
+      ['Dnipro floodplain · Kherson', 'region · 427 km²', 100],
       ['kakhovka_hls_l30', 'HLS L30 · true colour · 2023-06-09', 100],
     ]);
     // The result's swatch is its style's ramp.

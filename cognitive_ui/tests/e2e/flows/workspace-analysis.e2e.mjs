@@ -14,7 +14,7 @@ const ANALYSIS_TIMEOUT = 60_000;
 // About 410 km² of the Lower Dnipro floodplain, as the map store persists a drawn region.
 const REGION = {
   id: 'region-e2e',
-  name: 'Dnipro floodplain',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -133,7 +133,7 @@ test('composed done: Run confirms the proposal, the same message runs it and car
       'DRIER 42.0 km² WETTER +37.9 km² THRESHOLD ΔNDMI 0.2',
     );
     assert.equal(await card.getByTestId('legend').innerText(), 'drier\nwetter\nno change');
-    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png$/);
+    assert.match(await card.getByTestId('result-image').getAttribute('src'), /change_map_bare\.png&name=ndmi-change_2023-06-01_2023-06-09_map\.png$/);
     const followups = message.getByRole('list', { name: 'Follow-ups' }).getByRole('button');
     assert.ok((await followups.count()) >= 2, 'two or three follow-ups');
 
@@ -162,7 +162,7 @@ test('failed and retry: a region without Earth Engine fails with two fixes; the 
     await send(page, NDWI);
 
     const failed = await analysis(page, 'failed');
-    assert.match(await failed.innerText(), /I'll compute NDWI for .+ from Dnipro floodplain, then difference them/);
+    assert.match(await failed.innerText(), /I'll compute NDWI for .+ from Dnipro floodplain · Kherson, then difference them/);
     assert.match(await failed.getByTestId('status-pill').innerText(), /Failed/);
     assert.equal(await failed.getByTestId('failure-code').innerText(), 'EE_NOT_CONFIGURED');
     assert.match(

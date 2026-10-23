@@ -15,10 +15,10 @@ import {
   withDataset,
 } from './imagery';
 
-// A rectangle over the reservoir's north shore, about 427 km² (the design's Reservoir-north is 412).
+// A rectangle over the reservoir's north shore, about 427 km² (the design's region chip says 412).
 const reservoirNorth: DrawnRegion = {
   id: 'region-1',
-  name: 'Reservoir-north',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -50,7 +50,7 @@ describe('the imagery panel as a region', () => {
     expect(region).toEqual({
       id: 'region-1',
       geometry: reservoirNorth.geometry.geometry,
-      name: 'Reservoir-north',
+      name: 'Dnipro floodplain · Kherson',
       dataset: 'HLS L30',
       start_date: '2023-06-01',
       end_date: '2023-06-09',
@@ -59,10 +59,10 @@ describe('the imagery panel as a region', () => {
       area_km2: expect.closeTo(426.7, 1),
     });
     // The chip and the request body (JobRegion forbids extra fields: no id, area or line).
-    expect(regionLine(region)).toBe('Region · Reservoir-north · 427 km² · HLS L30 · 2023-06-01 → 06-09 · ≤35 % cloud');
+    expect(regionLine(region)).toBe('Region · Dnipro floodplain · Kherson · 427 km² · HLS L30 · 2023-06-01 → 06-09 · ≤35 % cloud');
     expect(toChatRegion(region)).toEqual({
       geometry: reservoirNorth.geometry.geometry,
-      name: 'Reservoir-north',
+      name: 'Dnipro floodplain · Kherson',
       dataset: 'HLS L30',
       start_date: '2023-06-01',
       end_date: '2023-06-09',

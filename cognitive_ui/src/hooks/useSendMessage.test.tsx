@@ -161,14 +161,14 @@ describe('sendMessage', () => {
     const region: ChatRegion = {
       id: 'region-1',
       geometry: { type: 'Polygon', coordinates: [[[32.5, 46.5], [32.6, 46.5], [32.6, 46.6], [32.5, 46.5]]] },
-      name: 'Reservoir-north',
+      name: 'Dnipro floodplain · Kherson',
       dataset: 'HLS L30',
       start_date: '2023-06-01',
       end_date: '2023-06-09',
       cloud_max: 20,
       area_km2: 42.4,
     };
-    const line = 'Region · Reservoir-north · 43 km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud';
+    const line = 'Region · Dnipro floodplain · Kherson · 43 km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud';
     fetchMock
       .mockResolvedValueOnce(sse([['reply_done', { text: 'ok' }]]))
       .mockResolvedValueOnce(sse([['analysis', { job_id: 'job-2', job: { ...JOB, id: 'job-2', region: { line, area_km2: 43.1 } } }]]));
@@ -182,7 +182,7 @@ describe('sendMessage', () => {
     expect(body.attachments).toEqual([]);
     expect(body.region).toEqual({
       geometry: region.geometry,
-      name: 'Reservoir-north',
+      name: 'Dnipro floodplain · Kherson',
       dataset: 'HLS L30',
       start_date: '2023-06-01',
       end_date: '2023-06-09',

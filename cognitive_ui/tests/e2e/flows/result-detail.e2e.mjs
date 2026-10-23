@@ -17,7 +17,7 @@ const ANALYSIS_TIMEOUT = 60_000;
 // About 410 km² of the Lower Dnipro floodplain, as the map store persists a drawn region.
 const REGION = {
   id: 'region-e2e',
-  name: 'Dnipro floodplain',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -125,7 +125,12 @@ test('result detail: from the Library row, maps, statistics, plan, downloads, CS
     const downloads = await page.getByTestId('download-row').allInnerTexts();
     assert.equal(downloads.length, 10, downloads.join(' | '));
     assert.ok(downloads.every((d) => /(GeoTIFF|PNG|CSV) · \d+(\.\d)? (KB|MB)$/.test(d.replace(/\s+/g, ' '))), downloads.join(' | '));
-    assert.match(downloads[0].replace(/\s+/g, ' '), /^2_ChangeMap_change\.tif GeoTIFF · 2\.0 MB$/);
+    assert.match(downloads[0].replace(/\s+/g, ' '), /^water-change_ndwi_2023-06-01_2023-06-09\.tif GeoTIFF · 2\.0 MB$/);
+    // A real download: saved under the readable name (Content-Disposition), the stored path unchanged.
+    const first = page.getByTestId('download-row').first();
+    assert.equal(await first.getAttribute('download'), 'water-change_ndwi_2023-06-01_2023-06-09.tif');
+    const firstHref = await first.getAttribute('href');
+    assert.match(firstHref, /path=[^&]*2_ChangeMap_change\.tif&name=water-change_ndwi_2023-06-01_2023-06-09\.tif$/);
     assert.match(downloads[9].replace(/\s+/g, ' '), /^statistics\.csv CSV · 1 KB$/);
     // No assistant: no interpretation, and never "summarization failed".
     assert.equal(await page.getByTestId('interpretation').count(), 0);
@@ -133,6 +138,13 @@ test('result detail: from the Library row, maps, statistics, plan, downloads, CS
 
     await settle(page);
     await page.screenshot({ path: outPath('result-detail.png') });
+
+    // Download it (after the screenshot: the click leaves the row hovered).
+    const [saved] = await Promise.all([page.waitForEvent('download'), first.click()]);
+    assert.equal(saved.suggestedFilename(), 'water-change_ndwi_2023-06-01_2023-06-09.tif');
+    const tif = await page.request.get(new URL(firstHref, h.baseURL).href);
+    assert.equal(tif.status(), 200);
+    assert.match(tif.headers()['content-disposition'], /^attachment; filename="water-change_ndwi_2023-06-01_2023-06-09\.tif"/);
 
     // Open on map: the result layers and the sample in map mode.
     await page.getByRole('button', { name: 'Open on map' }).click();
@@ -171,7 +183,7 @@ test('result detail: from the Library row, maps, statistics, plan, downloads, CS
     assert.equal(await failure.getByTestId('failure-code').innerText(), 'EE_NOT_CONFIGURED');
     assert.deepEqual(await failure.getByRole('group', { name: 'Fixes' }).getByRole('button').allInnerTexts(), ['Use my own image', 'Try the Kakhovka sample']);
     assert.equal(await page.getByTestId('detail-map').count(), 0);
-    assert.match(await page.getByTestId('detail-asked').getByTestId('region-chip').innerText(), /Dnipro floodplain/);
+    assert.match(await page.getByTestId('detail-asked').getByTestId('region-chip').innerText(), /Dnipro floodplain · Kherson/);
     await settle(page);
     await page.screenshot({ path: outPath('result-detail-failed.png') });
 

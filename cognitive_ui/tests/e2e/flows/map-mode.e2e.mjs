@@ -140,13 +140,13 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
 
     // Rename it in place.
     await regionCard.getByRole('button', { name: 'Rename' }).click();
-    await regionCard.getByRole('textbox', { name: 'Region name' }).fill('Reservoir-north');
+    await regionCard.getByRole('textbox', { name: 'Region name' }).fill('Dnipro floodplain · Kherson');
     await regionCard.getByRole('textbox', { name: 'Region name' }).press('Enter');
     const detail = await regionCard.getByTestId('region-detail').innerText();
     const area = Number(/^(\d+) km²/.exec(detail)?.[1]);
     assert.ok(area > 20 && area < 2500, `region area (${detail})`);
     assert.match(detail, /^\d+ km² · 46\.\d\d N 32\.\d\d E$/);
-    assert.equal(await page.getByTestId('region-label').innerText(), `Reservoir-north · ${area} km²`);
+    assert.equal(await page.getByTestId('region-label').innerText(), `Dnipro floodplain · Kherson · ${area} km²`);
 
     // HLS L30, 2023-06-01 → 2023-06-09, cloud 20 %, B2–B6 (B7 off).
     await panel.getByRole('button', { name: 'Sentinel-2' }).click();
@@ -168,7 +168,7 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
     assert.equal(await layers.getByText(/^Layers · \d+$/).innerText(), 'LAYERS · 3');
     assert.deepEqual(
       (await layers.getByTestId('map-layer-row').allInnerTexts()).map((t) => t.split('\n')[0]),
-      ['Water change · NDWI', 'Reservoir-north', 'kakhovka_hls_l30'],
+      ['Water change · NDWI', 'Dnipro floodplain · Kherson', 'kakhovka_hls_l30'],
     );
 
     // Fetch to map: disabled, with the reason from GET /v1/capabilities.
@@ -198,7 +198,7 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
     // Compare: the result (opacity 100, region hidden) left of the divider, the sample right of it.
     await layers.getByRole('slider', { name: 'Opacity of Water change · NDWI' }).focus();
     await page.keyboard.press('End');
-    await layers.getByRole('button', { name: 'Hide Reservoir-north' }).click();
+    await layers.getByRole('button', { name: 'Hide Dnipro floodplain · Kherson' }).click();
     await page.getByRole('button', { name: 'Compare' }).click();
     const divider = page.getByTestId('compare-divider');
     await divider.waitFor();
@@ -238,7 +238,7 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
     assert.ok(dragged < 12, `after the drag the right points show the result (median ${dragged.toFixed(1)} off its ramp)`);
     await page.getByRole('button', { name: 'Compare' }).click();
     await divider.waitFor({ state: 'detached' });
-    await layers.getByRole('button', { name: 'Show Reservoir-north' }).click();
+    await layers.getByRole('button', { name: 'Show Dnipro floodplain · Kherson' }).click();
     const opacity = layers.getByRole('slider', { name: 'Opacity of Water change · NDWI' });
     await opacity.focus();
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
@@ -249,7 +249,7 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
     await page.waitForURL(/\/app$/);
     const chip = page.getByTestId('region-chip');
     await chip.waitFor();
-    assert.match((await chip.innerText()).replace(/\s+/g, ' '), new RegExp(`Region · Reservoir-north .*${area} km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud`));
+    assert.match((await chip.innerText()).replace(/\s+/g, ' '), new RegExp(`Region · Dnipro floodplain · Kherson .*${area} km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud`));
 
     // 1280 × 800: map mode is the only map; nothing overlaps.
     await page.setViewportSize({ width: 1280, height: 800 });

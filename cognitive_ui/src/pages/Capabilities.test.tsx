@@ -167,6 +167,7 @@ describe('Capabilities page, public demo', () => {
       ['Configured', 'done'],
     ]);
     expect(within(tier('data')).getByText('Guests: up to 5 analyses per hour, results kept 24 h in this browser, no account needed.')).toBeTruthy();
+    expect(within(tier('data')).getByText('kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09')).toBeTruthy();
   });
 });
 
@@ -195,6 +196,9 @@ describe('Capabilities page, offline laptop', () => {
     expect(statuses(prithvi)).toEqual([['Downloads on first use · 450 MB · ~75 s · Apache-2.0', 'run']]);
     expect(promptIn(prithvi).disabled).toBe(false);
     expect(statuses(tier('data'))[2]).toEqual(['Not configured', 'muted']);
+    // The Data note follows the role: a member has no guest limits.
+    expect(within(tier('data')).getByText('Member on a local server: no analysis limit; results are kept until you delete them.')).toBeTruthy();
+    expect(within(tier('data')).queryByText(/^Guests:/)).toBeNull();
     expect(screen.getByTestId('capabilities-summary').textContent).toBe(
       'Live for this installation: member account · assistant offline · models download on first use · no Earth Engine.',
     );
@@ -219,7 +223,7 @@ describe('Capabilities page, controls', () => {
     const coming = await screen.findByTestId('tier-coming');
     const toggle = within(coming).getByRole('button');
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.textContent).toContain('ConvLSTM NDVI forecast · PINN-LINDA nowcasting · VI forecasting DTI');
+    expect(toggle.textContent).toContain('ConvLSTM NDVI forecast · PINN-LINDA nowcasting · VI forecasting DTI · Runoff ensemble');
     expect(toggle.textContent).toContain('Show');
     expect(within(coming).queryByText(/Predicts vegetation health/)).toBeNull();
 
@@ -227,6 +231,14 @@ describe('Capabilities page, controls', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(toggle.textContent).toContain('Hide');
     expect(within(coming).getByText(/Predicts vegetation health/)).toBeTruthy();
+    // Four entries, the runoff ensemble last.
+    const items = coming.querySelectorAll('#tier-coming-items > div');
+    expect([...items].map((i) => i.firstElementChild?.textContent)).toEqual([
+      'ConvLSTM NDVI forecast',
+      'PINN-LINDA nowcasting',
+      'VI forecasting DTI',
+      'Runoff ensemble',
+    ]);
   });
 
   it('an example prompt opens the Workspace with it in the composer, not sent, files kept', async () => {

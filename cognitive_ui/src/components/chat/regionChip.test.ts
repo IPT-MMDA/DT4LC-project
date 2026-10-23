@@ -18,7 +18,7 @@ const REGION: ChatRegion = {
 // A 0.1° × 0.1° box at the sample's latitude: about 85 km² (turf's spherical area).
 const DRAWN: DrawnRegion = {
   id: 'region-1',
-  name: 'Reservoir-north',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -61,7 +61,7 @@ describe('regionFromMap', () => {
     const region = regionFromMap(DRAWN, undefined, new Date(2026, 9, 23));
     expect(region).toMatchObject({
       id: 'region-1',
-      name: 'Reservoir-north',
+      name: 'Dnipro floodplain · Kherson',
       dataset: 'HLS L30',
       start_date: '2026-09-23',
       end_date: '2026-10-23',
@@ -70,7 +70,10 @@ describe('regionFromMap', () => {
     });
     expect(region.area_km2).toBeGreaterThan(80);
     expect(region.area_km2).toBeLessThan(90);
-    expect(regionLine(region)).toMatch(/^Region · Reservoir-north · 8\d km² · HLS L30 · 2026-09-23 → 10-23 · ≤20 % cloud$/);
+    expect(regionLine(region)).toMatch(/^Region · Dnipro floodplain · Kherson · 8\d km² · HLS L30 · 2026-09-23 → 10-23 · ≤20 % cloud$/);
+    // The name's own middle dot stays in the chip's title line (DESIGN §4).
+    expect(regionChipLines(region).title).toBe('Region · Dnipro floodplain · Kherson');
+    expect(regionChipLines(region).detail).toMatch(/^8\d km² · HLS L30 · 2026-09-23 → 10-23 · ≤20 % cloud$/);
   });
 
   it("takes the sample's dates when the conversation has the sample", () => {
