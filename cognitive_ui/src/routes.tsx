@@ -1,0 +1,78 @@
+import { useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useSession } from './api/hooks/useSession';
+import { Shell } from './components/shell/Shell';
+import { MapPage } from './pages/MapPage';
+import { Placeholder } from './pages/Placeholder';
+import { Workspace } from './pages/Workspace';
+import { findConversationByJobId, useChatStore } from './store/useChatStore';
+
+/** Redirect that keeps the query string, e.g. `/?sample=1` to `/app?sample=1`. */
+function RedirectTo({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: to, search }} replace />;
+}
+
+/** Legacy `/jobs/:jobId` from v0.5 links. */
+function LegacyJobRedirect() {
+  const { jobId } = useParams();
+  return <RedirectTo to={`/app/results/${jobId}`} />;
+}
+
+/**
+ * `/app/results/:id`: until the result page exists (Phase 4), open the Workspace
+ * conversation that holds the job, or the placeholder when this browser has none.
+ */
+function ResultRoute() {
+  const { id = '' } = useParams();
+  const navigate = useNavigate();
+  const conversation = useChatStore((state) => findConversationByJobId(state.conversations, id));
+  const selectConversation = useChatStore((state) => state.selectConversation);
+
+  useEffect(() => {
+    if (!conversation) return;
+    selectConversation(conversation.id);
+    navigate('/app', { replace: true });
+  }, [conversation, selectConversation, navigate]);
+
+  return conversation ? null : <Placeholder title="Result" />;
+}
+
+/** `/app/settings` is for operators only. */
+function SettingsRoute() {
+  const { data: session, isPending } = useSession();
+  if (isPending) return null;
+  if (session?.role !== 'operator') return <Navigate to="/app" replace />;
+  return <Placeholder title="Settings" />;
+}
+
+export function AppRoutes() {
+  return (
+    <Routes>
+      {/* The guest landing page is Phase 3; until then / opens the Workspace. */}
+      <Route path="/" element={<RedirectTo to="/app" />} />
+
+      <Route path="/app" element={<Shell />}>
+        <Route index element={<Workspace />} />
+        <Route path="map" element={<MapPage />} />
+        <Route path="library" element={<Placeholder title="Library" />} />
+        <Route path="capabilities" element={<Placeholder title="What DT4LC can do" />} />
+        <Route path="results/:id" element={<ResultRoute />} />
+        <Route path="settings" element={<SettingsRoute />} />
+        <Route path="*" element={<Navigate to="/app" replace />} />
+      </Route>
+
+      {/* v0.5 routes */}
+      <Route path="/chat" element={<RedirectTo to="/app" />} />
+      <Route path="/dashboard" element={<RedirectTo to="/app" />} />
+      <Route path="/map" element={<RedirectTo to="/app/map" />} />
+      <Route path="/jobs" element={<RedirectTo to="/app/library" />} />
+      <Route path="/jobs/:jobId" element={<LegacyJobRedirect />} />
+      <Route path="/data" element={<RedirectTo to="/app/library" />} />
+      <Route path="/models" element={<RedirectTo to="/app/capabilities" />} />
+      <Route path="/settings" element={<RedirectTo to="/app/settings" />} />
+
+      <Route path="*" element={<Navigate to="/app" replace />} />
+    </Routes>
+  );
+}

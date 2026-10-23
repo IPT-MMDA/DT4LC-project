@@ -10,7 +10,8 @@ import { OblastBoundaries } from './OblastBoundaries';
 import { useMapColours } from './mapColours';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-export function MapContainer() {
+/** `docked`: the Workspace's map pane at ≥1440 px, without the drawing toolbar and scale bar. */
+export function MapContainer({ docked = false }: { docked?: boolean }) {
   const mapRef = useRef<MapRef>(null);
   const drawRef = useRef<DrawControlRef>(null);
   const isProcessingDraw = useRef(false);
@@ -154,7 +155,7 @@ export function MapContainer() {
         style={{ width: '100%', height: '100%' }}
       >
         <NavigationControl position="bottom-right" />
-        <ScaleControl position="bottom-left" />
+        {!docked && <ScaleControl position="bottom-left" />}
         <DrawControl ref={drawRef} onCreate={handleDrawCreate} />
 
         {/* Render all drawn regions as layers */}
@@ -193,7 +194,7 @@ export function MapContainer() {
         <JobLayersManager />
         <OblastBoundaries />
       </Map>
-      <DrawToolbar onModeChange={handleModeChange} currentMode={drawMode} />
+      {!docked && <DrawToolbar onModeChange={handleModeChange} currentMode={drawMode} />}
       {!useNewDatasetPanel && <LocationQuickAccess onLocationSelect={handleLocationSelect} />}
     </div>
   );
