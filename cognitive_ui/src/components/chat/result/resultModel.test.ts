@@ -24,8 +24,9 @@ import {
 } from './resultModel';
 
 // Fixtures: GET /v1/jobs/{id} on the bundled Kakhovka sample (guest, no assistant),
-// trimmed to the artifacts, follow-ups and the planning-ready and done events, paths
-// rewritten to the Docker layout. ndwi-change-v050.json is a job from before the bare
+// trimmed to the artifacts, follow-ups and the planning-ready and done events (the
+// full event log in ndwi-change, ndmi-change and statistics), paths rewritten to the
+// Docker layout. ndwi-change-v050.json is a job from before the bare
 // map PNGs and raster styles (v0.5.0): no `*_bare` refs, no `stats.style`.
 const SAMPLE_FILES: MessageAttachment[] = sample.attachments.map((a) => ({
   ...a,
@@ -142,7 +143,16 @@ describe('card selection by artifact kind', () => {
     expect(c.views[1].bare?.url).toMatch(/index_before_bare\.png$/);
     expect(c.views[1].image?.url).toMatch(/index_before\.png$/);
     // Band-math change is drawn over ±display_range[1]; the layer legend keeps the ramp and that range.
-    expect(c.views[0].legend).toEqual({ kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'], range: [-0.41093224674729933, 0.41093224674729933] });
+    expect(c.views[0].legend).toEqual({
+      kind: 'change',
+      stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'],
+      range: [-0.41093224674729933, 0.41093224674729933],
+      classes: [
+        { label: 'drier', tone: 'lost', colour: '#8c4a2f', area_km2: 41.961 },
+        { label: 'no change', tone: 'neutral', colour: '#c4cad6', area_km2: 450.94 },
+        { label: 'wetter', tone: 'gained', colour: '#2d5f9e', area_km2: 37.927 },
+      ],
+    });
     expect(c.views[1].legend).toMatchObject({ kind: 'ramp', range: [-1, 1] });
   });
 
@@ -248,6 +258,13 @@ describe('card selection by artifact kind', () => {
     expect(c.views).toEqual([]);
     expect(c.bands.map((b) => b.band)).toEqual(['B2', 'B3', 'B4', 'B5', 'B6']);
     expect(c.bands[0]).toEqual({ band: 'B2', min: '−1 429', max: '3 533', mean: '333.7', std: '225.9', valid: '589 824' });
+  });
+
+  it('statistics from before BR3 (band_<n> keys): named by the file\'s n-th band', () => {
+    const old = { result: { execution: { artifacts: { RasterPath: SAMPLE_FILES[1].path, Statistics: { bands: { band_1: { min: 1 }, band_7: { min: 2 } } } } } } };
+    const c = card(old);
+    if (c.kind !== 'statistics') throw new Error();
+    expect(c.bands.map((b) => b.band)).toEqual(['B2', 'Band 7']);
   });
 
   it('field boundaries: count, area, the overlay PNG and a GeoPackage download', () => {

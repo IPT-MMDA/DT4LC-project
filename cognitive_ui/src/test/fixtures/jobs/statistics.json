@@ -1,5 +1,5 @@
 {
- "id": "8f1be957",
+ "id": "af111d9f",
  "status": "completed",
  "prompt": "Give me statistics for every band",
  "plan": {
@@ -28,8 +28,56 @@
   ],
   "composed": false
  },
+ "created_at": "2026-10-23T16:53:21.482725",
+ "started_at": "2026-10-23T16:53:21.487125",
+ "completed_at": "2026-10-23T16:53:21.790985",
+ "error": null,
+ "card": {
+  "title": "Raster statistics · 2023-06-09",
+  "analysis": {
+   "id": "algorithms/statistics",
+   "label": "Statistics"
+  },
+  "kind": "statistics",
+  "thumbnail_url": null,
+  "duration_s": 0.3,
+  "error": null
+ },
  "result": {
+  "intent": "pipeline",
+  "plan": {
+   "flow": "Give me statistics for every band",
+   "steps": [
+    {
+     "uses": "input/file",
+     "binds": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+     },
+     "config": {}
+    },
+    {
+     "uses": "algorithms/statistics",
+     "binds": {},
+     "config": {}
+    },
+    {
+     "uses": "post-processing/agent-analysis",
+     "binds": {},
+     "config": {}
+    }
+   ],
+   "outputs": [
+    "publish: chat"
+   ],
+   "composed": false
+  },
   "execution": {
+   "flow": "Give me statistics for every band",
+   "steps": [
+    "input/file",
+    "algorithms/statistics",
+    "post-processing/agent-analysis"
+   ],
    "artifacts": {
     "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
     "Statistics": {
@@ -37,29 +85,29 @@
      "metadata": {
       "crs": "EPSG:32636",
       "bounds": [
-       453240,
-       5144820,
-       476280,
-       5167860
+       453240.0,
+       5144820.0,
+       476280.0,
+       5167860.0
       ],
       "width": 768,
       "height": 768,
       "count": 5,
       "dtype": "int16",
-      "nodata": -9999
+      "nodata": -9999.0
      },
      "bands": {
-      "band_1": {
-       "min": -1429,
-       "max": 3533,
+      "B2": {
+       "min": -1429.0,
+       "max": 3533.0,
        "mean": 333.7257317437066,
        "std": 225.92327864288447,
-       "median": 243,
+       "median": 243.0,
        "percentiles": {
-        "p5": 111,
-        "p25": 170,
-        "p75": 448,
-        "p95": 804
+        "p5": 111.0,
+        "p25": 170.0,
+        "p75": 448.0,
+        "p95": 804.0
        },
        "valid_pixels": 589824,
        "total_pixels": 589824,
@@ -78,31 +126,31 @@
          11
         ],
         "bin_edges": [
-         -1429,
+         -1429.0,
          -932.8,
          -436.6,
          59.59999999999991,
          555.8,
-         1052,
+         1052.0,
          1548.1999999999998,
          2044.4,
          2540.6,
          3036.8,
-         3533
+         3533.0
         ]
        }
       },
-      "band_2": {
-       "min": -141,
-       "max": 4498,
+      "B3": {
+       "min": -141.0,
+       "max": 4498.0,
        "mean": 601.8606703016493,
        "std": 275.1492250496187,
-       "median": 478,
+       "median": 478.0,
        "percentiles": {
-        "p5": 330,
-        "p25": 401,
-        "p75": 768,
-        "p95": 1153
+        "p5": 330.0,
+        "p25": 401.0,
+        "p75": 768.0,
+        "p95": 1153.0
        },
        "valid_pixels": 589824,
        "total_pixels": 589824,
@@ -121,7 +169,7 @@
          1
         ],
         "bin_edges": [
-         -141,
+         -141.0,
          322.9,
          786.8,
          1250.6999999999998,
@@ -131,21 +179,21 @@
          3106.2999999999997,
          3570.2,
          4034.0999999999995,
-         4498
+         4498.0
         ]
        }
       },
-      "band_3": {
-       "min": -306,
-       "max": 5225,
+      "B4": {
+       "min": -306.0,
+       "max": 5225.0,
        "mean": 621.0870208740234,
        "std": 368.75382999588834,
-       "median": 445,
+       "median": 445.0,
        "percentiles": {
-        "p5": 270,
-        "p25": 364,
-        "p75": 841,
-        "p95": 1380
+        "p5": 270.0,
+        "p25": 364.0,
+        "p75": 841.0,
+        "p95": 1380.0
        },
        "valid_pixels": 589824,
        "total_pixels": 589824,
@@ -164,7 +212,7 @@
          1
         ],
         "bin_edges": [
-         -306,
+         -306.0,
          247.10000000000002,
          800.2,
          1353.3000000000002,
@@ -174,21 +222,21 @@
          3565.7000000000003,
          4118.8,
          4671.900000000001,
-         5225
+         5225.0
         ]
        }
       },
-      "band_4": {
-       "min": -251,
-       "max": 6957,
+      "B5": {
+       "min": -251.0,
+       "max": 6957.0,
        "mean": 1418.8385297987197,
        "std": 1221.3636806559773,
-       "median": 937,
+       "median": 937.0,
        "percentiles": {
-        "p5": 147,
-        "p25": 242,
-        "p75": 2605,
-        "p95": 3340
+        "p5": 147.0,
+        "p25": 242.0,
+        "p75": 2605.0,
+        "p95": 3340.0
        },
        "valid_pixels": 589824,
        "total_pixels": 589824,
@@ -207,31 +255,31 @@
          1
         ],
         "bin_edges": [
-         -251,
+         -251.0,
          469.79999999999995,
          1190.6,
          1911.3999999999996,
          2632.2,
-         3353,
+         3353.0,
          4073.7999999999993,
          4794.599999999999,
          5515.4,
          6236.2,
-         6957
+         6957.0
         ]
        }
       },
-      "band_5": {
-       "min": -345,
-       "max": 9924,
+      "B6": {
+       "min": -345.0,
+       "max": 9924.0,
        "mean": 1158.7803412543403,
        "std": 1149.166412830772,
-       "median": 531,
+       "median": 531.0,
        "percentiles": {
-        "p5": 70,
-        "p25": 155,
-        "p75": 2182,
-        "p95": 3279
+        "p5": 70.0,
+        "p25": 155.0,
+        "p75": 2182.0,
+        "p95": 3279.0
        },
        "valid_pixels": 589824,
        "total_pixels": 589824,
@@ -250,7 +298,7 @@
          1
         ],
         "bin_edges": [
-         -345,
+         -345.0,
          681.9000000000001,
          1708.8000000000002,
          2735.7000000000003,
@@ -260,7 +308,7 @@
          6843.300000000001,
          7870.200000000001,
          8897.1,
-         9924
+         9924.0
         ]
        }
       }
@@ -268,247 +316,10 @@
      "overall_mean": 826.8584587944879
     },
     "agent_result": {
-     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
-     "inputs": {
-      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
-      "Statistics": {
-       "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
-       "metadata": {
-        "crs": "EPSG:32636",
-        "bounds": [
-         453240,
-         5144820,
-         476280,
-         5167860
-        ],
-        "width": 768,
-        "height": 768,
-        "count": 5,
-        "dtype": "int16",
-        "nodata": -9999
-       },
-       "bands": {
-        "band_1": {
-         "min": -1429,
-         "max": 3533,
-         "mean": 333.7257317437066,
-         "std": 225.92327864288447,
-         "median": 243,
-         "percentiles": {
-          "p5": 111,
-          "p25": 170,
-          "p75": 448,
-          "p95": 804
-         },
-         "valid_pixels": 589824,
-         "total_pixels": 589824,
-         "nodata_pixels": 0,
-         "histogram": {
-          "counts": [
-           2,
-           6,
-           3448,
-           481594,
-           102242,
-           2299,
-           149,
-           50,
-           23,
-           11
-          ],
-          "bin_edges": [
-           -1429,
-           -932.8,
-           -436.6,
-           59.59999999999991,
-           555.8,
-           1052,
-           1548.1999999999998,
-           2044.4,
-           2540.6,
-           3036.8,
-           3533
-          ]
-         }
-        },
-        "band_2": {
-         "min": -141,
-         "max": 4498,
-         "mean": 601.8606703016493,
-         "std": 275.1492250496187,
-         "median": 478,
-         "percentiles": {
-          "p5": 330,
-          "p25": 401,
-          "p75": 768,
-          "p95": 1153
-         },
-         "valid_pixels": 589824,
-         "total_pixels": 589824,
-         "nodata_pixels": 0,
-         "histogram": {
-          "counts": [
-           24327,
-           427407,
-           119345,
-           18032,
-           553,
-           88,
-           48,
-           21,
-           2,
-           1
-          ],
-          "bin_edges": [
-           -141,
-           322.9,
-           786.8,
-           1250.6999999999998,
-           1714.6,
-           2178.5,
-           2642.3999999999996,
-           3106.2999999999997,
-           3570.2,
-           4034.0999999999995,
-           4498
-          ]
-         }
-        },
-        "band_3": {
-         "min": -306,
-         "max": 5225,
-         "mean": 621.0870208740234,
-         "std": 368.75382999588834,
-         "median": 445,
-         "percentiles": {
-          "p5": 270,
-          "p25": 364,
-          "p75": 841,
-          "p95": 1380
-         },
-         "valid_pixels": 589824,
-         "total_pixels": 589824,
-         "nodata_pixels": 0,
-         "histogram": {
-          "counts": [
-           17346,
-           413005,
-           127110,
-           29981,
-           2211,
-           103,
-           58,
-           8,
-           1,
-           1
-          ],
-          "bin_edges": [
-           -306,
-           247.10000000000002,
-           800.2,
-           1353.3000000000002,
-           1906.4,
-           2459.5,
-           3012.6000000000004,
-           3565.7000000000003,
-           4118.8,
-           4671.900000000001,
-           5225
-          ]
-         }
-        },
-        "band_4": {
-         "min": -251,
-         "max": 6957,
-         "mean": 1418.8385297987197,
-         "std": 1221.3636806559773,
-         "median": 937,
-         "percentiles": {
-          "p5": 147,
-          "p25": 242,
-          "p75": 2605,
-          "p95": 3340
-         },
-         "valid_pixels": 589824,
-         "total_pixels": 589824,
-         "nodata_pixels": 0,
-         "histogram": {
-          "counts": [
-           244380,
-           67657,
-           36606,
-           98825,
-           113890,
-           25923,
-           2425,
-           109,
-           8,
-           1
-          ],
-          "bin_edges": [
-           -251,
-           469.79999999999995,
-           1190.6,
-           1911.3999999999996,
-           2632.2,
-           3353,
-           4073.7999999999993,
-           4794.599999999999,
-           5515.4,
-           6236.2,
-           6957
-          ]
-         }
-        },
-        "band_5": {
-         "min": -345,
-         "max": 9924,
-         "mean": 1158.7803412543403,
-         "std": 1149.166412830772,
-         "median": 531,
-         "percentiles": {
-          "p5": 70,
-          "p25": 155,
-          "p75": 2182,
-          "p95": 3279
-         },
-         "valid_pixels": 589824,
-         "total_pixels": 589824,
-         "nodata_pixels": 0,
-         "histogram": {
-          "counts": [
-           312310,
-           62222,
-           148761,
-           59068,
-           7411,
-           32,
-           16,
-           3,
-           0,
-           1
-          ],
-          "bin_edges": [
-           -345,
-           681.9000000000001,
-           1708.8000000000002,
-           2735.7000000000003,
-           3762.6000000000004,
-           4789.5,
-           5816.400000000001,
-           6843.300000000001,
-           7870.200000000001,
-           8897.1,
-           9924
-          ]
-         }
-        }
-       },
-       "overall_mean": 826.8584587944879
-      }
-     }
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
     }
-   }
+   },
+   "outputs": {}
   },
   "followups": [
    "Map vegetation health with NDVI",
@@ -517,6 +328,22 @@
   ]
  },
  "events": [
+  {
+   "seq": 1,
+   "type": "intent",
+   "data": {
+    "text": "I'll compute Raster Statistics for 9 June from the sample.",
+    "t": 1792774401.484
+   }
+  },
+  {
+   "seq": 2,
+   "type": "planning",
+   "data": {
+    "phase": "started",
+    "t": 1792774401.491
+   }
+  },
   {
    "seq": 3,
    "type": "planning",
@@ -543,21 +370,81 @@
      }
     ],
     "composed": false,
-    "t": 1792749821.855
+    "t": 1792774401.652
+   }
+  },
+  {
+   "seq": 4,
+   "type": "step_started",
+   "data": {
+    "index": 1,
+    "id": "input/file",
+    "name": "Read hlsl_20230609.tif",
+    "t": 1792774401.652
+   }
+  },
+  {
+   "seq": 5,
+   "type": "step_finished",
+   "data": {
+    "index": 1,
+    "id": "input/file",
+    "elapsed_s": 0.0,
+    "t": 1792774401.652
+   }
+  },
+  {
+   "seq": 6,
+   "type": "step_started",
+   "data": {
+    "index": 2,
+    "id": "algorithms/statistics",
+    "name": "Raster Statistics",
+    "t": 1792774401.652
+   }
+  },
+  {
+   "seq": 7,
+   "type": "step_finished",
+   "data": {
+    "index": 2,
+    "id": "algorithms/statistics",
+    "elapsed_s": 0.14,
+    "t": 1792774401.79
+   }
+  },
+  {
+   "seq": 8,
+   "type": "step_started",
+   "data": {
+    "index": 3,
+    "id": "post-processing/agent-analysis",
+    "name": "Interpretation",
+    "t": 1792774401.79
+   }
+  },
+  {
+   "seq": 9,
+   "type": "step_finished",
+   "data": {
+    "index": 3,
+    "id": "post-processing/agent-analysis",
+    "elapsed_s": 0.0,
+    "t": 1792774401.791
    }
   },
   {
    "seq": 10,
    "type": "done",
    "data": {
-    "elapsed_s": 0.2,
+    "elapsed_s": 0.3,
     "summary": "3 steps · <1 s · Raster Statistics",
     "followups": [
      "Map vegetation health with NDVI",
      "Classify land cover in this image",
      "What else can you do with this data?"
     ],
-    "t": 1792749821.982
+    "t": 1792774401.791
    }
   }
  ],

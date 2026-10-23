@@ -511,11 +511,12 @@ function fieldsCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
 function statisticsCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
   const { files, date, file } = singleFile(context, artifacts, artifact);
   const codes = (file ?? files[0])?.metadata?.bands ?? [];
+  // Keys are band codes (B2…B6) since BR3; `band_<n>` (older jobs) is the file's n-th band.
   const bands = Object.entries(obj(artifact.bands)).map(([key, v]) => {
-    const n = Number(/(\d+)$/.exec(key)?.[1]);
+    const n = Number(/^band_(\d+)$/.exec(key)?.[1]);
     const s = obj(v);
     return {
-      band: codes.find((b) => b.index === n)?.code ?? (Number.isFinite(n) ? `Band ${n}` : key),
+      band: Number.isFinite(n) ? (codes.find((b) => b.index === n)?.code ?? `Band ${n}`) : key,
       min: formatValue(s.min),
       max: formatValue(s.max),
       mean: formatValue(s.mean),
