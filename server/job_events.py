@@ -17,7 +17,10 @@ fields below; optional fields are left out when unknown.
   (emitted by the plan-proposal story).
 - ``planning`` ``{phase: "started"}`` when planning starts, then
   ``{phase: "ready", steps: [{index, id, name, kind}], composed}`` when the
-  plan is ready (``index`` is 1-based, ``kind`` is the registry kind).
+  plan is ready (``index`` is 1-based, ``kind`` is the registry kind). When a
+  model's weights must be downloaded first, a ``{index, id: "prepare/<model id>",
+  name: "Preparing model · <model>", kind: "prepare", model_id}`` row precedes
+  the step that needs it, and the later rows' indices shift by one.
 - ``step_started`` ``{index, id, name}``.
 - ``step_progress`` ``{index, fraction?, message?, bytes?, total_bytes?, eta_s?}``.
 - ``step_finished`` ``{index, id, elapsed_s}``.
@@ -38,7 +41,8 @@ from typing import Any
 
 from dta.config import RESOURCES_PATH
 from dta.dti.coe.llm.router import _KEY_PATTERN
-from dta.dti.executor import MissingInputError, ModelNotInstalledError
+from dta.dti.executor import InputBandsError, MissingInputError, ModelGatedError, ModelNotInstalledError
+from dta.dti.models import AVAILABLE_MODELS
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
 
 EVENT_TYPES = (
@@ -100,15 +104,34 @@ def _item(registry: Registry, step_id: str) -> RegistryItem | None:
 
 
 def step_skeleton(
-    plan: ExecutionPlan, registry: Registry, filenames: dict[str, str] | None = None
+    plan: ExecutionPlan,
+    registry: Registry,
+    filenames: dict[str, str] | None = None,
+    prepare: dict[int, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """``[{index, id, name, kind}]`` for the ``planning`` ready event; index is 1-based like the executor's."""
-    rows = []
-    for index, step in enumerate(plan.steps, start=1):
+    """``[{index, id, name, kind}]`` for the ``planning`` ready event; index is 1-based.
+
+    ``prepare`` maps a plan step's 1-based index to the model whose weights are downloaded
+    before it (:meth:`PipelineExecutor.models_to_prepare`); each adds a ``kind: "prepare"``
+    row, so a row's index equals the plan index only without preparation rows.
+    """
+    rows: list[dict[str, Any]] = []
+    for plan_index, step in enumerate(plan.steps, start=1):
+        model_id = (prepare or {}).get(plan_index)
+        if model_id:
+            rows.append(
+                {
+                    "index": len(rows) + 1,
+                    "id": f"prepare/{model_id}",
+                    "name": f"Preparing model · {AVAILABLE_MODELS[model_id].name}",
+                    "kind": "prepare",
+                    "model_id": model_id,
+                }
+            )
         item = _item(registry, step.uses)
         rows.append(
             {
-                "index": index,
+                "index": len(rows) + 1,
                 "id": step.uses,
                 "name": step_name(step, item, filenames) if item else step.uses,
                 "kind": item.kind if item else "algorithm",
@@ -216,11 +239,17 @@ def intent_text(plan: ExecutionPlan, registry: Registry, attachments: list[dict[
 #   open_map: open the map to pick a region.
 
 _ASK_CAPABILITIES = {"label": "See what I can do", "kind": "prompt", "prompt": "What can you do?"}
+_BUILT_IN = {
+    "label": "Use a built-in analysis instead",
+    "kind": "prompt",
+    "prompt": "Which built-in analyses can I run on this file?",
+}
+_UPLOAD_OWN = {"label": "Use my own image", "kind": "upload"}
 _RETRY = {"label": "Retry", "kind": "retry"}
 
 # (code, exception types in the cause chain, message pattern, stage, fixes): the first matching row wins.
 # ``stage`` limits a row to "planning" or "running" failures. Later stories add their codes here
-# (EE_NOT_CONFIGURED, MODEL_GATED, GUEST_QUOTA, ...).
+# (EE_NOT_CONFIGURED, GUEST_QUOTA, ...).
 FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str | None, list[dict[str, Any]]]] = [
     (
         "INPUT_MISSING",
@@ -234,11 +263,21 @@ FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str 
     ),
     (
         "BAND_MISSING",
+        (InputBandsError,),
+        r"needs \w+ HLS bands",
+        None,
+        [
+            _UPLOAD_OWN,
+            {"label": "Run NDWI change instead", "kind": "prompt", "prompt": "Map NDWI change between the two dates"},
+        ],
+    ),
+    (
+        "BAND_MISSING",
         (),
         r"Band \w+ is not in this file|requires band",
         None,
         [
-            {"label": "Use my own image", "kind": "upload"},
+            _UPLOAD_OWN,
             {
                 "label": "What can this file do?",
                 "kind": "prompt",
@@ -246,7 +285,20 @@ FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str 
             },
         ],
     ),
-    ("MODEL_NOT_INSTALLED", (ModelNotInstalledError,), None, None, [_ASK_CAPABILITIES]),
+    (
+        "MODEL_GATED",
+        (ModelGatedError,),
+        r"isn't available for \w+s — ask an operator",
+        None,
+        [_ASK_CAPABILITIES, _BUILT_IN],
+    ),
+    (
+        "MODEL_NOT_INSTALLED",
+        (ModelNotInstalledError,),
+        r"isn't installed on this server",
+        None,
+        [_ASK_CAPABILITIES, _BUILT_IN],
+    ),
     ("INTERRUPTED", (), r"Server restarted while job was in progress", None, [_RETRY]),
     ("PLAN_FAILED", (), None, "planning", [_ASK_CAPABILITIES, _RETRY]),
     ("INTERNAL", (), None, None, [_RETRY]),
