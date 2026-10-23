@@ -1,19 +1,32 @@
-import type { Attachment } from '../../types';
+import type { MessageAttachment } from '../../types';
 
-export interface AttachmentChip {
+export interface AttachmentChip<T extends MessageAttachment = MessageAttachment> {
   key: string;
   name: string;
   line: string;
-  attachments: Attachment[];
+  attachments: T[];
 }
 
 /**
- * The composer's chips: one per group (the sample pair is one chip with the
- * group's name and line), one per other file with `metadata.line · size_label`.
+ * "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01" (DESIGN §4): the metadata line with
+ * the size before the date, which the server's line ends with.
  */
-export function attachmentChips(attachments: Attachment[]): AttachmentChip[] {
-  const chips: AttachmentChip[] = [];
-  const byGroup = new Map<string, AttachmentChip>();
+function fileLine(a: MessageAttachment): string {
+  const { line = '', size_label: size, date } = a.metadata ?? {};
+  if (!size) return line;
+  const dateSuffix = date ? ` · ${date}` : '';
+  if (dateSuffix && line.endsWith(dateSuffix)) return `${line.slice(0, -dateSuffix.length)} · ${size}${dateSuffix}`;
+  return [line, size].filter(Boolean).join(' · ');
+}
+
+/**
+ * The chips of the composer and of sent messages: one per group (the sample pair is
+ * one chip with the group's name and line), one per other file with its metadata
+ * line and size. Keyed by path: the two sample files share one id.
+ */
+export function attachmentChips<T extends MessageAttachment>(attachments: T[]): AttachmentChip<T>[] {
+  const chips: AttachmentChip<T>[] = [];
+  const byGroup = new Map<string, AttachmentChip<T>>();
   for (const a of attachments) {
     if (a.group) {
       const existing = byGroup.get(a.group.name);
@@ -26,8 +39,7 @@ export function attachmentChips(attachments: Attachment[]): AttachmentChip[] {
       chips.push(chip);
       continue;
     }
-    const line = [a.metadata?.line, a.metadata?.size_label].filter(Boolean).join(' · ');
-    chips.push({ key: `file:${a.path}`, name: a.filename, line, attachments: [a] });
+    chips.push({ key: `file:${a.path ?? a.id}`, name: a.filename, line: fileLine(a), attachments: [a] });
   }
   return chips;
 }

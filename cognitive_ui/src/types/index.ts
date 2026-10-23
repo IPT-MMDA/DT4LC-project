@@ -1,5 +1,3 @@
-import type { DrawnRegion } from '../store/useAppStore';
-
 // Chat (one store: src/store/useChatStore.ts). One assistant message narrates
 // one analysis (design/DESIGN.md §4), so a job is a single `analysis` message
 // whose status and timeline are updated in place.
@@ -11,6 +9,9 @@ export interface MessageAttachment {
   path?: string;  // Server path for follow-up requests
   preview_url?: string;  // Server-relative preview URL from POST /v1/upload
   group?: AttachmentGroup;  // Shown as one chip with the other files of the group
+  mime_type?: string;  // re-sent with follow-ups (the server requires it)
+  size_bytes?: number;
+  metadata?: UploadMetadata;  // re-sent with follow-ups (the intent names the date)
 }
 
 /**
@@ -45,7 +46,35 @@ export interface UserMessage extends BaseMessage {
   kind: 'user';
   text: string;
   attachments?: MessageAttachment[];
-  region?: DrawnRegion;
+  region?: ChatRegion;
+}
+
+export type RegionDataset = 'HLS L30' | 'HLS S30' | 'Sentinel-2' | 'Landsat 8/9' | 'MODIS';
+
+/**
+ * A region from the map as the composer holds it and POST /v1/chat sends it
+ * (`region` of docs/API.md). `area_km2` is computed in the browser until the
+ * job echoes the region; `line` is the server's echo, which wins when present.
+ */
+export interface ChatRegion {
+  id: string;  // the map store's DrawnRegion id
+  geometry: GeoJSON.Geometry;
+  name?: string;
+  place?: string;
+  dataset: RegionDataset;
+  start_date: string;  // YYYY-MM-DD
+  end_date: string;
+  cloud_max: number;
+  area_km2: number;
+  line?: string;
+}
+
+/** `pending` of a reply that asked for a file; sent back with the next message. */
+export interface PendingIntent {
+  prompt: string;
+  item_id: string | null;
+  needs: string[];
+  asked_at: string;
 }
 
 /** A conversational reply (or a submit error) that is not tied to a job. */
@@ -61,6 +90,12 @@ export type AnalysisStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancel
 export interface AnalysisEvent {
   type: string;  // intent, proposal, planning, step_started, step_progress, step_finished, done, failed, cancelled
   [key: string]: unknown;
+}
+
+/** A job event as the server stores it: `events` of a JobRecord and of the `analysis` chat frame. */
+export interface JobEvent extends AnalysisEvent {
+  seq: number;
+  data: Record<string, unknown>;
 }
 
 export interface AnalysisMessage extends BaseMessage {
@@ -87,6 +122,7 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+  pending?: PendingIntent | null;  // the latest reply's pending; a reply without one clears it
 }
 
 // Structured result data for context management

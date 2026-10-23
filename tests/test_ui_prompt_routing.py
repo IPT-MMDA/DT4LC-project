@@ -56,11 +56,15 @@ _KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "
 _SESSION = Session(id="routing", role="operator", created_at=0.0, expires_at=0.0)
 
 # The suggestions under "What do you want to know?" (workspace-empty-with-sample.png and
-# workspace-empty-no-sample.png; askWater, askFields and askClassify in the prototype).
+# workspace-empty-no-sample.png; askWater, askFields and askClassify in the prototype; with
+# the sample also askBurn, which is NDMI, and askPrithvi). The Workspace's list is
+# cognitive_ui/src/components/chat/suggestions.ts, which checks it against this tuple.
 EMPTY_STATE = (
     "Compare water before and after the dam breach",
     "Detect field boundaries east of the river",
     "Classify land cover on the flooded fields",
+    "Map moisture change with NDMI between the two dates",
+    "Fill the cloud gaps in the 9 June image",
 )
 # The proposal card's Explain button (DESIGN §4.2) and a typed question about the proposal: the
 # Workspace sends them with the conversation's files, and they must stay conversation.

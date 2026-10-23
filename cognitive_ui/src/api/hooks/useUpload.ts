@@ -22,6 +22,7 @@ export interface GeoTIFFFile {
   size_bytes: number;
   source: 'upload' | 'export';
   modified: number;
+  metadata?: UploadMetadata | null;
 }
 
 interface ListFilesResponse {

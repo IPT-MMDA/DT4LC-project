@@ -51,6 +51,8 @@ test('empty Workspace with the sample attached (?sample=1)', async () => {
     assert.match(await chip.innerText(), /kakhovka_hls_l30/);
     assert.match(await chip.innerText(), /HLS L30 · B2–B6 · 30 m · .* · 2023-06-01 → 06-09/);
     assert.match(await page.getByTestId('session-badge').innerText(), /^Guest\. \d+ of \d+ analyses left this hour · kept 24 h · no account\.$/);
+    await page.getByRole('heading', { name: 'What do you want to know about this area?' }).waitFor();
+    assert.equal(await page.getByRole('list', { name: 'Suggestions' }).getByRole('button').count(), 5);
     // The parameter is consumed, so a reload does not attach the sample again.
     await page.waitForURL((url) => !url.searchParams.has('sample'));
 
@@ -67,6 +69,22 @@ test('empty Workspace without the sample (?sample=0)', async () => {
     await page.getByRole('heading', { name: 'What do you want to know?' }).waitFor();
     await page.getByText('No conversations yet.', { exact: false }).waitFor();
     assert.equal(await page.getByTestId('attachment-chip').count(), 0);
+    for (const name of ['+ Attach the Kakhovka sample', 'Upload GeoTIFF', 'Pick a region on the map']) {
+      await page.getByRole('button', { name, exact: true }).waitFor();
+    }
+    const suggestions = page.getByRole('list', { name: 'Suggestions' }).getByRole('button');
+    assert.deepEqual(
+      (await suggestions.allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')),
+      [
+        'Compare water before and after the dam breach ~50 s',
+        'Detect field boundaries east of the river ~2 min',
+        'Classify land cover on the flooded fields ~90 s',
+      ],
+    );
+    assert.equal(
+      await page.getByLabel('Message', { exact: true }).getAttribute('placeholder'),
+      'Describe an analysis… or drop GeoTIFFs here',
+    );
 
     await screenshot(page, 'workspace-empty-no-sample.png');
     assert.deepEqual(errors, []);

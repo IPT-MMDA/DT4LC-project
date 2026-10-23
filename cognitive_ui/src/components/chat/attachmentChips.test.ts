@@ -17,3 +17,28 @@ describe('attachmentChips', () => {
     ]);
   });
 });
+
+describe('attachment chip line (DESIGN §4)', () => {
+  it('puts the size before the date of a single file', () => {
+    const [chip] = attachmentChips([
+      {
+        id: 'k',
+        filename: 'hlsl_20230601.tif',
+        path: '/u/k.tif',
+        metadata: { line: 'HLS L30 · B2–B6 · 30 m · 2023-06-01', date: '2023-06-01', size_label: '4.0 MB' },
+      },
+    ]);
+    expect(chip.line).toBe('HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01');
+  });
+
+  it('shows the sample pair as one chip with the group line', () => {
+    const group = { name: 'kakhovka_hls_l30', line: 'HLS L30 · B2–B6 · 30 m · 4.1 MB · 2023-06-01 → 06-09' };
+    const chips = attachmentChips([
+      { id: 's', filename: 'hlsl_20230601.tif', path: '/u/a.tif', group, metadata: { date: '2023-06-01' } },
+      { id: 's', filename: 'hlsl_20230609.tif', path: '/u/b.tif', group, metadata: { date: '2023-06-09' } },
+    ]);
+    expect(chips.map((c) => `${c.name} ${c.line}`)).toEqual([
+      'kakhovka_hls_l30 HLS L30 · B2–B6 · 30 m · 4.1 MB · 2023-06-01 → 06-09',
+    ]);
+  });
+});

@@ -143,10 +143,12 @@ describe('composer', () => {
     store.getState().setPendingRegion({
       id: 'r1',
       name: 'Region 1',
-      type: 'bbox',
-      geometry: { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [32.54, 46.56] } },
-      bbox: [32.39, 46.46, 32.69, 46.66],
-      createdAt: '2023-06-01T00:00:00.000Z',
+      geometry: { type: 'Polygon', coordinates: [[[32.39, 46.46], [32.69, 46.46], [32.69, 46.66], [32.39, 46.46]]] },
+      dataset: 'HLS L30',
+      start_date: '2023-06-01',
+      end_date: '2023-06-09',
+      cloud_max: 20,
+      area_km2: 412,
     });
     store.getState().addMessage(user('compute ndvi'));
 
@@ -382,5 +384,35 @@ describe('getContextForBackend', () => {
       previous_attachments: [{ id: 'a1', filename: 'scene.tif', path: '/app/uploads/a1_scene.tif', mime_type: 'image/tiff' }],
       history: 'User: calculate ndvi\nAssistant: Mean NDVI 0.41.\nUser: and ndwi',
     });
+  });
+});
+
+describe('what a follow-up needs survives a reload', () => {
+  it("keeps the conversation's pending and the sent files' metadata and MIME type", async () => {
+    const store = await loadFreshStore();
+    const metadata = { sensor: 'HLS L30', date: '2023-06-09', line: 'HLS L30 · B2–B6 · 30 m · 2023-06-09' };
+    const pending = { prompt: 'Map vegetation health', item_id: null, needs: ['RasterPath'], asked_at: '2026-10-23T07:00:00Z' };
+    const { conversationId } = store.getState().addMessage({
+      kind: 'user',
+      text: 'here',
+      attachments: [{ id: 'k', filename: 'hlsl_20230609.tif', path: '/u/k.tif', mime_type: 'image/tiff', size_bytes: 4, metadata }],
+    });
+    store.getState().setConversationPending(conversationId, pending);
+
+    const reloaded = await loadFreshStore();
+    const conversation = reloaded.getState().conversations[0];
+    expect(conversation.pending).toEqual(pending);
+    expect((conversation.messages[0] as UserMessage).attachments?.[0]).toMatchObject({ mime_type: 'image/tiff', size_bytes: 4, metadata });
+
+    reloaded.getState().setConversationPending(conversationId, null);
+    expect(reloaded.getState().conversations[0].pending).toBeNull();
+  });
+
+  it('titles a conversation by the first user message with text', async () => {
+    const store = await loadFreshStore();
+    store.getState().addMessage({ kind: 'user', text: '', attachments: [{ id: 'k', filename: 'a.tif', path: '/u/a.tif' }] });
+    expect(store.getState().conversations[0].title).toBe('New chat');
+    store.getState().addMessage({ kind: 'user', text: 'Map open water' });
+    expect(store.getState().conversations[0].title).toBe('Map open water');
   });
 });
