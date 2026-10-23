@@ -169,6 +169,21 @@ ROUTES: dict[str, dict[str, str]] = {
     "Explain why you chose NDMI": {"pair": "reply", "none": "reply"},
 }
 
+# Typed prompts that are not on a chip, held to the same routing: a date in the prompt picks that
+# file of the pair (the run-1 rule read the later one whatever the prompt said).
+TYPED: dict[str, dict[str, str]] = {
+    "Calculate NDVI for 1 June": {
+        "pair": "algorithms/ndvi@0601",
+        "one": "algorithms/ndvi@0609",  # no file is dated 1 June: the existing rule
+        "none": "ask:algorithms/ndvi",
+    },
+    "Where is open water on 1 June?": {
+        "pair": "algorithms/ndwi@0601",
+        "one": "algorithms/ndwi@0609",
+        "none": "reply",
+    },
+}
+
 XFAIL: dict[tuple[str, str], str] = {
     ("Redo the water map with a 0.1 threshold", "pair"): (
         "composed tier (needs the assistant): re-running the last water analysis with a new threshold; "
@@ -263,7 +278,7 @@ async def _route(message: str, state: str, pending: Any = None) -> tuple[str, Co
 
 
 def _cases() -> Iterator[Any]:
-    for prompt, routes in ROUTES.items():
+    for prompt, routes in (ROUTES | TYPED).items():
         for state, expected in routes.items():
             reason = XFAIL.get((prompt, state))
             marks = [pytest.mark.xfail(raises=AssertionError, strict=True, reason=reason)] if reason else []
@@ -278,7 +293,7 @@ async def test_ui_prompt_routes_as_intended(prompt: str, state: str, expected: s
     if reply is not None and reply.pending is not None and (prompt, "pair") not in XFAIL:
         # The pending flow: "here" with the sample pair runs the request that waited.
         resumed, _ = await _route("here", "pair", reply.pending)
-        assert resumed == ROUTES[prompt]["pair"]
+        assert resumed == (ROUTES | TYPED)[prompt]["pair"]
 
 
 def test_the_table_covers_every_ui_prompt() -> None:

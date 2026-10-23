@@ -51,6 +51,25 @@ def _planning_failed(result: dict[str, Any]) -> JSONResponse:
     return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=400)
 
 
+NOT_AN_ANALYSIS = "This reads as a question, not an analysis — send it to POST /v1/chat."
+NEEDS_A_FILE = (
+    "This analysis needs a raster, and this endpoint takes no file: send it to POST /v1/chat "
+    "or POST /v1/jobs with the file attached."
+)
+
+
+def _not_an_analysis(result: dict[str, Any]) -> JSONResponse:
+    """422 for a prompt the classifier reads as conversation: ``missing_input`` when it asks for a
+    file, else ``NOT_AN_ANALYSIS``. Neither endpoint takes a file, so an analysis prompt is the former."""
+    missing = result.get("rule") == "missing_input"
+    error = ErrorDetail(
+        code=ErrorCode.MISSING_INPUT if missing else "NOT_AN_ANALYSIS",
+        message=NEEDS_A_FILE if missing else NOT_AN_ANALYSIS,
+        details={"intent": "conversation"},
+    )
+    return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=422)
+
+
 CONFIRMATION_REQUIRED = (
     "This request composes a new analysis, which runs only after you confirm it: "
     "submit it with POST /v1/jobs, then confirm with POST /v1/jobs/{job_id}/confirm."
@@ -62,6 +81,7 @@ CONFIRMATION_REQUIRED = (
     response_model=PlanResponse,
     summary="Generate execution plan",
     response_description="COE plan without running the pipeline",
+    responses={422: {"model": ErrorResponse, "description": "NOT_AN_ANALYSIS, missing_input"}},
 )
 async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
     """Generate an execution plan from the latest user message (no execution)."""
@@ -73,6 +93,8 @@ async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
         coe_req = COEChatRequest(prompt=prompt, attachments=[])
 
         result = orchestrate(coe_req)
+        if result.get("intent") == "conversation":
+            return _not_an_analysis(result)
         if not result.get("ok"):
             return _planning_failed(result)
 
@@ -87,6 +109,7 @@ async def create_plan(req: ChatRequest) -> PlanResponse | JSONResponse:
     summary="Plan and execute pipeline",
     responses={
         409: {"model": ErrorResponse, "description": "CONFIRMATION_REQUIRED"},
+        422: {"model": ErrorResponse, "description": "NOT_AN_ANALYSIS, missing_input"},
         429: {"model": ErrorResponse, "description": "GUEST_QUOTA"},
     },
 )
@@ -95,16 +118,24 @@ async def execute_plan(req: ChatRequest, session: CurrentSession) -> ExecuteResp
 
     Counts against the guest quota like ``POST /v1/jobs`` (429 ``GUEST_QUOTA``). A composed plan
     (a proposal) is not run: 409 ``CONFIRMATION_REQUIRED``, uncounted; submit it as a job and confirm it.
+    A prompt the classifier reads as conversation is 422 (``NOT_AN_ANALYSIS``, or ``missing_input``
+    when it asks for a file), classified before the quota counts it.
     """
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
 
+    prompt = req.messages[-1].content
+    coe_req = COEChatRequest(prompt=prompt, attachments=[])
+    intent = classify_intent(coe_req)
+    if intent.get("intent") == IntentType.CONVERSATION:
+        return _not_an_analysis(intent)
+
     counted_at = enforce_analysis_quota(session)
     try:
-        prompt = req.messages[-1].content
-        coe_req = COEChatRequest(prompt=prompt, attachments=[])
-
         orch_result = orchestrate(coe_req)
+        if orch_result.get("intent") == "conversation":  # an LLM classification can differ on the second call
+            release_analysis(session, counted_at)
+            return _not_an_analysis(orch_result)
         if not orch_result.get("ok"):
             return _planning_failed(orch_result)
         if orch_result.get("proposal"):

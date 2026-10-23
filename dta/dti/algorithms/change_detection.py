@@ -20,6 +20,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
+from dta.dti.algorithms.spectral_index import RANGES
 from dta.dti.raster import reflectance_divisor
 
 # Try to import matplotlib for visualization, graceful fallback
@@ -237,7 +238,8 @@ def _calculate_index_array(
         index_type: Type of index to calculate
 
     Returns:
-        Index array with values in appropriate range
+        Index array clipped to the formula's range (``spectral_index.RANGES``, as the per-index
+        analyses), NaN where a band is nodata or the denominator is zero
     """
     bands = _get_band_indices(src)
     # src.read(None) would read every band; fail clearly instead.
@@ -334,7 +336,8 @@ def _calculate_index_array(
     else:
         raise ValueError(f"Unknown index type: {index_type}")
 
-    return index
+    # Near-zero denominators (negative stored reflectance) give |index| far beyond the range.
+    return np.clip(index, *RANGES[index_type])
 
 
 def _create_change_visualization(

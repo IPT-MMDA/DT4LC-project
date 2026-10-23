@@ -183,7 +183,7 @@ def named_index_request(prompt: str, attachments: list[Attachment], reg: Registr
         ]
     steps += [PlanStep(uses=it.id) for it in reg.instances if it.kind == "postprocess"][:1]
     plan = ExecutionPlan(flow=prompt, steps=steps, outputs=["publish: chat"], composed=True)
-    _inject_file_bindings(plan, files[:2] if change else files[:1])
+    _inject_file_bindings(plan, files[:2] if change else files[:1], prompt)
 
     text = proposal_text_for(index, [codes[r] for r in roles], change)
     for att, names in zip(files, available, strict=True):

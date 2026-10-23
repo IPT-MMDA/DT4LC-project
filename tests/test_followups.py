@@ -187,4 +187,4 @@ async def test_ndwi_change_job_on_the_sample_ends_with_followups_and_water(queue
     assert job.result["followups"] == done["data"]["followups"]
     stats = job.result["execution"]["artifacts"]["ChangeMap"]["statistics"]
     assert stats["water"]["gained_km2"] == 156.761
-    assert stats["areas_km2"]["increase"] == 325.227
+    assert stats["areas_km2"]["increase"] == 325.22
