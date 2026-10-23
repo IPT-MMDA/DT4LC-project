@@ -1,7 +1,9 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Menu, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { HowItWorks } from '../components/landing/HowItWorks';
 import '../components/landing/landing.css';
+import { PHONE_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import type { SessionInfo } from '../types';
 
 // The guest landing (design/DESIGN.md section 7, design/prototype/Landing v2.dc.html):
@@ -45,9 +47,44 @@ function External({ href, children, className }: { href: string; children: React
   );
 }
 
-function Header() {
+function NavLinks({ className, onPick }: { className: string; onPick?: () => void }) {
   return (
-    <header className="absolute inset-x-0 top-0 z-[5] h-16 flex items-center px-[80px] gap-[28px] text-[#fff]">
+    <nav aria-label="Landing" id="landing-nav" className={className}>
+      <Link to="/app/capabilities" onClick={onPick}>
+        Capabilities
+      </Link>
+      <a href="#how" onClick={onPick}>
+        How it works
+      </a>
+      <a href="#about" onClick={onPick}>
+        About
+      </a>
+      <External href={GITHUB}>GitHub ↗</External>
+    </nav>
+  );
+}
+
+/** The header; on a phone its links collapse behind a Menu button beside Open workspace. */
+function Header() {
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLElement>(null);
+  const menuOpen = phone && open;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onPointer = (e: PointerEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [menuOpen]);
+
+  return (
+    <header ref={ref} className="absolute inset-x-0 top-0 z-[5] h-16 flex items-center px-[80px] max-md:px-4 md:max-lg:px-8 gap-[28px] text-[#fff]">
       <Link to="/" aria-label="DT4LC home" className="flex items-center gap-[10px]">
         <span aria-hidden className="w-7 h-7 rounded-[7px] bg-[#fff] text-[#1a1d23] flex items-center justify-center text-[11px] font-bold">
           DT
@@ -55,24 +92,67 @@ function Header() {
         <span className="font-semibold tracking-[-.01em]">DT4LC</span>
       </Link>
       <div className="flex-1" />
-      <div className="flex items-center gap-[6px] py-1 pr-1 pl-[14px] rounded-pill bg-[rgba(10,12,16,.55)] border border-[rgba(255,255,255,.25)]">
-        <nav aria-label="Landing" className="flex gap-[18px] text-[13.5px] pr-[10px]">
-          <Link to="/app/capabilities">Capabilities</Link>
-          <a href="#how">How it works</a>
-          <a href="#about">About</a>
-          <External href={GITHUB}>GitHub ↗</External>
-        </nav>
+      <div className="flex items-center gap-[6px] py-1 pr-1 pl-[14px] max-md:pl-1 rounded-pill bg-[rgba(10,12,16,.55)] border border-[rgba(255,255,255,.25)]">
+        {!phone && <NavLinks className="flex gap-[18px] text-[13.5px] pr-[10px]" />}
         <Link to="/app?sample=0" className="text-[13px] px-3 py-[7px] rounded-pill bg-[#fff] text-[#1a1d23] font-medium">
           Open workspace
         </Link>
+        {phone && (
+          <button
+            type="button"
+            aria-label="Menu"
+            aria-expanded={open}
+            aria-controls={open ? 'landing-nav' : undefined}
+            onClick={() => setOpen((o) => !o)}
+            className="w-8 h-8 rounded-pill flex items-center justify-center"
+          >
+            {open ? <X aria-hidden className="w-[18px] h-[18px]" /> : <Menu aria-hidden className="w-[18px] h-[18px]" />}
+          </button>
+        )}
       </div>
+      {menuOpen && (
+        <NavLinks
+          onPick={() => setOpen(false)}
+          className="absolute top-16 inset-x-4 p-2 flex flex-col rounded-card bg-[rgba(10,12,16,.88)] border border-[rgba(255,255,255,.25)] text-[15px] [&>a]:px-3 [&>a]:py-[10px]"
+        />
+      )}
     </header>
   );
 }
 
-function Hero() {
+/** The sample's figure; under the buttons on a phone, at the bottom of the hero otherwise. */
+function Caption({ className }: { className: string }) {
   return (
-    <section aria-labelledby="landing-title" className="relative h-screen overflow-hidden bg-[#0a0c10] text-[#fff]">
+    // The bundled crop's NDWI change as the app computes it (+157 km², DESIGN §8); the full scene in the image differs.
+    <div data-testid="landing-caption" className={`${className} font-mono text-[12.5px] text-[rgba(255,255,255,.85)]`}>
+      <span>
+        Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach{' '}
+        <span data-testid="landing-caption-crop" title={FULL_SCENE} className="underline decoration-dotted underline-offset-2 cursor-help">
+          (bundled crop)
+        </span>{' '}
+        · NASA HLS L30
+        <span className="sr-only">. {FULL_SCENE}</span>
+      </span>
+      <span className="flex items-center gap-[5px]">
+        <span className="w-[10px] h-[10px] rounded-[2px] bg-legend-gained" />
+        gained
+      </span>
+      <span className="flex items-center gap-[5px]">
+        <span className="w-[10px] h-[10px] rounded-[2px] bg-legend-lost" />
+        lost
+      </span>
+    </div>
+  );
+}
+
+function Hero() {
+  const phone = useMediaQuery(PHONE_QUERY);
+  return (
+    <section
+      aria-labelledby="landing-title"
+      data-testid="landing-hero"
+      className="relative h-screen max-md:h-auto max-md:min-h-[100dvh] overflow-hidden bg-[#0a0c10] text-[#fff]"
+    >
       <img
         src={`${HERO}_1920.jpg`}
         srcSet={`${HERO}_960.jpg 960w, ${HERO}_1920.jpg 1920w`}
@@ -82,11 +162,11 @@ function Hero() {
       />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,.55)_0%,rgba(0,0,0,0)_60%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,0,0,.3)_0%,rgba(0,0,0,0)_40%)]" />
-      <div className="absolute left-[80px] right-[80px] top-[84px] bottom-[72px] flex flex-col items-start justify-center pt-[2%]">
+      <div className="absolute left-[80px] right-[80px] top-[84px] bottom-[72px] md:max-lg:inset-x-8 max-md:relative max-md:inset-auto max-md:min-h-[100dvh] max-md:px-4 max-md:pt-[84px] max-md:pb-8 flex flex-col items-start justify-center pt-[2%]">
         <div className="text-[11px] tracking-[.08em] uppercase text-[rgba(255,255,255,.8)] font-semibold mb-4">
           Digital Twin for Land Cover · open-source research software
         </div>
-        <h1 id="landing-title" className="landing-settle mb-5 text-hero max-w-[900px]">
+        <h1 id="landing-title" className="landing-settle mb-5 text-hero max-md:text-hero-phone max-w-[900px]">
           What changed on the ground?
           <br />
           Ask in plain language.
@@ -102,33 +182,16 @@ function Hero() {
             Describe your own analysis
           </Link>
         </div>
+        {phone && <Caption className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1" />}
       </div>
-      {/* The bundled crop's NDWI change as the app computes it (+157 km², DESIGN §8); the full scene in the image differs. */}
-      <div data-testid="landing-caption" className="absolute left-[80px] bottom-6 flex items-center gap-3 font-mono text-[12.5px] text-[rgba(255,255,255,.85)]">
-        <span>
-          Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach{' '}
-          <span data-testid="landing-caption-crop" title={FULL_SCENE} className="underline decoration-dotted underline-offset-2 cursor-help">
-            (bundled crop)
-          </span>{' '}
-          · NASA HLS L30
-          <span className="sr-only">. {FULL_SCENE}</span>
-        </span>
-        <span className="flex items-center gap-[5px]">
-          <span className="w-[10px] h-[10px] rounded-[2px] bg-legend-gained" />
-          gained
-        </span>
-        <span className="flex items-center gap-[5px]">
-          <span className="w-[10px] h-[10px] rounded-[2px] bg-legend-lost" />
-          lost
-        </span>
-      </div>
+      {!phone && <Caption className="absolute left-[80px] md:max-lg:left-8 md:max-lg:right-8 md:max-lg:flex-wrap bottom-6 flex items-center gap-3" />}
     </section>
   );
 }
 
 function Tiers() {
   return (
-    <section id="capabilities" aria-labelledby="capabilities-title" className="px-10 py-14 border-t border-border bg-surface">
+    <section id="capabilities" aria-labelledby="capabilities-title" className="px-10 max-md:px-4 md:max-lg:px-6 py-14 max-md:py-10 border-t border-border bg-surface">
       <div className="max-w-[1360px] mx-auto flex flex-col gap-[22px]">
         <div className="flex items-baseline justify-between gap-5">
           <h2 id="capabilities-title" className="text-[22px] font-semibold tracking-[-.015em]">
@@ -138,7 +201,7 @@ function Tiers() {
             All capabilities →
           </Link>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3">
           {TIERS.map((tier) => (
             <Link
               key={tier.label}
@@ -171,16 +234,16 @@ function Logo({ src, name, mark, height }: { src?: string; name: string; mark: s
 
 function Footer() {
   return (
-    <footer id="about" className="border-t border-border bg-surface pt-8 pb-9 px-10">
+    <footer id="about" className="border-t border-border bg-surface pt-8 pb-9 px-10 max-md:px-4 md:max-lg:px-6">
       <div className="max-w-[1360px] mx-auto flex flex-col gap-[22px]">
-        <div className="grid grid-cols-3 gap-3 items-center">
-          <div className="flex gap-7 items-center">
+        <div className="grid grid-cols-3 max-lg:grid-cols-1 gap-3 max-lg:gap-5 items-center">
+          <div className="flex gap-7 max-md:gap-5 items-center max-lg:flex-wrap">
             <Logo src="/brand/logo_mmda.png" name='MMDA, Igor Sikorsky Kyiv Polytechnic Institute' mark="MMDA" height={72} />
             <Logo src="/brand/logo_unige.png" name="University of Geneva" mark="UNIGE" height={72} />
             <Logo name="University of Maryland" mark="UMD" height={72} />
             <Logo name="Swiss National Science Foundation" mark="SNSF" height={56} />
           </div>
-          <p className="col-span-2 min-w-0 text-[12.5px] text-muted leading-[1.6]">
+          <p className="col-span-2 max-lg:col-span-1 min-w-0 text-[12.5px] text-muted leading-[1.6]">
             Developed at the National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute" with the University of Geneva
             and the University of Maryland. Supported by the project "DT4LC" (Grant 2023.01/0040) of the Ukrainian-Swiss Joint Research
             Programme, funded by the Swiss National Science Foundation.
