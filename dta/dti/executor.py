@@ -373,12 +373,13 @@ class PipelineExecutor:
                 func = getattr(module, func_name)
                 result = func(**func_args)
             else:
-                # Simple mode: call run() or main() with collected inputs
+                # Simple mode: call run() or main() with collected inputs (and the step's config, if any)
                 # Used for algorithms that don't require complex argument mapping
+                kwargs = {**inputs, "config": step.config} if step.config else inputs
                 if hasattr(module, "run"):
-                    result = module.run(**inputs)
+                    result = module.run(**kwargs)
                 elif hasattr(module, "main"):
-                    result = module.main(**inputs)
+                    result = module.main(**kwargs)
                 else:
                     raise ExecutionError(f"Module {entrypoint_str} has no run() or main()")
 

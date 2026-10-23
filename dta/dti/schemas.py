@@ -146,6 +146,7 @@ class Registry(BaseModel):  # type: ignore[misc]
 class PlanStep(BaseModel):  # type: ignore[misc]
     uses: str  # registry id (e.g., "algorithms/ndvi")
     binds: dict[str, str] = {}  # type -> source alias
+    config: dict[str, Any] = {}  # runner parameters, passed as config=...; band math: {formula, name, threshold}
 
 
 class ExecutionPlan(BaseModel):  # type: ignore[misc]
