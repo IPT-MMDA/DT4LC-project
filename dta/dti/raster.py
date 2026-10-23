@@ -447,10 +447,18 @@ def describe_raster(src: Any, filename: str, size_bytes: int | None = None) -> R
         logger.warning("Upload metadata: no CRS/resolution for %s: %s", filename, exc)
     try:
         if src.crs is not None:
-            from rasterio.warp import transform_bounds
+            from rasterio.warp import transform, transform_bounds
 
             west, south, east, north = transform_bounds(src.crs, "EPSG:4326", *src.bounds, densify_pts=21)
             meta.bounds_wgs84 = [round(float(v), 6) for v in (west, south, east, north)]
+            # A projected raster is a rotated quadrilateral in degrees, not its bounding box.
+            b = src.bounds
+            lons, lats = transform(
+                src.crs, "EPSG:4326", [b.left, b.right, b.right, b.left], [b.top, b.top, b.bottom, b.bottom]
+            )
+            meta.footprint_wgs84 = [
+                [round(float(lon), 6), round(float(lat), 6)] for lon, lat in zip(lons, lats, strict=True)
+            ]
     except Exception as exc:
         logger.warning("Upload metadata: no WGS84 bounds for %s: %s", filename, exc)
     try:
