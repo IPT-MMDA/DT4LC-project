@@ -1,29 +1,50 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ChatMessage, ChatSession, JobResultData, Job, ContextItem } from '../types';
+import type {
+  AnalysisEvent,
+  AnalysisMessage,
+  Attachment,
+  ChatMessage,
+  Conversation,
+  JobResultData,
+  NewChatMessage,
+  UserMessage,
+} from '../types';
+import type { DrawnRegion } from './useAppStore';
 
-// Context management settings
-const MAX_CONTEXT_TOKENS = 4000;
+// The single owner of chat state: conversations, their messages and the composer.
+// Map and UI state stay in useAppStore.
+
+export const CHAT_STORAGE_KEY = 'dt4lc-chat-storage';
+export const CHAT_STORAGE_VERSION = 4;
+/** Conversations are kept in this browser for 24 h (design/DESIGN.md §6). */
+export const CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
+export const MAX_CONTEXT_TOKENS = 4000;
 const CHARS_PER_TOKEN = 4;
-const MAX_SESSIONS = 50; // Keep last 50 sessions
+const MAX_CONVERSATIONS = 50;
+const NEW_CONVERSATION_TITLE = 'New chat';
 
-// Helper to estimate tokens from text
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
+function generateId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// Helper to create context-safe summary from job result
-function createContextSummary(result?: JobResultData): string {
+function titleFrom(text: string): string {
+  return text.length > 50 ? text.slice(0, 47) + '...' : text;
+}
+
+// Compact, image-free summary of a job result, for the context counter and the
+// history sent to the backend.
+function resultSummary(result?: JobResultData): string {
   if (!result) return '';
 
   const parts: string[] = [];
 
-  // AI Summary (most important - put first)
   if (result.summary) {
     parts.push(result.summary);
   }
 
-  // Statistics (NDVI, change detection, etc.)
   if (result.statistics) {
     const statsStr = Object.entries(result.statistics.values)
       .map(([k, v]) => `${k}: ${v}`)
@@ -31,7 +52,6 @@ function createContextSummary(result?: JobResultData): string {
     parts.push(`[${result.statistics.type.toUpperCase()} stats: ${statsStr}]`);
   }
 
-  // Classification (change detection classes)
   if (result.classification) {
     const classStr = Object.entries(result.classification)
       .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v.percentage?.toFixed(1)}%`)
@@ -39,480 +59,304 @@ function createContextSummary(result?: JobResultData): string {
     parts.push(`[Classification: ${classStr}]`);
   }
 
-  // Field boundaries
   if (result.fieldBoundaries) {
     parts.push(`[Field boundaries: ${result.fieldBoundaries.numFields} fields detected, total area ${(result.fieldBoundaries.totalAreaM2 / 10000).toFixed(2)} hectares]`);
   }
 
-  // Prithvi reconstruction
   if (result.reconstruction) {
     parts.push(`[Prithvi MAE reconstruction using ${result.reconstruction.model}]`);
   }
 
-  // Include info about visualizations (without the actual images)
   if (result.visualizations && result.visualizations.length > 0) {
-    const vizLabels = result.visualizations.map(v => v.label).join(', ');
+    const vizLabels = result.visualizations.map((v) => v.label).join(', ');
     parts.push(`[Visualizations available: ${vizLabels}]`);
   }
 
   return parts.join(' ');
 }
 
-// Keep only what localStorage needs: image URLs, never image bytes (#67 bug 3).
-// Attachments keep their metadata and preview URL; visualizations keep {type, label, url}
-// and are dropped when they have no URL (messages persisted before v0.5.0).
-function toPersistedMessages(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((m) => {
-    const stripped = { ...m };
+/** The text a message contributes to the conversation context. */
+export function messageText(message: ChatMessage): string {
+  if (message.kind !== 'analysis') return message.text;
+  return [message.text, resultSummary(message.result), message.error].filter(Boolean).join(' ');
+}
 
-    if (stripped.attachments) {
-      stripped.attachments = stripped.attachments.map((att) => ({
+/**
+ * Context counter: an estimate of the tokens in a conversation, at 4 characters
+ * per token: ceil(sum of messageText(m).length / 4). User and assistant messages
+ * count their text; an analysis counts its narration, its result summary and its
+ * error. Image data never reaches messages, so it never counts.
+ */
+export function estimateTokens(messages: ChatMessage[]): number {
+  const chars = messages.reduce((acc, m) => acc + messageText(m).length, 0);
+  return Math.ceil(chars / CHARS_PER_TOKEN);
+}
+
+/** Context for POST /v1/jobs: earlier attachments with server paths, plus a compact history. */
+export function getContextForBackend(messages: ChatMessage[]): {
+  previous_attachments: Array<{ id: string; filename: string; path: string; mime_type?: string }>;
+  history: string;
+} {
+  const previousAttachments: Array<{ id: string; filename: string; path: string; mime_type?: string }> = [];
+  const seenIds = new Set<string>();
+
+  for (const message of messages) {
+    if (message.kind !== 'user' || !message.attachments) continue;
+    for (const att of message.attachments) {
+      if (att.path && !seenIds.has(att.id)) {
+        seenIds.add(att.id);
+        previousAttachments.push({ id: att.id, filename: att.filename, path: att.path, mime_type: 'image/tiff' });
+      }
+    }
+  }
+
+  const history = messages
+    .slice(-10)
+    .map((m) => ({ prefix: m.kind === 'user' ? 'User' : 'Assistant', text: messageText(m) }))
+    .filter((m) => m.text)
+    .map((m) => `${m.prefix}: ${m.text.slice(0, 200)}`)
+    .join('\n');
+
+  return { previous_attachments: previousAttachments, history };
+}
+
+// Keep only what localStorage needs to restore a conversation: image URLs, never
+// image bytes (#67 bug 3). Attachments keep their metadata and preview URL;
+// visualizations keep {type, label, url} and are dropped without a URL; per-tick
+// step_progress events are dropped from the timeline.
+function toPersistedMessage(message: ChatMessage): ChatMessage {
+  if (message.kind === 'user') {
+    if (!message.attachments) return message;
+    return {
+      ...message,
+      attachments: message.attachments.map((att) => ({
         id: att.id,
         filename: att.filename,
         path: att.path,
         preview_url: att.preview_url,
-      }));
-    }
+      })),
+    };
+  }
 
-    if (stripped.resultData?.visualizations) {
-      stripped.resultData = {
-        ...stripped.resultData,
-        visualizations: stripped.resultData.visualizations
+  if (message.kind === 'analysis') {
+    const persisted: AnalysisMessage = {
+      ...message,
+      events: message.events.filter((e) => e.type !== 'step_progress'),
+    };
+    if (message.result?.visualizations) {
+      persisted.result = {
+        ...message.result,
+        visualizations: message.result.visualizations
           .filter((v) => typeof v.url === 'string' && v.url)
           .map((v) => ({ type: v.type, label: v.label, url: v.url })),
       };
     }
-
-    return stripped;
-  });
-}
-
-// Generate a unique session ID
-function generateSessionId(): string {
-  return `chat_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-// Generate a session title from the first user message
-function generateTitle(messages: ChatMessage[]): string {
-  const firstUserMessage = messages.find((m) => m.role === 'user');
-  if (firstUserMessage) {
-    const content = firstUserMessage.content;
-    return content.length > 50 ? content.slice(0, 47) + '...' : content;
+    return persisted;
   }
-  return 'New Chat';
+
+  return message;
 }
 
-interface ChatStore {
-  // Current session
-  currentSessionId: string | null;
-  messages: ChatMessage[];
-  activeJobIds: string[];
+export interface ChatStore {
+  conversations: Conversation[]; // newest first
+  activeConversationId: string | null; // null: the next message starts a conversation
 
-  // Session history
-  sessions: ChatSession[];
+  // Composer (not persisted)
+  draft: string;
+  pendingAttachments: Attachment[];
+  pendingRegion: DrawnRegion | null;
 
-  // Context management
-  contextTokenCount: number;
-  maxContextTokens: number;
+  // Conversations
+  newConversation: () => void;
+  selectConversation: (conversationId: string) => void;
+  renameConversation: (conversationId: string, title: string) => void;
+  deleteConversation: (conversationId: string) => void;
 
-  // Job-to-session mapping (for linking from Jobs page)
-  jobToSessionMap: Record<string, string>;
+  // Messages. addMessage targets `conversationId`, else the active conversation;
+  // when that does not exist it starts a new one and makes it active.
+  addMessage: (message: NewChatMessage, conversationId?: string) => { conversationId: string; messageId: string };
+  updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void;
+  removeMessage: (messageId: string) => void;
+  // Analyses are found by job id in any conversation: a job may finish after the
+  // user has switched conversations.
+  updateAnalysis: (jobId: string, updates: Partial<Omit<AnalysisMessage, 'id' | 'kind' | 'jobId'>>) => void;
+  appendAnalysisEvent: (jobId: string, event: AnalysisEvent) => void;
 
-  // Actions
-  // Session management
-  createNewSession: () => string;
-  loadSession: (sessionId: string) => void;
-  deleteSession: (sessionId: string) => void;
-  getCurrentSession: () => ChatSession | null;
-  getSessionByJobId: (jobId: string) => ChatSession | null;
+  // Composer
+  setDraft: (draft: string) => void;
+  addAttachment: (attachment: Attachment) => void;
+  removeAttachment: (attachmentId: string) => void;
+  clearAttachments: () => void;
+  setPendingRegion: (region: DrawnRegion | null) => void;
+}
 
-  // Message actions
-  addMessage: (message: ChatMessage) => void;
-  addJobResultMessage: (job: Job, resultData?: JobResultData) => void;
-  updateMessageByJobId: (jobId: string, updates: Partial<ChatMessage>) => void;
-  clearMessages: () => void;
+/** Messages of the active conversation (a stable empty array when there is none). */
+export function selectActiveMessages(state: ChatStore): ChatMessage[] {
+  return state.conversations.find((c) => c.id === state.activeConversationId)?.messages ?? EMPTY_MESSAGES;
+}
 
-  // Job tracking
-  trackJob: (jobId: string) => void;
-  untrackJob: (jobId: string) => void;
+/** The context counter for the active conversation (see estimateTokens). */
+export function selectContextTokens(state: ChatStore): number {
+  return estimateTokens(selectActiveMessages(state));
+}
 
-  // Context management
-  getContextForLLM: () => ContextItem[];
-  getContextForBackend: () => { previous_attachments: Array<{ id: string; filename: string; path: string; mime_type?: string }>, history: string };
-  setMaxContextTokens: (tokens: number) => void;
+export function findConversationByJobId(conversations: Conversation[], jobId: string): Conversation | null {
+  return (
+    conversations.find((c) => c.messages.some((m) => m.kind === 'analysis' && m.jobId === jobId)) ?? null
+  );
+}
+
+// Apply `update` to the messages of every conversation that `match`es, bumping updatedAt.
+function mapMessages(
+  conversations: Conversation[],
+  match: (m: ChatMessage) => boolean,
+  update: (m: ChatMessage) => ChatMessage | null,
+): Conversation[] {
+  const now = new Date().toISOString();
+  return conversations.map((c) => {
+    if (!c.messages.some(match)) return c;
+    const messages = c.messages.flatMap((m) => {
+      if (!match(m)) return [m];
+      const next = update(m);
+      return next ? [next] : [];
+    });
+    return { ...c, messages, updatedAt: now };
+  });
 }
 
 export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
-      // Initial state
-      currentSessionId: null,
-      messages: [],
-      activeJobIds: [],
-      sessions: [],
-      contextTokenCount: 0,
-      maxContextTokens: MAX_CONTEXT_TOKENS,
-      jobToSessionMap: {},
+      conversations: [],
+      activeConversationId: null,
+      draft: '',
+      pendingAttachments: [],
+      pendingRegion: null,
 
-      // Session management
-      createNewSession: () => {
-        const newSessionId = generateSessionId();
-        set({
-          currentSessionId: newSessionId,
-          messages: [],
-          activeJobIds: [],
-          contextTokenCount: 0,
-        });
+      newConversation: () => set({ activeConversationId: null }),
 
-        return newSessionId;
-      },
+      selectConversation: (conversationId) =>
+        set((state) =>
+          state.conversations.some((c) => c.id === conversationId) ? { activeConversationId: conversationId } : {},
+        ),
 
-      loadSession: (sessionId: string) => {
-        const state = get();
-        const session = state.sessions.find((s) => s.id === sessionId);
-        if (session) {
-          const tokenCount = session.messages.reduce(
-            (acc, m) => acc + estimateTokens(m.content),
-            0
-          );
-          set({
-            currentSessionId: sessionId,
-            messages: session.messages,
-            activeJobIds: [],
-            contextTokenCount: tokenCount,
-          });
-        }
-      },
-
-      deleteSession: (sessionId: string) => {
-        set((state) => {
-          const newSessions = state.sessions.filter((s) => s.id !== sessionId);
-
-          // If deleting current session, create a fresh new session
-          if (state.currentSessionId === sessionId) {
-            return {
-              sessions: newSessions,
-              currentSessionId: generateSessionId(),
-              messages: [],
-              activeJobIds: [],
-              contextTokenCount: 0,
-            };
-          }
-
-          return { sessions: newSessions };
-        });
-      },
-
-      getCurrentSession: () => {
-        const state = get();
-        if (!state.currentSessionId) return null;
-        return (
-          state.sessions.find((s) => s.id === state.currentSessionId) || null
-        );
-      },
-
-      getSessionByJobId: (jobId: string) => {
-        const state = get();
-        const sessionId = state.jobToSessionMap[jobId];
-        if (!sessionId) return null;
-        return state.sessions.find((s) => s.id === sessionId) || null;
-      },
-
-      // Message actions
-      addMessage: (message) =>
-        set((state) => {
-          // Create session if none exists
-          let sessionId = state.currentSessionId;
-          if (!sessionId) {
-            sessionId = generateSessionId();
-          }
-
-          const newMessage = {
-            ...message,
-            timestamp: message.timestamp || new Date().toISOString(),
-          };
-          const newMessages = [...state.messages, newMessage];
-          const newTokenCount = newMessages.reduce(
-            (acc, m) => acc + estimateTokens(m.content),
-            0
-          );
-
-          // Update job-to-session mapping
-          const jobToSessionMap = { ...state.jobToSessionMap };
-          if (message.jobId) {
-            jobToSessionMap[message.jobId] = sessionId;
-          }
-
-          // Auto-save session to sessions array for visibility in history
-          const now = new Date().toISOString();
-          const existingIndex = state.sessions.findIndex((s) => s.id === sessionId);
-          const updatedSession: ChatSession = {
-            id: sessionId,
-            title: generateTitle(newMessages),
-            messages: newMessages,
-            jobIds: newMessages
-              .filter((m) => m.jobId)
-              .map((m) => m.jobId as string),
-            createdAt: existingIndex >= 0 ? state.sessions[existingIndex].createdAt : now,
-            updatedAt: now,
-          };
-
-          const sessions =
-            existingIndex >= 0
-              ? state.sessions.map((s, i) => (i === existingIndex ? updatedSession : s))
-              : [updatedSession, ...state.sessions];
-
-          return {
-            currentSessionId: sessionId,
-            messages: newMessages,
-            contextTokenCount: newTokenCount,
-            jobToSessionMap,
-            sessions: sessions.slice(0, MAX_SESSIONS),
-          };
-        }),
-
-      addJobResultMessage: (job, resultData) =>
-        set((state) => {
-          const contextSummary = createContextSummary(resultData);
-          const message: ChatMessage = {
-            role: 'assistant',
-            content: contextSummary || `Job ${job.id} completed.`,
-            type: 'job_result',
-            jobId: job.id,
-            timestamp: new Date().toISOString(),
-            // Store result data for rendering (includes visualizations)
-            resultData: resultData,
-          };
-          const newMessages = [...state.messages, message];
-          const newTokenCount = newMessages.reduce(
-            (acc, m) => acc + estimateTokens(m.content),
-            0
-          );
-
-          // Update job-to-session mapping
-          const jobToSessionMap = { ...state.jobToSessionMap };
-          const sessionId = state.currentSessionId;
-          if (sessionId) {
-            jobToSessionMap[job.id] = sessionId;
-          }
-
-          // Auto-save session to sessions array
-          let sessions = state.sessions;
-          if (sessionId) {
-            const now = new Date().toISOString();
-            const existingIndex = state.sessions.findIndex((s) => s.id === sessionId);
-            const updatedSession: ChatSession = {
-              id: sessionId,
-              title: generateTitle(newMessages),
-              messages: newMessages,
-              jobIds: newMessages
-                .filter((m) => m.jobId)
-                .map((m) => m.jobId as string),
-              createdAt: existingIndex >= 0 ? state.sessions[existingIndex].createdAt : now,
-              updatedAt: now,
-            };
-
-            sessions =
-              existingIndex >= 0
-                ? state.sessions.map((s, i) => (i === existingIndex ? updatedSession : s))
-                : [updatedSession, ...state.sessions];
-          }
-
-          return {
-            messages: newMessages,
-            contextTokenCount: newTokenCount,
-            activeJobIds: state.activeJobIds.filter((id) => id !== job.id),
-            jobToSessionMap,
-            sessions: sessions.slice(0, MAX_SESSIONS),
-          };
-        }),
-
-      updateMessageByJobId: (jobId, updates) =>
+      renameConversation: (conversationId, title) =>
         set((state) => ({
-          messages: state.messages.map((m) =>
-            m.jobId === jobId ? { ...m, ...updates } : m
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId ? { ...c, title, updatedAt: new Date().toISOString() } : c,
           ),
         })),
 
-      clearMessages: () =>
-        set({ messages: [], contextTokenCount: 0, activeJobIds: [] }),
-
-      // Job tracking
-      trackJob: (jobId) =>
-        set((state) => {
-          // Update job-to-session mapping
-          const jobToSessionMap = { ...state.jobToSessionMap };
-          if (state.currentSessionId) {
-            jobToSessionMap[jobId] = state.currentSessionId;
-          }
-          return {
-            activeJobIds: [...state.activeJobIds, jobId],
-            jobToSessionMap,
-          };
-        }),
-
-      untrackJob: (jobId) =>
+      deleteConversation: (conversationId) =>
         set((state) => ({
-          activeJobIds: state.activeJobIds.filter((id) => id !== jobId),
+          conversations: state.conversations.filter((c) => c.id !== conversationId),
+          activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
         })),
 
-      // Context management
-      getContextForLLM: () => {
+      addMessage: (input, conversationId) => {
+        const now = new Date().toISOString();
+        const message = { ...input, id: input.id ?? generateId('msg'), createdAt: input.createdAt ?? now } as ChatMessage;
         const state = get();
-        const maxTokens = state.maxContextTokens;
-        const contextItems: ContextItem[] = [];
-        let tokenCount = 0;
+        const existing = state.conversations.find((c) => c.id === (conversationId ?? state.activeConversationId));
 
-        const reversedMessages = [...state.messages].reverse();
-
-        for (const message of reversedMessages) {
-          const tokens = estimateTokens(message.content);
-
-          if (tokenCount + tokens > maxTokens) {
-            break;
-          }
-
-          contextItems.unshift({
-            role: message.role,
-            content: message.content,
-            tokenEstimate: tokens,
+        if (!existing) {
+          const conversation: Conversation = {
+            id: generateId('chat'),
+            title: message.kind === 'user' ? titleFrom(message.text) : NEW_CONVERSATION_TITLE,
+            createdAt: now,
+            updatedAt: now,
+            messages: [message],
+          };
+          set({
+            conversations: [conversation, ...state.conversations].slice(0, MAX_CONVERSATIONS),
+            activeConversationId: conversation.id,
           });
-
-          tokenCount += tokens;
+          return { conversationId: conversation.id, messageId: message.id };
         }
 
-        return contextItems;
-      },
-
-      // Get context for backend job submission (includes previous attachments with paths)
-      getContextForBackend: () => {
-        const state = get();
-        const previousAttachments: Array<{ id: string; filename: string; path: string; mime_type?: string }> = [];
-        const seenIds = new Set<string>();
-
-        // Use current messages (includes newly added ones not yet persisted)
-        const allMessages = state.messages;
-
-        for (const message of allMessages) {
-          if (message.role === 'user' && message.attachments) {
-            for (const att of message.attachments) {
-              // Check if we have a path and haven't seen this attachment before
-              if (att.path && !seenIds.has(att.id)) {
-                seenIds.add(att.id);
-                previousAttachments.push({
-                  id: att.id,
-                  filename: att.filename,
-                  path: att.path,
-                  mime_type: 'image/tiff',
-                });
-              }
-            }
-          }
-        }
-
-        // Build a compact history summary
-        const historyParts: string[] = [];
-        for (const message of allMessages.slice(-10)) { // Last 10 messages
-          const prefix = message.role === 'user' ? 'User' : 'Assistant';
-          const content = message.content.slice(0, 200);
-          historyParts.push(`${prefix}: ${content}`);
-        }
-
-        return {
-          previous_attachments: previousAttachments,
-          history: historyParts.join('\n'),
+        const isFirstUserMessage = message.kind === 'user' && !existing.messages.some((m) => m.kind === 'user');
+        const updated: Conversation = {
+          ...existing,
+          title: isFirstUserMessage ? titleFrom((message as UserMessage).text) : existing.title,
+          messages: [...existing.messages, message],
+          updatedAt: now,
         };
+        set({ conversations: state.conversations.map((c) => (c.id === existing.id ? updated : c)) });
+        return { conversationId: existing.id, messageId: message.id };
       },
 
-      setMaxContextTokens: (tokens) => set({ maxContextTokens: tokens }),
+      updateMessage: (messageId, updates) =>
+        set((state) => ({
+          conversations: mapMessages(
+            state.conversations,
+            (m) => m.id === messageId,
+            (m) => ({ ...m, ...updates, id: m.id, kind: m.kind }) as ChatMessage,
+          ),
+        })),
+
+      removeMessage: (messageId) =>
+        set((state) => ({
+          conversations: mapMessages(state.conversations, (m) => m.id === messageId, () => null),
+        })),
+
+      updateAnalysis: (jobId, updates) =>
+        set((state) => ({
+          conversations: mapMessages(
+            state.conversations,
+            (m) => m.kind === 'analysis' && m.jobId === jobId,
+            (m) => ({ ...(m as AnalysisMessage), ...updates }),
+          ),
+        })),
+
+      appendAnalysisEvent: (jobId, event) =>
+        set((state) => ({
+          conversations: mapMessages(
+            state.conversations,
+            (m) => m.kind === 'analysis' && m.jobId === jobId,
+            (m) => ({ ...(m as AnalysisMessage), events: [...(m as AnalysisMessage).events, event] }),
+          ),
+        })),
+
+      setDraft: (draft) => set({ draft }),
+
+      addAttachment: (attachment) =>
+        set((state) => ({ pendingAttachments: [...state.pendingAttachments, attachment] })),
+
+      removeAttachment: (attachmentId) =>
+        set((state) => ({ pendingAttachments: state.pendingAttachments.filter((a) => a.id !== attachmentId) })),
+
+      clearAttachments: () => set({ pendingAttachments: [] }),
+
+      setPendingRegion: (region) => set({ pendingRegion: region }),
     }),
     {
-      name: 'dt4lc-chat-storage',
-      partialize: (state) => {
-        // Strip binary data from both current messages and all sessions
-        const strippedSessions = state.sessions.map((session) => ({
-          ...session,
-          messages: toPersistedMessages(session.messages),
-        }));
-
-        return {
-          sessions: strippedSessions,
-          currentSessionId: state.currentSessionId,
-          messages: toPersistedMessages(state.messages),
-          jobToSessionMap: state.jobToSessionMap,
-        };
-      },
-      // Storage version for migrations
-      version: 3,
-      migrate: (persistedState: unknown, version: number) => {
-        // Version 2: Strip binary data from storage to fix quota issues
-        if (version < 2) {
-          // Clear old storage that might have base64 data
-          console.log('[ChatStore] Migrating from v1 to v2: clearing binary data');
-          return {
-            sessions: [],
-            currentSessionId: null,
-            messages: [],
-            jobToSessionMap: {},
-          };
+      name: CHAT_STORAGE_KEY,
+      version: CHAT_STORAGE_VERSION,
+      // Only what restores a conversation; the composer starts empty on every load.
+      partialize: (state) => ({
+        conversations: state.conversations.map((c) => ({ ...c, messages: c.messages.map(toPersistedMessage) })),
+        activeConversationId: state.activeConversationId,
+      }),
+      // v0.5 (version ≤ 3) stored sessions of role/content messages with separate
+      // job_submitted / job_result / error entries. That shape does not map onto
+      // one analysis message per job, so it is dropped: a v0.5 user starts with an
+      // empty conversation list instead of a crash.
+      migrate: (persistedState, version) => {
+        if (version < CHAT_STORAGE_VERSION) {
+          return { conversations: [], activeConversationId: null };
         }
-        // Version 3: images are URLs (#67 bug 3). v2 messages have neither a URL nor
-        // bytes, so they keep their text and statistics and render without an image.
-        if (version < 3) {
-          const state = persistedState as Pick<ChatStore, 'sessions' | 'messages'>;
-          return {
-            ...state,
-            sessions: (state.sessions ?? []).map((session) => ({
-              ...session,
-              messages: toPersistedMessages(session.messages ?? []),
-            })),
-            messages: toPersistedMessages(state.messages ?? []),
-          } as ChatStore;
-        }
-        return persistedState as ChatStore;
+        return persistedState as Pick<ChatStore, 'conversations' | 'activeConversationId'>;
       },
-      // On rehydration, ensure current session is in the sessions array
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-
-        // If there's a current session with messages, ensure it's in sessions array
-        if (state.currentSessionId && state.messages.length > 0) {
-          const existingIndex = state.sessions.findIndex(
-            (s) => s.id === state.currentSessionId
-          );
-
-          if (existingIndex === -1) {
-            // Session not in array, add it
-            const now = new Date().toISOString();
-            const newSession: ChatSession = {
-              id: state.currentSessionId,
-              title: generateTitle(state.messages),
-              messages: state.messages,
-              jobIds: state.messages
-                .filter((m) => m.jobId)
-                .map((m) => m.jobId as string),
-              createdAt: now,
-              updatedAt: now,
-            };
-            state.sessions = [newSession, ...state.sessions].slice(0, MAX_SESSIONS);
-          } else {
-            // Session exists but might have stale messages, update it
-            const existingSession = state.sessions[existingIndex];
-            const updatedSession: ChatSession = {
-              ...existingSession,
-              messages: state.messages,
-              title: generateTitle(state.messages),
-              jobIds: state.messages
-                .filter((m) => m.jobId)
-                .map((m) => m.jobId as string),
-              updatedAt: new Date().toISOString(),
-            };
-            state.sessions = state.sessions.map((s, i) =>
-              i === existingIndex ? updatedSession : s
-            );
-          }
-        }
+      // 24 h retention: drop conversations not updated within the TTL on load.
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<Pick<ChatStore, 'conversations' | 'activeConversationId'>>;
+        const cutoff = Date.now() - CONVERSATION_TTL_MS;
+        const conversations = (persisted.conversations ?? []).filter((c) => Date.parse(c.updatedAt) >= cutoff);
+        const activeConversationId = conversations.some((c) => c.id === persisted.activeConversationId)
+          ? (persisted.activeConversationId as string)
+          : null;
+        return { ...currentState, conversations, activeConversationId };
       },
-    }
-  )
+    },
+  ),
 );

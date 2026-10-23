@@ -1,42 +1,68 @@
-export type Role = 'user' | 'assistant' | 'system';
+import type { DrawnRegion } from '../store/useAppStore';
 
-// Message types for chat
-export type ChatMessageType = 'text' | 'job_submitted' | 'job_result' | 'error';
+// Chat (one store: src/store/useChatStore.ts). One assistant message narrates
+// one analysis (design/DESIGN.md §4), so a job is a single `analysis` message
+// whose status and timeline are updated in place.
 
-// Base chat message
-export interface ChatMessage {
-  role: Role;
-  content: string;
-  type?: ChatMessageType;
-  jobId?: string;
-  timestamp?: string;
-  // For job_result messages: includes the parsed result data for display
-  resultData?: JobResultData;
-  // For user messages with attachments: includes preview images and path for context
-  attachments?: Array<{
-    id: string;
-    filename: string;
-    preview_url?: string;  // Server-relative preview URL from POST /v1/upload
-    path?: string;  // Server path for follow-up requests
-  }>;
+/** A file reference kept on a sent user message: metadata and URLs, never image bytes. */
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  path?: string;  // Server path for follow-up requests
+  preview_url?: string;  // Server-relative preview URL from POST /v1/upload
 }
 
-// Chat session for persistence
-export interface ChatSession {
+interface BaseMessage {
+  id: string;
+  createdAt: string;  // ISO 8601
+}
+
+export interface UserMessage extends BaseMessage {
+  kind: 'user';
+  text: string;
+  attachments?: MessageAttachment[];
+  region?: DrawnRegion;
+}
+
+/** A conversational reply (or a submit error) that is not tied to a job. */
+export interface AssistantMessage extends BaseMessage {
+  kind: 'assistant';
+  text: string;
+  error?: boolean;
+}
+
+export type AnalysisStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';
+
+/** One entry of the analysis timeline, as streamed by GET /v1/jobs/{id}/events. */
+export interface AnalysisEvent {
+  type: string;  // intent, proposal, planning, step_started, step_progress, step_finished, done, failed, cancelled
+  [key: string]: unknown;
+}
+
+export interface AnalysisMessage extends BaseMessage {
+  kind: 'analysis';
+  jobId: string;
+  status: AnalysisStatus;
+  text: string;  // narration (intent); empty until the assistant says something
+  events: AnalysisEvent[];  // the timeline slot
+  result?: JobResultData;
+  error?: string;
+}
+
+export type ChatMessage = UserMessage | AssistantMessage | AnalysisMessage;
+
+/** A message as callers add it; the store assigns `id` and `createdAt` when missing. */
+export type NewChatMessage =
+  | (Omit<UserMessage, 'id' | 'createdAt'> & Partial<BaseMessage>)
+  | (Omit<AssistantMessage, 'id' | 'createdAt'> & Partial<BaseMessage>)
+  | (Omit<AnalysisMessage, 'id' | 'createdAt'> & Partial<BaseMessage>);
+
+export interface Conversation {
   id: string;
   title: string;
-  messages: ChatMessage[];
-  jobIds: string[]; // All jobs associated with this session
   createdAt: string;
   updatedAt: string;
-}
-
-/** Extended message with job result data for display in chat. */
-export interface JobResultMessage extends ChatMessage {
-  type: 'job_result';
-  jobId: string;
-  jobStatus: JobStatus;
-  result?: JobResultData;
+  messages: ChatMessage[];
 }
 
 // Structured result data for context management
@@ -77,14 +103,6 @@ export interface JobResultData {
     inputFile: string;
     outputDir: string;
   };
-}
-
-// Context item for LLM processing (images stripped out)
-export interface ContextItem {
-  role: Role;
-  content: string;
-  // Metadata for context management
-  tokenEstimate?: number;
 }
 
 export interface Plan {

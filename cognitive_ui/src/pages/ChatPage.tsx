@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Loader2, Paperclip, Info, PanelLeftOpen, PanelLeftClose, CheckCircle, XCircle, ExternalLink, X, Plus, StopCircle } from 'lucide-react';
-import { useAppStore } from '../store/useAppStore';
-import { useChatStore } from '../store/useChatStore';
+import { Send, Loader2, Paperclip, Info, PanelLeftOpen, PanelLeftClose, XCircle, ExternalLink, X, Plus, StopCircle } from 'lucide-react';
+import {
+  MAX_CONTEXT_TOKENS,
+  findConversationByJobId,
+  getContextForBackend,
+  selectActiveMessages,
+  selectContextTokens,
+  useChatStore,
+} from '../store/useChatStore';
 import { useSubmitJob, useJob, useCancelJob } from '../api/hooks/useJobs';
 import { Link, useSearchParams } from 'react-router-dom';
 import { JobResultCard, parseJobResult } from '../components/chat/JobResultCard';
@@ -11,33 +17,28 @@ import { ImagePreviewModal } from '../components/chat/ImagePreviewModal';
 import { useJobSync } from '../hooks/useJobSync';
 import { resolveApiUrl } from '../api/client';
 import { chatLogger as logger } from '../utils/logger';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, MessageAttachment } from '../types';
 
 export function ChatPage() {
-  const [input, setInput] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ src: string; filename: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Use chat store for persistence
-  const {
-    messages,
-    addMessage,
-    addJobResultMessage,
-    trackJob,
-    contextTokenCount,
-    maxContextTokens,
-    currentSessionId,
-    loadSession,
-    getSessionByJobId,
-    createNewSession,
-    getContextForBackend,
-  } = useChatStore();
-
-  // Use app store for attachments (not persisted)
-  const { uploadedAttachments, clearAttachments, removeAttachment } = useAppStore();
+  // One chat store: conversations, messages and the composer
+  const messages = useChatStore(selectActiveMessages);
+  const contextTokenCount = useChatStore(selectContextTokens);
+  const currentSessionId = useChatStore((state) => state.activeConversationId);
+  const addMessage = useChatStore((state) => state.addMessage);
+  const updateAnalysis = useChatStore((state) => state.updateAnalysis);
+  const loadSession = useChatStore((state) => state.selectConversation);
+  const createNewSession = useChatStore((state) => state.newConversation);
+  const input = useChatStore((state) => state.draft);
+  const setInput = useChatStore((state) => state.setDraft);
+  const uploadedAttachments = useChatStore((state) => state.pendingAttachments);
+  const clearAttachments = useChatStore((state) => state.clearAttachments);
+  const removeAttachment = useChatStore((state) => state.removeAttachment);
 
   const submitJob = useSubmitJob();
   const cancelJob = useCancelJob();
@@ -55,7 +56,7 @@ export function ChatPage() {
       setSearchParams({});
     } else if (jobId) {
       // Find session containing this job
-      const session = getSessionByJobId(jobId);
+      const session = findConversationByJobId(useChatStore.getState().conversations, jobId);
       if (session && session.id !== currentSessionId) {
         loadSession(session.id);
       }
@@ -77,28 +78,19 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, currentJob]);
 
-  // Handle job completion - add result to chat
+  // Handle job completion - settle the job's analysis message
   useEffect(() => {
     if (currentJob && currentJob.status === 'completed') {
-      const resultData = parseJobResult(currentJob);
-      addJobResultMessage(currentJob, resultData);
+      updateAnalysis(currentJob.id, { status: 'done', result: parseJobResult(currentJob) });
       setCurrentJobId(null);
     } else if (currentJob && currentJob.status === 'failed') {
-      addMessage({
-        role: 'assistant',
-        content: `Job ${currentJob.id} failed: ${currentJob.error || 'Unknown error'}`,
-        type: 'error',
-        jobId: currentJob.id,
-      });
+      updateAnalysis(currentJob.id, { status: 'failed', error: currentJob.error || 'Unknown error' });
       setCurrentJobId(null);
     } else if (currentJob && currentJob.status === 'cancelled') {
-      addMessage({
-        role: 'assistant',
-        content: `Job ${currentJob.id} was cancelled`,
-        type: 'error',
-        jobId: currentJob.id,
-      });
+      updateAnalysis(currentJob.id, { status: 'cancelled' });
       setCurrentJobId(null);
+    } else if (currentJob && currentJob.status === 'running') {
+      updateAnalysis(currentJob.id, { status: 'running' });
     }
   }, [currentJob?.status]);
 
@@ -107,7 +99,7 @@ export function ChatPage() {
     if (!input.trim() || submitJob.isPending) return;
 
     // Include attachment previews AND paths in the message for display and context
-    const messageAttachments = uploadedAttachments.length > 0
+    const messageAttachments: MessageAttachment[] | undefined = uploadedAttachments.length > 0
       ? uploadedAttachments.map(att => ({
           id: att.id,
           filename: att.filename,
@@ -116,18 +108,17 @@ export function ChatPage() {
         }))
       : undefined;
 
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: input,
-      type: 'text',
+    const { conversationId } = addMessage({
+      kind: 'user',
+      text: input,
       attachments: messageAttachments,
-    };
-    addMessage(userMessage);
+    });
     setInput('');
 
     try {
-      // Build context for backend (includes previous attachments from this session)
-      const backendContext = getContextForBackend();
+      // Build context for backend (includes previous attachments from this conversation)
+      const conversation = useChatStore.getState().conversations.find((c) => c.id === conversationId);
+      const backendContext = getContextForBackend(conversation?.messages ?? []);
 
       logger.debug('Submitting job with:', {
         prompt: input,
@@ -143,26 +134,14 @@ export function ChatPage() {
         context: backendContext,  // Send context with previous attachments
       });
 
-      // Add job submitted message
-      addMessage({
-        role: 'assistant',
-        content: `Processing your request...`,
-        type: 'job_submitted',
-        jobId: job.id,
-      });
-
-      // Track the job for polling
-      trackJob(job.id);
+      // One analysis message narrates the job; polling settles it in place
+      addMessage({ kind: 'analysis', jobId: job.id, status: 'pending', text: '', events: [] }, conversationId);
       setCurrentJobId(job.id);
 
       // Clear attachments after successful submission
       clearAttachments();
     } catch (error) {
-      addMessage({
-        role: 'assistant',
-        content: `Error: ${(error as Error).message}`,
-        type: 'error',
-      });
+      addMessage({ kind: 'assistant', text: `Error: ${(error as Error).message}`, error: true }, conversationId);
     }
   };
 
@@ -174,16 +153,16 @@ export function ChatPage() {
   ];
 
   // Render a message based on its type
-  const renderMessage = (message: ChatMessage, index: number) => {
-    const isUser = message.role === 'user';
+  const renderMessage = (message: ChatMessage) => {
+    const isUser = message.kind === 'user';
+    const isError = message.kind === 'assistant' && message.error;
 
-    // Job result messages get special treatment
-    if (message.type === 'job_result' && message.jobId) {
-      // Use stored resultData from the message, or try to get from currentJob
-      const resultData = message.resultData || (currentJob?.id === message.jobId ? parseJobResult(currentJob) : undefined);
+    // A done analysis shows its result card
+    if (message.kind === 'analysis' && message.status === 'done') {
+      const resultData = message.result;
 
       return (
-        <div key={index} className="flex justify-start">
+        <div key={message.id} className="flex justify-start">
           <div className="max-w-[90%]">
             {resultData ? (
               <JobResultCard
@@ -194,7 +173,7 @@ export function ChatPage() {
             ) : (
               <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {message.content}
+                  Job {message.jobId} completed.
                 </p>
                 <Link
                   to={`/jobs/${message.jobId}`}
@@ -209,26 +188,16 @@ export function ChatPage() {
       );
     }
 
-    // Job submitted - show progress card or completed state
-    if (message.type === 'job_submitted' && message.jobId) {
+    // A pending, running, failed or cancelled analysis
+    if (message.kind === 'analysis') {
       const isActiveJob = message.jobId === currentJobId;
       const job = isActiveJob && currentJob ? currentJob : null;
-
-      // Check if there's a result message for this job (job completed)
-      const hasResultMessage = messages.some(
-        (m) => m.type === 'job_result' && m.jobId === message.jobId
-      );
-
-      // Check if there's an error message for this job (failed or cancelled)
-      const errorMessage = messages.find(
-        (m) => m.type === 'error' && m.jobId === message.jobId
-      );
-      const isCancelled = errorMessage?.content?.includes('cancelled');
+      const isCancelled = message.status === 'cancelled';
 
       // If job failed or cancelled, show appropriate state
-      if (errorMessage) {
+      if (message.status === 'failed' || isCancelled) {
         return (
-          <div key={index} className="flex justify-start">
+          <div key={message.id} className="flex justify-start">
             <div className="max-w-[90%]">
               <div className={`rounded-lg border p-3 ${
                 isCancelled
@@ -246,7 +215,7 @@ export function ChatPage() {
                       ? 'text-orange-700 dark:text-orange-300'
                       : 'text-red-700 dark:text-red-300'
                   }`}>
-                    {isCancelled ? 'Job cancelled' : 'Job failed'}
+                    {isCancelled ? 'Job cancelled' : `Job failed${message.error ? `: ${message.error}` : ''}`}
                   </span>
                   <Link
                     to={`/jobs/${message.jobId}`}
@@ -266,39 +235,14 @@ export function ChatPage() {
         );
       }
 
-      // If job is completed, show a compact success message instead of spinner
-      if (hasResultMessage) {
-        return (
-          <div key={index} className="flex justify-start">
-            <div className="max-w-[90%]">
-              <div className="bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800 p-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
-                  <span className="text-sm text-green-700 dark:text-green-300">
-                    Job completed
-                  </span>
-                  <Link
-                    to={`/jobs/${message.jobId}`}
-                    className="ml-auto flex items-center gap-1 text-xs text-green-600 dark:text-green-400 hover:underline"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Details
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      }
-
       const handleCancelJob = () => {
-        if (message.jobId && !cancelJob.isPending) {
+        if (!cancelJob.isPending) {
           cancelJob.mutate(message.jobId);
         }
       };
 
       return (
-        <div key={index} className="flex justify-start">
+        <div key={message.id} className="flex justify-start">
           <div className="max-w-[90%]">
             {job ? (
               <JobResultCard job={job} compact={true} />
@@ -308,7 +252,7 @@ export function ChatPage() {
                   <div className="flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-primary-500" />
                     <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {message.content}
+                      Processing your request...
                     </span>
                   </div>
                   <button
@@ -339,20 +283,20 @@ export function ChatPage() {
     // Regular text messages
     return (
       <div
-        key={index}
+        key={message.id}
         className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
       >
         <div
           className={`max-w-[80%] rounded-lg p-4 ${
             isUser
               ? 'bg-primary-500 text-white'
-              : message.type === 'error'
+              : isError
               ? 'bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800'
               : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800'
           }`}
         >
           {/* Attachment previews for user messages */}
-          {isUser && message.attachments && message.attachments.length > 0 && (
+          {message.kind === 'user' && message.attachments && message.attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-3">
               {message.attachments.map((att) => (
                 <button
@@ -388,12 +332,12 @@ export function ChatPage() {
             className={`text-sm ${
               isUser
                 ? 'text-white'
-                : message.type === 'error'
+                : isError
                 ? 'text-red-700 dark:text-red-300'
                 : 'text-gray-900 dark:text-white'
             }`}
           >
-            {message.content}
+            {message.text}
           </p>
         </div>
       </div>
@@ -445,7 +389,7 @@ export function ChatPage() {
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <Info className="w-3 h-3" />
                 <span>
-                  Context: {contextTokenCount} / {maxContextTokens} tokens
+                  Context: {contextTokenCount} / {MAX_CONTEXT_TOKENS} tokens
                 </span>
               </div>
               {/* New Chat button */}
@@ -495,7 +439,7 @@ export function ChatPage() {
           </div>
         ) : (
           <>
-            {messages.map((message, i) => renderMessage(message, i))}
+            {messages.map((message) => renderMessage(message))}
             <div ref={messagesEndRef} />
           </>
         )}

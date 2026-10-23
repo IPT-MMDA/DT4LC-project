@@ -10,17 +10,7 @@ import type { Job } from '../types';
  * This handles the case where a page reload happens while jobs are running.
  */
 export function useJobSync() {
-  const {
-    messages,
-    addJobResultMessage,
-    updateMessageByJobId,
-    untrackJob,
-  } = useChatStore();
-
-  // Find all job_submitted messages that might need syncing
-  const pendingJobMessages = messages.filter(
-    (m) => m.type === 'job_submitted' && m.jobId
-  );
+  const updateAnalysis = useChatStore((state) => state.updateAnalysis);
 
   // Sync a single job
   const syncJob = useCallback(async (jobId: string) => {
@@ -30,33 +20,15 @@ export function useJobSync() {
       logger.debug(`Job ${jobId.slice(0, 8)} status: ${job.status}`);
 
       if (job.status === 'completed') {
-        // Job completed - add result message
-        const resultData = parseJobResult(job);
-        addJobResultMessage(job, resultData);
-
-        // Update the original "Processing..." message
-        updateMessageByJobId(jobId, {
-          content: `Job completed successfully`,
-          type: 'job_result',
-        });
-
+        updateAnalysis(jobId, { status: 'done', result: parseJobResult(job) });
         logger.debug(`Job ${jobId.slice(0, 8)} completed, result added to chat`);
         return true;
       } else if (job.status === 'failed') {
-        // Job failed - update message
-        updateMessageByJobId(jobId, {
-          content: `Job failed: ${job.error || 'Unknown error'}`,
-          type: 'error',
-        });
-        untrackJob(jobId);
+        updateAnalysis(jobId, { status: 'failed', error: job.error || 'Unknown error' });
         logger.debug(`Job ${jobId.slice(0, 8)} failed: ${job.error}`);
         return true;
       } else if (job.status === 'cancelled') {
-        updateMessageByJobId(jobId, {
-          content: `Job was cancelled`,
-          type: 'error',
-        });
-        untrackJob(jobId);
+        updateAnalysis(jobId, { status: 'cancelled' });
         logger.debug(`Job ${jobId.slice(0, 8)} cancelled`);
         return true;
       }
@@ -70,34 +42,30 @@ export function useJobSync() {
 
       if (isNotFound) {
         logger.warn(`Job ${jobId.slice(0, 8)} not found on server (may have expired)`);
-        updateMessageByJobId(jobId, {
-          content: `Job not found. The server may have been restarted. Please try your request again.`,
-          type: 'error',
+        updateAnalysis(jobId, {
+          status: 'failed',
+          error: 'Job not found. The server may have been restarted. Please try your request again.',
         });
-        untrackJob(jobId);
         return true; // Consider it "handled"
       }
 
       logger.error(`Error syncing job ${jobId}:`, error);
       return false;
     }
-  }, [addJobResultMessage, updateMessageByJobId, untrackJob]);
+  }, [updateAnalysis]);
 
-  // On mount, check all pending job messages
+  // On mount, check every unfinished analysis in every kept conversation
   useEffect(() => {
     const checkPendingJobs = async () => {
-      for (const message of pendingJobMessages) {
-        if (!message.jobId) continue;
-
-        // Check if we already have a result message for this job
-        const hasResult = messages.some(
-          (m) => m.type === 'job_result' && m.jobId === message.jobId
-        );
-
-        if (!hasResult) {
-          logger.debug(`Checking pending job: ${message.jobId.slice(0, 8)}`);
-          await syncJob(message.jobId);
-        }
+      const pending = useChatStore.getState().conversations.flatMap((c) =>
+        c.messages.filter(
+          (m) => m.kind === 'analysis' && (m.status === 'pending' || m.status === 'running'),
+        ),
+      );
+      for (const message of pending) {
+        if (message.kind !== 'analysis') continue;
+        logger.debug(`Checking pending job: ${message.jobId.slice(0, 8)}`);
+        await syncJob(message.jobId);
       }
     };
 

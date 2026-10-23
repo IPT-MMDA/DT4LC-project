@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, X, Loader2, AlertCircle, CheckCircle, Paperclip, Download, Database } from 'lucide-react';
 import type { GeoTIFFFile } from '../../api/hooks/useUpload';
 import { useUploadFile, useListFiles } from '../../api/hooks/useUpload';
-import { useAppStore } from '../../store/useAppStore';
+import { useChatStore } from '../../store/useChatStore';
 import { resolveApiUrl } from '../../api/client';
 import { uploadLogger as logger } from '../../utils/logger';
 
@@ -26,7 +26,8 @@ export function FileUploadDropzone({ onClose, compact = false }: FileUploadDropz
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadFile = useUploadFile();
   const { data: availableFiles, isLoading: isLoadingFiles, isError: isFilesError } = useListFiles();
-  const { addAttachment, uploadedAttachments } = useAppStore();
+  const addAttachment = useChatStore((state) => state.addAttachment);
+  const uploadedAttachments = useChatStore((state) => state.pendingAttachments);
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;

@@ -1,6 +1,6 @@
 import { MessageSquarePlus, Trash2, MessageSquare } from 'lucide-react';
 import { useChatStore } from '../../store/useChatStore';
-import type { ChatSession } from '../../types';
+import type { Conversation } from '../../types';
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -17,18 +17,20 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString();
 }
 
+function jobCount(conversation: Conversation): number {
+  return conversation.messages.filter((m) => m.kind === 'analysis').length;
+}
+
 interface ChatHistoryProps {
   onClose?: () => void;
 }
 
 export function ChatHistory({ onClose }: ChatHistoryProps) {
-  const {
-    sessions,
-    currentSessionId,
-    createNewSession,
-    loadSession,
-    deleteSession,
-  } = useChatStore();
+  const sessions = useChatStore((state) => state.conversations);
+  const currentSessionId = useChatStore((state) => state.activeConversationId);
+  const createNewSession = useChatStore((state) => state.newConversation);
+  const loadSession = useChatStore((state) => state.selectConversation);
+  const deleteSession = useChatStore((state) => state.deleteConversation);
 
   const handleNewChat = () => {
     createNewSession();
@@ -75,7 +77,7 @@ export function ChatHistory({ onClose }: ChatHistoryProps) {
           </div>
         ) : (
           <div className="divide-y divide-gray-200 dark:divide-gray-800">
-            {sortedSessions.map((session: ChatSession) => (
+            {sortedSessions.map((session: Conversation) => (
               <div
                 key={session.id}
                 onClick={() => handleLoadSession(session.id)}
@@ -94,9 +96,9 @@ export function ChatHistory({ onClose }: ChatHistoryProps) {
                       <span className="text-xs text-gray-500 dark:text-gray-400">
                         {formatDate(session.updatedAt)}
                       </span>
-                      {session.jobIds.length > 0 && (
+                      {jobCount(session) > 0 && (
                         <span className="text-xs px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
-                          {session.jobIds.length} job{session.jobIds.length !== 1 ? 's' : ''}
+                          {jobCount(session)} job{jobCount(session) !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>

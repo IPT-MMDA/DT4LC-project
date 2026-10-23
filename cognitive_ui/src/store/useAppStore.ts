@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ChatMessage, Attachment, ContextItem, JobResultData, Job } from '../types';
 
 interface Layer {
   id: string;
@@ -19,10 +18,6 @@ export interface DrawnRegion {
   bbox: [number, number, number, number]; // [minX, minY, maxX, maxY]
   createdAt: string;
 }
-
-// Context management settings
-const MAX_CONTEXT_TOKENS = 4000; // Safe limit for small LLM instances
-const CHARS_PER_TOKEN = 4; // Rough estimate
 
 interface AppStore {
   // UI State
@@ -50,15 +45,6 @@ interface AppStore {
   cloudCoverMax: number;
   isFetchingDatasets: boolean;
   fetchError: string | null;
-
-  // Chat State
-  messages: ChatMessage[];
-  uploadedAttachments: Attachment[];
-  activeJobIds: string[]; // Jobs being tracked in chat
-
-  // Context Management
-  contextTokenCount: number;
-  maxContextTokens: number;
 
   // Actions
   toggleSidebar: () => void;
@@ -95,57 +81,6 @@ interface AppStore {
   setSelectedRegion: (region: DrawnRegion | null) => void;
   clearRegions: () => void;
 
-  // Chat Actions
-  addMessage: (message: ChatMessage) => void;
-  addJobResultMessage: (job: Job, resultData?: JobResultData) => void;
-  updateMessageByJobId: (jobId: string, updates: Partial<ChatMessage>) => void;
-  clearMessages: () => void;
-
-  // Attachment Actions
-  addAttachment: (attachment: Attachment) => void;
-  removeAttachment: (attachmentId: string) => void;
-  clearAttachments: () => void;
-
-  // Job Tracking
-  trackJob: (jobId: string) => void;
-  untrackJob: (jobId: string) => void;
-
-  // Context Management
-  getContextForLLM: () => ContextItem[];
-  setMaxContextTokens: (tokens: number) => void;
-}
-
-// Helper to estimate tokens from text
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
-}
-
-// Helper to create context-safe summary from job result
-function createContextSummary(result?: JobResultData): string {
-  if (!result) return '';
-
-  const parts: string[] = [];
-
-  if (result.summary) {
-    parts.push(result.summary);
-  }
-
-  if (result.statistics) {
-    const statsStr = Object.entries(result.statistics.values)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(', ');
-    parts.push(`[${result.statistics.type} stats: ${statsStr}]`);
-  }
-
-  if (result.fieldBoundaries) {
-    parts.push(`[Field boundaries: ${result.fieldBoundaries.numFields} fields, ${(result.fieldBoundaries.totalAreaM2 / 10000).toFixed(2)} hectares]`);
-  }
-
-  if (result.reconstruction) {
-    parts.push(`[Prithvi reconstruction: ${result.reconstruction.model}]`);
-  }
-
-  return parts.join(' ');
 }
 
 // Helper to calculate default dates
@@ -166,7 +101,7 @@ function getDefaultDates() {
 
 export const useAppStore = create<AppStore>()(
   persist(
-    (set, get) => {
+    (set) => {
       const defaultDates = getDefaultDates();
 
       return {
@@ -191,12 +126,6 @@ export const useAppStore = create<AppStore>()(
       cloudCoverMax: 20,
       isFetchingDatasets: false,
       fetchError: null,
-
-      messages: [],
-      uploadedAttachments: [],
-      activeJobIds: [],
-      contextTokenCount: 0,
-      maxContextTokens: MAX_CONTEXT_TOKENS,
 
   // UI Actions
   toggleSidebar: () =>
@@ -325,113 +254,6 @@ export const useAppStore = create<AppStore>()(
   clearRegions: () =>
     set({ drawnRegions: [], selectedRegion: null }),
 
-  // Chat Actions
-  addMessage: (message) =>
-    set((state) => {
-      const newMessage = {
-        ...message,
-        timestamp: message.timestamp || new Date().toISOString(),
-      };
-      const newMessages = [...state.messages, newMessage];
-      const newTokenCount = newMessages.reduce(
-        (acc, m) => acc + estimateTokens(m.content),
-        0
-      );
-      return { messages: newMessages, contextTokenCount: newTokenCount };
-    }),
-
-  addJobResultMessage: (job, resultData) =>
-    set((state) => {
-      const contextSummary = createContextSummary(resultData);
-      const message: ChatMessage = {
-        role: 'assistant',
-        content: contextSummary || `Job ${job.id} completed.`,
-        type: 'job_result',
-        jobId: job.id,
-        timestamp: new Date().toISOString(),
-      };
-      const newMessages = [...state.messages, message];
-      const newTokenCount = newMessages.reduce(
-        (acc, m) => acc + estimateTokens(m.content),
-        0
-      );
-      return {
-        messages: newMessages,
-        contextTokenCount: newTokenCount,
-        activeJobIds: state.activeJobIds.filter((id) => id !== job.id),
-      };
-    }),
-
-  updateMessageByJobId: (jobId, updates) =>
-    set((state) => ({
-      messages: state.messages.map((m) =>
-        m.jobId === jobId ? { ...m, ...updates } : m
-      ),
-    })),
-
-  clearMessages: () =>
-    set({ messages: [], contextTokenCount: 0, activeJobIds: [] }),
-
-  // Attachment Actions
-  addAttachment: (attachment) =>
-    set((state) => ({
-      uploadedAttachments: [...state.uploadedAttachments, attachment],
-    })),
-
-  removeAttachment: (attachmentId) =>
-    set((state) => ({
-      uploadedAttachments: state.uploadedAttachments.filter(
-        (a) => a.id !== attachmentId
-      ),
-    })),
-
-  clearAttachments: () =>
-    set({ uploadedAttachments: [] }),
-
-  // Job Tracking
-  trackJob: (jobId) =>
-    set((state) => ({
-      activeJobIds: [...state.activeJobIds, jobId],
-    })),
-
-  untrackJob: (jobId) =>
-    set((state) => ({
-      activeJobIds: state.activeJobIds.filter((id) => id !== jobId),
-    })),
-
-  // Context Management
-  getContextForLLM: () => {
-    const state = get();
-    const maxTokens = state.maxContextTokens;
-    const contextItems: ContextItem[] = [];
-    let tokenCount = 0;
-
-    // Process messages from newest to oldest, keeping within token limit
-    const reversedMessages = [...state.messages].reverse();
-
-    for (const message of reversedMessages) {
-      const tokens = estimateTokens(message.content);
-
-      // Skip if adding this message would exceed limit
-      if (tokenCount + tokens > maxTokens) {
-        break;
-      }
-
-      // Add to context (will reverse later)
-      contextItems.unshift({
-        role: message.role,
-        content: message.content,
-        tokenEstimate: tokens,
-      });
-
-      tokenCount += tokens;
-    }
-
-    return contextItems;
-  },
-
-  setMaxContextTokens: (tokens) =>
-    set({ maxContextTokens: tokens }),
     };
   },
     {
