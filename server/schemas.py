@@ -397,10 +397,22 @@ class SampleResponse(BaseModel):  # type: ignore[misc]
     )
 
 
+class FileGroup(BaseModel):  # type: ignore[misc]
+    """Files the Library shows as one row: the two dates of the bundled sample."""
+
+    name: str = Field(description="Row name, 'kakhovka_hls_l30.tif'")
+    line: str = Field(description="e.g. 'HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09 · EPSG:32636'")
+
+
 class FileInfo(BaseModel):  # type: ignore[misc]
     """Metadata for an on-disk GeoTIFF."""
 
-    id: str
+    id: str = Field(description="The file name without its extension")
+    upload_id: str | None = Field(
+        None,
+        description="The id POST /v1/upload or POST /v1/sample returned (the sample pair shares one); "
+        "DELETE /v1/files/{upload_id}; null for exports",
+    )
     filename: str
     path: str
     size: list[int]
@@ -411,6 +423,19 @@ class FileInfo(BaseModel):  # type: ignore[misc]
     modified: float = Field(description="Unix modification time")
     metadata: RasterMetadata | None = Field(None, description="As in UploadResponse.metadata")
     owner: str | None = Field(None, description="Uploader's session id; null for exports and older uploads")
+    kind: Literal["upload", "sample", "export"] = Field(
+        description="upload, sample (a copy of the bundled sample from POST /v1/sample) or export (Earth Engine)"
+    )
+    group: FileGroup | None = Field(None, description="Set on both sample files: show them as one row")
+    preview_url: str | None = Field(None, description="Download URL of the PNG preview; null if there is none")
+    created_at: str = Field(description="ISO time of the upload (the owner record), else of the last modification")
+
+
+class FileDeleteResponse(BaseModel):  # type: ignore[misc]
+    """``DELETE /v1/files/{id}``: the files removed with their previews and owner records."""
+
+    ok: bool = True
+    deleted: list[str] = Field(description="File names removed, e.g. both sample dates")
 
 
 class FileListResponse(BaseModel):  # type: ignore[misc]

@@ -44,6 +44,19 @@ def read_owner(path: Path) -> str | None:
     return owner if isinstance(owner, str) else None
 
 
+def read_created_at(path: Path) -> str | None:
+    """When ``path`` was uploaded (ISO, from its sidecar), ``None`` if unknown."""
+    record = _read(path)
+    created = record.get("created_at") if record else None
+    return created if isinstance(created, str) else None
+
+
+def delete_upload(path: Path) -> None:
+    """Delete an upload, its ``<stem>.png`` preview and its sidecar. Blocking."""
+    for f in (path, path.with_suffix(".png"), owner_file(path)):
+        f.unlink(missing_ok=True)
+
+
 def cleanup_guest_uploads(upload_dir: Path, guest_hours: float) -> int:
     """Delete guest uploads older than ``guest_hours``: the GeoTIFF, its preview and the sidecar. Blocking."""
     cutoff = datetime.now() - timedelta(hours=guest_hours)

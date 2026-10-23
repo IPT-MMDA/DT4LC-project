@@ -2,8 +2,10 @@
 
 import asyncio
 import base64
+from datetime import datetime
 import io
 import logging
+from pathlib import Path
 from typing import Annotated
 import uuid
 
@@ -18,10 +20,19 @@ from dta.dti.raster import describe_raster, format_size
 from dta.dti.schemas import RasterMetadata
 
 from ..paths import ensure_served_owner, resolve_served_path
-from ..sample import SAMPLE_NAME, SampleNotBundledError, attach_sample
-from ..schemas import ErrorDetail, ErrorResponse, FileInfo, FileListResponse, SampleResponse, UploadResponse
+from ..sample import SAMPLE_DIR, SAMPLE_NAME, SampleNotBundledError, attach_sample, is_sample_copy, pair_line
+from ..schemas import (
+    ErrorDetail,
+    ErrorResponse,
+    FileDeleteResponse,
+    FileGroup,
+    FileInfo,
+    FileListResponse,
+    SampleResponse,
+    UploadResponse,
+)
 from ..sessions import CurrentSession
-from ..uploads import owner_file, read_owner, write_owner
+from ..uploads import delete_upload, owner_file, read_created_at, read_owner, write_owner
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
@@ -167,6 +178,23 @@ def _raster_metadata(src: object, filename: str, size_bytes: int) -> RasterMetad
         return RasterMetadata(size_bytes=size_bytes, size_label=format_size(size_bytes))
 
 
+def _group_samples(files: list[FileInfo]) -> None:
+    """Give each owner's sample files one ``group``: the sample name and the pair line with the CRS."""
+    pairs: dict[str | None, list[FileInfo]] = {}
+    for f in files:
+        if f.kind == "sample":
+            pairs.setdefault(f.upload_id, []).append(f)
+    for pair in pairs.values():
+        pair.sort(key=lambda f: f.filename)
+        first, last = pair[0].metadata, pair[-1].metadata
+        if first is None or last is None:
+            continue
+        line = " · ".join(p for p in (pair_line(first, last), pair[0].crs) if p)  # one date left: that date
+        group = FileGroup(name=f"{SAMPLE_NAME}.tif", line=line)
+        for f in pair:
+            f.group = group
+
+
 @router.get(  # type: ignore[misc]
     "/files",
     response_model=FileListResponse,
@@ -175,7 +203,9 @@ def _raster_metadata(src: object, filename: str, size_bytes: int) -> RasterMetad
 async def list_files(session: CurrentSession) -> FileListResponse:
     """List the caller's uploads and the GEE-exported GeoTIFF files on the server.
 
-    Operators see every upload, including those from before v0.6.0 that have no owner.
+    Operators see every upload, including those from before v0.6.0 that have no owner. ``kind`` is
+    ``upload``, ``sample`` (the caller's copy of the bundled sample, both dates carrying the same
+    ``group`` so the Library shows them as one row) or ``export``.
     """
     try:
         import rasterio
@@ -196,9 +226,12 @@ async def list_files(session: CurrentSession) -> FileListResponse:
                     crs = src.crs.to_string() if src.crs else None
                     width, height = src.width, src.height
 
+                    preview = file_path.with_suffix(".png")
+                    modified = file_path.stat().st_mtime
                     files.append(
                         FileInfo(
                             id=file_path.stem,
+                            upload_id=file_path.name.split("_", 1)[0],
                             filename=file_path.name,
                             path=str(file_path),
                             size=[width, height],
@@ -206,10 +239,13 @@ async def list_files(session: CurrentSession) -> FileListResponse:
                             bounds=[bounds.left, bounds.bottom, bounds.right, bounds.top],
                             size_bytes=file_path.stat().st_size,
                             source="upload",
-                            modified=file_path.stat().st_mtime,
+                            modified=modified,
                             # Uploads are stored as <id>_<original name>
                             metadata=_raster_metadata(src, file_path.name.split("_", 1)[-1], file_path.stat().st_size),
                             owner=owner,
+                            kind="sample" if is_sample_copy(file_path, owner) else "upload",
+                            preview_url=artifact_files.ref("png", preview)["url"] if preview.is_file() else None,
+                            created_at=read_created_at(file_path) or datetime.fromtimestamp(modified).isoformat(),
                         )
                     )
             except Exception as e:
@@ -239,11 +275,15 @@ async def list_files(session: CurrentSession) -> FileListResponse:
                                 source="export",
                                 modified=file_path.stat().st_mtime,
                                 metadata=_raster_metadata(src, file_path.name, file_path.stat().st_size),
+                                kind="export",
+                                created_at=datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
                             )
                         )
                 except Exception as e:
                     logger.warning(f"Failed to read file {file_path}: {e}")
                     continue
+
+        _group_samples(files)
 
         # Sort by modification time (newest first)
         files.sort(key=lambda x: x.modified, reverse=True)
@@ -257,6 +297,43 @@ async def list_files(session: CurrentSession) -> FileListResponse:
     except Exception as e:
         logger.exception("Failed to list files")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete(  # type: ignore[misc]
+    "/files/{file_id}",
+    response_model=FileDeleteResponse,
+    summary="Delete an upload",
+)
+async def delete_file(file_id: str, session: CurrentSession) -> FileDeleteResponse:
+    """Delete the caller's upload with its preview and owner record.
+
+    ``file_id`` is an ``upload_id`` (what ``POST /v1/upload`` or ``POST /v1/sample`` returned) or
+    a file's ``id`` from ``GET /v1/files``. The two sample dates share one ``upload_id``, so
+    deleting by it deletes the pair; ``POST /v1/sample`` attaches a fresh copy. Only copies in the
+    upload directory are deleted, never the bundled sample. 404 for an unknown id or another
+    session's upload (operators may delete any).
+    """
+
+    def matches(p: Path) -> bool:
+        return p.suffix.lower() in (".tif", ".tiff") and (p.stem == file_id or p.name.startswith(f"{file_id}_"))
+
+    upload_root = UPLOAD_DIR.resolve()
+    bundled = SAMPLE_DIR.resolve()
+    targets = [
+        p
+        for p in sorted(UPLOAD_DIR.iterdir() if UPLOAD_DIR.is_dir() else [])
+        if p.is_file()
+        and matches(p)
+        and p.resolve().parent == upload_root
+        and not p.resolve().is_relative_to(bundled)
+        and session.can_see(read_owner(p))
+    ]
+    if not targets:
+        raise HTTPException(status_code=404, detail=f"File {file_id} not found")
+    for p in targets:
+        await asyncio.to_thread(delete_upload, p)
+    logger.info(f"Deleted {len(targets)} upload(s) for id {file_id}")
+    return FileDeleteResponse(deleted=[p.name for p in targets])
 
 
 @router.get(  # type: ignore[misc]
