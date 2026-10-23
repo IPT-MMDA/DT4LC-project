@@ -4,10 +4,11 @@ Defines request/response models for the REST API endpoints including
 job submission, chat messages, and file attachments.
 """
 
+from datetime import date
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from dta import __version__
 
@@ -35,6 +36,7 @@ __all__ = [
     "GEEFetchResponse",
     "JobListResponse",
     "JobRecord",
+    "JobRegion",
     "JobStatus",
     "JobSubmitRequest",
     "MetricsResponse",
@@ -100,6 +102,72 @@ class ChatRequest(BaseModel):  # type: ignore[misc]
     messages: list[ChatMessage] = Field(description="Conversation messages; last user message is used as the prompt")
 
 
+class JobRegion(BaseModel):  # type: ignore[misc]
+    """A region sent from the map: what to fetch from Earth Engine for the analysis.
+
+    Exactly one of ``geometry`` and ``bbox``; ``start_date`` ≤ ``end_date``; at most
+    ``MAX_REGION_KM2`` (2500 km²). Anything else is a 422.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    geometry: dict[str, Any] | None = Field(None, description="GeoJSON Polygon or MultiPolygon in WGS84")
+    bbox: list[float] | None = Field(None, description="[west, south, east, north] in degrees")
+    name: str | None = Field(None, max_length=80, description="Region name, e.g. 'Dnipro floodplain'")
+    place: str | None = Field(None, max_length=80, description="Place, e.g. 'Kherson'")
+    dataset: Literal["HLS L30", "HLS S30", "Sentinel-2", "Landsat 8/9", "MODIS"]
+    start_date: date
+    end_date: date
+    bands: list[str] | None = Field(
+        None, description="Band codes, e.g. ['B2', 'B5']; default: the dataset's optical bands"
+    )
+    cloud_max: int = Field(20, ge=0, le=100, description="Maximum cloud cover, percent")
+    _area_km2: float = PrivateAttr(0.0)
+    _bounds: list[float] = PrivateAttr(default_factory=list)
+
+    @model_validator(mode="after")  # type: ignore[misc]
+    def _check(self) -> "JobRegion":
+        from dta.dti.data_sources.gee_region import DATASETS, band_code
+
+        from .regions import MAX_REGION_KM2, area_km2, format_area, region_shape
+
+        if self.start_date > self.end_date:
+            raise ValueError("region start_date is after end_date")
+        geom = region_shape(self.geometry, self.bbox)
+        area = area_km2(geom)
+        if area > MAX_REGION_KM2:
+            raise ValueError(
+                f"region is {format_area(area)}; the limit is {format_area(MAX_REGION_KM2)}. Draw a smaller region."
+            )
+        if self.bands is not None:
+            if not self.bands:
+                raise ValueError("region bands is empty; leave it out for the dataset's default bands")
+            codes = [band_code(self.dataset, b) for b in self.bands]
+            unknown = [b for b, c in zip(self.bands, codes, strict=True) if c is None]
+            if unknown:
+                bands = ", ".join(DATASETS[self.dataset].bands)
+                raise ValueError(f"{self.dataset} has no band {', '.join(unknown)}; its bands are {bands}")
+            self.bands = list(dict.fromkeys(c for c in codes if c))
+        self._area_km2 = area
+        self._bounds = [round(v, 6) for v in geom.bounds]
+        return self
+
+    def echo(self, note: str | None = None) -> dict[str, Any]:
+        """The job's ``region``: the request (bands resolved), ``bounds``, ``area_km2``, ``line`` and ``note``."""
+        from dta.dti.data_sources.gee_region import DATASETS
+
+        from .regions import region_line
+
+        echo: dict[str, Any] = self.model_dump(mode="json")
+        echo["bands"] = self.bands or list(DATASETS[self.dataset].default_bands)
+        echo["bounds"] = self._bounds
+        echo["area_km2"] = round(self._area_km2, 1)
+        echo["line"] = region_line(echo)
+        if note:
+            echo["note"] = note
+        return echo
+
+
 class JobSubmitRequest(BaseModel):  # type: ignore[misc]
     """Request for submitting a new job."""
 
@@ -107,6 +175,10 @@ class JobSubmitRequest(BaseModel):  # type: ignore[misc]
     mode: str = Field(default="hybrid", description="Planning mode: hybrid, llm, or template")
     attachments: list[Attachment] = Field(default_factory=list, description="Uploaded GeoTIFF attachments")
     context: dict[str, Any] | None = Field(default=None, description="Optional session context for follow-up requests")
+    region: JobRegion | None = Field(
+        default=None,
+        description="Region from the map, fetched from Earth Engine when no file is attached (attachments win)",
+    )
 
 
 class Plan(BaseModel):  # type: ignore[misc]
@@ -167,6 +239,10 @@ class JobRecord(JobSummary):
     proposal: dict[str, Any] | None = Field(
         default=None,
         description="{text, plan} when planning proposed a composed plan (status proposal until confirmed)",
+    )
+    region: dict[str, Any] | None = Field(
+        default=None,
+        description="The submitted region with bounds, area_km2 and the chip line; note if attachments won",
     )
 
 

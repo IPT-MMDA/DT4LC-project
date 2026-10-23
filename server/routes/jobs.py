@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["jobs"])
 
+REGION_IGNORED_NOTE = "Files are attached, so the analysis reads them and doesn't fetch this region."
+
 
 def _job_record(job_dict: dict[str, Any]) -> JobRecord:
     return JobRecord.model_validate(job_dict)  # type: ignore[no-any-return]
@@ -59,6 +61,12 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
     combination of steps), the job stops at status ``proposal`` with a ``proposal`` event
     ``{text, plan}`` and waits for ``POST /v1/jobs/{job_id}/confirm``; a proposal does not count
     against the guest quota, its confirmation does.
+
+    ``region`` (a region sent from the map) is fetched from Earth Engine when no file is attached;
+    the job echoes it with ``bounds``, ``area_km2`` and the chip ``line``. Attached files win: the
+    region is not fetched and its echo carries ``note``. Without Earth Engine credentials a region
+    job fails at planning with ``EE_NOT_CONFIGURED``. A region job counts like any analysis. An
+    invalid region is a 422.
     """
     counted_at = enforce_analysis_quota(session)
     try:
@@ -66,6 +74,11 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
 
         attachments_dict = [att.model_dump() for att in req.attachments]
         logger.info(f"Job submit: {len(req.attachments)} attachments received: {attachments_dict}")
+
+        region = None
+        if req.region is not None:
+            attached = any(att.path for att in req.attachments)
+            region = req.region.echo(REGION_IGNORED_NOTE if attached else None)
 
         job_id = await queue.submit_job(
             prompt=req.prompt,
@@ -75,6 +88,7 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
             owner=session.id,
             owner_role=session.role,
             uncount=functools.partial(release_analysis, session, counted_at),
+            region=region,
         )
 
         job = await queue.get_job(job_id)
