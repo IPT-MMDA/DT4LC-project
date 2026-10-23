@@ -116,6 +116,19 @@ describe('Landing', () => {
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
   });
 
+  it("the full scene note on \"(bundled crop)\" is reachable by keyboard and shown on focus", async () => {
+    await openLanding();
+    const crop = screen.getByTestId('landing-caption-crop');
+    expect(crop.tabIndex).toBe(0);
+    const note = screen.getByTestId('landing-caption-note');
+    expect(note.textContent).toBe(crop.getAttribute('title'));
+    // Shown while focus is in the caption's sentence (CSS group-focus-within); screen readers get the sr-only copy.
+    expect(note.className).toContain('hidden');
+    expect(note.className).toContain('group-focus-within:block');
+    expect(note.parentElement!.className).toContain('group');
+    expect(note.getAttribute('aria-hidden')).toBe('true');
+  });
+
   it("hero B: headline, both buttons as real links, the caption with the bundled crop's figure", async () => {
     await openLanding();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('What changed on the ground?Ask in plain language.');

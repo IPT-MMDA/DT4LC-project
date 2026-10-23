@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type Ref } from 'react';
 import { Contrast, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useThemeToggle } from '../../hooks/useThemeToggle';
 import { useChatStore } from '../../store/useChatStore';
 import { cn } from '../../utils/cn';
@@ -55,8 +56,11 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
   const { pathname } = useLocation();
   const theme = useThemeToggle();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const workspace = pathname === '/app';
 
+  // Tab stays in the drawer; focus goes back to the menu button however it closes.
+  useFocusTrap(dialogRef);
   useEffect(() => {
     closeRef.current?.focus();
   }, []);
@@ -71,6 +75,7 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex">
       <div
+        ref={dialogRef}
         id={MENU_ID}
         role="dialog"
         aria-modal="true"

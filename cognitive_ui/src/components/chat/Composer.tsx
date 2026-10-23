@@ -58,7 +58,7 @@ export function Composer({ hasMessages, sending, onSend, onOpenFilePicker, note 
 
   return (
     <div className="flex-none px-5 pb-4 max-md:px-3 max-md:pb-3">
-      <div className="bg-surface border border-border rounded-composer shadow-composer pt-[10px] px-3 pb-2 flex flex-col gap-2">
+      <div className="bg-surface border border-border rounded-composer shadow-composer pt-[10px] px-3 pb-2 flex flex-col gap-2 has-[textarea:focus-visible]:outline has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-accent">
         {(chips.length > 0 || region) && (
           <ul aria-label="Attachments" className="flex flex-wrap gap-2">
             {chips.map((chip) => (

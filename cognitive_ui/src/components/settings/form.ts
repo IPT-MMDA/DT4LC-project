@@ -31,7 +31,7 @@ export function makeForm(
 
 export const card = 'border border-border rounded-card bg-surface px-4 py-[14px] flex flex-col';
 export const inputClass =
-  'px-[10px] py-[6px] rounded-control border border-border bg-surface text-control text-text placeholder:text-faint focus:outline-none focus:border-accent disabled:text-faint';
+  'px-[10px] py-[6px] rounded-control border border-border bg-surface text-control text-text placeholder:text-faint focus:border-accent disabled:text-faint';
 export const smallButton =
   'px-[9px] py-[4px] border border-border rounded-control text-[12px] text-text2 whitespace-nowrap enabled:hover:bg-surface2 disabled:text-faint disabled:cursor-not-allowed';
 

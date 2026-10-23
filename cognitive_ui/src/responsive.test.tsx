@@ -166,6 +166,39 @@ describe('the shell on a phone', () => {
     expect(document.activeElement).toBe(menu);
   });
 
+  it('keeps Tab inside the drawer, both ways, and gives focus back to the menu button when another conversation closes it', async () => {
+    stubWidth(390);
+    mockApi();
+    renderApp('/app');
+    const menu = screen.getByRole('button', { name: 'Open menu' });
+    menu.focus();
+    fireEvent.click(menu);
+    const drawer = screen.getByRole('dialog', { name: 'Menu' });
+    await within(drawer).findByRole('button', { name: 'Account: Guest' });
+    const close = within(drawer).getByRole('button', { name: 'Close menu' });
+    const theme = within(drawer).getByRole('button', { name: 'Dark theme' });
+    expect(document.activeElement).toBe(close);
+
+    // The theme button is the drawer's last control: Tab wraps to the first, Shift+Tab back.
+    const home = within(drawer).getByRole('link', { name: 'DT, DT4LC home' });
+    theme.focus();
+    fireEvent.keyDown(theme, { key: 'Tab' });
+    expect(document.activeElement).toBe(home);
+    fireEvent.keyDown(home, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(theme);
+    // Between the ends Tab is the browser's.
+    close.focus();
+    expect(fireEvent.keyDown(close, { key: 'Tab' })).toBe(true);
+    // Focus that left the drawer is pulled back in.
+    menu.focus();
+    fireEvent.keyDown(menu, { key: 'Tab' });
+    expect(document.activeElement).toBe(home);
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Snow in Brienz' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open menu' })));
+  });
+
   it('a destination, the current one too, another conversation and Close each close the drawer', () => {
     stubWidth(390);
     mockApi();
