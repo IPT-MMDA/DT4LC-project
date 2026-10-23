@@ -84,6 +84,8 @@ function toMessageAttachment(a: Attachment): MessageAttachment {
 export interface SendOptions {
   /** After an `analysis` frame, or a quota refusal: the session's quota changed. */
   onQuotaChanged?: () => void;
+  /** A `retry` fix's `params`, merged into the request body (docs/API.md "Failures"). */
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -132,6 +134,7 @@ export async function sendMessage(text: string, options: SendOptions = {}): Prom
         attachments: context.attachments.filter((a) => a.path).map((a) => toChatAttachment(a as Attachment)),
         ...(context.region ? { region: toChatRegion(context.region) } : {}),
         ...(conversation?.pending ? { pending: conversation.pending } : {}),
+        ...options.params,
       },
       (event) => {
         if (event.type === 'reply_delta') {
@@ -163,19 +166,20 @@ export async function sendMessage(text: string, options: SendOptions = {}): Prom
   }
 }
 
-/** `send(text?)` (the draft by default) and whether a message is in flight. */
+/** `send(text?, {params}?)` (the draft by default) and whether a message is in flight. */
 export function useSendMessage() {
   const queryClient = useQueryClient();
   const [sending, setSending] = useState(false);
   const inFlight = useRef(false);
 
   const send = useCallback(
-    async (text?: string) => {
+    async (text?: string, options: Pick<SendOptions, 'params'> = {}) => {
       if (inFlight.current) return;
       inFlight.current = true;
       setSending(true);
       try {
         await sendMessage(text ?? useChatStore.getState().draft, {
+          ...options,
           onQuotaChanged: () => queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
         });
       } finally {

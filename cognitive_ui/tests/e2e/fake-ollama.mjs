@@ -6,8 +6,9 @@
 //   POST /api/chat     -> {message: {role: "assistant", content: <reply>}, done: true}
 //
 // The reply is the first rule whose `match` regex matches the last user message
-// or the last system message; otherwise `default`. Rules:
-//   {default: string, rules: [{match: string, flags?: string, reply: string}]}
+// or the last system message; otherwise `default`. A rule's `delay_ms` holds the
+// reply back that long, e.g. to keep an Interpretation step running. Rules:
+//   {default: string, rules: [{match: string, flags?: string, reply: string, delay_ms?: number}]}
 //
 // Flows change the rules at run time through the control endpoints:
 //   PUT  /__e2e/rules  body = rules object  -> replaces the rules
@@ -36,6 +37,7 @@ function compile(rules) {
     rules: (rules.rules ?? []).map((r) => ({
       re: new RegExp(r.match, r.flags ?? ''),
       reply: r.reply,
+      delayMs: Number(r.delay_ms) > 0 ? Number(r.delay_ms) : 0,
     })),
   };
 }
@@ -47,12 +49,16 @@ function lastContent(messages, role) {
   return '';
 }
 
-/** Pick the reply for an Ollama chat message list. */
-export function pickReply(compiled, messages) {
+/** The matching rule (`{reply, delayMs}`) for an Ollama chat message list; `default` when none matches. */
+export function pickRule(compiled, messages) {
   const user = lastContent(messages, 'user');
   const system = lastContent(messages, 'system');
-  const hit = compiled.rules.find((r) => r.re.test(user) || r.re.test(system));
-  return hit ? hit.reply : compiled.default;
+  return compiled.rules.find((r) => r.re.test(user) || r.re.test(system)) ?? { reply: compiled.default, delayMs: 0 };
+}
+
+/** Pick the reply for an Ollama chat message list. */
+export function pickReply(compiled, messages) {
+  return pickRule(compiled, messages).reply;
 }
 
 /**
@@ -75,7 +81,8 @@ export async function startFakeOllama({ rules, port = 0, model = FAKE_MODEL }) {
       }
       if (req.method === 'POST' && url.pathname === '/api/chat') {
         const body = JSON.parse(await readBody(req));
-        const content = pickReply(current, body.messages ?? []);
+        const { reply: content, delayMs } = pickRule(current, body.messages ?? []);
+        if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
         return sendJSON(res, 200, {
           model: body.model ?? model,
           created_at: new Date().toISOString(),

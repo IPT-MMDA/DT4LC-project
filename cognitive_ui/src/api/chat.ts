@@ -88,7 +88,8 @@ export function toChatRegion(r: ChatRegion): ChatRegionRequest {
   };
 }
 
-async function errorFrom(res: Response): Promise<ChatError> {
+/** A refusal as `ChatError`: `{ok:false, error:{code, message}}` or FastAPI's `detail`. */
+export async function errorFrom(res: Response): Promise<ChatError> {
   let body: { error?: { code?: string; message?: string; details?: Record<string, unknown> }; detail?: unknown } = {};
   try {
     body = await res.json();
