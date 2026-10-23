@@ -89,6 +89,15 @@ def phrase_in(phrase: str, text: str) -> bool:
     return _phrase_pattern(phrase).search(text.lower()) is not None
 
 
+# "Use EVI instead of NDVI": the term right after "instead of" or "rather than" is the one not wanted.
+_REJECTED = re.compile(r"\b(instead of|rather than)\s+(?:(?:the|an?)\s+)?[a-z0-9-]+", re.I)
+
+
+def without_rejected(text: str) -> str:
+    """``text`` without the term the user turns down: "use evi instead of ndvi" → "use evi instead of"."""
+    return _REJECTED.sub(r"\1", text)
+
+
 def _strip_pleasantries(prompt: str) -> str:
     return _PLEASANTRY_PREFIX.sub("", prompt.strip())
 
@@ -205,26 +214,42 @@ class TriggerIndex:
         """Return the user-runnable item whose triggers best match the prompt,
         or None if no item matches. Score = number of distinct trigger keywords
         appearing in the prompt as whole words (:func:`phrase_in`); tie-broken by
-        length of the longest match.
+        the earliest match in the prompt, then by the length of the longest match.
+
+        A match inside a longer match of another item's trigger does not count
+        ("snow" in "classify snow and ice"), nor the term after "instead of" or
+        "rather than" (:func:`without_rejected`: "use EVI instead of NDVI").
         """
-        p = prompt.lower()
-        best: RegistryItem | None = None
-        best_score = 0
-        best_max_len = 0
+        p = without_rejected(prompt.lower())
+        spans: list[tuple[RegistryItem, str, int, int]] = []
         for item in self.user_runnable_items:
             if item.triggers is None:
                 continue
-            keywords = [k.lower() for k in item.triggers.keywords]
-            phrases = [k.lower() for k in item.triggers.action_phrases]
-            matches = [kw for kw in keywords + phrases if phrase_in(kw, p)]
+            for kw in item.triggers.keywords + item.triggers.action_phrases:
+                kw = kw.strip().lower()
+                if kw:
+                    spans += [(item, kw, *m.span()) for m in _phrase_pattern(kw).finditer(p)]
+
+        def inside_longer(item: RegistryItem, start: int, end: int) -> bool:
+            return any(o is not item and s <= start and end <= e and e - s > end - start for o, _, s, e in spans)
+
+        best: RegistryItem | None = None
+        best_key: tuple[int, int, int] = (0, 0, 0)
+        for item in self.user_runnable_items:
+            if item.triggers is None:
+                continue
+            first: dict[str, int] = {}
+            for o, kw, start, end in spans:
+                if o is item and not inside_longer(item, start, end):
+                    first[kw] = min(first.get(kw, start), start)
+            keywords = [k.strip().lower() for k in item.triggers.keywords + item.triggers.action_phrases]
+            matches = [kw for kw in keywords if kw in first]
             if not matches:
                 continue
-            score = len(matches)
-            max_len = max((len(m) for m in matches), default=0)
-            if score > best_score or (score == best_score and max_len > best_max_len):
+            key = (len(matches), -min(first.values()), max(len(m) for m in matches))
+            if best is None or key > best_key:
                 best = item
-                best_score = score
-                best_max_len = max_len
+                best_key = key
         return best
 
     # --- Response rendering -----------------------------------------------

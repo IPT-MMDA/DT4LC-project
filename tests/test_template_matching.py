@@ -19,7 +19,7 @@ from dta.dti.coe.llm import get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.coe.planner import plan_template
-from dta.dti.coe.triggers import phrase_in
+from dta.dti.coe.triggers import get_trigger_index, phrase_in
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
 
@@ -99,6 +99,26 @@ def _llm_like_context(prompt: str) -> ContextUnderstanding:
 )
 def test_phrase_in_matches_whole_words(phrase: str, text: str, expected: bool) -> None:
     assert phrase_in(phrase, text) is expected
+
+
+@pytest.mark.parametrize(
+    ("prompt", "item_id"),
+    [
+        # "instead of" turns the next term down; else the index named first wins.
+        ("Use EVI instead of NDVI for the forest", "algorithms/evi"),
+        ("Use NDVI rather than EVI", "algorithms/ndvi"),
+        ("Calculate EVI or NDVI", "algorithms/evi"),
+        ("Calculate NDVI or EVI", "algorithms/ndvi"),
+        # A match inside another item's longer match does not count: "snow" in "classify snow".
+        ("Classify snow and ice robustly", "algorithms/snow-classifier"),
+        ("Map snow cover with NDSI", "algorithms/ndsi"),
+        ("Compare with NDVI change between the same dates", "algorithms/change-detection"),
+    ],
+)
+def test_find_matching_item(prompt: str, item_id: str | None) -> None:
+    item = get_trigger_index().find_matching_item(prompt)
+
+    assert (item.id if item else None) == item_id
 
 
 @pytest.mark.parametrize("prompt", UNRELATED)
