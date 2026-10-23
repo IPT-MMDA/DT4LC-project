@@ -738,6 +738,32 @@ class JobQueue:
             logger.info(f"Cancelled job {job_id}")
             return True
 
+    async def delete_job(self, job_id: str) -> bool:
+        """Delete a finished job or a proposal: its row and ``OUTPUTS_PATH/<job_id>/``.
+
+        A deleted proposal's open event streams end with ``cancelled {reason: "deleted"}``.
+
+        Returns:
+            True if deleted, False if there is no such job.
+
+        Raises:
+            JobConflictError: The job is pending or running (cancel it first).
+        """
+        async with self._lock:
+            job = self._jobs_cache.get(job_id) or self._store.get(job_id)
+            if job is None:
+                return False
+            if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
+                raise JobConflictError(f"Job {job_id} is {job.status.value}: cancel it first")
+            if job.status == JobStatus.PROPOSAL:
+                self._emit(job, "cancelled", reason="deleted")
+            self._store.delete(job_id)
+            self._jobs_cache.pop(job_id, None)
+            self._uncount.pop(job_id, None)
+        await asyncio.to_thread(self._remove_output_dirs, [job_id])
+        logger.info(f"Deleted job {job_id}")
+        return True
+
     async def confirm_job(
         self, job_id: str, plan: ExecutionPlan | None = None, count: Callable[[], object] | None = None
     ) -> Job | None:

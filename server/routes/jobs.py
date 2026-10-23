@@ -19,6 +19,7 @@ from ..jobs import JobConflictError, JobQueue, JobStatus, get_job_queue
 from ..schemas import (
     CancelJobResponse,
     JobConfirmRequest,
+    JobDeleteResponse,
     JobListResponse,
     JobRecord,
     JobSubmitRequest,
@@ -190,6 +191,28 @@ async def stream_job_events(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.delete(  # type: ignore[misc]
+    "/jobs/{job_id}",
+    response_model=JobDeleteResponse,
+    summary="Delete job",
+)
+async def delete_job(job_id: str, session: CurrentSession) -> JobDeleteResponse:
+    """Delete a finished job (completed, failed, cancelled) or a proposal, with its output files.
+
+    409 for a pending or running job (cancel it first); 404 for an unknown job or another
+    session's. A deleted proposal's open event stream ends with ``cancelled {reason: "deleted"}``.
+    """
+    queue = get_job_queue()
+    await _ensure_visible(queue, job_id, session)
+    try:
+        deleted = await queue.delete_job(job_id)
+    except JobConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    return JobDeleteResponse(id=job_id)
 
 
 @router.post(  # type: ignore[misc]

@@ -275,6 +275,13 @@ class JobRecord(JobSummary):
     )
 
 
+class JobDeleteResponse(BaseModel):  # type: ignore[misc]
+    """``DELETE /v1/jobs/{id}``: the job and its output files are gone."""
+
+    ok: bool = True
+    id: str
+
+
 class JobConfirmRequest(BaseModel):  # type: ignore[misc]
     """``POST /v1/jobs/{id}/confirm``: run the proposal, or ``plan`` if the user changed it."""
 
