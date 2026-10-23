@@ -31,7 +31,6 @@ export interface DrawnRegion {
 
 interface AppStore {
   // UI State
-  sidebarCollapsed: boolean;
   theme: 'light' | 'dark' | 'auto';
   useNewDatasetPanel: boolean; // Feature flag for new dataset selection panel
 
@@ -58,8 +57,6 @@ interface AppStore {
   fetchError: string | null;
 
   // Actions
-  toggleSidebar: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
   setTheme: (theme: 'light' | 'dark' | 'auto') => void;
   toggleDatasetPanelVersion: () => void;
 
@@ -121,7 +118,6 @@ export const useAppStore = create<AppStore>()(
 
       return {
       // Initial state
-      sidebarCollapsed: false,
       theme: 'light',
       useNewDatasetPanel: true, // Default to new panel for new users
       currentBasemap: 'satellite',
@@ -144,12 +140,6 @@ export const useAppStore = create<AppStore>()(
       fetchError: null,
 
   // UI Actions
-  toggleSidebar: () =>
-    set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-
-  setSidebarCollapsed: (collapsed) =>
-    set({ sidebarCollapsed: collapsed }),
-
   setTheme: (theme) =>
     set({ theme }),
 

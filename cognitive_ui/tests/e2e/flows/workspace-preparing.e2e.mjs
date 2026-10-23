@@ -95,7 +95,9 @@ test('preparing model: the Preparing model row downloads from the fake Hub, with
     const statuses = await message.getByTestId('step-row').evaluateAll((rows) => rows.map((r) => r.dataset.status));
     assert.deepEqual(statuses, ['done', 'running', 'queued', 'queued']);
     assert.equal(await page.getByTestId('assistant-offline').count(), 1);
-    assert.match(await page.getByTestId('session-badge').innerText(), /^Member\./);
+    // DESIGN §6, on a local server (DT4LC_DEPLOYMENT unset) with no assistant.
+    await page.getByTestId('session-badge').filter({ hasText: 'Local server' }).waitFor();
+    assert.equal(await page.getByTestId('session-badge').innerText(), 'Member. Local server · no analysis limit · assistant offline.');
     assert.deepEqual(await fakeHFRequests(), [
       { method: 'HEAD', path: PRITHVI_FILE },
       { method: 'GET', path: PRITHVI_FILE },

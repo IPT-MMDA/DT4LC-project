@@ -67,7 +67,4 @@ export function createLogger(prefix?: string): Logger {
 }
 
 // Pre-configured loggers for common modules
-export const jobSyncLogger = createLogger('JobSync');
 export const apiLogger = createLogger('API');
-export const chatLogger = createLogger('Chat');
-export const uploadLogger = createLogger('Upload');

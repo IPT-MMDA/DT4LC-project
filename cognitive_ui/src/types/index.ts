@@ -179,22 +179,6 @@ export interface Plan {
   meta: Record<string, any>;
 }
 
-/** Job status values matching backend JobStatus enum. */
-export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-/** Job model matching backend Job.to_dict() response. */
-export interface Job {
-  id: string;
-  status: JobStatus;
-  progress: number;
-  message?: string;
-  result?: Record<string, any>;
-  plan?: Plan;
-  error?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 export interface Attachment {
   id: string;
   filename: string;
@@ -205,20 +189,6 @@ export interface Attachment {
   preview_url?: string;
   metadata?: UploadMetadata;  // sent back with jobs and chat messages
   group?: AttachmentGroup;
-}
-
-export interface JobSubmitRequest {
-  prompt: string;
-  mode?: 'hybrid' | 'llm' | 'template';
-  attachments?: Attachment[];
-  context?: Record<string, any>;
-}
-
-export interface JobsListResponse {
-  jobs: Job[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 export interface HealthResponse {

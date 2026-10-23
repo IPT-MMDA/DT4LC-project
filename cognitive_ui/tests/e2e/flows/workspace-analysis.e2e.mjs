@@ -193,18 +193,24 @@ test('failed and retry: a region without Earth Engine fails with two fixes; the 
   }
 });
 
-test('model gated for a guest: Prithvi on the sample fails with MODEL_GATED and its fixes', async () => {
+test('model gated for a guest: Prithvi on the sample is refused in one assistant sentence with its fixes', async () => {
   const { context, page, errors } = await open('sample=1');
   try {
     await send(page, PRITHVI);
     const failed = await analysis(page, 'failed');
-    assert.equal(await failed.getByTestId('failure-code').innerText(), 'MODEL_GATED');
-    assert.match(
-      await failed.getByTestId('analysis-failure').innerText(),
-      /Prithvi EO v1 \(100M\) isn't installed on this server and isn't available for guests — ask an operator\./,
+    // The design's plain sentence: no Failed pill, timeline, code or show raw.
+    assert.equal(
+      await failed.getByTestId('analysis-refusal').innerText(),
+      "Prithvi EO v1 (100M) isn't installed on this server and isn't available for guests — ask an operator.",
     );
-    // Refused before planning finished: no rows.
-    assert.equal(await failed.getByTestId('step-row').count(), 0);
+    for (const id of ['status-pill', 'analysis-timeline', 'failure-code', 'step-row']) {
+      assert.equal(await failed.getByTestId(id).count(), 0, id);
+    }
+    assert.equal(await failed.getByRole('button', { name: 'show raw' }).count(), 0);
+    // Still the server's MODEL_GATED failure underneath.
+    const record = await (await page.request.get(`${h.baseURL}/v1/jobs/${await failed.getAttribute('data-job-id')}`)).json();
+    assert.equal(record.status, 'failed');
+    assert.equal(record.events.at(-1).data.code, 'MODEL_GATED');
     const fixes = failed.getByRole('group', { name: 'Fixes' }).getByRole('button');
     assert.deepEqual(await fixes.allInnerTexts(), ['See what I can do', 'Use a built-in analysis instead']);
     await screenshot(page, 'workspace-model-gated-for-guest.png');

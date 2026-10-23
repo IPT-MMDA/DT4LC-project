@@ -5,7 +5,8 @@ import {
   CHAT_STORAGE_VERSION,
   conversationMeta,
   findConversationByJobId,
-  getContextForBackend,
+  MAX_CONVERSATIONS,
+  retainConversations,
   selectActiveMessages,
   selectContextTokens,
 } from './useChatStore';
@@ -157,7 +158,7 @@ describe('composer', () => {
     expect(store.getState().pendingRegion?.id).toBe('r1');
 
     const persisted = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? '{}');
-    expect(Object.keys(persisted.state).sort()).toEqual(['activeConversationId', 'conversations']);
+    expect(Object.keys(persisted.state).sort()).toEqual(['activeConversationId', 'conversations', 'keptHours']);
 
     store.getState().clearAttachments();
     store.getState().setPendingRegion(null);
@@ -224,7 +225,7 @@ describe('conversationMeta', () => {
   });
 });
 
-describe('24 h retention (DESIGN §6)', () => {
+describe('retention (DESIGN §6): 24 h before any session is known', () => {
   it('drops conversations not updated for 24 h when the page loads', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T08:00:00Z'));
@@ -262,6 +263,85 @@ describe('24 h retention (DESIGN §6)', () => {
     vi.setSystemTime(new Date('2026-10-22T05:00:00Z'));
     const reloaded = await loadFreshStore();
     expect(reloaded.getState().conversations.map((c) => c.id)).toEqual([conversationId]);
+  });
+});
+
+describe('retention follows the session', () => {
+  it("a guest's conversations expire at the session's kept_hours, also on the next load", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T08:00:00Z'));
+    const store = await loadFreshStore();
+    const old = store.getState().addMessage(user('old')).conversationId;
+    store.getState().newConversation();
+    vi.setSystemTime(new Date('2026-10-20T12:00:00Z'));
+    const recent = store.getState().addMessage(user('recent')).conversationId;
+    store.getState().selectConversation(old);
+
+    // A server with GUEST_SESSION_HOURS=6, 5 h after the old one: both kept.
+    vi.setSystemTime(new Date('2026-10-20T13:00:00Z'));
+    store.getState().setKeptHours(6);
+    expect(store.getState().conversations.map((c) => c.id)).toEqual([recent, old]);
+
+    // 7 h after it: the old one goes at once, and with it the selection.
+    vi.setSystemTime(new Date('2026-10-20T15:00:00Z'));
+    store.getState().setKeptHours(6);
+    expect(store.getState().conversations.map((c) => c.id)).toEqual([recent]);
+    expect(store.getState().activeConversationId).toBeNull();
+
+    // The next load applies 6 h before the session is fetched again.
+    vi.setSystemTime(new Date('2026-10-20T18:30:00Z'));
+    const reloaded = await loadFreshStore();
+    expect(reloaded.getState().keptHours).toBe(6);
+    expect(reloaded.getState().conversations).toEqual([]);
+  });
+
+  it("a member's conversations do not expire", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-01T08:00:00Z'));
+    const store = await loadFreshStore();
+    store.getState().setKeptHours(null);
+    const { conversationId } = store.getState().addMessage(user('a month ago'));
+
+    vi.setSystemTime(new Date('2026-10-31T08:00:00Z'));
+    store.getState().setKeptHours(null);
+    expect(store.getState().conversations.map((c) => c.id)).toEqual([conversationId]);
+    const reloaded = await loadFreshStore();
+    expect(reloaded.getState().keptHours).toBeNull();
+    expect(reloaded.getState().conversations.map((c) => c.id)).toEqual([conversationId]);
+    expect(reloaded.getState().activeConversationId).toBe(conversationId);
+  });
+
+  it(`keeps at most ${MAX_CONVERSATIONS} conversations, dropping the least recently updated`, async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const store = await loadFreshStore();
+    store.getState().setKeptHours(null);
+    const ids: string[] = [];
+    for (let i = 0; i < MAX_CONVERSATIONS; i++) {
+      vi.setSystemTime(new Date(Date.UTC(2026, 9, 1, 0, i)));
+      store.getState().newConversation();
+      ids.push(store.getState().addMessage(user(`conversation ${i}`)).conversationId);
+    }
+    // The oldest one is used again, so the second oldest is the one to go.
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 2)));
+    store.getState().addMessage(user('again'), ids[0]);
+    vi.setSystemTime(new Date(Date.UTC(2026, 9, 3)));
+    store.getState().newConversation();
+    const newest = store.getState().addMessage(user('one more')).conversationId;
+
+    const kept = store.getState().conversations.map((c) => c.id);
+    expect(kept).toHaveLength(MAX_CONVERSATIONS);
+    expect(kept[0]).toBe(newest);
+    expect(kept).toContain(ids[0]);
+    expect(kept).not.toContain(ids[1]);
+  });
+
+  it('retainConversations: the time limit first, then the cap, in list order', () => {
+    const at = (id: string, updatedAt: string) => ({ id, title: id, createdAt: updatedAt, updatedAt, messages: [] });
+    const list = [at('b', '2026-10-23T10:00:00Z'), at('a', '2026-10-22T09:00:00Z')];
+    const now = Date.parse('2026-10-23T10:00:00Z');
+    expect(retainConversations(list, 24, now).map((c) => c.id)).toEqual(['b']);
+    expect(retainConversations(list, 25, now).map((c) => c.id)).toEqual(['b', 'a']);
+    expect(retainConversations(list, null, now).map((c) => c.id)).toEqual(['b', 'a']);
   });
 });
 
@@ -330,7 +410,7 @@ describe('migration from v0.5 storage', () => {
 
     const persisted = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? '{}');
     expect(persisted.version).toBe(CHAT_STORAGE_VERSION);
-    expect(persisted.state).toEqual({ conversations: [], activeConversationId: null });
+    expect(persisted.state).toEqual({ conversations: [], activeConversationId: null, keptHours: 24 });
 
     store.getState().addMessage(user('hello'));
     expect(store.getState().conversations).toHaveLength(1);
@@ -371,22 +451,6 @@ describe('context counter', () => {
     expect(selectContextTokens(store.getState())).toBe(2);
     store.getState().selectConversation(first);
     expect(selectContextTokens(store.getState())).toBe(10);
-  });
-});
-
-describe('getContextForBackend', () => {
-  it('lists earlier attachments with server paths once and summarises the history', async () => {
-    const store = await loadFreshStore();
-    const att = { id: 'a1', filename: 'scene.tif', path: '/app/uploads/a1_scene.tif' };
-    store.getState().addMessage({ kind: 'user', text: 'calculate ndvi', attachments: [att] });
-    store.getState().addMessage(analysis('job-1'));
-    store.getState().updateAnalysis('job-1', { status: 'done', result: { summary: 'Mean NDVI 0.41.' } });
-    store.getState().addMessage({ kind: 'user', text: 'and ndwi', attachments: [att, { id: 'a2', filename: 'no-path.tif' }] });
-
-    expect(getContextForBackend(selectActiveMessages(store.getState()))).toEqual({
-      previous_attachments: [{ id: 'a1', filename: 'scene.tif', path: '/app/uploads/a1_scene.tif', mime_type: 'image/tiff' }],
-      history: 'User: calculate ndvi\nAssistant: Mean NDVI 0.41.\nUser: and ndwi',
-    });
   });
 });
 

@@ -1,6 +1,7 @@
 import { ConversationList } from '../components/shell/ConversationList';
 import { ChatColumn } from '../components/shell/ChatColumn';
 import { DockedMap } from '../components/shell/DockedMap';
+import { useConversationRetention } from '../hooks/useConversationRetention';
 import { DOCKED_MAP_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { useSampleFromQuery } from '../hooks/useSample';
 
@@ -8,6 +9,7 @@ import { useSampleFromQuery } from '../hooks/useSample';
 export function Workspace() {
   const docked = useMediaQuery(DOCKED_MAP_QUERY);
   useSampleFromQuery();
+  useConversationRetention();
 
   return (
     <>

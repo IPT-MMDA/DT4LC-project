@@ -132,3 +132,21 @@ export const PRITHVI_PREPARING: JobEvent[] = [
   ev(7, 'step_progress', { index: 2, fraction: 0.0, message: 'Downloading Prithvi EO v1 (100M) · 450 MB', bytes: 0, total_bytes: 471859200, eta_s: 75 }),
   ev(8, 'step_progress', { index: 2, fraction: 0.111, message: 'Downloading Prithvi EO v1 (100M) · 450 MB', bytes: 52428801, total_bytes: 471859200, eta_s: 56 }),
 ];
+
+export const MODEL_GATED_MESSAGE =
+  "Prithvi EO v1 (100M) isn't installed on this server and isn't available for guests — ask an operator.";
+
+/** A guest's Prithvi run without the weights: refused before the skeleton (docs/API.md). */
+export const MODEL_GATED: JobEvent[] = [
+  ev(1, 'intent', { text: "I'll run Prithvi MAE Reconstruction on the sample." }),
+  ev(2, 'planning', { phase: 'started' }),
+  ev(3, 'failed', {
+    code: 'MODEL_GATED',
+    message: MODEL_GATED_MESSAGE,
+    fixes: [
+      { label: 'See what I can do', kind: 'prompt', prompt: 'What can you do?' },
+      { label: 'Use a built-in analysis instead', kind: 'prompt', prompt: 'Which built-in analyses can I run on this file?' },
+    ],
+    raw: MODEL_GATED_MESSAGE,
+  }),
+];

@@ -18,11 +18,15 @@ import type {
 
 export const CHAT_STORAGE_KEY = 'dt4lc-chat-storage';
 export const CHAT_STORAGE_VERSION = 4;
-/** Conversations are kept in this browser for 24 h (design/DESIGN.md §6). */
-export const CONVERSATION_TTL_MS = 24 * 60 * 60 * 1000;
+// Retention (design/DESIGN.md §6). Guests: conversations are kept in this browser
+// for the session's `kept_hours` after their last update, 24 h until the session is
+// known. Members and operators: no time limit. Everyone: at most MAX_CONVERSATIONS,
+// the least recently updated dropped first (localStorage holds about 5 MB).
+export const GUEST_KEPT_HOURS = 24;
+export const MAX_CONVERSATIONS = 50;
 export const MAX_CONTEXT_TOKENS = 4000;
 const CHARS_PER_TOKEN = 4;
-const MAX_CONVERSATIONS = 50;
+const HOUR_MS = 60 * 60 * 1000;
 const NEW_CONVERSATION_TITLE = 'New chat';
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -94,34 +98,6 @@ export function estimateTokens(messages: ChatMessage[]): number {
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 
-/** Context for POST /v1/jobs: earlier attachments with server paths, plus a compact history. */
-export function getContextForBackend(messages: ChatMessage[]): {
-  previous_attachments: Array<{ id: string; filename: string; path: string; mime_type?: string }>;
-  history: string;
-} {
-  const previousAttachments: Array<{ id: string; filename: string; path: string; mime_type?: string }> = [];
-  const seenIds = new Set<string>();
-
-  for (const message of messages) {
-    if (message.kind !== 'user' || !message.attachments) continue;
-    for (const att of message.attachments) {
-      if (att.path && !seenIds.has(att.id)) {
-        seenIds.add(att.id);
-        previousAttachments.push({ id: att.id, filename: att.filename, path: att.path, mime_type: 'image/tiff' });
-      }
-    }
-  }
-
-  const history = messages
-    .slice(-10)
-    .map((m) => ({ prefix: m.kind === 'user' ? 'User' : 'Assistant', text: messageText(m) }))
-    .filter((m) => m.text)
-    .map((m) => `${m.prefix}: ${m.text.slice(0, 200)}`)
-    .join('\n');
-
-  return { previous_attachments: previousAttachments, history };
-}
-
 // Keep only what localStorage needs to restore a conversation: image URLs, never
 // image bytes (#67 bug 3). Attachments keep their metadata and preview URL;
 // visualizations keep {type, label, url} and are dropped without a URL; per-tick
@@ -163,9 +139,24 @@ function toPersistedMessage(message: ChatMessage): ChatMessage {
   return message;
 }
 
+/**
+ * The conversations to keep: updated within `keptHours` (null: no time limit), and
+ * of those the MAX_CONVERSATIONS most recently updated, in their list order.
+ */
+export function retainConversations(conversations: Conversation[], keptHours: number | null, now = Date.now()): Conversation[] {
+  const cutoff = keptHours === null ? -Infinity : now - keptHours * HOUR_MS;
+  const live = conversations.filter((c) => Date.parse(c.updatedAt) >= cutoff);
+  if (live.length <= MAX_CONVERSATIONS) return live;
+  const newest = [...live].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, MAX_CONVERSATIONS);
+  const keep = new Set(newest.map((c) => c.id));
+  return live.filter((c) => keep.has(c.id));
+}
+
 export interface ChatStore {
   conversations: Conversation[]; // newest first
   activeConversationId: string | null; // null: the next message starts a conversation
+  /** How long this browser keeps conversations: the guest session's `kept_hours`; null for members. */
+  keptHours: number | null;
 
   // Composer (not persisted)
   draft: string;
@@ -173,6 +164,8 @@ export interface ChatStore {
   pendingRegion: ChatRegion | null;
 
   // Conversations
+  /** Apply the session's retention (see retainConversations) and drop what it no longer keeps. */
+  setKeptHours: (keptHours: number | null) => void;
   newConversation: () => void;
   selectConversation: (conversationId: string) => void;
   renameConversation: (conversationId: string, title: string) => void;
@@ -257,9 +250,18 @@ export const useChatStore = create<ChatStore>()(
     (set, get) => ({
       conversations: [],
       activeConversationId: null,
+      keptHours: GUEST_KEPT_HOURS,
       draft: '',
       pendingAttachments: [],
       pendingRegion: null,
+
+      setKeptHours: (keptHours) =>
+        set((state) => {
+          const conversations = retainConversations(state.conversations, keptHours);
+          if (keptHours === state.keptHours && conversations.length === state.conversations.length) return {};
+          const active = conversations.some((c) => c.id === state.activeConversationId);
+          return { keptHours, conversations, activeConversationId: active ? state.activeConversationId : null };
+        }),
 
       newConversation: () => set({ activeConversationId: null }),
 
@@ -301,7 +303,7 @@ export const useChatStore = create<ChatStore>()(
             messages: [message],
           };
           set({
-            conversations: [conversation, ...state.conversations].slice(0, MAX_CONVERSATIONS),
+            conversations: retainConversations([conversation, ...state.conversations], state.keptHours),
             activeConversationId: conversation.id,
           });
           return { conversationId: conversation.id, messageId: message.id };
@@ -378,6 +380,7 @@ export const useChatStore = create<ChatStore>()(
       partialize: (state) => ({
         conversations: state.conversations.map((c) => ({ ...c, messages: c.messages.map(toPersistedMessage) })),
         activeConversationId: state.activeConversationId,
+        keptHours: state.keptHours,
       }),
       // v0.5 (version ≤ 3) stored sessions of role/content messages with separate
       // job_submitted / job_result / error entries. That shape does not map onto
@@ -387,17 +390,18 @@ export const useChatStore = create<ChatStore>()(
         if (version < CHAT_STORAGE_VERSION) {
           return { conversations: [], activeConversationId: null };
         }
-        return persistedState as Pick<ChatStore, 'conversations' | 'activeConversationId'>;
+        return persistedState as Pick<ChatStore, 'conversations' | 'activeConversationId' | 'keptHours'>;
       },
-      // 24 h retention: drop conversations not updated within the TTL on load.
+      // Retention on load, with the retention of the last known session (a guest's
+      // 24 h before any session was seen; v4 data written before F5 has none).
       merge: (persistedState, currentState) => {
-        const persisted = (persistedState ?? {}) as Partial<Pick<ChatStore, 'conversations' | 'activeConversationId'>>;
-        const cutoff = Date.now() - CONVERSATION_TTL_MS;
-        const conversations = (persisted.conversations ?? []).filter((c) => Date.parse(c.updatedAt) >= cutoff);
+        const persisted = (persistedState ?? {}) as Partial<Pick<ChatStore, 'conversations' | 'activeConversationId' | 'keptHours'>>;
+        const keptHours = persisted.keptHours === undefined ? GUEST_KEPT_HOURS : persisted.keptHours;
+        const conversations = retainConversations(persisted.conversations ?? [], keptHours);
         const activeConversationId = conversations.some((c) => c.id === persisted.activeConversationId)
           ? (persisted.activeConversationId as string)
           : null;
-        return { ...currentState, conversations, activeConversationId };
+        return { ...currentState, conversations, activeConversationId, keptHours };
       },
     },
   ),

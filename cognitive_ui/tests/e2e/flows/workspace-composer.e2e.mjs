@@ -9,6 +9,7 @@ import { after, before, test } from 'node:test';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';
 
 const OFFLINE = 'Assistant offline — analyses still run; answers are limited to the catalog.';
+const NO_CONVERSATIONS = 'No conversations yet. They appear here as you work and stay for 24 h.';
 
 // About 410 km² of the Lower Dnipro floodplain, inside the sample's footprint.
 const REGION = {
@@ -57,6 +58,9 @@ test('assistant offline: one line above the controls, with the sample attached',
     const line = page.getByTestId('assistant-offline');
     await line.waitFor();
     assert.equal(await line.innerText(), OFFLINE);
+    // A guest's badge is the design's either way; the composer line tells the assistant is offline.
+    assert.match(await page.getByTestId('session-badge').innerText(), /^Guest\. \d+ of \d+ analyses left this hour · kept 24 h · no account\.$/);
+    assert.equal(await page.getByTestId('no-conversations').innerText(), NO_CONVERSATIONS);
     // Five suggestions with the sample, NDMI composed, Prithvi named.
     const suggestions = page.getByRole('list', { name: 'Suggestions' }).getByRole('button');
     assert.equal(await suggestions.count(), 5);

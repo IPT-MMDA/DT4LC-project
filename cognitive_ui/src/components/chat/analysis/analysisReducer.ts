@@ -266,6 +266,18 @@ export function statusOf(view: AnalysisView): AnalysisStatus {
   }
 }
 
+/**
+ * Failures that are a refusal about this server, not a broken run: the message is
+ * one assistant sentence with its fixes, without the Failed pill, timeline or code
+ * (design/screens/workspace-model-gated-for-guest.png).
+ */
+export const REFUSAL_CODES: readonly string[] = ['MODEL_GATED', 'MODEL_NOT_INSTALLED'];
+
+/** The refusal of a failed analysis (see REFUSAL_CODES), or null. */
+export function refusalOf(view: AnalysisView): AnalysisFailure | null {
+  return view.phase === 'failed' && view.failure && REFUSAL_CODES.includes(view.failure.code) ? view.failure : null;
+}
+
 export const isTerminal = (view: AnalysisView) =>
   view.phase === 'done' || view.phase === 'failed' || view.phase === 'cancelled';
 
