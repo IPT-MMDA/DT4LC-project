@@ -8,7 +8,7 @@ npm run build          # the harness serves dist/; it refuses to run without it
 npm run e2e:smoke      # flows/smoke.e2e.mjs only
 npm run e2e            # every flows/*.e2e.mjs (guest, E2E_LLM=none; fake- and member-only flows skip)
 npm run e2e:workspace  # the Workspace screens: the four env groups below, one API run each
-npm run e2e:run2       # the run-2 screens: e2e:capabilities and e2e:landing, their groups below
+npm run e2e:run2       # the run-2 screens: e2e:capabilities, e2e:landing and e2e:map, their groups below
 node tests/e2e/run.mjs smoke other   # pick flows by name (flows/<name>.e2e.mjs) or by path
 ```
 
@@ -24,6 +24,7 @@ One API process serves a run, so flows that need another role or LLM mode run in
 | `e2e:capabilities:demo` | guest, `E2E_SERVER=demo`, `E2E_LLM=fake`, `E2E_GUEST_LIMIT=5` | `capabilities-demo` | the public demo (`capabilities-demo-top.png`, `capabilities-demo-models-data.png`, `capabilities-prithvi-gated.png`); an Ask prompt opens the Workspace with it in the composer, nothing sent |
 | `e2e:landing:guest` | guest, `E2E_GUEST_LIMIT=5`, `E2E_LLM=none` | `landing` | the guest landing (`landing-hero.png`, `landing-below-fold.png` after the demo has played; `landing-footer.png` and `landing-below-fold-reduced-motion.png`, not design screens); both hero buttons; a guest with a stored conversation goes to `/app`; reduced motion: no animations, a still demo; the step buttons scrub the demo |
 | `e2e:landing:member` | `E2E_DEV_ROLE=member`, `E2E_LLM=none` | `landing-member` | none: a member at `/` lands on `/app` with the query kept, the landing never renders |
+| `e2e:map` | guest, `E2E_LLM=none` | `map-mode` | map mode (`map-mode.png` at 1440×900, `map-mode-1280.png` at 1280×800; `map-mode-compare.png`, not a design screen): NDWI change On map from the chat, the sample in true colour with its footprint under it, the legend with the class areas, a rectangle drawn with the mouse and renamed, Fit to result, Compare (pixels on both sides of the divider, moved by keyboard and drag), Fetch to map disabled without Earth Engine, Send to chat to the region chip; at 1280×800 no panel or control overlaps another |
 
 `workspace-running` skips itself unless `E2E_LLM=fake`, `workspace-preparing` unless `E2E_DEV_ROLE=member`, and `workspace-quota` unless `E2E_GUEST_LIMIT=2`. `capabilities-offline` runs only as a member with `E2E_LLM=none` on a local server, and `capabilities-demo` only as a guest with `E2E_SERVER=demo` and `E2E_LLM=fake`. `landing` runs only as a guest, `landing-member` only with `E2E_DEV_ROLE=member`.
 

@@ -22,7 +22,8 @@
     "e2e:landing": "npm run e2e:landing:guest && npm run e2e:landing:member",
     "e2e:landing:guest": "E2E_GUEST_LIMIT=5 node tests/e2e/run.mjs landing",
     "e2e:landing:member": "E2E_DEV_ROLE=member node tests/e2e/run.mjs landing-member",
-    "e2e:run2": "npm run e2e:capabilities && npm run e2e:landing"
+    "e2e:map": "node tests/e2e/run.mjs map-mode",
+    "e2e:run2": "npm run e2e:capabilities && npm run e2e:landing && npm run e2e:map"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.0",
