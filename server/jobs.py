@@ -19,18 +19,24 @@ import os
 from pathlib import Path
 import shutil
 import sqlite3
+import threading
+import time
 from typing import Any
 import uuid
 
 import numpy as np
 
 from dta.dti import artifact_files
+from dta.dti.coe.context_agent import _deterministic_context
 from dta.dti.coe.orchestrator import orchestrate
+from dta.dti.coe.planner import plan_template
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment as COEAttachment
 from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
+
+from .job_events import TERMINAL_EVENTS, classify_failure, done_summary, intent_text, step_skeleton
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +99,8 @@ class Job:
     created_at: datetime = field(default_factory=datetime.now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    # Event log, ``{"seq", "type", "data"}`` per event (see server/job_events.py); metadata only, no arrays.
+    events: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary.
@@ -111,6 +119,7 @@ class Job:
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "events": list(self.events),
         }
 
     @property
@@ -147,7 +156,7 @@ class JobStore(ABC):
 
     @abstractmethod
     def list_summaries(self) -> list[Job]:
-        """Return all jobs without ``result``, ``context`` and ``attachments`` (``GET /v1/jobs`` fields only).
+        """Return all jobs without ``result``, ``context``, ``attachments`` and ``events`` (``GET /v1/jobs`` fields).
 
         The returned jobs are partial: never ``save()`` them.
         """
@@ -191,7 +200,7 @@ class MemoryJobStore(JobStore):
         return list(self._jobs.values())
 
     def list_summaries(self) -> list[Job]:
-        return [replace(j, result=None, context=None, attachments=[]) for j in self._jobs.values()]
+        return [replace(j, result=None, context=None, attachments=[], events=[]) for j in self._jobs.values()]
 
     def count(self) -> int:
         return len(self._jobs)
@@ -205,6 +214,8 @@ class MemoryJobStore(JobStore):
 
 class SQLiteJobStore(JobStore):
     """SQLite-backed persistent job storage."""
+
+    _ADDED_COLUMNS = {"events": "TEXT NOT NULL DEFAULT '[]'"}
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path)
@@ -232,6 +243,11 @@ class SQLiteJobStore(JobStore):
                 completed_at TEXT
             )
         """)
+        # Columns added after v0.5.1: an older jobs.db gets them with their default on open.
+        have = {row["name"] for row in self._conn.execute("PRAGMA table_info(jobs)")}
+        for name, decl in self._ADDED_COLUMNS.items():
+            if name not in have:
+                self._conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {decl}")
         self._conn.commit()
 
     def _serialize_job(self, job: Job) -> tuple[str | float | None, ...]:
@@ -248,6 +264,7 @@ class SQLiteJobStore(JobStore):
             job.created_at.isoformat(),
             job.started_at.isoformat() if job.started_at else None,
             job.completed_at.isoformat() if job.completed_at else None,
+            json.dumps(list(job.events)),
         )
 
     def _deserialize_row(self, row: sqlite3.Row) -> Job:
@@ -265,14 +282,15 @@ class SQLiteJobStore(JobStore):
             created_at=datetime.fromisoformat(row["created_at"]),
             started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
+            events=json.loads(row["events"]),
         )
 
     def save(self, job: Job) -> None:
         self._conn.execute(
             """INSERT OR REPLACE INTO jobs
                (id, status, prompt, attachments, context, plan, result,
-                progress, error, created_at, started_at, completed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                progress, error, created_at, started_at, completed_at, events)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             self._serialize_job(job),
         )
         self._conn.commit()
@@ -363,6 +381,9 @@ class JobQueue:
         self._workers: list[asyncio.Task[None]] = []
         self._running = False
         self._lock = asyncio.Lock()
+        # Guards every job's event log and the subscribers; worker threads emit events too.
+        self._events_lock = threading.Lock()
+        self._subscribers: dict[str, list[tuple[asyncio.AbstractEventLoop, asyncio.Queue[dict[str, Any]]]]] = {}
 
         # Thread pool for running blocking operations
         self._thread_pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="job_worker")
@@ -431,6 +452,7 @@ class JobQueue:
             attachments=attachments or [],
             context=context,
         )
+        self._emit(job, "intent", text=self._intent_text(job))
 
         async with self._lock:
             self._store.save(job)
@@ -456,6 +478,114 @@ class JobQueue:
                 return cached
             return self._store.get(job_id)
 
+    # --- Event log -------------------------------------------------------------
+
+    def _emit(self, job: Job, event_type: str, **data: Any) -> dict[str, Any] | None:
+        """Append an event to ``job.events`` and hand it to the job's subscribers; safe from any thread.
+
+        ``None`` values are dropped from ``data``. Nothing is appended after a terminal event.
+        """
+        payload = {k: v for k, v in data.items() if v is not None}
+        payload["t"] = round(time.time(), 3)
+        with self._events_lock:
+            if job.events and job.events[-1]["type"] in TERMINAL_EVENTS:
+                return None
+            event = {"seq": len(job.events) + 1, "type": event_type, "data": payload}
+            job.events.append(event)
+            for loop, queue in self._subscribers.get(job.id, []):
+                try:
+                    loop.call_soon_threadsafe(queue.put_nowait, event)
+                except RuntimeError:  # the subscriber's loop is closed
+                    pass
+        return event
+
+    @staticmethod
+    def _current_step(job: Job) -> int | None:
+        """Index of the step started but not finished, per the event log."""
+        running: int | None = None
+        for event in job.events:
+            if event["type"] == "step_started":
+                running = event["data"]["index"]
+            elif event["type"] == "step_finished" and event["data"]["index"] == running:
+                running = None
+        return running
+
+    def _done_data(self, job: Job) -> dict[str, Any]:
+        """``done`` data: ``elapsed_s`` and the one-line summary (a conversation reply ran no steps)."""
+        elapsed = job.duration_seconds or 0.0
+        if job.plan is None:
+            summary = "Answered without running an analysis"
+        else:
+            summary = done_summary(step_skeleton(job.plan, self._registry), elapsed)
+        return {"elapsed_s": round(elapsed, 1), "summary": summary}
+
+    def _terminal_event(self, job: Job) -> None:
+        """Append the terminal event a finished job lacks (a job from before the event log, or one
+        marked failed by ``recover_interrupted``), so every finished job's stream ends."""
+        if job.status == JobStatus.COMPLETED:
+            self._emit(job, "done", **self._done_data(job))
+        elif job.status == JobStatus.FAILED:
+            stage = "running" if job.plan is not None else "planning"
+            self._emit(job, "failed", **classify_failure(job.error or "", stage, self._current_step(job)))
+        elif job.status == JobStatus.CANCELLED:
+            self._emit(job, "cancelled", at_step=self._current_step(job))
+
+    def subscribe(
+        self, job_id: str, after: int = 0
+    ) -> tuple[list[dict[str, Any]], asyncio.Queue[dict[str, Any]] | None] | None:
+        """Events with ``seq > after`` so far, and a queue for the live tail.
+
+        Call from the event loop. Returns ``None`` for an unknown job, and no queue
+        when the log already ends with its terminal event. Pass the queue to
+        :meth:`unsubscribe` when done.
+        """
+        loop = asyncio.get_running_loop()
+        with self._events_lock:
+            job = self._jobs_cache.get(job_id) or self._store.get(job_id)
+            if job is None:
+                return None
+        if job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+            self._terminal_event(job)
+        with self._events_lock:
+            backlog = [e for e in job.events if e["seq"] > after]
+            if job.events and job.events[-1]["type"] in TERMINAL_EVENTS:
+                return backlog, None
+            queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+            self._subscribers.setdefault(job_id, []).append((loop, queue))
+            return backlog, queue
+
+    def unsubscribe(self, job_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        """Stop handing ``job_id``'s events to ``queue``."""
+        with self._events_lock:
+            subscribers = [s for s in self._subscribers.get(job_id, []) if s[1] is not queue]
+            if subscribers:
+                self._subscribers[job_id] = subscribers
+            else:
+                self._subscribers.pop(job_id, None)
+
+    def _intent_text(self, job: Job) -> str:
+        """The ``intent`` sentence: the template plan for the deterministic context, no LLM call."""
+        attachments = [a for a in job.attachments if a.get("path")]
+        if not attachments and job.context:
+            attachments = [a for a in job.context.get("previous_attachments", []) if a.get("path")]
+        try:
+            req = COEChatRequest(
+                prompt=job.prompt,
+                attachments=[
+                    COEAttachment(
+                        id=a.get("id", ""),
+                        filename=a.get("filename", ""),
+                        mime_type=a.get("mime_type", "image/tiff"),
+                        path=a["path"],
+                    )
+                    for a in attachments
+                ],
+            )
+            return intent_text(plan_template(_deterministic_context(req), self._registry), self._registry, attachments)
+        except Exception as e:
+            logger.warning(f"Job {job.id}: no intent sentence from the template plan ({e})")
+            return "I'll work out which analysis fits this request."
+
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a job.
 
@@ -475,6 +605,7 @@ class JobQueue:
 
             job.status = JobStatus.CANCELLED
             job.completed_at = datetime.now()
+            self._emit(job, "cancelled", at_step=self._current_step(job))
             self._store.save(job)
             self._jobs_cache.pop(job_id, None)
             logger.info(f"Cancelled job {job_id}")
@@ -694,6 +825,7 @@ class JobQueue:
             raise CancellationError("Job cancelled before planning")
 
         job.progress = 0.2
+        self._emit(job, "planning", phase="started")
         logger.debug(f"Job {job_id}: Calling orchestrate with {len(coe_attachments)} attachments")
         coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
         plan_result = orchestrate(coe_req)
@@ -720,6 +852,29 @@ class JobQueue:
         job.plan = ExecutionPlan(**plan_result["plan"])
         job.progress = 0.4
         logger.debug(f"Executing plan with {len(job.plan.steps)} steps")
+        filenames = {a.path: a.filename for a in coe_attachments if a.path}
+        skeleton = step_skeleton(job.plan, self._registry, filenames)
+        names = {row["index"]: row["name"] for row in skeleton}
+        self._emit(
+            job, "planning", phase="ready", steps=skeleton, composed=bool(plan_result["plan"].get("composed", False))
+        )
+        step_t0: dict[int, float] = {}
+
+        def on_progress(event: dict[str, Any]) -> None:
+            """Executor step events -> job events; keeps ``job.progress`` between 0.4 and 0.8."""
+            index = event.get("index")
+            if not isinstance(index, int):
+                return
+            if event.get("event") == "step_start":
+                step_t0[index] = time.monotonic()
+                self._emit(job, "step_started", index=index, id=event["step_id"], name=names.get(index))
+            elif event.get("event") == "step_complete":
+                job.progress = 0.4 + 0.4 * index / max(len(skeleton), 1)
+                elapsed = time.monotonic() - step_t0.get(index, time.monotonic())
+                self._emit(job, "step_finished", index=index, id=event["step_id"], elapsed_s=round(elapsed, 2))
+            elif event.get("event") == "step_progress":
+                keys = ("fraction", "message", "bytes", "total_bytes", "eta_s")
+                self._emit(job, "step_progress", index=index, **{k: event.get(k) for k in keys})
 
         # Create synchronous cancellation checker
         def check_cancelled() -> bool:
@@ -731,7 +886,10 @@ class JobQueue:
 
         # Execute plan with cancellation support; artifact files go to OUTPUTS_PATH/<job_id>/
         execution_result = executor.execute(
-            job.plan, is_cancelled=check_cancelled, output_dir=artifact_files.output_dir(job_id)
+            job.plan,
+            on_progress=on_progress,
+            is_cancelled=check_cancelled,
+            output_dir=artifact_files.output_dir(job_id),
         )
 
         job.progress = 0.8
@@ -785,6 +943,7 @@ class JobQueue:
                 job.status = JobStatus.COMPLETED
                 job.progress = 1.0
                 job.completed_at = datetime.now()
+                self._emit(job, "done", **self._done_data(job))
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 
@@ -803,6 +962,7 @@ class JobQueue:
                 job.error = str(e)
                 job.result = e.to_dict()  # Include model info for frontend
                 job.completed_at = datetime.now()
+                self._emit(job, "failed", **classify_failure(e, "running", self._current_step(job)))
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 
@@ -815,6 +975,8 @@ class JobQueue:
                     job.status = JobStatus.FAILED
                     job.error = str(e)
                     job.completed_at = datetime.now()
+                    stage = "running" if job.plan is not None else "planning"
+                    self._emit(job, "failed", **classify_failure(e, stage, self._current_step(job)))
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 

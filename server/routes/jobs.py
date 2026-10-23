@@ -1,12 +1,16 @@
 """Async job queue endpoints."""
 
+import asyncio
+from collections.abc import AsyncIterator
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from ..jobs import JobStatus, get_job_queue
+from ..job_events import KEEPALIVE_FRAME, TERMINAL_EVENTS, sse_event_frame
+from ..jobs import JobQueue, JobStatus, get_job_queue
 from ..schemas import (
     CancelJobResponse,
     JobListResponse,
@@ -67,7 +71,7 @@ async def submit_job(req: JobSubmitRequest) -> JobRecord:
     summary="Get job status",
 )
 async def get_job_status(job_id: str) -> JobRecord:
-    """Return job status, progress, plan, and results (when completed)."""
+    """Return job status, progress, plan, results (when completed) and the event log (``events``)."""
     try:
         queue = get_job_queue()
         job = await queue.get_job(job_id)
@@ -82,6 +86,68 @@ async def get_job_status(job_id: str) -> JobRecord:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get job: {e}") from e
+
+
+# Seconds between keep-alive comments on an idle event stream.
+KEEPALIVE_S = 15.0
+
+
+async def _event_frames(
+    queue: JobQueue, job_id: str, backlog: list[dict[str, Any]], live: asyncio.Queue[dict[str, Any]] | None
+) -> AsyncIterator[bytes]:
+    """SSE frames: the backlog, then the live tail until the terminal event, with keep-alives."""
+    try:
+        for event in backlog:
+            yield sse_event_frame(event)
+        if live is None:
+            return
+        while True:
+            try:
+                event = await asyncio.wait_for(live.get(), timeout=KEEPALIVE_S)
+            except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041
+                yield KEEPALIVE_FRAME
+                continue
+            yield sse_event_frame(event)
+            if event["type"] in TERMINAL_EVENTS:
+                return
+    finally:
+        if live is not None:
+            queue.unsubscribe(job_id, live)
+
+
+@router.get(  # type: ignore[misc]
+    "/jobs/{job_id}/events",
+    summary="Stream job events (SSE)",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/event-stream": {}}, "description": "Server-Sent Events"}},
+)
+async def stream_job_events(
+    job_id: str,
+    after: int | None = Query(None, ge=0, description="Replay only events with a larger id (wins over Last-Event-ID)"),
+    last_event_id: str | None = Header(None, alias="Last-Event-ID"),
+) -> StreamingResponse:
+    """Stream the job's events as ``text/event-stream``: the full log so far, then the live tail.
+
+    Frames are ``id: <seq>``, ``event: <type>``, ``data: <json>``; an idle stream gets a
+    ``: keep-alive`` comment every 15 s. The stream ends after ``done``, ``failed`` or
+    ``cancelled``. To resume, send ``Last-Event-ID`` (browsers do on reconnect) or
+    ``?after=<seq>``. Event payloads are documented in ``server/job_events.py``.
+    """
+    if after is None:
+        try:
+            after = max(int(last_event_id or 0), 0)
+        except ValueError:
+            after = 0
+    queue = get_job_queue()
+    subscription = queue.subscribe(job_id, after)
+    if subscription is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    backlog, live = subscription
+    return StreamingResponse(
+        _event_frames(queue, job_id, backlog, live),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post(  # type: ignore[misc]

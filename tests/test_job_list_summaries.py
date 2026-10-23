@@ -58,9 +58,10 @@ def _jobs(n: int) -> list[Job]:
 
 
 def _summary(job: Job) -> dict[str, Any]:
-    """The v0.5.0 list item: ``to_dict()`` of the full job minus ``result``."""
+    """The v0.5.0 list item: ``to_dict()`` of the full job minus ``result`` (and the v0.6.0 ``events``)."""
     d = job.to_dict()
     del d["result"]
+    del d["events"]
     return d
 
 

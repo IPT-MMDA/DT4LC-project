@@ -157,6 +157,10 @@ class JobRecord(JobSummary):
     result: dict[str, Any] | None = Field(
         default=None, description="Pipeline result; files are referenced as {kind, path, url, stats}"
     )
+    events: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Event log as replayed by GET /v1/jobs/{id}/events: [{seq, type, data}] (server/job_events.py)",
+    )
 
 
 class JobListResponse(BaseModel):  # type: ignore[misc]
