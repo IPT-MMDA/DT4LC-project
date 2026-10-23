@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import cache, lru_cache
 import re
 
 from dta.dti.registry import load_registry
@@ -66,16 +66,27 @@ _CAPABILITY_QUESTION_PATTERNS = [
 _PLEASANTRY_PREFIX = re.compile(r"^(so|ok|okay|well|hey|hi|hello),?\s*", re.I)
 
 
+@cache
+def _phrase_pattern(phrase: str) -> re.Pattern[str]:
+    """Whole-word pattern for a lowercased ``phrase``: see :func:`phrase_in`."""
+    if phrase.endswith("e"):  # "compare": compares, compared, comparing
+        body = rf"{re.escape(phrase[:-1])}(?:e|es|ed|ing)"
+    else:  # "flood": floods, flooded, flooding
+        body = rf"{re.escape(phrase)}(?:e?s|ed|ing)?"
+    return re.compile(rf"(?<![a-z0-9]){body}(?![a-z0-9])")
+
+
 def phrase_in(phrase: str, text: str) -> bool:
     """True if ``phrase`` occurs in ``text`` as whole words, case-insensitively.
 
-    A trailing plural ``s``/``es`` is allowed ("water change" matches "water changes"),
-    nothing else: "detect" does not match "detection", nor "land" "landsat" or "landscape".
+    Its last word may take a plural ``s``/``es`` or an ``-ed``/``-ing`` ending, a final ``e``
+    dropped before them ("water change" matches "water changes" and "water changed", "flood"
+    "flooded"), nothing else: "detect" does not match "detection", nor "land" "landsat" or "landscape".
     """
     phrase = phrase.strip().lower()
     if not phrase:
         return False
-    return re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?:e?s)?(?![a-z0-9])", text.lower()) is not None
+    return _phrase_pattern(phrase).search(text.lower()) is not None
 
 
 def _strip_pleasantries(prompt: str) -> str:
