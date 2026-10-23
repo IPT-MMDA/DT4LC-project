@@ -4,7 +4,7 @@ Defines request/response models for the REST API endpoints including
 job submission, chat messages, and file attachments.
 """
 
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -23,6 +23,10 @@ __all__ = [
     "CapabilitiesResponse",
     "ChatMessage",
     "ChatRequest",
+    "ChatTurn",
+    "ConversationAnalysis",
+    "ConversationReply",
+    "ConversationRequest",
     "CreateJobRequest",
     "DatasetListResponse",
     "ErrorCode",
@@ -44,6 +48,7 @@ __all__ = [
     "MLModelDetailResponse",
     "MLModelDownloadResponse",
     "MLModelsListResponse",
+    "PendingIntent",
     "PersistLayerRequest",
     "PersistLayerResponse",
     "Plan",
@@ -292,6 +297,52 @@ class ExecuteResponse(BaseModel):  # type: ignore[misc]
     plan: dict[str, Any]
     result: dict[str, Any] = Field(description="Pipeline execution artifacts and outputs")
     progress: list[dict[str, Any]] = Field(default_factory=list, description="Step progress events")
+
+
+class ChatTurn(BaseModel):  # type: ignore[misc]
+    """One earlier turn of the conversation, as the client shows it."""
+
+    role: Role
+    text: str = Field(description="Turn text; for an analysis, its summary or interpretation")
+
+
+class PendingIntent(BaseModel):  # type: ignore[misc]
+    """An analysis request that waits for its input; the client stores it and sends it back."""
+
+    prompt: str = Field(description="The request to run once the input arrives")
+    item_id: str | None = Field(None, description="Registry id of the analysis it names, if any")
+    needs: list[Literal["RasterPath", "RasterPathBefore", "RasterPathAfter"]] = Field(
+        min_length=1, description='["RasterPath"], or ["RasterPathBefore", "RasterPathAfter"] for two dates'
+    )
+    asked_at: datetime = Field(description="When the assistant asked (UTC); a pending older than 30 min expires")
+
+
+class ConversationRequest(BaseModel):  # type: ignore[misc]
+    """``POST /v1/chat``: one Workspace message."""
+
+    message: str = Field("", description="The user's message; may be empty when only files are attached")
+    history: list[ChatTurn] = Field(
+        default_factory=list, description="Earlier turns, oldest first; the server keeps the last 10 (8000 chars)"
+    )
+    attachments: list[Attachment] = Field(default_factory=list, description="Uploads, with their metadata")
+    region: JobRegion | None = Field(None, description="As in POST /v1/jobs")
+    pending: PendingIntent | None = Field(None, description="The pending of the previous reply, if any")
+
+
+class ConversationReply(BaseModel):  # type: ignore[misc]
+    """A conversation reply: markdown, no job."""
+
+    kind: Literal["reply"] = "reply"
+    text: str = Field(description="Markdown")
+    pending: PendingIntent | None = Field(None, description="Set when the reply asks for the input of an analysis")
+
+
+class ConversationAnalysis(BaseModel):  # type: ignore[misc]
+    """An analysis request: the job submitted as by POST /v1/jobs; follow GET /v1/jobs/{job_id}/events."""
+
+    kind: Literal["analysis"] = "analysis"
+    job_id: str
+    job: JobRecord
 
 
 # --- Files ---

@@ -233,14 +233,14 @@ class TriggerIndex:
         return "I'd be happy to help with that analysis! Please upload a GeoTIFF image and I'll process it for you."
 
     def render_catalog_response(self) -> str:
-        """Bulleted list of every user-runnable item — used as the generic 'what can you do?' answer."""
+        """The generic 'what can you do?' answer: a markdown list of every user-runnable item, whole descriptions."""
         bullets: list[str] = []
         for item in self.user_runnable_items:
             label = item.display_name or item.id
-            desc = (item.description or "").strip().split("\n", 1)[0]
-            bullets.append(f"• **{label}** — {desc}" if desc else f"• **{label}**")
+            desc = _whole(item.description).replace("*", "\\*")  # "6*RED - 7.5*BLUE" is not emphasis
+            bullets.append(f"- **{label}** — {desc}" if desc else f"- **{label}**")
         return (
-            "Yes! Our geospatial Digital Twin system can perform several analyses:\n\n"
+            "Our geospatial Digital Twin system can perform several analyses:\n\n"
             + "\n".join(bullets)
             + "\n\nUpload a GeoTIFF image and tell me what analysis you'd like to perform."
         )
@@ -254,7 +254,7 @@ class TriggerIndex:
         bullets: list[str] = []
         for item in self.user_runnable_items:
             label = item.display_name or item.id
-            desc = (item.description or "").strip().split("\n", 1)[0]
+            desc = _whole(item.description)
             bullets.append(f"   - {label}: {desc}" if desc else f"   - {label}")
         catalog = "\n".join(bullets) if bullets else "   - (no user-runnable items registered)"
         return (
@@ -267,10 +267,15 @@ class TriggerIndex:
             "   Examples: 'what can we do next?', 'explain NDVI', 'help me "
             "understand this result', requests for clarification.\n\n"
             'Return ONLY valid JSON: {"intent": "pipeline" or "conversation", '
-            '"reason": "...", "response": "if conversation, a helpful answer"}\n\n'
+            '"reason": "...", "response": "if conversation, a helpful answer in concise markdown"}\n\n'
             "For CONVERSATION responses, you may suggest available analyses:\n"
             f"{catalog}\n"
         )
+
+
+def _whole(description: str | None) -> str:
+    """A registry description on one line: every line of it, not only the first."""
+    return " ".join((description or "").split())
 
 
 def _user_runnable_items(registry: Registry) -> Iterable[RegistryItem]:

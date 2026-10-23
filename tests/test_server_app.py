@@ -13,7 +13,7 @@ import pytest
 
 import dta
 from server.app import app
-from server.utils import apply_colormap, detect_data_type, sse_frame
+from server.utils import apply_colormap, detect_data_type
 
 
 @pytest.fixture
@@ -25,24 +25,6 @@ def client() -> TestClient:
 # ---------------------------------------------------------------------------
 # Helper function tests
 # ---------------------------------------------------------------------------
-
-
-class TestSSEFrame:
-    """Tests for sse_frame helper."""
-
-    def test_basic_payload(self) -> None:
-        result = sse_frame({"ok": True})
-        assert result == b'data: {"ok": true}\n\n'
-
-    def test_unicode_payload(self) -> None:
-        result = sse_frame({"msg": "héllo wörld"})
-        assert b"data:" in result
-        assert "héllo wörld" in result.decode("utf-8")
-
-    def test_nested_payload(self) -> None:
-        result = sse_frame({"a": {"b": [1, 2]}})
-        assert b'"a"' in result
-        assert b'"b"' in result
 
 
 class TestDetectDataType:
@@ -284,53 +266,6 @@ class TestExecuteEndpoint:
         error = resp.json()["error"]
         assert error["code"] == "internal_error"
         assert error["message"] == message
-
-
-class TestChatEndpoint:
-    """Tests for POST /v1/chat (SSE streaming)."""
-
-    def test_chat_empty_messages(self, client: TestClient) -> None:
-        resp = client.post(
-            "/v1/chat",
-            json={"messages": []},
-        )
-        assert resp.status_code == 200
-        text = resp.text
-        assert "error" in text
-        assert "done" in text
-
-    def test_chat_success_stream(self, client: TestClient) -> None:
-        mock_plan = {
-            "flow": "ndvi",
-            "steps": [{"uses": "input/file", "binds": {"RasterPath": "/fake.tif"}}],
-            "outputs": ["NDVIMap"],
-        }
-        mock_exec = {"flow": "ndvi", "steps": ["input/file"], "artifacts": {}, "outputs": {}}
-
-        with (
-            patch("server.routes.chat.orchestrate", return_value={"ok": True, "plan": mock_plan}),
-            patch("server.routes.chat.PipelineExecutor") as mock_exec_class,
-        ):
-            mock_exec_class.return_value.execute.return_value = mock_exec
-            resp = client.post(
-                "/v1/chat",
-                json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
-            )
-        assert resp.status_code == 200
-        text = resp.text
-        assert "planning" in text
-        assert "complete" in text or "done" in text
-
-    def test_chat_orchestrate_fail(self, client: TestClient) -> None:
-        with patch("server.routes.chat.orchestrate", return_value={"ok": False, "error": "fail"}):
-            resp = client.post(
-                "/v1/chat",
-                json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
-            )
-        assert resp.status_code == 200
-        text = resp.text
-        assert "error" in text
-        assert "done" in text
 
 
 class TestDownloadEndpoint:
