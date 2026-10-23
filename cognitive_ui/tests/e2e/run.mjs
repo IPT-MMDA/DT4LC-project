@@ -23,6 +23,8 @@ const repoRoot = path.resolve(uiDir, '..');
 const flowsDir = path.join(here, 'flows');
 const outDir = path.resolve(process.env.E2E_OUT || path.join(here, 'out'));
 const llmMode = process.env.E2E_LLM || 'none';
+// `demo` stages the public demo's server state (see stageDemo); `local` (default) is a laptop.
+const serverMode = process.env.E2E_SERVER || 'local';
 const rulesFile = path.resolve(process.env.E2E_LLM_RULES || path.join(here, 'fake-llm-rules.json'));
 const API_START_TIMEOUT_MS = 180_000;
 
@@ -69,6 +71,21 @@ function resolveFlows(args) {
   });
 }
 
+// The public demo as the real backend computes it from env and files, with nothing real
+// behind it: Delineate-Anything "installed" (the two files ModelManager.get_model_status
+// checks, empty) and Earth Engine "configured" (gee_common.is_configured only checks that
+// GEE_PROJECT_ID is set and the key file exists). No flow in this mode may call Earth
+// Engine or run Delineate: the key is a dummy and the weights are empty.
+function stageDemo(stateDir) {
+  const delineate = path.join(stateDir, 'models', 'delineate-anything-small');
+  fs.mkdirSync(delineate, { recursive: true });
+  fs.writeFileSync(path.join(delineate, 'DelineateAnything-S.pt'), '');
+  fs.writeFileSync(path.join(delineate, 'delineate.py'), '');
+  const key = path.join(stateDir, 'gee-key.json');
+  fs.writeFileSync(key, JSON.stringify({ type: 'service_account', project_id: 'e2e-demo' }));
+  return { DT4LC_DEPLOYMENT: 'demo', GEE_PROJECT_ID: 'e2e-demo', GEE_SERVICE_ACCOUNT_KEY: key };
+}
+
 function apiEnv(stateDir, fakeURL, fakeHFURL) {
   const env = {
     ...process.env,
@@ -91,8 +108,10 @@ function apiEnv(stateDir, fakeURL, fakeHFURL) {
     HF_ENDPOINT: fakeHFURL,
     HF_HUB_OFFLINE: '0',
     HF_HOME: path.join(stateDir, 'hf'),
+    DT4LC_DEPLOYMENT: 'local',
   };
-  if (llmMode === 'live') return env;
+  const demo = serverMode === 'demo' ? stageDemo(stateDir) : {};
+  if (llmMode === 'live') return { ...env, ...demo };
   // server/app.py calls load_dotenv() without override, so a variable that is
   // already set (even to "") wins over .env. Blank every provider key.
   return {
@@ -112,6 +131,7 @@ function apiEnv(stateDir, fakeURL, fakeHFURL) {
     // No Earth Engine either: region flows must fail cleanly without credentials.
     GEE_PROJECT_ID: '',
     GEE_SERVICE_ACCOUNT_KEY: '',
+    ...demo,
   };
 }
 
@@ -198,6 +218,9 @@ async function main() {
   if (!['none', 'fake', 'live'].includes(llmMode)) {
     throw new Error(`E2E_LLM must be none, fake or live (got ${llmMode})`);
   }
+  if (!['local', 'demo'].includes(serverMode)) {
+    throw new Error(`E2E_SERVER must be local or demo (got ${serverMode})`);
+  }
   const flows = resolveFlows(process.argv.slice(2));
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -223,7 +246,7 @@ async function main() {
   cleanups.push(ui.close);
 
   console.log(
-    `e2e: UI ${ui.url}, API ${apiURL} (${process.env.E2E_DEV_ROLE || 'guest'}), LLM ${llmMode}${fakeURL ? ` (fake Ollama ${fakeURL})` : ''}, fake HF ${fakeHF.url}, out ${outDir}`,
+    `e2e: UI ${ui.url}, API ${apiURL} (${process.env.E2E_DEV_ROLE || 'guest'}, ${serverMode}), LLM ${llmMode}${fakeURL ? ` (fake Ollama ${fakeURL})` : ''}, fake HF ${fakeHF.url}, out ${outDir}`,
   );
   return runFlows(flows, {
     E2E_BASE_URL: ui.url,
@@ -234,6 +257,7 @@ async function main() {
     E2E_FAKE_LLM_URL: fakeURL ?? '',
     E2E_FAKE_HF_URL: fakeHF.url,
     E2E_DEV_ROLE: process.env.E2E_DEV_ROLE || 'guest',
+    E2E_SERVER: serverMode,
   });
 }
 

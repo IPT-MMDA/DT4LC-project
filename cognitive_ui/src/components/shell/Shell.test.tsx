@@ -185,13 +185,20 @@ describe('routes', () => {
 
   it.each([
     ['/app/library', 'Library'],
-    ['/app/capabilities', 'What DT4LC can do'],
   ])('%s is a placeholder inside the shell', (url, title) => {
     mockApi();
     renderApp(url);
     expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     expect(screen.getByText('Arrives in the next run.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Back to chat' }).getAttribute('href')).toBe('/app');
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
+  });
+
+  it('/app/capabilities is the Capabilities page inside the shell', () => {
+    mockApi();
+    renderApp('/app/capabilities');
+    expect(screen.getByRole('main', { name: 'What DT4LC can do · on this server' })).toBeTruthy();
+    expect(screen.queryByText('Arrives in the next run.')).toBeNull();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
   });
 

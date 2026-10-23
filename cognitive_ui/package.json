@@ -15,7 +15,11 @@
     "e2e:workspace:guest": "node tests/e2e/run.mjs workspace-empty workspace-messages workspace-composer workspace-analysis workspace-result workspace-conversations",
     "e2e:workspace:fake": "E2E_LLM=fake node tests/e2e/run.mjs workspace-running",
     "e2e:workspace:member": "E2E_DEV_ROLE=member node tests/e2e/run.mjs workspace-preparing",
-    "e2e:workspace:quota": "E2E_GUEST_LIMIT=2 node tests/e2e/run.mjs workspace-quota"
+    "e2e:workspace:quota": "E2E_GUEST_LIMIT=2 node tests/e2e/run.mjs workspace-quota",
+    "e2e:capabilities": "npm run e2e:capabilities:offline && npm run e2e:capabilities:demo",
+    "e2e:capabilities:offline": "E2E_DEV_ROLE=member E2E_LLM=none node tests/e2e/run.mjs capabilities-offline",
+    "e2e:capabilities:demo": "E2E_SERVER=demo E2E_LLM=fake E2E_GUEST_LIMIT=5 node tests/e2e/run.mjs capabilities-demo",
+    "e2e:run2": "npm run e2e:capabilities"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.0",
