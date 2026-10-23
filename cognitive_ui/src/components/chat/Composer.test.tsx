@@ -6,16 +6,18 @@ import apiClient from '../../api/client';
 import { sampleAttachments } from '../../api/sample';
 import { useAppStore, type DrawnRegion } from '../../store/useAppStore';
 import { useChatStore } from '../../store/useChatStore';
-import { SAMPLE } from '../../test/fixtures';
+import { GUEST_SESSION, SAMPLE } from '../../test/fixtures';
+import type { SessionInfo } from '../../types';
 import { Composer } from './Composer';
 
 const OFFLINE = 'Assistant offline — analyses still run; answers are limited to the catalog.';
 
-function health(offline: boolean) {
+function health(offline: boolean, session?: SessionInfo) {
   vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/v1/health') {
       return { ok: true, service: 'DT4LC', version: '0.6.0', assistant: { connected: !offline, offline, provider: null, model: null } } as never;
     }
+    if (url === '/v1/session' && session) return session as never;
     throw new Error(`unexpected GET ${url}`);
   });
 }
@@ -142,6 +144,41 @@ describe('the assistant offline line', () => {
     await screen.findByLabelText('Message');
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText(OFFLINE)).toBeNull();
+  });
+});
+
+describe('the guest quota line', () => {
+  const QUOTA = "You've used your 5 analyses for this hour — the next one is available at 14:05.";
+  const guest = (remaining: number): SessionInfo => ({
+    ...GUEST_SESSION,
+    analyses: { limit: 5, used: 5 - remaining, remaining, resets_at: new Date(2026, 9, 23, 14, 5).toISOString() },
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 23, 13, 40));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('at 0 left: one line with the local reset time; typing and sending still work', async () => {
+    health(true, guest(0));
+    const { onSend, input } = renderComposer();
+    expect((await screen.findByTestId('quota-line')).textContent).toBe(QUOTA);
+    expect(screen.getByTestId('assistant-offline')).toBeTruthy();
+    expect(input.disabled).toBe(false);
+    fireEvent.change(input, { target: { value: 'What is NDWI?' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('at 1 left: no line', async () => {
+    health(false, guest(1));
+    renderComposer();
+    await screen.findByLabelText('Message');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByTestId('quota-line')).toBeNull();
   });
 });
 

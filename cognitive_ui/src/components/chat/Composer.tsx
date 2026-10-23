@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ArrowUp } from 'lucide-react';
 import { useHealth } from '../../api/hooks/useHealth';
+import { useQuotaLine } from '../../api/hooks/useSession';
 import { useFromMap } from '../../hooks/useFromMap';
 import { useChatStore } from '../../store/useChatStore';
 import { attachmentChips } from './attachmentChips';
@@ -28,6 +29,8 @@ export function Composer({ hasMessages, sending, onSend, onOpenFilePicker, note 
   const removeAttachment = useChatStore((s) => s.removeAttachment);
   const setPendingRegion = useChatStore((s) => s.setPendingRegion);
   const offline = useHealth().data?.assistant?.offline === true;
+  // A guest with no analysis left: conversation still works and typing is never blocked.
+  const quota = useQuotaLine();
   const fromMap = useFromMap();
   const [libraryOpen, setLibraryOpen] = useState(false);
   const libraryRef = useRef<HTMLDivElement>(null);
@@ -84,6 +87,12 @@ export function Composer({ hasMessages, sending, onSend, onOpenFilePicker, note 
           placeholder={hasMessages ? 'Ask a follow-up…' : 'Describe an analysis… or drop GeoTIFFs here'}
           className="resize-none bg-transparent outline-none text-body text-text placeholder:text-faint"
         />
+        {quota && (
+          <p className="flex items-center gap-[7px] text-[11.5px] text-canc-ink" data-testid="quota-line">
+            <span aria-hidden className="w-2 h-2 rounded-full bg-canc flex-none" />
+            {quota}
+          </p>
+        )}
         {offline && (
           <p className="flex items-center gap-[7px] text-[11.5px] text-muted" data-testid="assistant-offline">
             <span aria-hidden className="w-2 h-2 rounded-full bg-canc flex-none" />

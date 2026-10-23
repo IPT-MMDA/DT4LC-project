@@ -283,7 +283,11 @@ export function AnalysisMessage({ message, prompt, context = NO_CONTEXT, onSend,
     setActionError(null);
     try {
       const job = await call();
-      if (kind === 'confirm') setAccepted(true);
+      if (kind === 'confirm') {
+        setAccepted(true);
+        // A guest's analysis is counted at confirm: the badge's quota changed.
+        void queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+      }
       applyJobEvents(message.jobId, (job.events ?? []) as AnalysisMessageData['events']);
     } catch (err) {
       setActionError(errorText(err));

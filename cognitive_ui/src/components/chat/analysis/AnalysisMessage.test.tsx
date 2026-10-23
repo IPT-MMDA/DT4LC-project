@@ -147,10 +147,13 @@ describe('proposal', () => {
       if (url.endsWith('/confirm')) return json(202, { id: JOB, status: 'pending', events: NDMI_CONFIRMED.slice(0, 4) });
       return json(500, {});
     });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     renderAnalysis(NDMI_PROPOSAL);
     fireEvent.click(button('Run'));
     await screen.findByText('Accepted · running below');
     expect(calls()).toContain(`POST /v1/jobs/${JOB}/confirm`);
+    // The quota is counted at confirm: the badge refreshes.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: SESSION_QUERY_KEY });
     expect(screen.queryByRole('button', { name: 'Run' })).toBeNull();
     expect(screen.getByTestId('composed-badge').textContent).toBe('Composed by the assistant');
     expect(within(message()).getByText("I'll compute NDMI for 1 June and 9 June from the sample.")).toBeTruthy();
