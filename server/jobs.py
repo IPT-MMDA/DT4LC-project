@@ -39,7 +39,7 @@ from dta.dti.executor import PipelineExecutor, model_not_installed_error
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment as COEAttachment
 from dta.dti.schemas import ChatRequest as COEChatRequest
-from dta.dti.schemas import ExecutionPlan
+from dta.dti.schemas import ExecutionPlan, Registry
 
 from . import library
 from .job_events import TERMINAL_EVENTS, classify_failure, done_summary, followups, intent_text, step_skeleton
@@ -455,6 +455,11 @@ class JobQueue:
 
         # Recover any interrupted jobs from previous run
         self._store.recover_interrupted()
+
+    @property
+    def registry(self) -> Registry:
+        """The registry the queue plans and runs with."""
+        return self._registry
 
     async def start(self) -> None:
         """Start worker pool."""

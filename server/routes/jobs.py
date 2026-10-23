@@ -7,12 +7,13 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import ValidationError
 
 from dta.dti.coe.plan_validator import PlanError
 from dta.dti.schemas import ExecutionPlan
 
+from .. import library
 from ..job_events import KEEPALIVE_FRAME, TERMINAL_EVENTS, sse_event_frame
 from ..jobs import JobConflictError, JobQueue, JobStatus, get_job_queue
 from ..schemas import (
@@ -257,6 +258,36 @@ async def confirm_job(job_id: str, session: CurrentSession, req: JobConfirmReque
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     return _job_record(job.to_dict())
+
+
+@router.get(  # type: ignore[misc]
+    "/jobs/{job_id}/statistics.csv",
+    summary="Download a job's statistics as CSV",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "CSV with a header row"}},
+)
+async def job_statistics_csv(job_id: str, session: CurrentSession) -> Response:
+    """The main analysis's statistics as a CSV attachment ``<slug of the card title>-statistics.csv``.
+
+    The class table (``class,area_km2,percent,pixels[,mean_change]``) for change detection, band-math
+    change, land cover and snow; one row per band (``band,min,max,mean,std,median,p5,p25,p75,p95,
+    valid_pixels,nodata_pixels``) for raster statistics; one row of index statistics
+    (``index,min,max,mean,…``) for a single index. 404 for an unknown job, another session's, or a
+    job without statistics (not finished, failed, or an analysis that reports none).
+    """
+    queue = get_job_queue()
+    job = await queue.get_job(job_id)
+    if not job or not session.can_see(job.owner):
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    text = library.statistics_csv(job, queue.registry) if job.status == JobStatus.COMPLETED else None
+    if text is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} has no statistics")
+    name = library.slug(str((job.card or {}).get("title") or "")) or f"job-{job_id}"
+    return Response(
+        text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}-statistics.csv"'},
+    )
 
 
 @router.get(  # type: ignore[misc]

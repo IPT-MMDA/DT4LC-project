@@ -334,3 +334,76 @@ def test_older_jobs_db_without_card_column_migrates(tmp_path: Path) -> None:
     store.save(old)
     assert SQLiteJobStore(db).get("old1").card == _CARD  # type: ignore[union-attr]
     assert SQLiteJobStore(db).list_summaries()[0].card == _CARD
+
+
+# --- Statistics CSV (GET /v1/jobs/{id}/statistics.csv) ------------------------------------------
+
+
+def _csv(text: str) -> list[list[str]]:
+    import csv
+    import io
+
+    return list(csv.reader(io.StringIO(text)))
+
+
+async def test_statistics_csv_has_a_row_per_band(queue: JobQueue) -> None:
+    async with _client() as client:
+        job_id = await _run(client, queue, "Give me statistics for every band", [SAMPLE_0609])
+        r = await client.get(f"/v1/jobs/{job_id}/statistics.csv")
+        bands = (await client.get(f"/v1/jobs/{job_id}")).json()["result"]["execution"]["artifacts"]["Statistics"]
+
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "text/csv; charset=utf-8"
+    assert r.headers["content-disposition"] == 'attachment; filename="raster-statistics-2023-06-09-statistics.csv"'
+    header, *rows = _csv(r.text)
+    assert header == [
+        "band", "min", "max", "mean", "std", "median", "p5", "p25", "p75", "p95", "valid_pixels", "nodata_pixels"
+    ]  # fmt: skip
+    assert [row[0] for row in rows] == ["band_1", "band_2", "band_3", "band_4", "band_5"]
+    first = bands["bands"]["band_1"]
+    assert [float(v) for v in rows[0][1:6]] == [first[k] for k in ("min", "max", "mean", "std", "median")]
+    assert int(rows[0][10]) == first["valid_pixels"]
+
+
+async def test_ndwi_change_csv_is_the_class_table(queue: JobQueue) -> None:
+    async with _client() as client:
+        job_id = await _run(client, queue, WATER_PROMPT, SAMPLE_PAIR)
+        r = await client.get(f"/v1/jobs/{job_id}/statistics.csv")
+
+    assert r.status_code == 200, r.text
+    assert r.headers["content-disposition"] == 'attachment; filename="water-change-ndwi-difference-statistics.csv"'
+    header, *rows = _csv(r.text)
+    assert header == ["class", "area_km2", "percent", "pixels", "mean_change"]
+    assert [row[:3] for row in rows] == [
+        ["Water gained", "156.761", "29.53"],
+        ["Water lost", "0.603", "0.11"],
+        ["No change", "373.476", "70.36"],
+    ]
+    assert float(rows[0][4]) > 0 > float(rows[1][4])
+
+
+async def test_ndvi_csv_is_the_index_statistics(queue: JobQueue) -> None:
+    async with _client() as client:
+        job_id = await _run(client, queue, "calculate ndvi", [SAMPLE_0601])
+        r = await client.get(f"/v1/jobs/{job_id}/statistics.csv")
+
+    assert r.status_code == 200, r.text
+    header, row = _csv(r.text)
+    assert header[:6] == ["index", "min", "max", "mean", "std", "median"]
+    assert row[0] == "NDVI"
+    assert float(row[header.index("mean")]) == pytest.approx(0.5451, abs=1e-4)
+
+
+async def test_statistics_csv_is_404_without_statistics_or_for_another_owner(
+    queue: JobQueue, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("DEV_ROLE", "guest")
+    async with _client() as owner, _client() as stranger:
+        failed = await _run(owner, queue, WATER_PROMPT, [], region=REGION)
+        done = await _run(owner, queue, "calculate ndvi", [SAMPLE_0601])
+        await stranger.get("/v1/session")
+
+        assert (await owner.get(f"/v1/jobs/{failed}/statistics.csv")).status_code == 404
+        assert (await owner.get("/v1/jobs/nojob/statistics.csv")).status_code == 404
+        assert (await stranger.get(f"/v1/jobs/{done}/statistics.csv")).status_code == 404
+        assert (await owner.get(f"/v1/jobs/{done}/statistics.csv")).status_code == 200
