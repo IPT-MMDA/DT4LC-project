@@ -62,6 +62,8 @@ def _assert_ref(ref: dict[str, Any], kind: str) -> None:
     assert ref["url"] == "/v1/download?path=" + quote(ref["path"], safe="")
     if kind == "geotiff":
         assert set(ref["stats"]) == {"min", "max", "mean", "valid_pixels"}
+    elif Path(ref["path"]).stem.endswith("_bare"):
+        assert set(ref["stats"]) == {"width", "height", "style"}
     else:
         assert ref["stats"] == {}
 
@@ -72,12 +74,20 @@ def _assert_ref(ref: dict[str, Any], kind: str) -> None:
 @pytest.mark.parametrize(
     ("module", "raster_keys", "viz_keys"),
     [
-        ("ndvi", {"ndvi"}, {"ndvi_map"}),
-        ("ndwi", {"ndwi"}, {"ndwi_map"}),
-        ("ndsi", {"ndsi", "snow_mask"}, {"ndsi_map"}),
-        ("evi", {"evi"}, {"evi_map"}),
-        ("snow_classifier", {"snow_mask", "ndsi", "ndvi", "brightness"}, {"snow_classification", "criteria_analysis"}),
-        ("lulc_classifier", {"classification"}, {"classification_map", "distribution_chart"}),
+        ("ndvi", {"ndvi"}, {"ndvi_map", "ndvi_map_bare"}),
+        ("ndwi", {"ndwi"}, {"ndwi_map", "ndwi_map_bare"}),
+        ("ndsi", {"ndsi", "snow_mask"}, {"ndsi_map", "ndsi_map_bare"}),
+        ("evi", {"evi"}, {"evi_map", "evi_map_bare"}),
+        (
+            "snow_classifier",
+            {"snow_mask", "ndsi", "ndvi", "brightness"},
+            {"snow_classification", "criteria_analysis", "snow_classification_bare"},
+        ),
+        (
+            "lulc_classifier",
+            {"classification"},
+            {"classification_map", "distribution_chart", "classification_map_bare"},
+        ),
     ],
 )
 def test_single_raster_algorithm_results_hold_refs(
@@ -104,7 +114,14 @@ def test_change_detection_result_holds_refs(synthetic_raster_pair: tuple[str, st
 
     assert _pixel_data(result) == []
     assert set(result["rasters"]) == {"change", "index_before", "index_after"}
-    assert set(result["visualizations"]) == {"change_map", "ndvi_before", "ndvi_after"}
+    assert set(result["visualizations"]) == {
+        "change_map",
+        "ndvi_before",
+        "ndvi_after",
+        "change_map_bare",
+        "ndvi_before_bare",
+        "ndvi_after_bare",
+    }
     with rasterio.open(result["rasters"]["change"]["path"]) as src, rasterio.open(after) as ref:
         assert src.crs == ref.crs and src.transform == ref.transform
         assert src.dtypes[0] == "float32" and np.isnan(src.nodata)

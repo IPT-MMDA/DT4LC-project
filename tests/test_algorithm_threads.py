@@ -49,7 +49,7 @@ def _check_concurrent_renders(
         for kind, index in TASKS
         for key, path in _render(kind, index, before, after, tmp_path / "serial").items()
     }
-    assert len(serial) == 16  # 4 index maps + 4 x (change map, before, after)
+    assert len(serial) == 32  # 4 index maps + 4 x (change map, before, after), each with its bare map
 
     for it in range(iterations):
         outdir = tmp_path / f"it{it}"
@@ -57,7 +57,7 @@ def _check_concurrent_renders(
             futures = {(k, i): pool.submit(_render, k, i, before, after, outdir / f"{k}_{i}") for k, i in TASKS}
         for (kind, index), future in futures.items():
             pngs = future.result()  # re-raises a worker exception
-            assert len(pngs) == (1 if kind == "si" else 3)
+            assert len(pngs) == (2 if kind == "si" else 6)
             for key, path in pngs.items():
                 assert _pixels(path) == serial[(kind, index, key)], f"iteration {it}: {path} != serial render"
 

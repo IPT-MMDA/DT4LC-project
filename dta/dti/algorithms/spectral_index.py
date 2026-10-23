@@ -117,12 +117,30 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         The :func:`calculate_index` result with the array in
-        ``rasters["<formula>"]`` and ``visualizations["<formula>_map"]`` as
-        artifact references (``{kind, path, url, stats}``).
+        ``rasters["<formula>"]``, ``visualizations["<formula>_map"]`` and its
+        map-only ``visualizations["<formula>_map_bare"]`` as artifact
+        references (``{kind, path, url, stats}``).
     """
     result, index_array, (crs, transform) = calculate_index(raster_path, index_config)
+    key = result["index_type"]
     return artifact_files.save(
-        result, {result["index_type"]: index_array}, result["visualizations"], crs=crs, transform=transform
+        result,
+        {key: index_array},
+        result["visualizations"],
+        crs=crs,
+        transform=transform,
+        styles={key: display_style(index_config)},
+        bare={f"{key}_map": key},
+    )
+
+
+def display_style(index_config: dict[str, Any]) -> dict[str, Any]:
+    """The colours and value range of an index's PNG, as an :func:`dta.dti.artifact_files.index_style`."""
+    formula_name = str(index_config.get("formula") or "ndvi").lower()
+    colormap_name = str(index_config.get("colormap") or formula_name)
+    colours = COLORMAPS.get(colormap_name) or COLORMAPS["ndvi"]
+    return artifact_files.index_style(
+        colours, float(index_config.get("vmin", -1.0)), float(index_config.get("vmax", 1.0))
     )
 
 
@@ -294,7 +312,14 @@ def run_change(
         "after_path": after.get("path"),
         "index_type": formula_name,
     }
-    return artifact_files.save(result, {"change": change}, None, crs=crs, transform=transform)
+    return artifact_files.save(
+        result,
+        {"change": change},
+        None,
+        crs=crs,
+        transform=transform,
+        styles={"change": artifact_files.change_style(0.5)},
+    )
 
 
 # --- Internals ---------------------------------------------------------------

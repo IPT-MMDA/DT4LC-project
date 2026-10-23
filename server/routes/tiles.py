@@ -12,6 +12,8 @@ import rasterio
 from rasterio.warp import transform_bounds
 from rasterio.windows import from_bounds
 
+from dta.dti import artifact_files
+
 from ..paths import ensure_served_owner, resolve_served_path
 from ..sessions import CurrentSession
 from ..utils import apply_colormap, detect_data_type
@@ -20,11 +22,34 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/tiles", tags=["tiles"])
 
+TILE_SIZE = 256
+
+
+def _png(rgba: np.ndarray) -> StreamingResponse:
+    """An RGBA uint8 array as a PNG response."""
+    img_bytes = io.BytesIO()
+    Image.fromarray(rgba, mode="RGBA").save(img_bytes, format="PNG")
+    img_bytes.seek(0)
+    return StreamingResponse(img_bytes, media_type="image/png")
+
+
+def _untagged_rgb(data: np.ndarray, valid: np.ndarray, data_type: str) -> np.ndarray:
+    """RGB of an untagged single-band tile, by the data type its file name suggests (NaN where not ``valid``)."""
+    if data_type in ["ndvi", "ndwi", "ndsi"]:
+        # Spectral indices range from -1 to 1: clip, scale to 0-255 and apply the index's colormap
+        data_normalized = ((np.clip(np.nan_to_num(data), -1, 1) + 1) / 2 * 255).astype(np.uint8)
+        colormap = {"ndvi": "RdYlGn", "ndwi": "Blues", "ndsi": "cool"}[data_type]
+        return apply_colormap(data_normalized, colormap)
+    # Generic single-band data: percentile stretch in viridis
+    p2, p98 = np.percentile(data[valid], [2, 98])
+    stretched = np.clip((np.nan_to_num(data, nan=p2) - p2) / ((p98 - p2) or 1.0) * 255, 0, 255)
+    return apply_colormap(stretched.astype(np.uint8), "viridis")
+
 
 @router.get(  # type: ignore[misc]
     "/{z}/{x}/{y}",
     summary="GeoTIFF map tile",
-    response_description="256×256 PNG tile",
+    response_description="256×256 RGBA PNG tile; transparent off the raster and on nodata",
 )
 async def get_tile(
     z: int,
@@ -60,102 +85,40 @@ async def get_tile(
             # Read window from GeoTIFF
             window = from_bounds(*src_bounds, src.transform)
 
-            # Check if window is valid (intersects with raster)
-            if window.width <= 0 or window.height <= 0:
-                # Return transparent tile for areas outside the raster
-                img = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-                img_bytes = io.BytesIO()
-                img.save(img_bytes, format="PNG")
-                img_bytes.seek(0)
-                return StreamingResponse(img_bytes, media_type="image/png")
+            # Tile pixels whose centre lies on the raster; the rest stays transparent.
+            cols = window.col_off + (np.arange(TILE_SIZE) + 0.5) * window.width / TILE_SIZE
+            rows = window.row_off + (np.arange(TILE_SIZE) + 0.5) * window.height / TILE_SIZE
+            inside = ((rows >= 0) & (rows < src.height))[:, None] & ((cols >= 0) & (cols < src.width))[None, :]
+            if not inside.any():
+                return _png(np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype=np.uint8))
 
-            # Read data based on band count
+            # Boundless: the part of the window off the raster is filled, not stretched over the tile.
+            bands = [1, 2, 3] if src.count >= 3 else [1]
+            read = src.read(
+                bands, window=window, out_shape=(len(bands), TILE_SIZE, TILE_SIZE), boundless=True, masked=True
+            )
+            data = np.ma.filled(read.astype(np.float64), np.nan)
+            valid = inside & ~np.ma.getmaskarray(read).any(axis=0) & np.isfinite(data).all(axis=0)
+            if not valid.any():
+                return _png(np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype=np.uint8))
+
+            rgba = np.zeros((TILE_SIZE, TILE_SIZE, 4), dtype=np.uint8)
+            rgba[..., 3] = np.where(valid, 255, 0)
+            style = artifact_files.read_style(src.tags())
             if src.count >= 3:
-                # RGB data - read first 3 bands
-                data = src.read([1, 2, 3], window=window, out_shape=(3, 256, 256))
-                data = np.transpose(data, (1, 2, 0))  # CHW to HWC
-
-                # Handle nodata
-                if src.nodata is not None:
-                    mask = data[:, :, 0] == src.nodata
-                    data[mask] = 0
-
-                # Normalize to 0-255
-                if data.max() > 255 or data.dtype != np.uint8:
-                    data_finite = data[np.isfinite(data)]
-                    if len(data_finite) > 0:
-                        p2, p98 = np.percentile(data_finite, [2, 98])
-                        data = np.clip((data - p2) / (p98 - p2) * 255, 0, 255).astype(np.uint8)
-                    else:
-                        data = np.zeros((256, 256, 3), dtype=np.uint8)
-
-                img = Image.fromarray(data, mode="RGB")
+                # RGB data: the first 3 bands, 2-98 % stretch unless already 8-bit
+                rgb = np.transpose(data, (1, 2, 0))  # CHW to HWC
+                if src.dtypes[0] != "uint8":
+                    p2, p98 = np.percentile(rgb[valid], [2, 98])
+                    rgb = np.clip((rgb - p2) / ((p98 - p2) or 1.0) * 255, 0, 255)
+                rgba[..., :3] = np.where(valid[..., None], rgb, 0).astype(np.uint8)
+            elif style is not None:
+                # Tagged job artifact: the colours of its bare map PNG
+                rgba = artifact_files.colourize(np.where(valid, data[0], np.nan), style)
             else:
-                # Single band data - read first band
-                data = src.read(1, window=window, out_shape=(256, 256))
+                rgba[..., :3] = _untagged_rgb(np.where(valid, data[0], np.nan), valid, data_type)
 
-                # Handle nodata values
-                if src.nodata is not None:
-                    nodata_mask = data == src.nodata
-                    data = np.where(nodata_mask, np.nan, data)
-
-                # Apply data-type-specific normalization and colormapping
-                data_finite = data[np.isfinite(data)]
-
-                if len(data_finite) == 0:
-                    # All nodata - return transparent tile
-                    img = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
-                    img_bytes = io.BytesIO()
-                    img.save(img_bytes, format="PNG")
-                    img_bytes.seek(0)
-                    return StreamingResponse(img_bytes, media_type="image/png")
-
-                # Normalize based on data type
-                if data_type in ["ndvi", "ndwi", "ndsi"]:
-                    # Spectral indices typically range from -1 to 1
-                    # Clip to expected range
-                    data_clipped = np.clip(data, -1, 1)
-                    # Scale to 0-255
-                    data_normalized = ((data_clipped + 1) / 2 * 255).astype(np.uint8)
-
-                    # Apply colormap
-                    if data_type == "ndvi":
-                        # Green-yellow-red colormap for vegetation
-                        rgb_data = apply_colormap(data_normalized, "RdYlGn")
-                    elif data_type == "ndwi":
-                        # Blue colormap for water
-                        rgb_data = apply_colormap(data_normalized, "Blues")
-                    elif data_type == "ndsi":
-                        # Cool colormap for snow/ice
-                        rgb_data = apply_colormap(data_normalized, "cool")
-                    else:
-                        rgb_data = apply_colormap(data_normalized, "viridis")
-
-                    # Handle nodata in RGB
-                    if src.nodata is not None:
-                        rgb_data[nodata_mask] = [0, 0, 0]
-
-                    img = Image.fromarray(rgb_data, mode="RGB")
-                else:
-                    # Generic single-band data - use percentile stretch
-                    p2, p98 = np.percentile(data_finite, [2, 98])
-                    data_normalized = np.clip((data - p2) / (p98 - p2) * 255, 0, 255).astype(np.uint8)
-
-                    # Apply viridis colormap for better visualization
-                    rgb_data = apply_colormap(data_normalized, "viridis")
-
-                    # Handle nodata
-                    if src.nodata is not None:
-                        rgb_data[nodata_mask] = [0, 0, 0]
-
-                    img = Image.fromarray(rgb_data, mode="RGB")
-
-            # Save as PNG
-            img_bytes = io.BytesIO()
-            img.save(img_bytes, format="PNG")
-            img_bytes.seek(0)
-
-            return StreamingResponse(img_bytes, media_type="image/png")
+            return _png(rgba)
 
     except HTTPException:
         raise
