@@ -23,13 +23,15 @@ export function ChatColumn({ className }: { className?: string }) {
   const [dragging, setDragging] = useState(false);
   const openFilePicker = () => fileInput.current?.click();
 
-  // Follow the conversation: new messages and streamed reply text.
+  // Follow the conversation: new messages, streamed reply text and a growing timeline.
   const last = messages[messages.length - 1];
   const lastText = last?.text;
+  const lastEvents = last?.kind === 'analysis' ? last.events.length : 0;
+  const lastResult = last?.kind === 'analysis' ? last.result?.summary : undefined;
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, lastText, conversation?.id]);
+  }, [messages.length, lastText, lastEvents, lastResult, conversation?.id]);
 
   const onDragOver = (e: DragEvent) => {
     if (!hasFiles(e)) return;
@@ -63,7 +65,12 @@ export function ChatColumn({ className }: { className?: string }) {
 
       <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto p-5 flex flex-col gap-5">
         {messages.length > 0 ? (
-          <MessageList messages={messages} waiting={sending} />
+          <MessageList
+            messages={messages}
+            waiting={sending}
+            onSend={(text, options) => void send(text, options)}
+            onOpenFilePicker={openFilePicker}
+          />
         ) : (
           <EmptyState onSend={(prompt) => void send(prompt)} onOpenFilePicker={openFilePicker} sending={sending} />
         )}

@@ -224,6 +224,12 @@ describe('sendMessage', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(messages()).toEqual([]);
   });
+
+  it('merges a retry fix\'s params into the request', async () => {
+    fetchMock.mockResolvedValueOnce(sse([['analysis', { job_id: 'job-1', job: JOB }]]));
+    await sendMessage('Calculate NDVI', { params: { mode: 'template' } });
+    expect(bodies()[0]).toEqual({ message: 'Calculate NDVI', history: [], attachments: [], mode: 'template' });
+  });
 });
 
 describe('conversationHistory', () => {

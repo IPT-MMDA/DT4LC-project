@@ -1,20 +1,9 @@
-import { analysisIntent } from '../../hooks/useSendMessage';
-import type { AnalysisMessage, AssistantMessage, ChatMessage, UserMessage } from '../../types';
+import type { AssistantMessage, ChatMessage, UserMessage } from '../../types';
+import { AnalysisMessage, type AnalysisMessageProps } from './analysis/AnalysisMessage';
 import { attachmentChips } from './attachmentChips';
+import { Avatar } from './Avatar';
 import { FileChip, RegionChip } from './Chips';
 import { Markdown } from './Markdown';
-
-/** The DT monogram beside every assistant message. */
-export function Avatar() {
-  return (
-    <div
-      aria-hidden
-      className="w-6 h-6 mt-[1px] flex-none rounded-[6px] bg-ink text-ink-bg font-bold text-[9px] flex items-center justify-center"
-    >
-      DT
-    </div>
-  );
-}
 
 function UserBubble({ message }: { message: UserMessage }) {
   const chips = attachmentChips(message.attachments ?? []);
@@ -50,30 +39,37 @@ function AssistantText({ message }: { message: AssistantMessage }) {
   );
 }
 
-// F3 replaces this with the analysis message (timeline, result, fixes).
-function AnalysisPlaceholder({ message }: { message: AnalysisMessage }) {
-  return (
-    <li className="flex gap-3 min-w-0" data-testid="analysis-message" data-job-id={message.jobId}>
-      <Avatar />
-      <div className="flex-1 min-w-0 text-body">
-        <p>{analysisIntent(message) || 'Starting the analysis…'}</p>
-        <p className="text-control text-muted mt-1">Analysis {message.status}</p>
-      </div>
-    </li>
-  );
+/** The text of the user message before `index`: what an analysis at `index` was asked. */
+function promptBefore(messages: ChatMessage[], index: number): string {
+  for (let i = index - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind === 'user') return m.text;
+  }
+  return '';
 }
 
-export function MessageList({ messages, waiting }: { messages: ChatMessage[]; waiting: boolean }) {
+interface MessageListProps extends Pick<AnalysisMessageProps, 'onSend' | 'onOpenFilePicker'> {
+  messages: ChatMessage[];
+  waiting: boolean;
+}
+
+export function MessageList({ messages, waiting, onSend, onOpenFilePicker }: MessageListProps) {
   const last = messages[messages.length - 1];
   return (
     <ol className="flex flex-col gap-5" aria-label="Messages" aria-busy={waiting}>
-      {messages.map((m) =>
+      {messages.map((m, i) =>
         m.kind === 'user' ? (
           <UserBubble key={m.id} message={m} />
         ) : m.kind === 'assistant' ? (
           <AssistantText key={m.id} message={m} />
         ) : (
-          <AnalysisPlaceholder key={m.id} message={m} />
+          <AnalysisMessage
+            key={m.id}
+            message={m}
+            prompt={promptBefore(messages, i)}
+            onSend={onSend}
+            onOpenFilePicker={onOpenFilePicker}
+          />
         ),
       )}
       {waiting && last?.kind === 'user' && (
