@@ -276,7 +276,8 @@ describe('?sample=1', () => {
 
     const chip = await screen.findByTestId('attachment-chip');
     expect(post).toHaveBeenCalledWith('/v1/sample');
-    expect(chip.textContent).toBe('kakhovka_hls_l30HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09');
+    expect(chip.textContent).toBe('kakhovka_hls_l30HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09×');
+    expect(within(chip).getByRole('button', { name: 'Remove kakhovka_hls_l30' })).toBeTruthy();
     expect(screen.getAllByTestId('attachment-chip')).toHaveLength(1);
     expect(useChatStore.getState().pendingAttachments.map((a) => a.filename)).toEqual([
       'hlsl_20230601.tif',
