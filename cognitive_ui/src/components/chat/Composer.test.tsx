@@ -44,7 +44,7 @@ function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {}) {
 
 const DRAWN: DrawnRegion = {
   id: 'region-1',
-  name: 'Reservoir-north',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -192,9 +192,9 @@ describe('From map', () => {
     fireEvent.click(screen.getByRole('button', { name: 'From map' }));
     const region = useChatStore.getState().pendingRegion;
     // The sample is in the composer, so its dates apply.
-    expect(region).toMatchObject({ id: 'region-1', name: 'Reservoir-north', dataset: 'HLS L30', cloud_max: 20, start_date: '2023-06-01', end_date: '2023-06-09' });
+    expect(region).toMatchObject({ id: 'region-1', name: 'Dnipro floodplain · Kherson', dataset: 'HLS L30', cloud_max: 20, start_date: '2023-06-01', end_date: '2023-06-09' });
     const chip = screen.getByTestId('region-chip');
-    expect(chip.textContent).toMatch(/^Region · Reservoir-north8\d km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud×$/);
+    expect(chip.textContent).toMatch(/^Region · Dnipro floodplain · Kherson8\d km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud×$/);
 
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove region' }));
     expect(useChatStore.getState().pendingRegion).toBeNull();

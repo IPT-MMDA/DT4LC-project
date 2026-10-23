@@ -101,19 +101,19 @@ describe('map mode (FR3)', () => {
   it('renames the selected region in the list and the selection, and keeps the name after a reload', async () => {
     const store = await loadFreshStore();
     store.getState().addRegion(region);
-    store.getState().updateRegion(region.id, { name: 'Reservoir-north' });
-    expect(store.getState().drawnRegions[0].name).toBe('Reservoir-north');
-    expect(store.getState().selectedRegion?.name).toBe('Reservoir-north');
+    store.getState().updateRegion(region.id, { name: 'Dnipro floodplain · Kherson' });
+    expect(store.getState().drawnRegions[0].name).toBe('Dnipro floodplain · Kherson');
+    expect(store.getState().selectedRegion?.name).toBe('Dnipro floodplain · Kherson');
 
     // Renaming another region leaves the selection alone.
     const other: DrawnRegion = { ...region, id: 'region-2', name: 'Region 2' };
     store.getState().addRegion(other);
     store.getState().setSelectedRegion(store.getState().drawnRegions[0]);
     store.getState().updateRegion('region-2', { name: 'South' });
-    expect(store.getState().selectedRegion?.name).toBe('Reservoir-north');
+    expect(store.getState().selectedRegion?.name).toBe('Dnipro floodplain · Kherson');
 
     const reloaded = await loadFreshStore();
-    expect(reloaded.getState().selectedRegion?.name).toBe('Reservoir-north');
+    expect(reloaded.getState().selectedRegion?.name).toBe('Dnipro floodplain · Kherson');
   });
 
   it('adds the sample layer once, under the result layers', async () => {
