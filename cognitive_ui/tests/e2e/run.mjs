@@ -13,7 +13,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launchBrowserServer } from './browser.mjs';
+import { FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_USERS, startFakeGitHub } from './fake-github.mjs';
 import { startFakeHF } from './fake-hf.mjs';
+import { FAKE_PROVIDER_KEYS } from './harness.mjs';
 import { FAKE_MODEL, startFakeOllama } from './fake-ollama.mjs';
 import { startStaticServer } from './static-server.mjs';
 
@@ -25,6 +27,10 @@ const outDir = path.resolve(process.env.E2E_OUT || path.join(here, 'out'));
 const llmMode = process.env.E2E_LLM || 'none';
 // `demo` stages the public demo's server state (see stageDemo); `local` (default) is a laptop.
 const serverMode = process.env.E2E_SERVER || 'local';
+// `fake`: GitHub sign-in configured against fake-github.mjs, with no DEV_ROLE (see signInEnv).
+const signInMode = process.env.E2E_SIGNIN || 'off';
+// `1`: the Settings group's API env (see settingsEnv).
+const settingsMode = process.env.E2E_SETTINGS === '1';
 const rulesFile = path.resolve(process.env.E2E_LLM_RULES || path.join(here, 'fake-llm-rules.json'));
 const API_START_TIMEOUT_MS = 180_000;
 
@@ -86,7 +92,30 @@ function stageDemo(stateDir) {
   return { DT4LC_DEPLOYMENT: 'demo', GEE_PROJECT_ID: 'e2e-demo', GEE_SERVICE_ACCOUNT_KEY: key };
 }
 
-function apiEnv(stateDir, fakeURL, fakeHFURL) {
+// Sign-in against the fake GitHub: the callback returns to the UI's origin (the static
+// server's proxy), `member` is allowlisted and `operator` is an operator. DEV_ROLE is
+// blank, so the role comes from the sign-in and not from the runner.
+function signInEnv(githubURL, uiOrigin) {
+  return {
+    DEV_ROLE: '',
+    GITHUB_CLIENT_ID: FAKE_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: FAKE_CLIENT_SECRET,
+    OAUTH_REDIRECT_BASE: uiOrigin,
+    GITHUB_OAUTH_BASE: githubURL,
+    GITHUB_API_BASE: githubURL,
+    ALLOWED_EMAILS: FAKE_USERS.member.email,
+    OPERATOR_EMAILS: FAKE_USERS.operator.email,
+  };
+}
+
+// FAKE_PROVIDER_KEYS: keys the Settings page must report as present and never show (the
+// flow greps the DOM for them). Neither provider is in the order, so nothing calls Gemini or
+// Groq; the order has a second provider without a key (mistral) to reorder.
+function settingsEnv() {
+  return { ...FAKE_PROVIDER_KEYS, MISTRAL_API_KEY: '', LLM_PROVIDER_ORDER: 'ollama,mistral' };
+}
+
+function apiEnv(stateDir, fakeURL, fakeHFURL, extra = {}) {
   const env = {
     ...process.env,
     PYTHONUNBUFFERED: '1',
@@ -98,6 +127,8 @@ function apiEnv(stateDir, fakeURL, fakeHFURL) {
     DT4LC_JOBS_DB: path.join(stateDir, 'jobs.db'),
     DT4LC_UPLOADS_PATH: path.join(stateDir, 'uploads'),
     DT4LC_MODEL_CACHE: path.join(stateDir, 'models'),
+    // Operator settings (PUT /v1/settings) write here, never to the real overrides file.
+    DT4LC_SETTINGS_PATH: path.join(stateDir, 'settings.json'),
     // Sessions: every browser is a guest (so the guest badge and gated states render),
     // with a limit high enough that a run of flows never hits the hourly quota.
     // E2E_DEV_ROLE=member|operator and E2E_GUEST_LIMIT override them for one run.
@@ -122,7 +153,7 @@ function apiEnv(stateDir, fakeURL, fakeHFURL) {
     OPERATOR_EMAILS: '',
   };
   const demo = serverMode === 'demo' ? stageDemo(stateDir) : {};
-  if (llmMode === 'live') return { ...env, ...demo };
+  if (llmMode === 'live') return { ...env, ...demo, ...extra };
   // server/app.py calls load_dotenv() without override, so a variable that is
   // already set (even to "") wins over .env. Blank every provider key.
   return {
@@ -143,6 +174,7 @@ function apiEnv(stateDir, fakeURL, fakeHFURL) {
     GEE_PROJECT_ID: '',
     GEE_SERVICE_ACCOUNT_KEY: '',
     ...demo,
+    ...extra,
   };
 }
 
@@ -232,6 +264,15 @@ async function main() {
   if (!['local', 'demo'].includes(serverMode)) {
     throw new Error(`E2E_SERVER must be local or demo (got ${serverMode})`);
   }
+  if (!['off', 'fake'].includes(signInMode)) {
+    throw new Error(`E2E_SIGNIN must be off or fake (got ${signInMode})`);
+  }
+  if (signInMode === 'fake' && process.env.E2E_DEV_ROLE) {
+    throw new Error('E2E_SIGNIN=fake decides the role by sign-in: unset E2E_DEV_ROLE');
+  }
+  if (settingsMode && llmMode === 'live') {
+    throw new Error('E2E_SETTINGS=1 sets fake provider keys: not with E2E_LLM=live');
+  }
   const flows = resolveFlows(process.argv.slice(2));
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -252,12 +293,24 @@ async function main() {
     fakeURL = fake.url;
   }
 
-  const apiURL = await startApi(apiEnv(stateDir, fakeURL, fakeHF.url), path.join(outDir, 'api.log'));
-  const ui = await startStaticServer({ distDir: path.join(uiDir, 'dist'), apiURL });
+  // The UI's port is chosen first: sign-in needs its origin in the API's env.
+  const uiPort = await freePort();
+  let extra = settingsMode ? settingsEnv() : {};
+  let fakeGitHubURL = '';
+  if (signInMode === 'fake') {
+    const github = await startFakeGitHub();
+    cleanups.push(github.close);
+    fakeGitHubURL = github.url;
+    extra = { ...extra, ...signInEnv(github.url, `http://127.0.0.1:${uiPort}`) };
+  }
+
+  const apiURL = await startApi(apiEnv(stateDir, fakeURL, fakeHF.url, extra), path.join(outDir, 'api.log'));
+  const ui = await startStaticServer({ distDir: path.join(uiDir, 'dist'), apiURL, port: uiPort });
   cleanups.push(ui.close);
+  const role = signInMode === 'fake' ? 'by sign-in' : process.env.E2E_DEV_ROLE || 'guest';
 
   console.log(
-    `e2e: UI ${ui.url}, API ${apiURL} (${process.env.E2E_DEV_ROLE || 'guest'}, ${serverMode}), LLM ${llmMode}${fakeURL ? ` (fake Ollama ${fakeURL})` : ''}, fake HF ${fakeHF.url}, out ${outDir}`,
+    `e2e: UI ${ui.url}, API ${apiURL} (${role}, ${serverMode}), LLM ${llmMode}${fakeURL ? ` (fake Ollama ${fakeURL})` : ''}, fake HF ${fakeHF.url}${fakeGitHubURL ? `, fake GitHub ${fakeGitHubURL}` : ''}${settingsMode ? ', settings env' : ''}, out ${outDir}`,
   );
   return runFlows(flows, {
     E2E_BASE_URL: ui.url,
@@ -267,8 +320,11 @@ async function main() {
     E2E_LLM: llmMode,
     E2E_FAKE_LLM_URL: fakeURL ?? '',
     E2E_FAKE_HF_URL: fakeHF.url,
-    E2E_DEV_ROLE: process.env.E2E_DEV_ROLE || 'guest',
+    E2E_DEV_ROLE: signInMode === 'fake' ? '' : process.env.E2E_DEV_ROLE || 'guest',
     E2E_SERVER: serverMode,
+    E2E_SIGNIN: signInMode,
+    E2E_FAKE_GITHUB_URL: fakeGitHubURL,
+    E2E_SETTINGS: settingsMode ? '1' : '',
   });
 }
 

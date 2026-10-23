@@ -1,0 +1,344 @@
+{
+  "assistant": {
+    "provider_order": [
+      "ollama",
+      "mistral"
+    ],
+    "providers": {
+      "ollama": {
+        "enabled": true,
+        "models": [
+          "fake"
+        ],
+        "multiple_models": false,
+        "key_required": false,
+        "key_present": false,
+        "available": true,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      },
+      "mistral": {
+        "enabled": true,
+        "models": [
+          "mistral-medium-latest"
+        ],
+        "multiple_models": true,
+        "key_required": true,
+        "key_present": false,
+        "available": false,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      },
+      "gemini": {
+        "enabled": true,
+        "models": [
+          "gemini-3.5-flash-lite",
+          "gemini-3.5-flash"
+        ],
+        "multiple_models": true,
+        "key_required": true,
+        "key_present": true,
+        "available": false,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      },
+      "groq": {
+        "enabled": false,
+        "models": [
+          "llama-3.1-8b-instant"
+        ],
+        "multiple_models": false,
+        "key_required": true,
+        "key_present": true,
+        "available": false,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      },
+      "apertus": {
+        "enabled": false,
+        "models": [
+          "swiss-ai/Apertus-8B"
+        ],
+        "multiple_models": false,
+        "key_required": false,
+        "key_present": false,
+        "available": false,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      },
+      "anthropic": {
+        "enabled": true,
+        "models": [
+          "claude-sonnet-4-6"
+        ],
+        "multiple_models": true,
+        "key_required": true,
+        "key_present": false,
+        "available": false,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      },
+      "openai": {
+        "enabled": true,
+        "models": [
+          "gpt-4o-mini"
+        ],
+        "multiple_models": true,
+        "key_required": true,
+        "key_present": false,
+        "available": false,
+        "editable": {
+          "enabled": true,
+          "models": true,
+          "multiple_models": false,
+          "key_required": false,
+          "key_present": false,
+          "available": false
+        },
+        "source": {
+          "enabled": "env",
+          "models": "env"
+        }
+      }
+    },
+    "connected": true,
+    "provider": "ollama",
+    "model": "fake",
+    "test_path": "/v1/settings/assistant/test",
+    "editable": {
+      "provider_order": true,
+      "providers": true,
+      "connected": false,
+      "provider": false,
+      "model": false,
+      "test_path": false
+    },
+    "source": {
+      "provider_order": "env"
+    }
+  },
+  "models": {
+    "items": [
+      {
+        "id": "prithvi-eo-v1-100m",
+        "display_name": "Prithvi EO v1 (100M)",
+        "installed": false,
+        "size_bytes": 471859200,
+        "est_download_s": 75,
+        "licence": "Apache-2.0",
+        "licence_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-1.0-100M",
+        "steps": [
+          "models/prithvi-reconstruction"
+        ]
+      },
+      {
+        "id": "delineate-anything-small",
+        "display_name": "Delineate-Anything (Small)",
+        "installed": false,
+        "size_bytes": 89128960,
+        "est_download_s": 14,
+        "licence": "AGPL-3.0",
+        "licence_url": "https://github.com/Lavreniuk/Delineate-Anything",
+        "steps": [
+          "models/delineate-anything"
+        ]
+      }
+    ],
+    "download_policy": "members",
+    "download_policy_options": [
+      "all",
+      "members",
+      "operators",
+      "none"
+    ],
+    "pre_download": {
+      "method": "POST",
+      "path": "/v1/ml-models/{id}/download"
+    },
+    "editable": {
+      "items": false,
+      "download_policy": true,
+      "download_policy_options": false,
+      "pre_download": false
+    },
+    "source": {
+      "download_policy": "default"
+    }
+  },
+  "access": {
+    "allowed_emails": [],
+    "allowed_domains": [],
+    "operator_emails": [],
+    "guest_analyses_per_hour": 1000,
+    "guest_session_hours": 24,
+    "bounds": {
+      "guest_analyses_per_hour": {
+        "min": 0,
+        "max": 1000
+      },
+      "guest_session_hours": {
+        "min": 1,
+        "max": 720
+      }
+    },
+    "sign_in": {
+      "configured": false
+    },
+    "editable": {
+      "allowed_emails": true,
+      "allowed_domains": true,
+      "operator_emails": true,
+      "guest_analyses_per_hour": true,
+      "guest_session_hours": true,
+      "bounds": false,
+      "sign_in": false
+    },
+    "source": {
+      "allowed_emails": "env",
+      "allowed_domains": "env",
+      "operator_emails": "env",
+      "guest_analyses_per_hour": "env",
+      "guest_session_hours": "default"
+    }
+  },
+  "data_sources": {
+    "earth_engine": {
+      "configured": false,
+      "project_id_present": false,
+      "key_file_present": false
+    },
+    "uploads": {
+      "path": "/tmp/dt4lc-e2e-state/uploads",
+      "files": 0,
+      "bytes": 0
+    },
+    "sample": {
+      "name": "kakhovka_hls_l30",
+      "bundled": true,
+      "path": "/home/roaffix/Workspace/DT4LC-project/resources/kahovka_data"
+    },
+    "editable": {
+      "earth_engine": false,
+      "uploads": false,
+      "sample": false
+    }
+  },
+  "server": {
+    "version": "0.5.1",
+    "deployment": "local",
+    "paths": {
+      "cache": "/tmp/dt4lc-e2e-state/cache",
+      "outputs": "/tmp/dt4lc-e2e-state/outputs",
+      "temp": "/tmp/dt4lc-e2e-state/tmp",
+      "uploads": "/tmp/dt4lc-e2e-state/uploads",
+      "models": "/tmp/dt4lc-e2e-state/models"
+    },
+    "storage": {
+      "cache": {
+        "bytes": 0,
+        "files": 0,
+        "truncated": false
+      },
+      "outputs": {
+        "bytes": 0,
+        "files": 0,
+        "truncated": false
+      },
+      "temp": {
+        "bytes": 0,
+        "files": 0,
+        "truncated": false
+      },
+      "uploads": {
+        "bytes": 0,
+        "files": 0,
+        "truncated": false
+      },
+      "models": {
+        "bytes": 0,
+        "files": 0,
+        "truncated": false
+      }
+    },
+    "jobs": {
+      "total": 0,
+      "by_status": {
+        "pending": 0,
+        "proposal": 0,
+        "running": 0,
+        "completed": 0,
+        "failed": 0,
+        "cancelled": 0
+      },
+      "queue_size": 0,
+      "workers": 3
+    },
+    "editable": {
+      "version": false,
+      "deployment": false,
+      "paths": false,
+      "storage": false,
+      "jobs": false
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "status": 422,
+  "body": {
+    "detail": [
+      {
+        "type": "value_error",
+        "loc": [
+          "body",
+          "assistant"
+        ],
+        "msg": "Value error, groq takes exactly one model",
+        "input": {
+          "providers": {
+            "groq": {
+              "models": [
+                "a",
+                "b"
+              ]
+            }
+          }
+        },
+        "ctx": {
+          "error": {}
+        }
+      },
+      {
+        "type": "value_error",
+        "loc": [
+          "body",
+          "access",
+          "allowed_domains",
+          1
+        ],
+        "msg": "Value error, not a domain name, e.g. unige.ch",
+        "input": "not a domain",
+        "ctx": {
+          "error": {}
+        }
+      },
+      {
+        "type": "less_than_equal",
+        "loc": [
+          "body",
+          "access",
+          "guest_analyses_per_hour"
+        ],
+        "msg": "Input should be less than or equal to 1000",
+        "input": 5000,
+        "ctx": {
+          "le": 1000
+        }
+      }
+    ]
+  }
+}

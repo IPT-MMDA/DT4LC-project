@@ -23,6 +23,18 @@ interface ErrorBody {
   detail?: string | { msg?: string }[];
 }
 
+/** A rejected request: the message as before, plus the HTTP status and the body (e.g. a 422's `detail[]`). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly body?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -76,7 +88,7 @@ axiosInstance.interceptors.response.use(
       errorMessage = error.message;
     }
 
-    return Promise.reject(new Error(errorMessage));
+    return Promise.reject(new ApiError(errorMessage, error.response?.status, error.response?.data));
   }
 );
 
