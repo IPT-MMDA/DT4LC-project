@@ -4,6 +4,7 @@ Uses TestClient for synchronous endpoint testing and pytest-mock
 for mocking external dependencies (orchestrate, executor, jobs, etc.).
 """
 
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -209,6 +210,12 @@ class TestPlanEndpoint:
 class TestExecuteEndpoint:
     """Tests for POST /v1/execute."""
 
+    @pytest.fixture(autouse=True)
+    def _classified_as_analysis(self) -> Iterator[MagicMock]:
+        """``orchestrate`` is mocked here, so is the classification before the quota (see TestNotAnAnalysis)."""
+        with patch("server.routes.chat.classify_intent", return_value={"intent": "pipeline"}) as classify:
+            yield classify
+
     def test_empty_messages_returns_error(self, client: TestClient) -> None:
         resp = client.post("/v1/execute", json={"messages": []})
         # HTTPException(400) is caught by outer handler → 500
@@ -248,16 +255,9 @@ class TestExecuteEndpoint:
         assert "plan" in data
         assert "result" in data
 
-    @pytest.mark.parametrize(
-        ("orchestrate_kwargs", "message"),
-        [
-            ({"side_effect": RuntimeError("boom")}, "Execution failed: boom"),
-            ({"return_value": {"ok": True, "intent": "conversation"}}, "Execution failed: 'plan'"),
-        ],
-    )
-    def test_execute_unexpected_error_is_json_500(self, orchestrate_kwargs: dict, message: str) -> None:
+    def test_execute_unexpected_error_is_json_500(self) -> None:
         client = TestClient(app, raise_server_exceptions=False)
-        with patch("server.routes.chat.orchestrate", **orchestrate_kwargs):
+        with patch("server.routes.chat.orchestrate", side_effect=RuntimeError("boom")):
             resp = client.post(
                 "/v1/execute",
                 json={"messages": [{"role": "user", "content": "calculate ndvi"}]},
@@ -265,7 +265,19 @@ class TestExecuteEndpoint:
         assert resp.status_code == 500
         error = resp.json()["error"]
         assert error["code"] == "internal_error"
-        assert error["message"] == message
+        assert error["message"] == "Execution failed: boom"
+
+    def test_conversation_on_the_second_classification_is_released(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The first classification said analysis (counted); orchestrate's said conversation: 422, uncounted."""
+        monkeypatch.setenv("DEV_ROLE", "guest")
+        statuses, execute, body = self._execute(client, {"ok": True, "intent": "conversation"}, 6)
+
+        assert statuses == [422] * 6
+        execute.assert_not_called()
+        assert body["error"]["code"] == "NOT_AN_ANALYSIS"
+        assert client.get("/v1/session").json()["analyses"]["used"] == 0
 
     PLAN = {"flow": "ndvi", "steps": [{"uses": "input/file", "binds": {"RasterPath": "/fake.tif"}}], "outputs": []}
     BODY = {"messages": [{"role": "user", "content": "calculate ndvi"}]}
@@ -319,6 +331,50 @@ class TestExecuteEndpoint:
                 "details": {},
             },
         }
+        assert client.get("/v1/session").json()["analyses"]["used"] == 0
+
+
+class TestNotAnAnalysis:
+    """A conversational prompt on POST /v1/plan or /v1/execute: a structured 422, not a 500 (run-1 carry-over)."""
+
+    REFUSAL = {
+        "ok": False,
+        "error": {
+            "code": "NOT_AN_ANALYSIS",
+            "message": "This reads as a question, not an analysis — send it to POST /v1/chat.",
+            "details": {"intent": "conversation"},
+        },
+    }
+
+    @pytest.mark.parametrize("route", ["/v1/plan", "/v1/execute"])
+    @pytest.mark.parametrize("prompt", ["hello", "what can you do?"])
+    def test_conversation_is_refused_and_not_counted(
+        self, monkeypatch: pytest.MonkeyPatch, route: str, prompt: str
+    ) -> None:
+        monkeypatch.setenv("DEV_ROLE", "guest")
+        client = TestClient(app, raise_server_exceptions=False)
+        with patch("server.routes.chat.PipelineExecutor") as executor_class:
+            responses = [
+                client.post(route, json={"messages": [{"role": "user", "content": prompt}]}) for _ in range(6)
+            ]
+
+        assert [r.status_code for r in responses] == [422] * 6  # never a 500, never the 429 of a spent quota
+        assert responses[-1].json() == self.REFUSAL
+        executor_class.return_value.execute.assert_not_called()
+        assert client.get("/v1/session").json()["analyses"]["used"] == 0
+
+    @pytest.mark.parametrize("route", ["/v1/plan", "/v1/execute"])
+    def test_analysis_without_a_file_says_it_needs_one(self, monkeypatch: pytest.MonkeyPatch, route: str) -> None:
+        """Neither endpoint takes a file, so "calculate ndvi" is the classifier's missing-input conversation."""
+        monkeypatch.setenv("DEV_ROLE", "guest")
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.post(route, json={"messages": [{"role": "user", "content": "calculate ndvi"}]})
+
+        assert resp.status_code == 422
+        error = resp.json()["error"]
+        assert error["code"] == "missing_input"
+        assert error["message"].startswith("This analysis needs a raster")
+        assert error["details"] == {"intent": "conversation"}
         assert client.get("/v1/session").json()["analyses"]["used"] == 0
 
 

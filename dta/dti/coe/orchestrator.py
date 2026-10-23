@@ -38,6 +38,7 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
             - plan: Execution plan (if pipeline); ``plan["composed"]`` when it is not a single template
             - proposal: Sentence offering a composed plan for confirmation (if composed)
             - response: Helpful response (if conversation)
+            - rule: The conversational rule that matched, e.g. ``"missing_input"`` (if conversation)
             - error: Error message if failed (also when the plan has no analysis step, or
               names a band the input lacks: no template retry then)
     """
@@ -54,6 +55,7 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
             "intent": "conversation",
             "response": intent_result.get("response", "How can I help you with your geospatial analysis?"),
             "reason": intent_result.get("reason", ""),
+            "rule": intent_result.get("rule"),
         }
 
     # Continue with pipeline planning
