@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JobRecord } from '../../../api/jobs';
 import { useAppStore } from '../../../store/useAppStore';
 import { conversationMeta, useChatStore } from '../../../store/useChatStore';
+import lulc from '../../../test/fixtures/jobs/lulc.json';
 import ndmiChange from '../../../test/fixtures/jobs/ndmi-change.json';
+import ndviSingle from '../../../test/fixtures/jobs/ndvi-single.json';
 import ndwiChange from '../../../test/fixtures/jobs/ndwi-change.json';
+import ndwiChangeV050 from '../../../test/fixtures/jobs/ndwi-change-v050.json';
 import sample from '../../../test/fixtures/jobs/sample.json';
 import statistics from '../../../test/fixtures/jobs/statistics.json';
 import type { MessageAttachment } from '../../../types';
@@ -17,6 +20,7 @@ const FILES = sample.attachments.map((a) => ({ ...a, group: { name: sample.name,
 const context = { attachments: FILES };
 const JOB = 'job-1';
 const BOUNDS = [32.388779, 46.455331, 32.691118, 46.663879];
+const CHANGE_RAMP = ['#8c4a2f', '#c4cad6', '#2d5f9e'];
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -66,9 +70,17 @@ describe('change card (NDWI on the sample)', () => {
     renderCard(ndwiChange);
     const card = screen.getByRole('region', { name: 'Water change · NDWI' });
     expect(card.dataset.kind).toBe('change');
-    expect(screen.getByTestId('result-image').getAttribute('src')).toMatch(/^\/v1\/download\?path=.*change_map\.png$/);
+    // The bare map, full-bleed.
+    const image = screen.getByTestId('result-image');
+    expect(image.getAttribute('src')).toMatch(/^\/v1\/download\?path=.*change_map_bare\.png$/);
+    expect(image.className).toContain('object-cover');
     expect(screen.getByTestId('image-overlay').textContent).toBe('difference · 06-01 → 06-09');
-    expect(screen.getByTestId('legend').textContent).toBe('water gainedwater lostno change');
+    const legend = screen.getByTestId('legend');
+    expect(legend.textContent).toBe('water gainedwater lostno change');
+    // Swatches in the change style's colours (jsdom reports them as rgb()).
+    expect([...legend.querySelectorAll<HTMLElement>('[aria-hidden]')].map((el) => el.style.background)).toEqual([
+      'rgb(45, 95, 158)', 'rgb(140, 74, 47)', 'rgb(196, 202, 214)',
+    ]);
     expect(screen.getByTestId('source-line').textContent).toBe('NASA HLS L30 (Landsat 8/9) · 30 m');
     const stats = screen.getByTestId('stats');
     expect([...stats.querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Open water before', 'Open water after', 'Gained', 'Lost']);
@@ -86,9 +98,10 @@ describe('change card (NDWI on the sample)', () => {
 
     fireEvent.click(toggle.getByRole('button', { name: 'Before' }));
     expect(pressed()).toEqual([['Difference', 'false'], ['Before', 'true'], ['After', 'false']]);
-    expect(screen.getByTestId('result-image').getAttribute('src')).toMatch(/ndwi_before\.png$/);
+    expect(screen.getByTestId('result-image').getAttribute('src')).toMatch(/ndwi_before_bare\.png$/);
     expect(screen.getByTestId('image-overlay').textContent).toBe('NDWI before · 2023-06-01');
     expect(actions().getByRole('link', { name: 'GeoTIFF' }).getAttribute('href')).toMatch(/index_before\.tif$/);
+    // PNG is still the full figure, with its title and colour bar.
     expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/ndwi_before\.png$/);
 
     fireEvent.click(toggle.getByRole('button', { name: 'After' }));
@@ -120,7 +133,7 @@ describe('change card (NDWI on the sample)', () => {
         opacity: 0.8,
         url: expect.stringMatching(/^\/app\/resources\/\.cache\/outputs\/.*2_ChangeMap_change\.tif$/),
         bounds: BOUNDS,
-        legend: { kind: 'change' },
+        legend: { kind: 'change', stops: CHANGE_RAMP },
       },
     ]);
     expect(fitRequest).toEqual(BOUNDS);
@@ -145,7 +158,44 @@ describe('change card (NDWI on the sample)', () => {
   });
 });
 
+describe('older jobs and fallbacks', () => {
+  it('a job without bare maps shows the full figure whole, with the legend tokens', () => {
+    renderCard(ndwiChangeV050);
+    const image = screen.getByTestId('result-image');
+    expect(image.getAttribute('src')).toMatch(/2_ChangeMap_change_map\.png$/);
+    expect(image.className).toContain('object-contain');
+    const swatches = [...screen.getByTestId('legend').querySelectorAll<HTMLElement>('[aria-hidden]')];
+    expect(swatches.map((el) => el.className.match(/bg-legend-\S+/)?.[0])).toEqual(['bg-legend-gained', 'bg-legend-lost', 'bg-legend-no-change']);
+    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/2_ChangeMap_change_map\.png$/);
+  });
+
+  it('PNG offers the bare map when there is no full figure', () => {
+    const job = structuredClone(ndwiChange) as unknown as { result: { execution: { artifacts: { ChangeMap: { visualizations: Record<string, unknown> } } } } };
+    delete job.result.execution.artifacts.ChangeMap.visualizations.change_map;
+    renderCard(job);
+    expect(actions().getByRole('link', { name: 'PNG' }).getAttribute('href')).toMatch(/change_map_bare\.png$/);
+  });
+});
+
 describe('other kinds', () => {
+  it('an index card draws its ramp from the bare map\'s style', () => {
+    renderCard(ndviSingle);
+    expect(screen.getByTestId('legend').textContent).toBe('−0.20.8');
+    expect(screen.getByTestId('legend-ramp').style.background).toBe(
+      'linear-gradient(90deg, #994c1a, #cc9933, #ffff66, #99cc33, #339933, #006600)',
+    );
+    expect(screen.getByTestId('result-image').getAttribute('src')).toMatch(/ndvi_map_bare\.png$/);
+  });
+
+  it('a classification card lists each class with its colour and area', () => {
+    renderCard(lulc);
+    const legend = screen.getByTestId('legend');
+    expect([...legend.children].map((el) => el.textContent)).toEqual([
+      'Water204 km²', 'Bare Soil4.3 km²', 'Sparse Vegetation65.6 km²', 'Cropland/Grassland122 km²', 'Dense Vegetation135 km²',
+    ]);
+    expect(legend.querySelector<HTMLElement>('[aria-hidden]')?.style.background).toBe('rgb(0, 119, 190)');
+  });
+
   it('a composed change card has the formula in its header', () => {
     renderCard(ndmiChange);
     expect(screen.getByRole('region', { name: 'Moisture change · ΔNDMI' })).toBeTruthy();

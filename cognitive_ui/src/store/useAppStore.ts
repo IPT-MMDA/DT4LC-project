@@ -6,7 +6,7 @@ export type LngLatBounds = [number, number, number, number];
 
 /** The colour key a result layer shows in the docked map's Layers panel. */
 export type LayerLegend =
-  | { kind: 'change' }  // lost · same · gained, the legend-* tokens
+  | { kind: 'change'; stops?: string[] }  // lost · same · gained: the raster style's ramp, else the legend-* tokens
   | { kind: 'ramp'; stops: string[]; range: [number, number] };  // an index colour ramp
 
 export interface Layer {

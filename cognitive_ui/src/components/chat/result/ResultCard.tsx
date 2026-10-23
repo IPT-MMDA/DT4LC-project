@@ -93,15 +93,17 @@ function ViewToggle({ views, active, onChange }: { views: CardView[]; active: Ca
   );
 }
 
+/** The bare map full-bleed (transparent off the raster, over surface2); else the full figure, whole. */
 function MapImage({ view, alt }: { view: CardView; alt: string }) {
+  const shown = view.bare ?? view.image;
   return (
     <div className="relative h-[250px] bg-surface2 border-b border-border2">
-      {view.image ? (
+      {shown ? (
         <img
           data-testid="result-image"
-          src={resolveApiUrl(view.image.url)}
+          src={resolveApiUrl(shown.url)}
           alt={alt}
-          className="absolute inset-0 w-full h-full object-contain"
+          className={cn('absolute inset-0 w-full h-full', view.bare ? 'object-cover' : 'object-contain')}
         />
       ) : (
         <p className="absolute inset-0 flex items-center justify-center text-control text-faint">No image for this view</p>
@@ -143,7 +145,7 @@ function ChangeLegend({ items }: { items: LegendItem[] }) {
     <>
       {items.map((item) => (
         <span key={item.label} className="flex items-center gap-[5px]">
-          <Swatch className={SWATCH[item.tone]} />
+          <Swatch className={item.colour ? undefined : SWATCH[item.tone]} style={item.colour ? { background: item.colour } : undefined} />
           {item.label}
         </span>
       ))}
@@ -156,7 +158,7 @@ function RampLegend({ ramp }: { ramp: { stops: string[]; range: [number, number]
   return (
     <span className="flex items-center gap-2 font-mono text-[11px]">
       <span>{formatRangeEnd(lo)}</span>
-      <span aria-hidden className="w-[120px] h-2 rounded-[2px]" style={{ background: `linear-gradient(90deg, ${ramp.stops.join(', ')})` }} />
+      <span data-testid="legend-ramp" aria-hidden className="w-[120px] h-2 rounded-[2px]" style={{ background: `linear-gradient(90deg, ${ramp.stops.join(', ')})` }} />
       <span>{formatRangeEnd(hi)}</span>
     </span>
   );
@@ -167,7 +169,7 @@ function ClassLegend({ classes }: { classes: ClassItem[] }) {
     <>
       {classes.map((c) => (
         <span key={c.name} className="flex items-center gap-[5px]">
-          <Swatch style={{ background: c.colour }} />
+          <Swatch style={c.colour ? { background: c.colour } : undefined} />
           {c.name}
           <span className="font-mono text-[11px] text-muted">{c.value}</span>
         </span>
@@ -223,13 +225,16 @@ function BandTable({ bands }: { bands: BandRow[] }) {
   );
 }
 
-/** On map · GeoTIFF · PNG · GeoPackage · Details ›, each only when its file exists. */
+/**
+ * On map · GeoTIFF · PNG · GeoPackage · Details ›, each only when its file exists.
+ * PNG is the full figure (title, colour bar), or the bare map when there is none.
+ */
 function Actions({ jobId, model, view }: { jobId: string; model: ResultCardModel; view?: CardView }) {
   const docked = useMediaQuery(DOCKED_MAP_QUERY);
   const navigate = useNavigate();
   const addResultLayer = useAppStore((s) => s.addResultLayer);
   const raster = view?.raster;
-  const image = view?.image;
+  const image = view?.image ?? view?.bare;
 
   const onMap = () => {
     if (!view || !raster) return;

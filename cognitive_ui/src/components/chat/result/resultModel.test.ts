@@ -7,6 +7,7 @@ import ndmiChange from '../../../test/fixtures/jobs/ndmi-change.json';
 import ndviChange from '../../../test/fixtures/jobs/ndvi-change.json';
 import ndviSingle from '../../../test/fixtures/jobs/ndvi-single.json';
 import ndwiChange from '../../../test/fixtures/jobs/ndwi-change.json';
+import ndwiChangeV050 from '../../../test/fixtures/jobs/ndwi-change-v050.json';
 import sample from '../../../test/fixtures/jobs/sample.json';
 import snow from '../../../test/fixtures/jobs/snow.json';
 import statistics from '../../../test/fixtures/jobs/statistics.json';
@@ -18,11 +19,14 @@ import {
   prettyFormula,
   resultCardOf,
   sourceLine,
+  styleOf,
   type ResultCardModel,
 } from './resultModel';
 
 // Fixtures: GET /v1/jobs/{id} on the bundled Kakhovka sample (guest, no assistant),
-// trimmed by scripts in the F4 report. Paths are rewritten to the Docker layout.
+// trimmed to the artifacts, follow-ups and the planning-ready and done events, paths
+// rewritten to the Docker layout. ndwi-change-v050.json is a job from before the bare
+// map PNGs and raster styles (v0.5.0): no `*_bare` refs, no `stats.style`.
 const SAMPLE_FILES: MessageAttachment[] = sample.attachments.map((a) => ({
   ...a,
   mime_type: 'image/tiff',
@@ -39,10 +43,11 @@ describe('card selection by artifact kind', () => {
     expect(c.title).toBe('Water change · NDWI');
     expect(c.formula).toBeUndefined();
     if (c.kind !== 'change') throw new Error();
+    // Swatches from the change style's ramp: lost → no change → gained.
     expect(c.legend).toEqual([
-      { label: 'water gained', tone: 'gained' },
-      { label: 'water lost', tone: 'lost' },
-      { label: 'no change', tone: 'neutral' },
+      { label: 'water gained', tone: 'gained', colour: '#2d5f9e' },
+      { label: 'water lost', tone: 'lost', colour: '#8c4a2f' },
+      { label: 'no change', tone: 'neutral', colour: '#c4cad6' },
     ]);
     // statistics.water: 13.881 → 170.039 km², 156.761 gained, 0.603 lost (not DESIGN §8's numbers).
     expect(c.stats).toEqual([
@@ -56,14 +61,40 @@ describe('card selection by artifact kind', () => {
       ['before', 'Before', 'NDWI before · 2023-06-01'],
       ['after', 'After', 'NDWI after · 2023-06-09'],
     ]);
+    // The bare map is shown; the full figure stays the PNG download.
+    expect(c.views[0].bare?.url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change_map_bare\.png$/);
     expect(c.views[0].image?.url).toMatch(/^\/v1\/download\?path=.*2_ChangeMap_change_map\.png$/);
     expect(c.views[0].raster?.path).toMatch(/2_ChangeMap_change\.tif$/);
+    expect(c.views[1].bare?.url).toMatch(/ndwi_before_bare\.png$/);
     expect(c.views[1].image?.url).toMatch(/ndwi_before\.png$/);
+    expect(c.views[2].bare?.url).toMatch(/ndwi_after_bare\.png$/);
     expect(c.views[2].raster?.path).toMatch(/index_after\.tif$/);
-    expect(c.views[0].legend).toEqual({ kind: 'change' });
+    // Layer legends: the styles the tiles are drawn in.
+    expect(c.views[0].legend).toEqual({ kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'] });
+    expect(c.views[1].legend).toEqual({
+      kind: 'ramp',
+      stops: ['#996633', '#ccb280', '#f2f2f2', '#99ccff', '#3380e6', '#003399'],
+      range: [-0.5, 0.5],
+    });
     expect(c.source).toBe('NASA HLS L30 (Landsat 8/9) · 30 m');
     expect(c.bounds).toEqual([32.388779, 46.455331, 32.691118, 46.663879]);
     expect(c.gpkgUrl).toBeUndefined();
+  });
+
+  it('a job from before the bare maps (v0.5.0): the full figures, token swatches, no index ramp', () => {
+    const c = card(ndwiChangeV050);
+    expect(c.kind).toBe('change');
+    if (c.kind !== 'change') throw new Error();
+    expect(c.views.map((v) => v.bare)).toEqual([undefined, undefined, undefined]);
+    expect(c.views[0].image?.url).toMatch(/2_ChangeMap_change_map\.png$/);
+    expect(c.views[1].image?.url).toMatch(/ndwi_before\.png$/);
+    expect(c.legend).toEqual([
+      { label: 'water gained', tone: 'gained' },
+      { label: 'water lost', tone: 'lost' },
+      { label: 'no change', tone: 'neutral' },
+    ]);
+    expect(c.views.map((v) => v.legend)).toEqual([{ kind: 'change' }, undefined, undefined]);
+    expect(c.stats.map((s) => s.value)).toEqual(['13.9 km²', '170 km²', '+157 km²', '0.6 km²']);
   });
 
   it('NDVI change reads statistics.vegetation', () => {
@@ -91,9 +122,18 @@ describe('card selection by artifact kind', () => {
       { label: 'Wetter', value: '+37.9 km²', tone: 'gained' },
       { label: 'Threshold', value: 'ΔNDMI 0.2' },
     ]);
-    expect(c.legend.map((l) => [l.label, l.tone])).toEqual([['drier', 'lost'], ['wetter', 'gained'], ['no change', 'neutral']]);
-    expect(c.views.map((v) => Boolean(v.image && v.raster))).toEqual([true, true, true]);
+    expect(c.legend.map((l) => [l.label, l.tone, l.colour])).toEqual([
+      ['drier', 'lost', '#8c4a2f'],
+      ['wetter', 'gained', '#2d5f9e'],
+      ['no change', 'neutral', '#c4cad6'],
+    ]);
+    expect(c.views.map((v) => Boolean(v.image && v.bare && v.raster))).toEqual([true, true, true]);
+    expect(c.views[0].bare?.url).toMatch(/2_BandMathChangeMap_change_map_bare\.png$/);
+    expect(c.views[1].bare?.url).toMatch(/index_before_bare\.png$/);
     expect(c.views[1].image?.url).toMatch(/index_before\.png$/);
+    // Band-math change is drawn over ±display_range[1]; the layer legend keeps the ramp.
+    expect(c.views[0].legend).toEqual({ kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'] });
+    expect(c.views[1].legend).toMatchObject({ kind: 'ramp', range: [-1, 1] });
   });
 
   it('a band-math change of another index uses increase / decrease', () => {
@@ -112,8 +152,10 @@ describe('card selection by artifact kind', () => {
     // The sample's latest file is the one analysed.
     expect(c.title).toBe('NDVI · 9 June');
     if (c.kind !== 'index') throw new Error();
-    expect(c.ramp?.range).toEqual([-0.2, 0.8]);
-    expect(c.ramp?.stops).toHaveLength(6);
+    // The ramp is the bare map's style, the one its tiles are drawn in.
+    expect(c.ramp).toEqual({ range: [-0.2, 0.8], stops: ['#994c1a', '#cc9933', '#ffff66', '#99cc33', '#339933', '#006600'] });
+    expect(c.views[0].legend).toEqual({ kind: 'ramp', ...c.ramp });
+    expect(c.views[0].bare?.url).toMatch(/1_NDVIMap_ndvi_map_bare\.png$/);
     expect(c.stats).toEqual([
       { label: 'Mean', value: '0.17' },
       { label: 'Min', value: '−1' },
@@ -133,29 +175,59 @@ describe('card selection by artifact kind', () => {
     expect(c.formula).toBe('(B5 − B6)/(B5 + B6) · 2023-06-09 · 30 m');
     if (c.kind !== 'index') throw new Error();
     expect(c.ramp?.range).toEqual([-1, 1]);
+    expect(c.views[0].bare?.url).toMatch(/1_BandMathMap_index_map_bare\.png$/);
+    expect(c.views[0].image?.url).toMatch(/1_BandMathMap_index_map\.png$/);
   });
 
-  it('LULC: a classification card with swatches and per-class shares, empty classes left out', () => {
+  it('LULC: a classification card with class_statistics colours and areas, empty classes left out', () => {
     const c = card(lulc);
     expect(c.kind).toBe('classification');
     expect(c.title).toBe('Land cover · 9 June');
     if (c.kind !== 'classification') throw new Error();
     expect(c.classes).toEqual([
-      { name: 'Water', colour: '#0077be', value: '38.5 %' },
-      { name: 'Bare Soil', colour: '#c2b280', value: '0.8 %' },
-      { name: 'Sparse Vegetation', colour: '#d4e157', value: '12.3 %' },
-      { name: 'Cropland/Grassland', colour: '#8bc34a', value: '23.0 %' },
-      { name: 'Dense Vegetation', colour: '#2e7d32', value: '25.3 %' },
+      { name: 'Water', colour: '#0077be', value: '204 km²' },
+      { name: 'Bare Soil', colour: '#c2b280', value: '4.3 km²' },
+      { name: 'Sparse Vegetation', colour: '#d4e157', value: '65.6 km²' },
+      { name: 'Cropland/Grassland', colour: '#8bc34a', value: '122 km²' },
+      { name: 'Dense Vegetation', colour: '#2e7d32', value: '135 km²' },
     ]);
+    expect(c.views[0].bare?.url).toMatch(/classification_map_bare\.png$/);
+    expect(c.views[0].image?.url).toMatch(/classification_map\.png$/);
     expect(c.views[0].raster?.path).toMatch(/classification\.tif$/);
   });
 
-  it('snow classifier: a classification card with the snow share', () => {
+  it('a class without an area shows its share; one without a colour takes the bare map\'s style', () => {
+    const job = structuredClone(lulc) as unknown as { result: { execution: { artifacts: { LULCMap: { class_statistics: Record<string, Record<string, unknown>> } } } } };
+    const stats = job.result.execution.artifacts.LULCMap.class_statistics;
+    for (const c of Object.values(stats)) c.area_km2 = null;
+    delete stats.Water.colour;
+    const c = card(job);
+    if (c.kind !== 'classification') throw new Error();
+    expect(c.classes.slice(0, 2)).toEqual([
+      { name: 'Water', colour: '#0077be', value: '38.5 %' },
+      { name: 'Bare Soil', colour: '#c2b280', value: '0.8 %' },
+    ]);
+  });
+
+  it('snow classifier: a classification card from class_statistics', () => {
     const c = card(snow);
     expect(c.title).toBe('Snow and ice · 9 June');
     if (c.kind !== 'classification') throw new Error();
-    expect(c.classes.map((x) => [x.name, x.value])).toEqual([['Snow / ice', '<0.1 %'], ['Other', '100.0 %']]);
+    expect(c.classes).toEqual([
+      { name: 'No Snow', colour: '#667f4c', value: '531 km²' },
+      { name: 'Snow', colour: '#ffcc66', value: '0.0 km²' },
+    ]);
+    expect(c.views[0].bare?.url).toMatch(/snow_classification_bare\.png$/);
     expect(c.views[0].raster?.path).toMatch(/snow_mask\.tif$/);
+  });
+
+  it('a snow job from before class_statistics keeps the snow share, without colours', () => {
+    const c = card({ result: { execution: { artifacts: { SnowClassification: { statistics: { snow_coverage_percent: 12.5 } } } } } });
+    if (c.kind !== 'classification') throw new Error();
+    expect(c.classes).toEqual([
+      { name: 'Snow / ice', value: '12.5 %' },
+      { name: 'Other', value: '87.5 %' },
+    ]);
   });
 
   it('statistics: a per-band table named by the file\'s band codes, no image', () => {
@@ -219,6 +291,24 @@ describe('card selection by artifact kind', () => {
     const c = card(old);
     expect(c.kind).toBe('index');
     expect(c.views[0]?.image).toBeUndefined();
+  });
+});
+
+describe('styleOf', () => {
+  const ref = (style: unknown) => ({ kind: 'png', path: '/o/x_bare.png', url: '/v1/download?path=x', stats: { width: 4, height: 4, style } });
+
+  it('reads change, index and class styles', () => {
+    expect(styleOf(ref({ kind: 'change', range: [-0.5, 0.5], ramp: ['#8c4a2f', '#c4cad6', '#2d5f9e'] }))).toEqual({
+      kind: 'change', range: [-0.5, 0.5], ramp: ['#8c4a2f', '#c4cad6', '#2d5f9e'],
+    });
+    expect(styleOf(ref({ kind: 'class', classes: { 0: '#667f4c', 1: '#ffcc66' } }))).toEqual({ kind: 'class', classes: { 0: '#667f4c', 1: '#ffcc66' } });
+  });
+
+  it('is undefined without a style or with a broken one', () => {
+    expect(styleOf(undefined)).toBeUndefined();
+    expect(styleOf({ kind: 'png', path: '/o/x.png', url: '/v1/download?path=x', stats: {} })).toBeUndefined();
+    expect(styleOf(ref({ kind: 'index', range: [0], ramp: ['#000000', '#ffffff'] }))).toBeUndefined();
+    expect(styleOf(ref({ kind: 'index', range: [0, 1], ramp: ['red', 'blue'] }))).toBeUndefined();
   });
 });
 
