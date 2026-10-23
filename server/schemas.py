@@ -48,6 +48,8 @@ __all__ = [
     "PlanResponse",
     "QueueStatsResponse",
     "RegistryModelsResponse",
+    "SessionAnalyses",
+    "SessionResponse",
     "UploadResponse",
 ]
 
@@ -149,6 +151,7 @@ class JobSummary(BaseModel):  # type: ignore[misc]
     created_at: str
     started_at: str | None = None
     completed_at: str | None = None
+    owner: str | None = Field(default=None, description="Submitter's session id; null for jobs from before v0.6.0")
 
 
 class JobRecord(JobSummary):
@@ -218,6 +221,7 @@ class UploadResponse(BaseModel):  # type: ignore[misc]
     preview_png_base64: str = Field(description="Grayscale PNG preview as base64 (do not persist)")
     preview_url: str = Field(description="Download URL of the PNG preview written next to the upload")
     metadata: RasterMetadata = Field(description="Sensor guess, bands, resolution, date, size and display line")
+    owner: str | None = Field(default=None, description="Uploader's session id")
 
 
 class FileInfo(BaseModel):  # type: ignore[misc]
@@ -233,6 +237,7 @@ class FileInfo(BaseModel):  # type: ignore[misc]
     source: Literal["upload", "export"] = Field(description="upload or gee export")
     modified: float = Field(description="Unix modification time")
     metadata: RasterMetadata | None = Field(None, description="As in UploadResponse.metadata")
+    owner: str | None = Field(None, description="Uploader's session id; null for exports and older uploads")
 
 
 class FileListResponse(BaseModel):  # type: ignore[misc]
@@ -241,6 +246,29 @@ class FileListResponse(BaseModel):  # type: ignore[misc]
     ok: bool = True
     files: list[FileInfo]
     count: int
+
+
+# --- Session ---
+
+
+class SessionAnalyses(BaseModel):  # type: ignore[misc]
+    """Analyses in the last hour; ``limit``, ``remaining`` and ``resets_at`` are null for unlimited roles."""
+
+    limit: int | None
+    used: int
+    remaining: int | None
+    resets_at: str | None = Field(description="ISO time (UTC) when ``used`` next drops by one; null if nothing used")
+
+
+class SessionResponse(BaseModel):  # type: ignore[misc]
+    """The caller's session (``GET /v1/session``): role, guest quota and retention for the UI badge."""
+
+    role: Literal["guest", "member", "operator"]
+    guest: bool
+    analyses: SessionAnalyses
+    kept_hours: int | None = Field(description="Hours a guest's jobs and uploads are kept; null for other roles")
+    expires_at: str = Field(description="ISO time (UTC) when the session cookie expires")
+    can_download_models: bool = Field(description="Whether this role may download model weights on demand")
 
 
 # --- Health / registry ---

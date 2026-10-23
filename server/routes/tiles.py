@@ -12,7 +12,8 @@ import rasterio
 from rasterio.warp import transform_bounds
 from rasterio.windows import from_bounds
 
-from ..paths import resolve_served_path
+from ..paths import ensure_served_owner, resolve_served_path
+from ..sessions import CurrentSession
 from ..utils import apply_colormap, detect_data_type
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,10 @@ async def get_tile(
     z: int,
     x: int,
     y: int,
+    session: CurrentSession,
     path: str = Query(..., description="Server path to the GeoTIFF file"),
 ) -> StreamingResponse:
-    """Serve a GeoTIFF as an XYZ map tile (PNG)."""
+    """Serve a GeoTIFF as an XYZ map tile (PNG); another owner's job artifact or upload is 404."""
     try:
         # Get tile bounds in Web Mercator (EPSG:3857)
         tile = mercantile.Tile(x, y, z)
@@ -39,6 +41,7 @@ async def get_tile(
 
         # Open GeoTIFF
         file_path = resolve_served_path(path)
+        await ensure_served_owner(file_path, session)
 
         # Detect data type from filename
         data_type = detect_data_type(file_path.name)

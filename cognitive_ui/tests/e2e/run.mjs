@@ -80,6 +80,11 @@ function apiEnv(stateDir, fakeURL) {
     DT4LC_JOBS_DB: path.join(stateDir, 'jobs.db'),
     DT4LC_UPLOADS_PATH: path.join(stateDir, 'uploads'),
     DT4LC_MODEL_CACHE: path.join(stateDir, 'models'),
+    // Sessions: every browser is a guest (so the guest badge and gated states render),
+    // with a limit high enough that a run of flows never hits the hourly quota.
+    // E2E_DEV_ROLE=member|operator and E2E_GUEST_LIMIT override them for one run.
+    DEV_ROLE: process.env.E2E_DEV_ROLE || 'guest',
+    GUEST_ANALYSES_PER_HOUR: process.env.E2E_GUEST_LIMIT || '1000',
   };
   if (llmMode === 'live') return env;
   // server/app.py calls load_dotenv() without override, so a variable that is

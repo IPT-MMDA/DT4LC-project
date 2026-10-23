@@ -16,8 +16,10 @@ from dta.dti import artifact_files
 from dta.dti.raster import describe_raster, format_size
 from dta.dti.schemas import RasterMetadata
 
-from ..paths import resolve_served_path
+from ..paths import ensure_served_owner, resolve_served_path
 from ..schemas import FileInfo, FileListResponse, UploadResponse
+from ..sessions import CurrentSession
+from ..uploads import owner_file, read_owner, write_owner
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ router = APIRouter(prefix="/v1", tags=["files"])
 )
 async def upload_geotiff(
     file: Annotated[UploadFile, File(description="GeoTIFF raster (.tif or .tiff)")],
+    session: CurrentSession,
 ) -> UploadResponse:
     """Upload a GeoTIFF, store it on the server, and return metadata plus a PNG preview.
 
@@ -67,6 +70,7 @@ async def upload_geotiff(
     file_id = str(uuid.uuid4())[:8]
     saved_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
     saved_path.write_bytes(raw)
+    write_owner(saved_path, session)
     preview_path = saved_path.with_suffix(".png")
 
     # Read in-memory with rasterio for preview
@@ -119,12 +123,14 @@ async def upload_geotiff(
             preview_png_base64=b64,
             preview_url=preview_url,
             metadata=metadata,
+            owner=session.id,
         )
     except Exception as e:
         # Clean up saved file on error
         if saved_path.exists():
             saved_path.unlink()
         preview_path.unlink(missing_ok=True)
+        owner_file(saved_path).unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
 
 
@@ -142,8 +148,11 @@ def _raster_metadata(src: object, filename: str, size_bytes: int) -> RasterMetad
     response_model=FileListResponse,
     summary="List GeoTIFF files",
 )
-async def list_files() -> FileListResponse:
-    """List uploaded and GEE-exported GeoTIFF files on the server."""
+async def list_files(session: CurrentSession) -> FileListResponse:
+    """List the caller's uploads and the GEE-exported GeoTIFF files on the server.
+
+    Operators see every upload, including those from before v0.6.0 that have no owner.
+    """
     try:
         import rasterio
 
@@ -154,6 +163,9 @@ async def list_files() -> FileListResponse:
         # Scan uploads directory
         upload_files = list(UPLOAD_DIR.glob("*.tif")) + list(UPLOAD_DIR.glob("*.tiff"))
         for file_path in upload_files:
+            owner = read_owner(file_path)
+            if not session.can_see(owner):
+                continue
             try:
                 with rasterio.open(file_path) as src:
                     bounds = src.bounds
@@ -173,6 +185,7 @@ async def list_files() -> FileListResponse:
                             modified=file_path.stat().st_mtime,
                             # Uploads are stored as <id>_<original name>
                             metadata=_raster_metadata(src, file_path.name.split("_", 1)[-1], file_path.stat().st_size),
+                            owner=owner,
                         )
                     )
             except Exception as e:
@@ -228,10 +241,15 @@ async def list_files() -> FileListResponse:
     response_description="Binary file (GeoTIFF, GeoPackage, PNG, etc.)",
 )
 async def download_file(
+    session: CurrentSession,
     path: str = Query(..., description="Absolute or allowed-relative path to the file on the server"),
 ) -> FileResponse:
-    """Download a generated or uploaded file (GeoPackage, GeoTIFF, PNG, JSON)."""
+    """Download a generated or uploaded file (GeoPackage, GeoTIFF, PNG, JSON).
+
+    Another owner's job artifact or upload is 404.
+    """
     file_path = resolve_served_path(path)
+    await ensure_served_owner(file_path, session)
 
     # Determine content type based on extension
     suffix = file_path.suffix.lower()

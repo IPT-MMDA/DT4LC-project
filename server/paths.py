@@ -7,6 +7,9 @@ from fastapi import HTTPException
 
 from dta.config import CACHE_PATH, OUTPUTS_PATH, TEMP_PATH
 
+from .jobs import get_job_queue
+from .sessions import Session
+from .uploads import read_owner
 from .utils import UPLOAD_DIR
 
 # Delineate-Anything working directory
@@ -34,3 +37,27 @@ def resolve_served_path(path: str) -> Path:
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
 
     return resolved
+
+
+async def ensure_served_owner(resolved: Path, session: Session) -> None:
+    """404 unless ``session`` may read ``resolved`` (a path from :func:`resolve_served_path`).
+
+    Job artifacts (``OUTPUTS_PATH/<job_id>/...``) belong to the job's owner, uploads and
+    their previews to the uploader; operators read everything. Other allowed roots (temp,
+    Delineate, GEE exports) and ``OUTPUTS_PATH/run-*`` (pipelines run outside the job
+    queue) have no owner and stay readable as before.
+    """
+    if session.operator:
+        return
+    outputs = OUTPUTS_PATH.resolve()
+    if resolved.is_relative_to(outputs):
+        job_id = resolved.relative_to(outputs).parts[0]
+        if job_id.startswith("run-"):
+            return
+        owner = await get_job_queue().get_owner(job_id)
+    elif resolved.is_relative_to(UPLOAD_DIR.resolve()):
+        owner = read_owner(resolved)
+    else:
+        return
+    if not session.can_see(owner):
+        raise HTTPException(status_code=404, detail="File not found")
