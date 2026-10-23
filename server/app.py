@@ -41,6 +41,7 @@ from .schemas import ErrorCode, ErrorDetail, ErrorResponse  # noqa: E402
 from .sessions import (  # noqa: E402
     GuestQuotaError,
     SessionMiddleware,
+    _env_int,
     analysis_counter,
     guest_session_hours,
     log_startup_warnings,
@@ -50,8 +51,11 @@ from .utils import UPLOAD_DIR  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# Seconds between runs of the periodic cleanup (expired guest jobs, outputs and uploads).
-CLEANUP_INTERVAL_S = 3600.0
+
+def cleanup_interval_s() -> float:
+    """Seconds between runs of the periodic cleanup (expired guest jobs, outputs and uploads):
+    ``GUEST_CLEANUP_MINUTES``, default 60, at least 1."""
+    return max(1, _env_int("GUEST_CLEANUP_MINUTES", 60)) * 60.0
 
 
 async def run_cleanup(queue: JobQueue) -> None:
@@ -64,7 +68,7 @@ async def run_cleanup(queue: JobQueue) -> None:
 
 async def _cleanup_periodically(queue: JobQueue) -> None:
     while True:
-        await asyncio.sleep(CLEANUP_INTERVAL_S)
+        await asyncio.sleep(cleanup_interval_s())
         try:
             await run_cleanup(queue)
         except Exception:
