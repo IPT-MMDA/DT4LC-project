@@ -359,22 +359,24 @@ export function CapabilitiesView({ doc }: { doc: CapabilitiesDoc }) {
         </p>
       )}
 
-      <TierSection tier={ask} dimmed={dimmed(ask)} sectionRef={refFor('ask')}>
-        <AskItems tier={ask} />
-      </TierSection>
-      <TierSection tier={composed} dimmed={dimmed(composed)} sectionRef={refFor('composed')}>
-        <ComposedItems tier={composed} />
-      </TierSection>
-      <TierSection tier={builtin} sectionRef={refFor('builtin')}>
-        <BuiltinItems tier={builtin} />
-      </TierSection>
-      <TierSection tier={models} sectionRef={refFor('models')}>
-        <ModelItems tier={models} />
-      </TierSection>
-      <TierSection tier={data} sectionRef={refFor('data')}>
-        <DataItems tier={data} />
-      </TierSection>
-      <ComingSection tier={coming} sectionRef={refFor('coming')} />
+      <div className="flex flex-col gap-3">
+        <TierSection tier={ask} dimmed={dimmed(ask)} sectionRef={refFor('ask')}>
+          <AskItems tier={ask} />
+        </TierSection>
+        <TierSection tier={composed} dimmed={dimmed(composed)} sectionRef={refFor('composed')}>
+          <ComposedItems tier={composed} />
+        </TierSection>
+        <TierSection tier={builtin} sectionRef={refFor('builtin')}>
+          <BuiltinItems tier={builtin} />
+        </TierSection>
+        <TierSection tier={models} sectionRef={refFor('models')}>
+          <ModelItems tier={models} />
+        </TierSection>
+        <TierSection tier={data} sectionRef={refFor('data')}>
+          <DataItems tier={data} />
+        </TierSection>
+        <ComingSection tier={coming} sectionRef={refFor('coming')} />
+      </div>
     </>
   );
 }
