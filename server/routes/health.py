@@ -1,19 +1,24 @@
 """Health, capabilities, models, and metrics endpoints."""
 
+import asyncio
 import logging
 import os
 from pathlib import Path
+import threading
+import time
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from dta.config import CACHE_PATH, MODELS_PATH, UPLOADS_PATH
 from dta.dti.coe.llm.config import get_default_config
+from dta.dti.coe.llm.dependencies import get_llm_router
 from dta.dti.coe.llm.router import LLMRouter
 from dta.dti.data_sources.gee_common import is_initialized
 from dta.dti.metrics import get_metrics_collector
 from dta.dti.models.registry import get_model_registry
 from dta.dti.registry import load_registry
 from server.schemas import (
+    AssistantStatus,
     CapabilitiesResponse,
     DiskEntry,
     DiskUsage,
@@ -63,6 +68,34 @@ def _collect_llm_providers() -> list[LLMProviderStatus]:
     except (ImportError, ValueError, OSError) as exc:
         logger.warning("Could not collect LLM provider info: %s", exc)
         return [LLMProviderStatus(error=str(exc))]
+
+
+# Availability probes can be slow (Ollama: two HTTP requests with 5 s timeouts each),
+# so /v1/health reuses the last answer for this long.
+ASSISTANT_STATUS_TTL_S = 30.0
+_assistant_lock = threading.Lock()
+_assistant_cache: tuple[float, AssistantStatus] | None = None
+
+
+def _probe_assistant() -> AssistantStatus:
+    """First available provider of the shared router, in LLM_PROVIDER_ORDER; later ones are not probed."""
+    try:
+        for provider in get_llm_router().providers:
+            if provider.is_available():
+                return AssistantStatus(connected=True, offline=False, provider=provider.name, model=provider.model)
+    except Exception as exc:
+        logger.warning("Could not check assistant availability: %s", exc)
+    return AssistantStatus(connected=False, offline=True)
+
+
+def _collect_assistant_status() -> AssistantStatus:
+    """``_probe_assistant()`` cached for ``ASSISTANT_STATUS_TTL_S``; concurrent callers share one probe."""
+    global _assistant_cache
+    with _assistant_lock:
+        now = time.monotonic()
+        if _assistant_cache is None or now - _assistant_cache[0] >= ASSISTANT_STATUS_TTL_S:
+            _assistant_cache = (now, _probe_assistant())
+        return _assistant_cache[1]
 
 
 def _collect_gee_status() -> GEEStatus:
@@ -132,17 +165,20 @@ async def health(
 ) -> HealthResponse:
     """Health check endpoint.
 
-    Without ?detailed=true returns a simple liveness response.
+    Without ?detailed=true returns a simple liveness response with the assistant status
+    (cached for ``ASSISTANT_STATUS_TTL_S``).
     With ?detailed=true returns internal diagnostics; restricted to localhost.
     """
+    assistant = await asyncio.to_thread(_collect_assistant_status)
     if not detailed:
-        return HealthResponse()
+        return HealthResponse(assistant=assistant)
 
     client_host = request.client.host if request.client else ""
     if client_host not in _LOCALHOST_HOSTS:
         raise HTTPException(status_code=403, detail="Detailed diagnostics are available from localhost only")
 
     return HealthResponse(
+        assistant=assistant,
         llm_providers=_collect_llm_providers(),
         gee=_collect_gee_status(),
         models=_collect_models_info(),
