@@ -1,8 +1,10 @@
 """Band-math algorithm: safe formulas, band names, NDMI/NDVI on the sample, change mode, plans."""
 
 import builtins
+import json
 import logging
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -11,10 +13,11 @@ from rasterio.transform import from_origin
 
 from dta.config import ROOT_DIR
 from dta.dti.algorithms import band_math, spectral_index
+from dta.dti.coe.llm_planner import plan_with_llm
 from dta.dti.coe.plan_validator import PlanError, validate
 from dta.dti.executor import PipelineExecutor
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import ExecutionPlan, PlanStep
+from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep
 
 BEFORE = str(ROOT_DIR / "resources/kahovka_data/hlsl_20230601.tif")
 AFTER = str(ROOT_DIR / "resources/kahovka_data/hlsl_20230609.tif")
@@ -312,3 +315,20 @@ def test_executor_runs_single_band_math() -> None:
     )
     out = PipelineExecutor().execute(validate(plan, load_registry()))["artifacts"]["BandMathMap"]
     _assert_same(_read(out["rasters"]["index"]), _direct_ndmi(BEFORE))
+
+
+@patch("dta.dti.coe.llm_planner.get_llm_router")
+def test_llm_planner_keeps_band_math_config(mock_get_router: MagicMock) -> None:
+    reply = {
+        "steps": [
+            {"uses": "input/file-before"},
+            {"uses": "input/file-after"},
+            {"uses": "algorithms/band-math-change", "config": NDMI},
+        ],
+        "reasoning": "NDMI for both dates, then the difference",
+    }
+    mock_get_router.return_value.generate.return_value = MagicMock(text=json.dumps(reply), provider="mock")
+    ctx = ContextUnderstanding(goal="NDMI change", desired_outputs=[], required_inputs=[])
+    plan = plan_with_llm(ctx, load_registry())
+    assert plan.steps[2].config == NDMI
+    assert "algorithms/band-math-change" in mock_get_router.return_value.generate.call_args[0][0][0].content
