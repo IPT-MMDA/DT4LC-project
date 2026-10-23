@@ -24,6 +24,10 @@ class RasterMetadata(BaseModel):  # type: ignore[misc]
     size_label: str | None = Field(None, description="File size for display, e.g. '4.0 MB' (1 MB = 1024² bytes)")
     crs: str | None = Field(None, description="e.g. 'EPSG:32636'")
     bounds_wgs84: list[float] | None = Field(None, description="[west, south, east, north] in degrees")
+    footprint_wgs84: list[list[float]] | None = Field(
+        None,
+        description="Corners [[lon, lat], ...] in degrees: north-west, north-east, south-east, south-west",
+    )
     line: str = Field("", description="Display line, e.g. 'HLS L30 · B2–B6 · 30 m · 2023-06-01' (no size)")
 
 

@@ -87,6 +87,31 @@ def test_kakhovka_crop_line(client: TestClient, uploads: Path) -> None:
     assert (round(west, 2), round(east, 2), round(south, 2), round(north, 2)) == (32.39, 32.69, 46.46, 46.66)
 
 
+def test_kakhovka_footprint_is_the_transformed_corners(client: TestClient, uploads: Path) -> None:
+    # Map mode draws the footprint: a UTM raster is a rotated quadrilateral in degrees, which its
+    # bounding box (bounds_wgs84) overshoots by ~0.0012° of latitude at the corners.
+    from rasterio.warp import transform
+
+    meta = _upload(client, KAKHOVKA)["metadata"]
+
+    with rasterio.open(KAKHOVKA) as src:
+        b = src.bounds
+        lons, lats = transform(
+            src.crs, "EPSG:4326", [b.left, b.right, b.right, b.left], [b.top, b.top, b.bottom, b.bottom]
+        )
+    corners = meta["footprint_wgs84"]
+    assert corners == [[round(lon, 6), round(lat, 6)] for lon, lat in zip(lons, lats, strict=True)]
+    nw, ne, se, sw = corners
+    assert ne[1] - nw[1] > 0.001  # rotated, not a box
+    west, south, east, north = meta["bounds_wgs84"]
+    assert (west, south, east, north) == (
+        min(c[0] for c in corners),
+        min(c[1] for c in corners),
+        max(c[0] for c in corners),
+        max(c[1] for c in corners),
+    )
+
+
 def test_synthetic_sentinel2(client: TestClient, uploads: Path, tmp_path: Path) -> None:
     path = _write(
         tmp_path / "S2A_crop_2023-06-09_l2a.tif", count=6, descriptions=["B2", "B3", "B4", "B8", "B11", "B12"]
