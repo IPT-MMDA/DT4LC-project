@@ -1,28 +1,37 @@
 {
- "id": "e1279934",
+ "id": "9340f4d7",
  "status": "completed",
  "prompt": "Map vegetation health across the region",
  "plan": {
+  "flow": "Map vegetation health across the region",
   "steps": [
    {
     "uses": "input/file",
+    "binds": {
+     "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+    },
     "config": {}
    },
    {
     "uses": "algorithms/ndvi",
+    "binds": {},
     "config": {}
    },
    {
     "uses": "post-processing/agent-analysis",
+    "binds": {},
     "config": {}
    }
+  ],
+  "outputs": [
+   "publish: chat"
   ],
   "composed": false
  },
  "result": {
   "execution": {
    "artifacts": {
-    "RasterPath": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+    "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
     "NDVIMap": {
      "metadata": {
       "crs": "EPSG:32636",
@@ -59,18 +68,42 @@
      "visualizations": {
       "ndvi_map": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/e1279934/1_NDVIMap_ndvi_map.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fe1279934%2F1_NDVIMap_ndvi_map.png",
+       "path": "/app/resources/.cache/outputs/9340f4d7/1_NDVIMap_ndvi_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F9340f4d7%2F1_NDVIMap_ndvi_map.png",
        "stats": {}
+      },
+      "ndvi_map_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/9340f4d7/1_NDVIMap_ndvi_map_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F9340f4d7%2F1_NDVIMap_ndvi_map_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "index",
+         "range": [
+          -0.2,
+          0.8
+         ],
+         "ramp": [
+          "#994c1a",
+          "#cc9933",
+          "#ffff66",
+          "#99cc33",
+          "#339933",
+          "#006600"
+         ]
+        }
+       }
       }
      },
-     "path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+     "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
      "index_type": "ndvi",
      "rasters": {
       "ndvi": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/e1279934/1_NDVIMap_ndvi.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fe1279934%2F1_NDVIMap_ndvi.tif",
+       "path": "/app/resources/.cache/outputs/9340f4d7/1_NDVIMap_ndvi.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F9340f4d7%2F1_NDVIMap_ndvi.tif",
        "stats": {
         "min": -1,
         "max": 1,
@@ -81,7 +114,91 @@
      }
     },
     "agent_result": {
-     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
+     "inputs": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+      "NDVIMap": {
+       "metadata": {
+        "crs": "EPSG:32636",
+        "transform": [
+         30,
+         0,
+         453240,
+         0,
+         -30,
+         5167860,
+         0,
+         0,
+         1
+        ],
+        "bounds": [
+         453240,
+         5144820,
+         476280,
+         5167860
+        ],
+        "width": 768,
+        "height": 768,
+        "count": 5
+       },
+       "statistics": {
+        "min": -1,
+        "max": 1,
+        "mean": 0.16500496011805407,
+        "std": 0.3941656387414763,
+        "median": 0.26265379126721655,
+        "valid_pixels": 589824,
+        "total_pixels": 589824
+       },
+       "visualizations": {
+        "ndvi_map": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/9340f4d7/1_NDVIMap_ndvi_map.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F9340f4d7%2F1_NDVIMap_ndvi_map.png",
+         "stats": {}
+        },
+        "ndvi_map_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/9340f4d7/1_NDVIMap_ndvi_map_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F9340f4d7%2F1_NDVIMap_ndvi_map_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "index",
+           "range": [
+            -0.2,
+            0.8
+           ],
+           "ramp": [
+            "#994c1a",
+            "#cc9933",
+            "#ffff66",
+            "#99cc33",
+            "#339933",
+            "#006600"
+           ]
+          }
+         }
+        }
+       },
+       "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+       "index_type": "ndvi",
+       "rasters": {
+        "ndvi": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/9340f4d7/1_NDVIMap_ndvi.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F9340f4d7%2F1_NDVIMap_ndvi.tif",
+         "stats": {
+          "min": -1,
+          "max": 1,
+          "mean": 0.16500496010460555,
+          "valid_pixels": 589824
+         }
+        }
+       }
+      }
+     }
     }
    }
   },
@@ -118,21 +235,21 @@
      }
     ],
     "composed": false,
-    "t": 1792745106.298
+    "t": 1792749813.933
    }
   },
   {
    "seq": 10,
    "type": "done",
    "data": {
-    "elapsed_s": 0.4,
+    "elapsed_s": 0.6,
     "summary": "3 steps · <1 s · NDVI",
     "followups": [
      "Use EVI for dense vegetation",
      "Map open water with NDWI",
      "Classify land cover in this image"
     ],
-    "t": 1792745106.66
+    "t": 1792749814.435
    }
   }
  ],

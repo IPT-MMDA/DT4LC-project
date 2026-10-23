@@ -1,19 +1,27 @@
 {
- "id": "8b7d31e8",
+ "id": "cddf57cd",
  "status": "completed",
  "prompt": "Map moisture change with NDMI between the two dates",
  "plan": {
+  "flow": "Map moisture change with NDMI between the two dates",
   "steps": [
    {
     "uses": "input/file-before",
+    "binds": {
+     "RasterPathBefore": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif"
+    },
     "config": {}
    },
    {
     "uses": "input/file-after",
+    "binds": {
+     "RasterPathAfter": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+    },
     "config": {}
    },
    {
     "uses": "algorithms/band-math-change",
+    "binds": {},
     "config": {
      "formula": "(B5 - B6) / (B5 + B6)",
      "name": "NDMI",
@@ -22,16 +30,20 @@
    },
    {
     "uses": "post-processing/agent-analysis",
+    "binds": {},
     "config": {}
    }
+  ],
+  "outputs": [
+   "publish: chat"
   ],
   "composed": true
  },
  "result": {
   "execution": {
    "artifacts": {
-    "RasterPathBefore": "/app/resources/.cache/uploads/6774daf7_hlsl_20230601.tif",
-    "RasterPathAfter": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+    "RasterPathBefore": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+    "RasterPathAfter": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
     "BandMathChangeMap": {
      "statistics": {
       "threshold": 0.2,
@@ -103,19 +115,19 @@
        "B5": 4,
        "B6": 5
       },
-      "before_path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230601.tif",
-      "after_path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif"
+      "before_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+      "after_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
      },
-     "before_path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230601.tif",
-     "after_path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+     "before_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+     "after_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
      "index_type": "band-math",
      "formula": "(B5 - B6) / (B5 + B6)",
      "name": "NDMI",
      "rasters": {
       "change": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/8b7d31e8/2_BandMathChangeMap_change.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F8b7d31e8%2F2_BandMathChangeMap_change.tif",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_change.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_change.tif",
        "stats": {
         "min": -2,
         "max": 2,
@@ -125,8 +137,8 @@
       },
       "index_before": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/8b7d31e8/2_BandMathChangeMap_index_before.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F8b7d31e8%2F2_BandMathChangeMap_index_before.tif",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_before.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_before.tif",
        "stats": {
         "min": -1,
         "max": 1,
@@ -136,8 +148,8 @@
       },
       "index_after": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/8b7d31e8/2_BandMathChangeMap_index_after.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F8b7d31e8%2F2_BandMathChangeMap_index_after.tif",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_after.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_after.tif",
        "stats": {
         "min": -1,
         "max": 1,
@@ -149,26 +161,303 @@
      "visualizations": {
       "change_map": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/8b7d31e8/2_BandMathChangeMap_change_map.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F8b7d31e8%2F2_BandMathChangeMap_change_map.png",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_change_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_change_map.png",
        "stats": {}
       },
       "index_before": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/8b7d31e8/2_BandMathChangeMap_index_before.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F8b7d31e8%2F2_BandMathChangeMap_index_before.png",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_before.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_before.png",
        "stats": {}
       },
       "index_after": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/8b7d31e8/2_BandMathChangeMap_index_after.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F8b7d31e8%2F2_BandMathChangeMap_index_after.png",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_after.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_after.png",
        "stats": {}
+      },
+      "change_map_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_change_map_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_change_map_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "change",
+         "range": [
+          -0.41093224674729933,
+          0.41093224674729933
+         ],
+         "ramp": [
+          "#8c4a2f",
+          "#c4cad6",
+          "#2d5f9e"
+         ]
+        }
+       }
+      },
+      "index_before_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_before_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_before_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "index",
+         "range": [
+          -1,
+          1
+         ],
+         "ramp": [
+          "#996633",
+          "#ccb280",
+          "#f2f2f2",
+          "#99ccff",
+          "#3380e6",
+          "#003399"
+         ]
+        }
+       }
+      },
+      "index_after_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_after_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_after_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "index",
+         "range": [
+          -1,
+          1
+         ],
+         "ramp": [
+          "#996633",
+          "#ccb280",
+          "#f2f2f2",
+          "#99ccff",
+          "#3380e6",
+          "#003399"
+         ]
+        }
+       }
       }
      }
     },
     "agent_result": {
-     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
+     "inputs": {
+      "RasterPathBefore": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+      "RasterPathAfter": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+      "BandMathChangeMap": {
+       "statistics": {
+        "threshold": 0.2,
+        "total_valid_pixels": 589809,
+        "min_change": -2,
+        "max_change": 2,
+        "mean_change": -0.010041383924347268,
+        "std_change": 0.15242461433392573,
+        "median_change": -0.004750294337642291,
+        "increase_pixels": 42141,
+        "decrease_pixels": 46623,
+        "stable_pixels": 501045,
+        "increase_area_km2": 37.927,
+        "decrease_area_km2": 41.961,
+        "areas_km2": {
+         "increase": 37.927,
+         "decrease": 41.961,
+         "stable": 450.94
+        },
+        "display_range": [
+         -0.41093224674729933,
+         0.41093224674729933
+        ],
+        "display_range_source": "98th percentile of |change|"
+       },
+       "index_statistics": {
+        "before": {
+         "min": -1,
+         "max": 1,
+         "mean": 0.19437692615425506,
+         "std": 0.19060637453572227,
+         "median": 0.20930232558139533,
+         "valid_pixels": 589814,
+         "total_pixels": 589824
+        },
+        "after": {
+         "min": -1,
+         "max": 1,
+         "mean": 0.18433914192318376,
+         "std": 0.18324286816358476,
+         "median": 0.192,
+         "valid_pixels": 589819,
+         "total_pixels": 589824
+        }
+       },
+       "metadata": {
+        "crs": "EPSG:32636",
+        "transform": [
+         30,
+         0,
+         453240,
+         0,
+         -30,
+         5167860,
+         0,
+         0,
+         1
+        ],
+        "bounds": [
+         453240,
+         5144820,
+         476280,
+         5167860
+        ],
+        "width": 768,
+        "height": 768,
+        "count": 5,
+        "bands": {
+         "B5": 4,
+         "B6": 5
+        },
+        "before_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+        "after_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+       },
+       "before_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+       "after_path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+       "index_type": "band-math",
+       "formula": "(B5 - B6) / (B5 + B6)",
+       "name": "NDMI",
+       "rasters": {
+        "change": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_change.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_change.tif",
+         "stats": {
+          "min": -2,
+          "max": 2,
+          "mean": -0.010041383924439148,
+          "valid_pixels": 589809
+         }
+        },
+        "index_before": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_before.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_before.tif",
+         "stats": {
+          "min": -1,
+          "max": 1,
+          "mean": 0.19437692622524083,
+          "valid_pixels": 589814
+         }
+        },
+        "index_after": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_after.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_after.tif",
+         "stats": {
+          "min": -1,
+          "max": 1,
+          "mean": 0.18433914212502878,
+          "valid_pixels": 589819
+         }
+        }
+       },
+       "visualizations": {
+        "change_map": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_change_map.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_change_map.png",
+         "stats": {}
+        },
+        "index_before": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_before.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_before.png",
+         "stats": {}
+        },
+        "index_after": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_after.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_after.png",
+         "stats": {}
+        },
+        "change_map_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_change_map_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_change_map_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "change",
+           "range": [
+            -0.41093224674729933,
+            0.41093224674729933
+           ],
+           "ramp": [
+            "#8c4a2f",
+            "#c4cad6",
+            "#2d5f9e"
+           ]
+          }
+         }
+        },
+        "index_before_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_before_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_before_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "index",
+           "range": [
+            -1,
+            1
+           ],
+           "ramp": [
+            "#996633",
+            "#ccb280",
+            "#f2f2f2",
+            "#99ccff",
+            "#3380e6",
+            "#003399"
+           ]
+          }
+         }
+        },
+        "index_after_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/cddf57cd/2_BandMathChangeMap_index_after_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fcddf57cd%2F2_BandMathChangeMap_index_after_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "index",
+           "range": [
+            -1,
+            1
+           ],
+           "ramp": [
+            "#996633",
+            "#ccb280",
+            "#f2f2f2",
+            "#99ccff",
+            "#3380e6",
+            "#003399"
+           ]
+          }
+         }
+        }
+       }
+      }
+     }
     }
    }
   },
@@ -211,24 +500,63 @@
      }
     ],
     "composed": true,
-    "t": 1792745107.848
+    "t": 1792749811.827
    }
   },
   {
    "seq": 13,
    "type": "done",
    "data": {
-    "elapsed_s": 1.2,
-    "summary": "4 steps · 1 s · NDMI",
+    "elapsed_s": 1.7,
+    "summary": "4 steps · 2 s · NDMI",
     "followups": [
      "Redo the moisture map with a 0.1 threshold",
      "Compare with NDWI water change between the same dates",
      "What else can you do with this data?"
     ],
-    "t": 1792745109.013
+    "t": 1792749813.512
    }
   }
  ],
- "proposal": null,
+ "proposal": {
+  "text": "I don't have a moisture-change algorithm. I can compute NDMI = (NIR − SWIR1)/(NIR + SWIR1) from B5 and B6 for both dates and difference them — run that?",
+  "plan": {
+   "flow": "Map moisture change with NDMI between the two dates",
+   "steps": [
+    {
+     "uses": "input/file-before",
+     "binds": {
+      "RasterPathBefore": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif"
+     },
+     "config": {}
+    },
+    {
+     "uses": "input/file-after",
+     "binds": {
+      "RasterPathAfter": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+     },
+     "config": {}
+    },
+    {
+     "uses": "algorithms/band-math-change",
+     "binds": {},
+     "config": {
+      "formula": "(B5 - B6) / (B5 + B6)",
+      "name": "NDMI",
+      "threshold": 0.2
+     }
+    },
+    {
+     "uses": "post-processing/agent-analysis",
+     "binds": {},
+     "config": {}
+    }
+   ],
+   "outputs": [
+    "publish: chat"
+   ],
+   "composed": true
+  }
+ },
  "region": null
 }

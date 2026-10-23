@@ -1,28 +1,37 @@
 {
- "id": "7794d1f5",
+ "id": "3dad0f9e",
  "status": "completed",
  "prompt": "Classify snow and ice robustly",
  "plan": {
+  "flow": "Classify snow and ice robustly",
   "steps": [
    {
     "uses": "input/file",
+    "binds": {
+     "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+    },
     "config": {}
    },
    {
     "uses": "algorithms/snow-classifier",
+    "binds": {},
     "config": {}
    },
    {
     "uses": "post-processing/agent-analysis",
+    "binds": {},
     "config": {}
    }
+  ],
+  "outputs": [
+   "publish: chat"
   ],
   "composed": false
  },
  "result": {
   "execution": {
    "artifacts": {
-    "RasterPath": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+    "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
     "SnowClassification": {
      "metadata": {
       "crs": "EPSG:32636",
@@ -73,23 +82,41 @@
        "mean": 0.16462104986928916
       }
      },
-     "path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+     "class_statistics": {
+      "No Snow": {
+       "id": 0,
+       "name": "No Snow",
+       "colour": "#667f4c",
+       "pixels": 589809,
+       "percent": 100,
+       "area_km2": 530.828
+      },
+      "Snow": {
+       "id": 1,
+       "name": "Snow",
+       "colour": "#ffcc66",
+       "pixels": 15,
+       "percent": 0,
+       "area_km2": 0.013
+      }
+     },
+     "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
      "rasters": {
       "snow_mask": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/7794d1f5/1_SnowClassification_snow_mask.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F7794d1f5%2F1_SnowClassification_snow_mask.tif",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_snow_mask.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_snow_mask.tif",
        "stats": {
         "min": 0,
         "max": 1,
-        "mean": 2.5431315104166668e-05,
+        "mean": 0.000025431315104166668,
         "valid_pixels": 589824
        }
       },
       "ndsi": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/7794d1f5/1_SnowClassification_ndsi.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F7794d1f5%2F1_SnowClassification_ndsi.tif",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_ndsi.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_ndsi.tif",
        "stats": {
         "min": -6.340425491333008,
         "max": 3.5185184478759766,
@@ -99,8 +126,8 @@
       },
       "ndvi": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/7794d1f5/1_SnowClassification_ndvi.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F7794d1f5%2F1_SnowClassification_ndvi.tif",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_ndvi.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_ndvi.tif",
        "stats": {
         "min": -16.241378784179688,
         "max": 7.508474349975586,
@@ -110,8 +137,8 @@
       },
       "brightness": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/7794d1f5/1_SnowClassification_brightness.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F7794d1f5%2F1_SnowClassification_brightness.tif",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_brightness.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_brightness.tif",
        "stats": {
         "min": -0.014100000262260437,
         "max": 0.4498000144958496,
@@ -123,20 +150,185 @@
      "visualizations": {
       "snow_classification": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/7794d1f5/1_SnowClassification_snow_classification.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F7794d1f5%2F1_SnowClassification_snow_classification.png",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_snow_classification.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_snow_classification.png",
        "stats": {}
       },
       "criteria_analysis": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/7794d1f5/1_SnowClassification_criteria_analysis.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F7794d1f5%2F1_SnowClassification_criteria_analysis.png",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_criteria_analysis.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_criteria_analysis.png",
        "stats": {}
+      },
+      "snow_classification_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_snow_classification_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_snow_classification_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "class",
+         "classes": {
+          "0": "#667f4c",
+          "1": "#ffcc66"
+         }
+        }
+       }
       }
      }
     },
     "agent_result": {
-     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
+     "inputs": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+      "SnowClassification": {
+       "metadata": {
+        "crs": "EPSG:32636",
+        "transform": [
+         30,
+         0,
+         453240,
+         0,
+         -30,
+         5167860,
+         0,
+         0,
+         1
+        ],
+        "bounds": [
+         453240,
+         5144820,
+         476280,
+         5167860
+        ],
+        "width": 768,
+        "height": 768,
+        "count": 5
+       },
+       "statistics": {
+        "total_pixels": 589824,
+        "valid_pixels": 589824,
+        "snow_pixels": 15,
+        "non_snow_pixels": 589809,
+        "snow_coverage_percent": 0.002543131510416667,
+        "pixels_meeting_ndsi_threshold": 177070,
+        "pixels_meeting_ndvi_criterion": 8882,
+        "pixels_meeting_brightness_threshold": 33,
+        "thresholds": {
+         "ndsi": 0.4,
+         "ndvi_center": 0.1,
+         "ndvi_tolerance": 0.025,
+         "brightness": 0.3
+        },
+        "ndsi_stats": {
+         "min": -6.340425531914892,
+         "max": 3.518518518518519,
+         "mean": -0.004921672282770225
+        },
+        "ndvi_stats": {
+         "min": -16.24137931034483,
+         "max": 7.508474576271183,
+         "mean": 0.16462104986928916
+        }
+       },
+       "class_statistics": {
+        "No Snow": {
+         "id": 0,
+         "name": "No Snow",
+         "colour": "#667f4c",
+         "pixels": 589809,
+         "percent": 100,
+         "area_km2": 530.828
+        },
+        "Snow": {
+         "id": 1,
+         "name": "Snow",
+         "colour": "#ffcc66",
+         "pixels": 15,
+         "percent": 0,
+         "area_km2": 0.013
+        }
+       },
+       "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+       "rasters": {
+        "snow_mask": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_snow_mask.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_snow_mask.tif",
+         "stats": {
+          "min": 0,
+          "max": 1,
+          "mean": 0.000025431315104166668,
+          "valid_pixels": 589824
+         }
+        },
+        "ndsi": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_ndsi.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_ndsi.tif",
+         "stats": {
+          "min": -6.340425491333008,
+          "max": 3.5185184478759766,
+          "mean": -0.004921672161696428,
+          "valid_pixels": 589824
+         }
+        },
+        "ndvi": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_ndvi.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_ndvi.tif",
+         "stats": {
+          "min": -16.241378784179688,
+          "max": 7.508474349975586,
+          "mean": 0.16462104985431011,
+          "valid_pixels": 589824
+         }
+        },
+        "brightness": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_brightness.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_brightness.tif",
+         "stats": {
+          "min": -0.014100000262260437,
+          "max": 0.4498000144958496,
+          "mean": 0.060186067111849754,
+          "valid_pixels": 589824
+         }
+        }
+       },
+       "visualizations": {
+        "snow_classification": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_snow_classification.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_snow_classification.png",
+         "stats": {}
+        },
+        "criteria_analysis": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_criteria_analysis.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_criteria_analysis.png",
+         "stats": {}
+        },
+        "snow_classification_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/3dad0f9e/1_SnowClassification_snow_classification_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F3dad0f9e%2F1_SnowClassification_snow_classification_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "class",
+           "classes": {
+            "0": "#667f4c",
+            "1": "#ffcc66"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
     }
    }
   },
@@ -173,7 +365,7 @@
      }
     ],
     "composed": false,
-    "t": 1792745110.514
+    "t": 1792749820.323
    }
   },
   {
@@ -187,7 +379,7 @@
      "Give me statistics for every band",
      "What else can you do with this data?"
     ],
-    "t": 1792745111.539
+    "t": 1792749821.315
    }
   }
  ],

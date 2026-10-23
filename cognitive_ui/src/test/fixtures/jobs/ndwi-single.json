@@ -1,28 +1,37 @@
 {
- "id": "14d63e19",
+ "id": "b715d7f5",
  "status": "completed",
  "prompt": "Where is open water on 9 June?",
  "plan": {
+  "flow": "Where is open water on 9 June?",
   "steps": [
    {
     "uses": "input/file",
+    "binds": {
+     "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+    },
     "config": {}
    },
    {
     "uses": "algorithms/ndwi",
+    "binds": {},
     "config": {}
    },
    {
     "uses": "post-processing/agent-analysis",
+    "binds": {},
     "config": {}
    }
+  ],
+  "outputs": [
+   "publish: chat"
   ],
   "composed": false
  },
  "result": {
   "execution": {
    "artifacts": {
-    "RasterPath": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+    "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
     "NDWIMap": {
      "metadata": {
       "crs": "EPSG:32636",
@@ -62,18 +71,42 @@
      "visualizations": {
       "ndwi_map": {
        "kind": "png",
-       "path": "/app/resources/.cache/outputs/14d63e19/1_NDWIMap_ndwi_map.png",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F14d63e19%2F1_NDWIMap_ndwi_map.png",
+       "path": "/app/resources/.cache/outputs/b715d7f5/1_NDWIMap_ndwi_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb715d7f5%2F1_NDWIMap_ndwi_map.png",
        "stats": {}
+      },
+      "ndwi_map_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/b715d7f5/1_NDWIMap_ndwi_map_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb715d7f5%2F1_NDWIMap_ndwi_map_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "index",
+         "range": [
+          -0.5,
+          0.5
+         ],
+         "ramp": [
+          "#996633",
+          "#ccb280",
+          "#f2f2f2",
+          "#99ccff",
+          "#3380e6",
+          "#003399"
+         ]
+        }
+       }
       }
      },
-     "path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+     "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
      "index_type": "ndwi",
      "rasters": {
       "ndwi": {
        "kind": "geotiff",
-       "path": "/app/resources/.cache/outputs/14d63e19/1_NDWIMap_ndwi.tif",
-       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F14d63e19%2F1_NDWIMap_ndwi.tif",
+       "path": "/app/resources/.cache/outputs/b715d7f5/1_NDWIMap_ndwi.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb715d7f5%2F1_NDWIMap_ndwi.tif",
        "stats": {
         "min": -1,
         "max": 1,
@@ -84,7 +117,94 @@
      }
     },
     "agent_result": {
-     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
+     "inputs": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+      "NDWIMap": {
+       "metadata": {
+        "crs": "EPSG:32636",
+        "transform": [
+         30,
+         0,
+         453240,
+         0,
+         -30,
+         5167860,
+         0,
+         0,
+         1
+        ],
+        "bounds": [
+         453240,
+         5144820,
+         476280,
+         5167860
+        ],
+        "width": 768,
+        "height": 768,
+        "count": 5
+       },
+       "statistics": {
+        "min": -1,
+        "max": 1,
+        "mean": -0.15768370315512154,
+        "std": 0.40460794729424593,
+        "median": -0.3181818181818181,
+        "valid_pixels": 589824,
+        "total_pixels": 589824,
+        "water_threshold": 0.3,
+        "water_pixels": 118912,
+        "water_coverage_percent": 20.16059027777778
+       },
+       "visualizations": {
+        "ndwi_map": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/b715d7f5/1_NDWIMap_ndwi_map.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb715d7f5%2F1_NDWIMap_ndwi_map.png",
+         "stats": {}
+        },
+        "ndwi_map_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/b715d7f5/1_NDWIMap_ndwi_map_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb715d7f5%2F1_NDWIMap_ndwi_map_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "index",
+           "range": [
+            -0.5,
+            0.5
+           ],
+           "ramp": [
+            "#996633",
+            "#ccb280",
+            "#f2f2f2",
+            "#99ccff",
+            "#3380e6",
+            "#003399"
+           ]
+          }
+         }
+        }
+       },
+       "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+       "index_type": "ndwi",
+       "rasters": {
+        "ndwi": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/b715d7f5/1_NDWIMap_ndwi.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb715d7f5%2F1_NDWIMap_ndwi.tif",
+         "stats": {
+          "min": -1,
+          "max": 1,
+          "mean": -0.15768370311049532,
+          "valid_pixels": 589824
+         }
+        }
+       }
+      }
+     }
     }
    }
   },
@@ -121,7 +241,7 @@
      }
     ],
     "composed": false,
-    "t": 1792745106.895
+    "t": 1792749814.957
    }
   },
   {
@@ -135,7 +255,7 @@
      "Classify land cover in this image",
      "What else can you do with this data?"
     ],
-    "t": 1792745107.268
+    "t": 1792749815.433
    }
   }
  ],
