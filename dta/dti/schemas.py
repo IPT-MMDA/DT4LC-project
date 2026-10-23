@@ -178,6 +178,7 @@ class ExecutionPlan(BaseModel):  # type: ignore[misc]
     flow: str = "auto"
     steps: list[PlanStep]
     outputs: list[str] = []  # friendly names, topics, channels, etc.
+    composed: bool = False  # not a single registered template: band math or a new combination of steps
 
 
 class ContextUnderstanding(BaseModel):  # type: ignore[misc]

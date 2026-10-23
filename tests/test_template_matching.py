@@ -107,6 +107,8 @@ def test_field_boundaries_plan_delineate() -> None:
 
     assert out["ok"], out.get("error")
     assert [s["uses"] for s in out["plan"]["steps"]] == ["input/file", DELINEATE, "post-processing/agent-analysis"]
+    assert out["plan"]["composed"] is False
+    assert "proposal" not in out
     template = plan_template(_llm_like_context("Detect field boundaries in this image"), load_registry())
     assert DELINEATE in [s.uses for s in template.steps]
 
