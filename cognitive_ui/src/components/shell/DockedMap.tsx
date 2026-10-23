@@ -4,16 +4,19 @@ import { cn } from '../../utils/cn';
 import { formatRangeEnd } from '../chat/result/resultModel';
 import { MapContainer } from '../map/MapContainer';
 
-/** lost · same · gained, in the map legend tokens. */
+/** lost · same · gained in the map legend tokens, for a change layer without its style's ramp. */
 const CHANGE_GRADIENT = 'bg-gradient-to-r from-legend-lost via-legend-land to-legend-gained';
 
+/** The layer's ramp as the server draws its tiles (the raster's style). */
 const rampStyle = (legend?: LayerLegend) =>
-  legend?.kind === 'ramp' ? { background: `linear-gradient(90deg, ${legend.stops.join(', ')})` } : undefined;
+  legend?.stops ? { background: `linear-gradient(90deg, ${legend.stops.join(', ')})` } : undefined;
+
+const tokenGradient = (legend?: LayerLegend) => legend?.kind === 'change' && !legend.stops && CHANGE_GRADIENT;
 
 function LegendRow({ legend }: { legend: LayerLegend }) {
   return (
     <div data-testid="layers-legend" className="flex items-center gap-[6px] pt-[6px] border-t border-border2 text-[11px] text-text2">
-      <div aria-hidden className={cn('w-[84px] h-[7px] rounded-[2px]', legend.kind === 'change' && CHANGE_GRADIENT)} style={rampStyle(legend)} />
+      <div data-testid="layers-legend-ramp" aria-hidden className={cn('w-[84px] h-[7px] rounded-[2px]', tokenGradient(legend))} style={rampStyle(legend)} />
       <span className="font-mono">{legend.kind === 'change' ? 'lost · same · gained' : `${formatRangeEnd(legend.range[0])} · ${formatRangeEnd(legend.range[1])}`}</span>
     </div>
   );
@@ -80,7 +83,7 @@ export function DockedMap() {
                 <li key={layer.id} data-testid="layer-row" className="flex items-center gap-2">
                   <span
                     aria-hidden
-                    className={cn('w-3 h-3 rounded-[3px] flex-none bg-surface2', layer.legend?.kind === 'change' && CHANGE_GRADIENT)}
+                    className={cn('w-3 h-3 rounded-[3px] flex-none bg-surface2', tokenGradient(layer.legend))}
                     style={rampStyle(layer.legend)}
                   />
                   <span className="flex-1 min-w-0 truncate font-medium">{layer.name}</span>

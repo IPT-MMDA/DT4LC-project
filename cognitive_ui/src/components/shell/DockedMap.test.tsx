@@ -10,7 +10,8 @@ vi.mock('../map/MapContainer', () => ({ MapContainer: () => <div data-testid="ma
 const BOUNDS: Layer['bounds'] = [32.388779, 46.455331, 32.691118, 46.663879];
 const change: Layer = {
   id: 'result-job-1-difference', name: 'Water change · NDWI', type: 'raster', visible: true, opacity: 0.8,
-  url: '/app/resources/.cache/outputs/job-1/2_ChangeMap_change.tif', bounds: BOUNDS, legend: { kind: 'change' },
+  url: '/app/resources/.cache/outputs/job-1/2_ChangeMap_change.tif', bounds: BOUNDS,
+  legend: { kind: 'change', stops: ['#8c4a2f', '#c4cad6', '#2d5f9e'] },
 };
 
 const renderMap = () => render(<MemoryRouter><DockedMap /></MemoryRouter>);
@@ -40,6 +41,8 @@ describe('docked map Layers panel', () => {
     const row = panel().getByTestId('layer-row');
     expect(row.textContent).toBe('Water change · NDWI80');
     expect(screen.getByTestId('layers-legend').textContent).toBe('lost · same · gained');
+    // The change style's ramp, as the tiles are drawn: brown → grey → blue.
+    expect(screen.getByTestId('layers-legend-ramp').style.background).toBe('linear-gradient(90deg, #8c4a2f, #c4cad6, #2d5f9e)');
 
     fireEvent.change(panel().getByRole('slider', { name: 'Opacity of Water change · NDWI' }), { target: { value: '45' } });
     expect(useAppStore.getState().mapLayers[0].opacity).toBe(0.45);
@@ -48,6 +51,14 @@ describe('docked map Layers panel', () => {
     expect(fit().hasAttribute('disabled')).toBe(false);
     fireEvent.click(fit());
     expect(useAppStore.getState().fitRequest).toEqual(BOUNDS);
+  });
+
+  it('a change layer without its style\'s ramp (an older job) falls back to the legend tokens', () => {
+    useAppStore.getState().addResultLayer({ ...change, legend: { kind: 'change' } });
+    renderMap();
+    const ramp = screen.getByTestId('layers-legend-ramp');
+    expect(ramp.className).toContain('from-legend-lost');
+    expect(ramp.style.background).toBe('');
   });
 
   it('shows the newest layer\'s index ramp with its range', () => {

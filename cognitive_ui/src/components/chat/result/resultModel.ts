@@ -6,15 +6,21 @@ import type { ChatRegion, MessageAttachment } from '../../../types';
 // GET /v1/jobs/{id} `result.execution.artifacts` (docs/ARCHITECTURE.md "Job
 // artifacts"). Pure: the card components render a ResultCardModel and nothing else.
 // Images and downloads are artifact `url`s only; a pre-v0.5.0 base64 string is no
-// reference and is ignored.
+// reference and is ignored. Colours come from the server: a bare map's `stats.style`
+// and `class_statistics[*].colour`, never from tables mirrored here.
 
 /** An artifact reference: `{kind: "geotiff" | "png", path, url, stats}`. */
 export interface ArtifactRef {
   kind: string;
   path: string;
   url: string;
-  stats?: Record<string, number | null>;
+  stats?: Record<string, unknown>;
 }
+
+/** How a raster is drawn: a bare map PNG's `stats.style`, the same as its tiles. */
+export type RasterStyle =
+  | { kind: 'change' | 'index'; range: [number, number]; ramp: string[] }
+  | { kind: 'class'; classes: Record<string, string> };
 
 export type Tone = 'gained' | 'lost' | 'neutral';
 
@@ -27,6 +33,7 @@ export interface Stat {
 export interface LegendItem {
   label: string;
   tone: Tone;
+  colour?: string;  // from the change style's ramp; the legend-* token without one
 }
 
 /** One image of a card: the map shown, the raster behind it and the overlay label. */
@@ -35,15 +42,16 @@ export interface CardView {
   label: string;  // the toggle's text
   layerName: string;  // its row in the Layers panel
   overlay: string;  // the mono label on the image, '' for none
-  image?: ArtifactRef;
+  image?: ArtifactRef;  // the full figure (title, colour bar): the PNG download
+  bare?: ArtifactRef;  // the map alone, shown full-bleed; older jobs have none
   raster?: ArtifactRef;
   legend?: LayerLegend;
 }
 
 export interface ClassItem {
   name: string;
-  colour: string;
-  value: string;  // per-class share, e.g. "38.5 %"
+  colour?: string;
+  value: string;  // per-class area, e.g. "204 km²", or share, "38.5 %"
 }
 
 export interface BandRow {
@@ -80,37 +88,9 @@ export interface AnalysedContext {
   region?: ChatRegion;
 }
 
-// --- Display tables, mirroring the server's renderers --------------------------
-
-// dta/dti/algorithms/spectral_index.py COLORMAPS, as hex; band math renders with "ndwi".
-const RAMPS: Record<string, string[]> = {
-  ndvi: ['#994c1a', '#cc9933', '#ffff66', '#99cc33', '#339933', '#006600'],
-  ndwi: ['#996633', '#ccb280', '#f2f2f2', '#99ccff', '#3380e6', '#003399'],
-  ndsi: ['#664c33', '#b29966', '#ffe6b2', '#cce6ff', '#66b2ff', '#ffffff'],
-};
-
-// dta/registry.yaml `config.colormap`, `vmin`, `vmax` of each index algorithm.
-const INDEX_DISPLAY: Record<string, { ramp: string; range: [number, number] }> = {
-  ndvi: { ramp: 'ndvi', range: [-0.2, 0.8] },
-  evi: { ramp: 'ndvi', range: [-0.2, 0.8] },
-  ndwi: { ramp: 'ndwi', range: [-0.5, 0.5] },
-  ndsi: { ramp: 'ndsi', range: [-0.5, 1.0] },
-};
+// --- Display tables ---------------------------------------------------------------
 
 const INDEX_ARTIFACTS = ['NDVIMap', 'EVIMap', 'NDWIMap', 'NDSIMap'];
-
-// dta/dti/algorithms/lulc_classifier.py LULC_CLASSES colours, by class_id.
-const LULC_COLOURS: Record<number, string> = {
-  1: '#0077be',
-  2: '#ffffff',
-  3: '#c2b280',
-  4: '#d4e157',
-  5: '#8bc34a',
-  6: '#2e7d32',
-};
-
-// dta/dti/algorithms/snow_classifier.py snow classification colours.
-const SNOW_COLOURS = { snow: '#ffcc66', other: '#66804c' };
 
 /** Sensor (upload `metadata.sensor`, region `dataset`) → the source line's long name. */
 export const SENSOR_NAMES: Record<string, string> = {
@@ -223,6 +203,28 @@ export function asRef(v: unknown): ArtifactRef | undefined {
 const firstRef = (group: unknown, kind: string): ArtifactRef | undefined =>
   Object.values(obj(group)).map(asRef).find((r) => r?.kind === kind);
 
+/** The map-only PNG `<key>_bare` of the first visualization key that has one. */
+const bareOf = (vis: Obj, ...keys: string[]): ArtifactRef | undefined =>
+  keys.map((k) => asRef(vis[`${k}_bare`])).find(Boolean);
+
+const isHex = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+
+/** A bare map's `stats.style`, or undefined when it has none (or not a valid one). */
+export function styleOf(ref: ArtifactRef | undefined): RasterStyle | undefined {
+  const s = obj(ref?.stats?.style);
+  if ((s.kind === 'change' || s.kind === 'index') && Array.isArray(s.ramp) && s.ramp.length > 1 && s.ramp.every(isHex)) {
+    const r = s.range;
+    if (Array.isArray(r) && r.length === 2 && r.every(isNum)) return { kind: s.kind, range: [r[0], r[1]], ramp: s.ramp };
+  }
+  if (s.kind === 'class' && Object.values(obj(s.classes)).every(isHex)) return { kind: 'class', classes: obj(s.classes) as Record<string, string> };
+  return undefined;
+}
+
+/** A change or index style as a ramp legend: its colour stops over its range. */
+function rampOf(style: RasterStyle | undefined): { stops: string[]; range: [number, number] } | undefined {
+  return style && style.kind !== 'class' ? { stops: style.ramp, range: style.range } : undefined;
+}
+
 /** The attachments that are the job's inputs (matched by path), or all of them. */
 function analysed(context: AnalysedContext, paths: unknown[]): MessageAttachment[] {
   const wanted = paths.filter((p): p is string => typeof p === 'string');
@@ -256,13 +258,6 @@ function gpkgUrlOf(artifact: Obj): string | undefined {
 
 const titled = (...parts: string[]) => parts.filter(Boolean).join(' · ');
 
-function rampOf(index: string, displayRange?: unknown): { stops: string[]; range: [number, number] } | undefined {
-  const d = INDEX_DISPLAY[index];
-  const r = Array.isArray(displayRange) && displayRange.length === 2 && displayRange.every(isNum) ? (displayRange as [number, number]) : d?.range;
-  const stops = RAMPS[d?.ramp ?? 'ndwi'];
-  return r ? { stops, range: r } : undefined;
-}
-
 function indexCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, bandMath: boolean): ResultCardModel {
   const index = String(artifact.index_type ?? '').toLowerCase();
   const name = bandMath ? String(artifact.name ?? artifact.formula ?? 'Band math') : index.toUpperCase();
@@ -270,10 +265,11 @@ function indexCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, band
   const file = byPath(context, artifacts.RasterPath) ?? byPath(context, artifact.path) ?? (files.length === 1 ? files[0] : undefined);
   const date = file?.metadata?.date;
   const stats = obj(artifact.statistics);
-  const ramp = rampOf(bandMath ? 'band-math' : index, stats.display_range);
   const vis = obj(artifact.visualizations);
   const rasters = obj(artifact.rasters);
   const image = asRef(vis[`${index}_map`]) ?? asRef(vis.index_map) ?? firstRef(vis, 'png');
+  const bare = bareOf(vis, `${index}_map`, 'index_map');
+  const ramp = rampOf(styleOf(bare));
   const raster = asRef(rasters[index]) ?? asRef(rasters.index) ?? firstRef(rasters, 'geotiff');
   const title = titled(name, dayMonth(date));
   return {
@@ -283,7 +279,7 @@ function indexCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, band
     source: sourceLine({ ...context, attachments: files }),
     bounds: boundsOf(files),
     ramp,
-    views: [{ key: 'map', label: 'Map', layerName: title, overlay: '', image, raster, legend: ramp && { kind: 'ramp', ...ramp } }],
+    views: [{ key: 'map', label: 'Map', layerName: title, overlay: '', image, bare, raster, legend: ramp && { kind: 'ramp', ...ramp } }],
     stats: [
       { label: 'Mean', value: formatValue(stats.mean) },
       { label: 'Min', value: formatValue(stats.min) },
@@ -328,11 +324,20 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
     if (bandMath && isNum(stats.threshold)) statRow.push({ label: 'Threshold', value: `Δ${label} ${stats.threshold}` });
   }
 
+  const changeBare = bareOf(vis, 'change_map');
+  const beforeBare = bareOf(vis, 'index_before', `${key}_before`);
+  const afterBare = bareOf(vis, 'index_after', `${key}_after`);
+  // Swatches from the change ramp: its first stop is lost, the middle no change, the last gained.
+  const stops = rampOf(styleOf(changeBare))?.stops;
+  const colour = (tone: Tone) => stops && (tone === 'lost' ? stops[0] : tone === 'gained' ? stops[stops.length - 1] : stops[(stops.length - 1) >> 1]);
+  const item = (label: string, tone: Tone): LegendItem => ({ label, tone, ...(stops && { colour: colour(tone) }) });
   const legend: LegendItem[] = bandMath
-    ? [{ label: lost, tone: 'lost' }, { label: gained, tone: 'gained' }, { label: 'no change', tone: 'neutral' }]
-    : [{ label: gained, tone: 'gained' }, { label: lost, tone: 'lost' }, { label: 'no change', tone: 'neutral' }];
-  const indexRamp = rampOf(bandMath ? 'band-math' : key);
-  const indexLegend: LayerLegend | undefined = indexRamp && { kind: 'ramp', ...indexRamp };
+    ? [item(lost, 'lost'), item(gained, 'gained'), item('no change', 'neutral')]
+    : [item(gained, 'gained'), item(lost, 'lost'), item('no change', 'neutral')];
+  const indexLegend = (bare: ArtifactRef | undefined): LayerLegend | undefined => {
+    const ramp = rampOf(styleOf(bare));
+    return ramp && { kind: 'ramp', ...ramp };
+  };
   const shortName = bandMath ? label : String(artifact.index_name ?? label);
 
   return {
@@ -350,8 +355,9 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
         layerName: title,
         overlay: titled('difference', range),
         image: asRef(vis.change_map),
+        bare: changeBare,
         raster: asRef(rasters.change),
-        legend: { kind: 'change' },
+        legend: stops ? { kind: 'change', stops } : { kind: 'change' },
       },
       {
         key: 'before',
@@ -359,8 +365,9 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
         layerName: titled(shortName, before ?? 'before'),
         overlay: titled(`${shortName} before`, before ?? ''),
         image: asRef(vis.index_before) ?? asRef(vis[`${key}_before`]),
+        bare: beforeBare,
         raster: asRef(rasters.index_before),
-        legend: indexLegend,
+        legend: indexLegend(beforeBare),
       },
       {
         key: 'after',
@@ -368,8 +375,9 @@ function changeCard(artifact: Obj, artifacts: Obj, context: AnalysedContext, ban
         layerName: titled(shortName, after ?? 'after'),
         overlay: titled(`${shortName} after`, after ?? ''),
         image: asRef(vis.index_after) ?? asRef(vis[`${key}_after`]),
+        bare: afterBare,
         raster: asRef(rasters.index_after),
-        legend: indexLegend,
+        legend: indexLegend(afterBare),
       },
     ],
   };
@@ -381,22 +389,39 @@ function singleFile(context: AnalysedContext, artifacts: Obj, artifact: Obj) {
   return { files, date: file?.metadata?.date, file };
 }
 
+/**
+ * The class legend from `class_statistics` (`{name: {id, name, colour, pixels, percent,
+ * area_km2}}`): classes with pixels, each with its area, or its share when the CRS
+ * has no area. A class without `colour` (an older job) takes the bare map's style.
+ */
+function classItems(artifact: Obj, bare: ArtifactRef | undefined): ClassItem[] {
+  const style = styleOf(bare);
+  const styled = style?.kind === 'class' ? style.classes : {};
+  return Object.entries(obj(artifact.class_statistics))
+    .map(([key, v]): [string, Obj] => [key, obj(v)])
+    .filter(([, c]) => isNum(c.pixels) && c.pixels > 0)
+    .map(([key, c]) => ({
+      name: typeof c.name === 'string' ? c.name : key,
+      colour: isHex(c.colour) ? c.colour : styled[String(c.id ?? c.class_id)],
+      value: isNum(c.area_km2) ? formatKm2(c.area_km2) : formatPercent(c.percent ?? c.percentage),
+    }));
+}
+
 function lulcCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
   const { files, date } = singleFile(context, artifacts, artifact);
   const title = titled('Land cover', dayMonth(date));
-  const classes = Object.entries(obj(artifact.class_statistics))
-    .map(([name, v]) => ({ name, ...(obj(v) as { class_id?: number; pixels?: number; percentage?: number }) }))
-    .filter((c) => (c.pixels ?? 0) > 0)
-    .map((c) => ({ name: c.name, colour: LULC_COLOURS[c.class_id ?? 0] ?? '#000000', value: formatPercent(c.percentage) }));
+  const vis = obj(artifact.visualizations);
+  const bare = bareOf(vis, 'classification_map');
   return {
     kind: 'classification',
     title,
     source: sourceLine({ ...context, attachments: files }),
     bounds: boundsOf(files),
-    classes,
+    classes: classItems(artifact, bare),
     views: [{
       key: 'map', label: 'Map', layerName: title, overlay: '',
-      image: asRef(obj(artifact.visualizations).classification_map),
+      image: asRef(vis.classification_map),
+      bare,
       raster: asRef(obj(artifact.rasters).classification),
     }],
   };
@@ -405,19 +430,26 @@ function lulcCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Resu
 function snowCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
   const { files, date } = singleFile(context, artifacts, artifact);
   const title = titled('Snow and ice', dayMonth(date));
+  const vis = obj(artifact.visualizations);
+  const bare = bareOf(vis, 'snow_classification');
   const share = obj(artifact.statistics).snow_coverage_percent;
+  // Before class_statistics (older jobs): the snow share alone, without colours.
+  const classes = Object.keys(obj(artifact.class_statistics)).length > 0
+    ? classItems(artifact, bare)
+    : [
+        { name: 'Snow / ice', value: formatPercent(share) },
+        { name: 'Other', value: isNum(share) ? formatPercent(100 - share) : '—' },
+      ];
   return {
     kind: 'classification',
     title,
     source: sourceLine({ ...context, attachments: files }),
     bounds: boundsOf(files),
-    classes: [
-      { name: 'Snow / ice', colour: SNOW_COLOURS.snow, value: formatPercent(share) },
-      { name: 'Other', colour: SNOW_COLOURS.other, value: isNum(share) ? formatPercent(100 - share) : '—' },
-    ],
+    classes,
     views: [{
       key: 'map', label: 'Map', layerName: title, overlay: '',
-      image: asRef(obj(artifact.visualizations).snow_classification),
+      image: asRef(vis.snow_classification),
+      bare,
       raster: asRef(obj(artifact.rasters).snow_mask),
     }],
   };
