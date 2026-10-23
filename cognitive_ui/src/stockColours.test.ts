@@ -38,7 +38,7 @@ const surviving = (readdirSync(srcDir, { recursive: true }) as string[])
 describe('surviving components use design tokens, not the stock Tailwind palette', () => {
   it('finds the files it checks', () => {
     expect(surviving).toContain('components/shell/Rail.tsx');
-    expect(surviving).toContain('components/map/DrawToolbar.tsx');
+    expect(surviving).toContain('components/map/mode/MapToolbar.tsx');
   });
 
   it.each(surviving)('%s has no stock palette classes', (file) => {

@@ -6,9 +6,10 @@ interface GEETileLayerProps {
   url: string;
   opacity?: number;
   visible?: boolean;
+  beforeId?: string;
 }
 
-export function GEETileLayer({ id, url, opacity = 1, visible = true }: GEETileLayerProps) {
+export function GEETileLayer({ id, url, opacity = 1, visible = true, beforeId }: GEETileLayerProps) {
   if (!visible) return null;
 
   const layerStyle: RasterLayerSpecification = {
@@ -28,7 +29,7 @@ export function GEETileLayer({ id, url, opacity = 1, visible = true }: GEETileLa
       tiles={[url]}
       tileSize={256}
     >
-      <Layer {...layerStyle} />
+      <Layer {...layerStyle} beforeId={beforeId} />
     </Source>
   );
 }
