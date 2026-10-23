@@ -106,11 +106,6 @@ ROUTES: dict[str, dict[str, str]] = {
         "one": "algorithms/ndwi@0609",
         "none": "ask:algorithms/ndwi",
     },
-    "Map snow cover in the Brienz sample": {
-        "pair": "algorithms/ndsi@0609",
-        "one": "algorithms/ndsi@0609",
-        "none": "ask:algorithms/ndsi",
-    },
     "Map snow cover with NDSI": {
         "pair": "algorithms/ndsi@0609",
         "one": "algorithms/ndsi@0609",

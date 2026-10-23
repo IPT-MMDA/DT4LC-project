@@ -211,7 +211,7 @@ def test_demo_builtin_spectral_indices(demo: dict[str, Any]) -> None:
         ["Green", "SWIR1"],
         ["Index map", "snow mask", "stats"],
         "~10 s",
-        "Map snow cover in the Brienz sample",
+        "Map snow cover with NDSI",
     )
 
 

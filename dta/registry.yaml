@@ -275,7 +275,7 @@ instances:
       description: Snow and ice; values above 0.42 usually mean snow.
       outputs: [Index map, snow mask, stats]
       time: "~10 s"
-      prompt: Map snow cover in the Brienz sample
+      prompt: Map snow cover with NDSI
       followups:
         - Map vegetation health with NDVI
         - Give me statistics for every band
