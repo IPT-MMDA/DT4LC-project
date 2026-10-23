@@ -39,6 +39,12 @@ describe('design tokens in index.css', () => {
     expect([...dark.keys()].sort()).toEqual([...light.keys()].sort());
   });
 
+  it('defines the region amber in both themes, apart from the cancelled hue', () => {
+    expect(light.get('region')).toBe('oklch(0.85 0.12 85)');
+    expect(dark.get('region')).toBeTruthy();
+    expect(light.get('region')).not.toBe(light.get('canc'));
+  });
+
   it('uses the DESIGN values for accent and the inverted monogram ink', () => {
     expect(light.get('accent')).toBe('oklch(0.5 0.16 265)');
     expect(dark.get('accent')).toBe('oklch(0.72 0.12 265)');

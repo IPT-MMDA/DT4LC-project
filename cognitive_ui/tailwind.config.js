@@ -40,6 +40,7 @@ module.exports = {
         canc: token('canc'),
         'canc-tint': token('canc-tint'),
         'canc-ink': token('canc-ink'),
+        region: token('region'),
         lost: token('lost'),
         ink: token('ink'),
         'ink-bg': token('ink-bg'),

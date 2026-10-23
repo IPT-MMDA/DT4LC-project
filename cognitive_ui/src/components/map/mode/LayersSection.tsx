@@ -8,7 +8,7 @@ import { layerRows, REGION_ROW_ID, type LayerRow } from './layers';
 
 const SWATCH_TOKEN = {
   change: 'bg-gradient-to-r from-legend-lost via-legend-no-change to-legend-gained',
-  region: 'bg-accent',
+  region: 'bg-region',
   imagery: 'bg-legend-land border border-border',
 } as const;
 

@@ -40,7 +40,7 @@ function RegionCard({ region }: { region: DrawnRegion }) {
 
   return (
     <div data-testid="region-card" className="flex items-center gap-2 px-[10px] py-2 rounded-[7px] bg-bg border border-border">
-      <span aria-hidden className="w-3 h-3 flex-none rounded-[3px] bg-accent" />
+      <span aria-hidden className="w-3 h-3 flex-none rounded-[3px] bg-region" />
       <div className="flex-1 min-w-0">
         {draft === null ? (
           <div className="font-medium truncate">{region.name}</div>
