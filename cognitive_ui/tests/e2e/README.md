@@ -18,12 +18,12 @@ The API runs with `uv run`, so the Python env must exist (`uv sync --extra dev -
 
 1. Launches `chrome-headless-shell` once as a browser server.
 2. With `E2E_LLM=fake`, starts the fake Ollama server.
-3. Starts the API from the repo root with `uv run uvicorn server.app:app --host 127.0.0.1 --port <free port>` and waits for `GET /v1/health`. Its state goes to a fresh temp dir: `JOB_STORAGE=sqlite`, `DT4LC_JOBS_DB`, `DT4LC_UPLOADS_PATH` and `DT4LC_MODEL_CACHE` all point into it. Its log goes to `<out>/api.log`.
+3. Starts the API from the repo root with `uv run uvicorn server.app:app --host 127.0.0.1 --port <free port>` and waits for `GET /v1/health`. Its state goes to a fresh temp dir: `JOB_STORAGE=sqlite`, and `DT4LC_CACHE_PATH`, `DT4LC_TEMP_PATH`, `DT4LC_OUTPUTS_PATH`, `DT4LC_JOBS_DB`, `DT4LC_UPLOADS_PATH` and `DT4LC_MODEL_CACHE` all point into it, so job runs write nothing to `resources/.cache/`. Every browser is a guest (`DEV_ROLE=guest`) with a guest limit of 1000 analyses per hour, so a run of flows never hits the quota; `E2E_DEV_ROLE` and `E2E_GUEST_LIMIT` change them. Its log goes to `<out>/api.log`.
 4. Serves `dist/` on a free port. Unknown paths without an extension fall back to `index.html`, and `/v1/*` is proxied to the API with streaming, so SSE works. A plain `npm run build` bakes `http://localhost:8000` (the `VITE_API_URL` fallback) into the bundle. The server rewrites it to its own origin, so the browser only ever talks to the harness.
 5. Runs the flows with `node --test --test-concurrency=1`. They share one API, so they run one file at a time.
 6. Tears everything down in reverse order, whether flows pass, fail or the runner gets SIGINT/SIGTERM/SIGHUP. That covers the flow processes, the static server, the API process group, the temp dir, the fake LLM and the browser. The exit code is the `node --test` exit code.
 
-Some paths stay under `resources/.cache/` because `dta/config` does not read an env var for them: `CACHE_PATH`, `TEMP_PATH` (`tmp/`) and `OUTPUTS_PATH` (`outputs/`). They are created at import if missing. Job artefacts still land in `resources/.cache/outputs/<job_id>/` until the backend makes that path configurable.
+One path stays outside the temp dir: Delineate-Anything works in `<system temp>/dt4lc_delineate`, which does not derive from `DT4LC_CACHE_PATH`.
 
 ## Environment variables
 
@@ -32,6 +32,8 @@ Some paths stay under `resources/.cache/` because `dta/config` does not read an 
 | `E2E_LLM` | `none` | LLM mode: `none`, `fake` or `live` (see below). |
 | `E2E_LLM_RULES` | `tests/e2e/fake-llm-rules.json` | Rules file the fake Ollama starts with (`fake` mode only). |
 | `E2E_OUT` | `tests/e2e/out/` | Where screenshots and `api.log` go. Git-ignored. |
+| `E2E_DEV_ROLE` | `guest` | Role of every request (`DEV_ROLE` for the API): `guest`, `member` or `operator`. One API serves the whole run, so a flow that needs another role needs its own run. |
+| `E2E_GUEST_LIMIT` | `1000` | Guest analyses per hour (`GUEST_ANALYSES_PER_HOUR` for the API); set it low to test the quota refusal. |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | newest `~/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell` | Browser binary. The cached revision does not have to match the `playwright-core` version. |
 
 Flows receive these from the runner (don't set them yourself): `E2E_BASE_URL` (UI origin), `E2E_API_URL` (API origin, direct), `E2E_WS_ENDPOINT` (browser server), `E2E_OUT`, `E2E_LLM` and `E2E_FAKE_LLM_URL`.
