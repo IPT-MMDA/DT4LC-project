@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from './api/hooks/useSession';
 import { Shell } from './components/shell/Shell';
+import { Capabilities } from './pages/Capabilities';
 import { MapPage } from './pages/MapPage';
 import { Placeholder } from './pages/Placeholder';
 import { Workspace } from './pages/Workspace';
@@ -56,7 +57,7 @@ export function AppRoutes() {
         <Route index element={<Workspace />} />
         <Route path="map" element={<MapPage />} />
         <Route path="library" element={<Placeholder title="Library" />} />
-        <Route path="capabilities" element={<Placeholder title="What DT4LC can do" />} />
+        <Route path="capabilities" element={<Capabilities />} />
         <Route path="results/:id" element={<ResultRoute />} />
         <Route path="settings" element={<SettingsRoute />} />
         <Route path="*" element={<Navigate to="/app" replace />} />
