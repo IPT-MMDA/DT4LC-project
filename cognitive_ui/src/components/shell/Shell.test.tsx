@@ -200,22 +200,15 @@ describe('routes', () => {
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
   });
 
-  it('/app/results/:id opens the conversation that holds the job', async () => {
+  it('/app/results/:id is Result detail inside the shell, under the Library in the rail', async () => {
     mockApi();
-    const { conversationId } = useChatStore.getState().addMessage({ kind: 'user', text: 'NDVI please' });
-    useChatStore.getState().addMessage({ kind: 'analysis', jobId: 'job-42', status: 'done', text: '', events: [] });
-    useChatStore.getState().newConversation();
-
-    renderApp('/app/results/job-42');
-    await waitFor(() => expect(location.current).toBe('/app'));
-    expect(useChatStore.getState().activeConversationId).toBe(conversationId);
-  });
-
-  it('/app/results/:id of an unknown job is the placeholder', () => {
-    mockApi();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, error: { code: 'not_found', message: 'Job elsewhere not found' } }), { status: 404 })));
     renderApp('/app/results/elsewhere');
-    expect(screen.getByRole('heading', { name: 'Result' })).toBeTruthy();
+    expect(await screen.findByTestId('result-unavailable')).toBeTruthy();
     expect(location.current).toBe('/app/results/elsewhere');
+    const rail = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(rail).getByRole('link', { name: 'Library' }).getAttribute('aria-current')).toBe('page');
+    expect(within(rail).getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBeNull();
   });
 
   it('/app/settings is for operators only', async () => {
