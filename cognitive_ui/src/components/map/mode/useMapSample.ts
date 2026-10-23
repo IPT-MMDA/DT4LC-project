@@ -1,10 +1,9 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import apiClient from '../../../api/client';
+import { useListFiles } from '../../../api/hooks/useUpload';
 import { carriedContext } from '../../../hooks/useSendMessage';
 import { selectActiveMessages, useChatStore } from '../../../store/useChatStore';
 import type { MessageAttachment } from '../../../types';
-import { samplesFromFiles, type LibraryFile } from './layers';
+import { samplesFromFiles } from './layers';
 
 /**
  * The sample pair for map mode: the conversation's (composer or last sent message),
@@ -17,12 +16,8 @@ export function useMapSample(): MessageAttachment[] {
     () => [...pending, ...carriedContext(messages).attachments].filter((a) => a.group),
     [pending, messages],
   );
-  const files = useQuery({
-    queryKey: ['files'],
-    queryFn: () => apiClient.get<{ ok: boolean; files: LibraryFile[] }>('/v1/files'),
-    enabled: fromChat.length === 0,
-    staleTime: 60_000,
-  });
-  const fromLibrary = useMemo(() => samplesFromFiles(files.data?.files), [files.data]);
+  // The Library's query (one shape under one key): it is invalidated when a file is deleted.
+  const files = useListFiles({ enabled: fromChat.length === 0 });
+  const fromLibrary = useMemo(() => samplesFromFiles(files.data), [files.data]);
   return fromChat.length > 0 ? fromChat : fromLibrary;
 }

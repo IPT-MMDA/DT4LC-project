@@ -145,13 +145,13 @@ export function defaultCompareSides(layers: Layer[]): { left: string; right: str
 /** A `GET /v1/files` item, the fields the sample layer reads (docs/API.md, BR2). */
 export interface LibraryFile {
   id: string;
-  upload_id?: string;
+  upload_id?: string | null;
   filename: string;
   path: string;
   kind?: 'upload' | 'sample' | 'export';
-  group?: { name: string; line: string };
-  metadata?: MessageAttachment['metadata'];
-  preview_url?: string;
+  group?: { name: string; line: string } | null;
+  metadata?: MessageAttachment['metadata'] | null;
+  preview_url?: string | null;
   created_at?: string;
 }
 
@@ -162,5 +162,5 @@ export function samplesFromFiles(files: LibraryFile[] | undefined): MessageAttac
   const latest = samples.reduce((a, b) => ((b.created_at ?? '') > (a.created_at ?? '') ? b : a));
   return samples
     .filter((f) => f.upload_id === latest.upload_id)
-    .map((f) => ({ id: f.upload_id ?? f.id, filename: f.filename, path: f.path, preview_url: f.preview_url, group: f.group, metadata: f.metadata }));
+    .map((f) => ({ id: f.upload_id ?? f.id, filename: f.filename, path: f.path, preview_url: f.preview_url ?? undefined, group: f.group ?? undefined, metadata: f.metadata ?? undefined }));
 }

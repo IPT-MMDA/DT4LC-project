@@ -1,5 +1,5 @@
 import type { JobRecord } from '../../../api/jobs';
-import type { LayerLegend, LegendClass, LngLatBounds } from '../../../store/useAppStore';
+import type { Layer, LayerLegend, LegendClass, LngLatBounds } from '../../../store/useAppStore';
 import type { ChatRegion, MessageAttachment } from '../../../types';
 
 // What a finished analysis shows as its result card (design/DESIGN.md §4), read from
@@ -573,4 +573,21 @@ export function resultCardOf(job: Pick<JobRecord, 'result'>, context: AnalysedCo
     if (card) return card;
   }
   return null;
+}
+
+/** A card view's raster as a map layer from the chat (`result-<jobId>-<view>`): On map, and the Library's Map. */
+export function resultLayerOf(jobId: string, model: ResultCardModel, view: CardView & { raster: ArtifactRef }): Layer {
+  return {
+    id: `result-${jobId}-${view.key}`,
+    name: view.layerName,
+    type: 'raster',
+    visible: true,
+    opacity: 0.8,
+    url: view.raster.path,
+    bounds: model.bounds,
+    legend: view.legend,
+    source: 'chat',
+    subtitle: 'from chat',
+    addedAt: new Date().toISOString(),
+  };
 }

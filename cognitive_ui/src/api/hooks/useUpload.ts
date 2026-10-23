@@ -23,7 +23,15 @@ export interface GeoTIFFFile {
   source: 'upload' | 'export';
   modified: number;
   metadata?: UploadMetadata | null;
+  upload_id?: string | null;  // what POST /v1/upload or /v1/sample returned; DELETE /v1/files/{upload_id}; null for exports
+  kind?: 'upload' | 'sample' | 'export';
+  group?: { name: string; line: string } | null;  // both sample files: one Library row
+  preview_url?: string | null;
+  created_at?: string;  // ISO, server local time
 }
+
+/** react-query key of GET /v1/files; Library, map mode and From library share it. */
+export const FILES_QUERY_KEY = ['files'] as const;
 
 interface ListFilesResponse {
   ok: boolean;
@@ -52,9 +60,11 @@ export function useUploadFile() {
   });
 }
 
-export function useListFiles() {
+/** `fresh`: refetch whenever the caller mounts (the Library; files arrive from chat and the sample too). */
+export function useListFiles({ enabled = true, fresh = false }: { enabled?: boolean; fresh?: boolean } = {}) {
   return useQuery({
-    queryKey: ['files'],
+    queryKey: FILES_QUERY_KEY,
+    enabled,
     queryFn: async (): Promise<GeoTIFFFile[]> => {
       const response = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/v1/files`);
 
@@ -65,7 +75,7 @@ export function useListFiles() {
       const data: ListFilesResponse = await response.json();
       return data.files;
     },
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    staleTime: fresh ? 0 : 30000, // Consider data fresh for 30 seconds
     refetchOnWindowFocus: true,
   });
 }
