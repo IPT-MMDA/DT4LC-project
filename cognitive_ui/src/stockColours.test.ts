@@ -4,20 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import tailwindColors from 'tailwindcss/colors';
 
-// Old pages and job cards that Phase 2 of v0.6.0 replaces; they keep their stock
-// colours until they are deleted. Everything else must use the design tokens.
-const LEGACY = new Set([
-  'pages/ChatPage.tsx',
-  'pages/Dashboard.tsx',
-  'pages/DataPage.tsx',
-  'pages/JobDetailsPage.tsx',
-  'pages/JobsPage.tsx',
-  'pages/ModelsPage.tsx',
-  'components/chat/ChatHistory.tsx',
-  'components/chat/FileUploadDropzone.tsx',
-  'components/chat/JobResultCard.tsx',
-  'components/jobs/JobResult.tsx',
-]);
+// Files allowed to keep stock colours. Empty since v0.6.0 Phase 2 deleted the old
+// pages and job cards; everything must use the design tokens.
+const LEGACY = new Set<string>([]);
 
 const HUES =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|primary|geo|white';
@@ -48,7 +37,7 @@ const surviving = (readdirSync(srcDir, { recursive: true }) as string[])
 
 describe('surviving components use design tokens, not the stock Tailwind palette', () => {
   it('finds the files it checks', () => {
-    expect(surviving).toContain('components/layout/Sidebar.tsx');
+    expect(surviving).toContain('components/shell/Rail.tsx');
     expect(surviving).toContain('components/map/DrawToolbar.tsx');
   });
 
