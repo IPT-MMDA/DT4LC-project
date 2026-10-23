@@ -1,0 +1,103 @@
+# DT4LC public demo: the frontend's nginx, the only way in to the backend.
+#
+# docker-compose.demo.yml mounts this file as /etc/nginx/templates/default.conf.template; at start
+# the nginx image substitutes ${DEMO_SUBNET} and writes /etc/nginx/conf.d/default.conf in place of
+# the default cognitive_ui/nginx.conf. Variables written with a dollar sign and no braces are
+# nginx's own.
+
+# The client's IP. A request from the demo network (the Docker gateway, where a TLS proxy on the
+# host arrives) may name the client in X-Forwarded-For, and the last address there is taken. Any
+# other peer is the client itself, whatever X-Forwarded-For it sends.
+set_real_ip_from ${DEMO_SUBNET};
+real_ip_header X-Forwarded-For;
+
+# Per-IP rate limits. POSTs that start work or call the LLM (analyses, chat turns, uploads, the
+# sample): 10 a minute plus a burst of 5. Every other API request: 20 a second plus a burst of 200
+# (tiles arrive in bursts when the map moves).
+map $request_method $dt4lc_post_client {
+    POST    $binary_remote_addr;
+    default "";
+}
+limit_req_zone $dt4lc_post_client zone=dt4lc_post:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=dt4lc_api:10m rate=20r/s;
+limit_req_status 429;
+
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # Sent with every proxied request. X-Forwarded-For is replaced, not appended to, so the backend
+    # (which trusts only the demo network) sees exactly the client IP nginx settled on above.
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+
+    # A rate-limited request gets the project's error body
+    error_page 429 = @rate_limited;
+    location @rate_limited {
+        default_type application/json;
+        add_header Retry-After 10 always;
+        return 429 '{"ok":false,"error":{"code":"RATE_LIMITED","message":"Too many requests from your address. Wait a few seconds and try again.","details":{}}}';
+    }
+
+    # API proxy to backend (^~: the static-asset rule below never applies to API paths)
+    location ^~ /v1/ {
+        limit_req zone=dt4lc_api burst=200 nodelay;
+        proxy_pass http://backend:8000;
+
+        # Increase timeouts for long-running requests
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+
+        client_max_body_size 10m;
+
+        # Work and LLM calls: the strict limit for POSTs, on top of the API one
+        location ~ ^/v1/(jobs|chat|upload|sample|plan|execute)$ {
+            limit_req zone=dt4lc_post burst=5 nodelay;
+            limit_req zone=dt4lc_api burst=200 nodelay;
+            proxy_pass http://backend:8000;
+
+            # GeoTIFF uploads: the backend accepts up to 200 MB per file
+            client_max_body_size 210m;
+        }
+    }
+
+    # OpenAPI / Swagger / ReDoc (FastAPI auto-generated docs)
+    location = /openapi.json {
+        limit_req zone=dt4lc_api burst=200 nodelay;
+        proxy_pass http://backend:8000/openapi.json;
+    }
+
+    location /docs {
+        limit_req zone=dt4lc_api burst=200 nodelay;
+        proxy_pass http://backend:8000/docs;
+    }
+
+    location /redoc {
+        limit_req zone=dt4lc_api burst=200 nodelay;
+        proxy_pass http://backend:8000/redoc;
+    }
+
+    # Handle SPA routing
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
