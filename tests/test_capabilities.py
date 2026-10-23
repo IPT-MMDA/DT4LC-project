@@ -328,7 +328,7 @@ def test_demo_data_sources_and_guest_limits(demo: dict[str, Any]) -> None:
     assert data["subtitle"] == "Where imagery can come from on this server."
     assert [(i["title"], i["detail"], i["status"], i["status_label"]) for i in data["items"]] == [
         ("Uploads", "GeoTIFF, up to 200 MB per file · any projection", "always", "Always"),
-        ("Bundled sample", "kahovka_data · HLS L30 · 2023-06-01 → 06-09", "always", "Always"),
+        ("Bundled sample", "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09", "always", "Always"),
         (
             "Earth Engine · Sentinel-2 / Landsat / MODIS",
             "Fetch by region, dates, bands and cloud filter from the Map",
@@ -415,6 +415,22 @@ def test_offline_no_earth_engine(offline: dict[str, Any]) -> None:
     session = offline["session"]
     assert (session["role"], session["guest"], session["analyses"]["limit"]) == ("member", False, None)
     assert session["can_download_models"] is True
+
+
+def test_member_data_note_is_not_the_guest_line(offline: dict[str, Any]) -> None:
+    """The Data tier's note follows the caller's role (prototype ``guestLimitLine``)."""
+    assert _tier(offline, "data")["note"] == (
+        "Member on a local server: no analysis limit; results are kept until you delete them."
+    )
+
+
+def test_operator_data_note_on_the_demo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DT4LC_DEPLOYMENT", "demo")
+    monkeypatch.setenv("DEV_ROLE", "operator")
+    doc = _capabilities(providers=[], installed=set(), ee=False)
+    assert _tier(doc, "data")["note"] == (
+        "Operator on the public demo: no analysis limit; results are kept until you delete them."
+    )
 
 
 # --- model statuses per role and policy --------------------------------------------

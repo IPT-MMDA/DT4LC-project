@@ -107,8 +107,8 @@ COMPOSED_ITEMS = (
     },
 )
 
-SAMPLE_DIR = RESOURCES_PATH / "kahovka_data"
-SAMPLE_DETAIL = "kahovka_data · HLS L30 · 2023-06-01 → 06-09"
+SAMPLE_DIR = RESOURCES_PATH / "kahovka_data"  # the folder keeps its name; the page shows the dataset
+SAMPLE_DETAIL = "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09"
 EE_TITLE = "Earth Engine · Sentinel-2 / Landsat / MODIS"
 EE_DETAIL = "Fetch by region, dates, bands and cloud filter from the Map"
 
@@ -117,6 +117,14 @@ def deployment() -> Literal["demo", "local"]:
     """``DT4LC_DEPLOYMENT``: ``demo`` (the public demo) or ``local`` (default; any other value)."""
     value = os.environ.get("DT4LC_DEPLOYMENT", "").strip().lower()
     return "demo" if value == "demo" else "local"
+
+
+def data_note(role: Role, deploy: Literal["demo", "local"], per_hour: int, kept: int) -> str:
+    """The Data tier's line about the caller's limits: the guest quota, or none for a member or operator."""
+    if role == "guest":
+        return f"Guests: up to {per_hour} analyses per hour, results kept {kept} h in this browser, no account needed."
+    where = "the public demo" if deploy == "demo" else "a local server"
+    return f"{role.capitalize()} on {where}: no analysis limit; results are kept until you delete them."
 
 
 def model_display_name(model_id: str | None) -> str | None:
@@ -314,8 +322,7 @@ def build_capabilities(
             "subtitle": "Where imagery can come from on this server.",
             "status": "available",
             "needs_assistant": False,
-            "note": f"Guests: up to {per_hour} analyses per hour, results kept {kept} h in this browser, "
-            "no account needed.",
+            "note": data_note(role, deploy, per_hour, kept),
             "items": [
                 {
                     "id": "uploads",
