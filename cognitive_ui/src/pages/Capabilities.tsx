@@ -144,7 +144,7 @@ function AskItems({ tier }: { tier: AskTier }) {
           <StatusPill status={tier.status} label={tier.status_label} />
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {tier.items.map((item) => (
           <PromptButton key={item.id} prompt={item.prompt} variant="card" />
         ))}
@@ -258,7 +258,7 @@ function DataItems({ tier }: { tier: DataTier }) {
           key={item.id}
           data-testid="data-item"
           data-id={item.id}
-          className="grid grid-cols-[1fr_1.4fr_220px] gap-[14px] px-4 py-[10px] border-b border-border2 items-center"
+          className="grid grid-cols-[1fr_1.4fr_220px] max-md:grid-cols-1 gap-[14px] max-md:gap-1 px-4 py-[10px] border-b border-border2 items-center"
         >
           <span className="font-medium">{item.title}</span>
           <span className={cn('text-text2', item.id === 'sample' && 'font-mono text-[12px]')}>{item.detail}</span>
@@ -388,7 +388,7 @@ export function Capabilities() {
     <main
       data-testid="capabilities-page"
       aria-labelledby="capabilities-title"
-      className="flex-1 min-w-0 h-full overflow-y-auto bg-bg px-10 pt-8 pb-12 flex flex-col gap-[30px] text-[13px]"
+      className="flex-1 min-w-0 h-full overflow-y-auto bg-bg px-10 max-md:px-4 md:max-lg:px-6 pt-8 max-md:pt-6 pb-12 flex flex-col gap-[30px] text-[13px]"
     >
       {data ? (
         <CapabilitiesView doc={data} />

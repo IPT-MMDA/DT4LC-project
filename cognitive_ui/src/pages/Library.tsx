@@ -21,11 +21,13 @@ import {
   type StatusFilter,
 } from '../components/library/libraryModel';
 import { useLibraryActions } from '../components/library/useLibraryActions';
+import { PHONE_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { useChatStore } from '../store/useChatStore';
 
 // /app/library (design/screens/library.png): every analysis and file from this
-// session in one table, newest first, with filters and one action per row. Replaces
-// v0.5's Jobs and Data pages. Classes join with clsx: utils/cn's tailwind-merge
+// session in one table, newest first, with filters and one action per row; on a phone a
+// list of cards, on a tablet the table without the conversation. Replaces v0.5's Jobs
+// and Data pages. Classes join with clsx: utils/cn's tailwind-merge
 // doesn't know the type-scale tokens and drops `text-control` before a text colour.
 
 const GEOTIFF = /\.tiff?$/i;
@@ -217,6 +219,7 @@ export function Library() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
   const [error, setError] = useState<string | null>(null);
+  const phone = useMediaQuery(PHONE_QUERY);
   const now = Date.now();
 
   const rows = useMemo(() => libraryRows(jobs.data ?? [], files.data ?? [], conversations), [jobs.data, files.data, conversations]);
@@ -232,6 +235,26 @@ export function Library() {
     setError(null);
     setError(await action());
   };
+  const rowActions = (row: LibraryRow) => (
+    <>
+      <RowActionButton
+        row={row}
+        onAction={() =>
+          void run(() => (row.kind === 'file' ? actions.openInChat(row) : row.action === 'map' ? actions.openOnMap(row) : actions.retry(row)))
+        }
+      />
+      {(row.kind === 'analysis' || row.deleteId) && <RowMenu row={row} onDelete={() => run(() => actions.remove(row))} />}
+    </>
+  );
+  const rowName = (row: LibraryRow) => (
+    <button type="button" className="block max-w-full text-left">
+      <span data-testid="library-name" className="block text-control font-medium text-text truncate">{row.title}</span>
+      {row.subtitle && <span data-testid="library-subtitle" className="block text-[11.5px] text-muted truncate">{row.subtitle}</span>}
+    </button>
+  );
+  const rowStatus = (row: LibraryRow) =>
+    row.kind === 'analysis' ? <StatusPill status={row.status} detail={row.duration} /> : <span className="text-control text-muted">—</span>;
+  const rowId = (row: LibraryRow) => (row.kind === 'analysis' ? row.job.id : (row.deleteId ?? row.key));
 
   const onUpload = async (list: FileList | null) => {
     const picked = [...(list ?? [])];
@@ -300,6 +323,35 @@ export function Library() {
         </button>
       </div>
     );
+  } else if (phone) {
+    // Cards: thumbnail, name, type, status, when and the row's action.
+    body = (
+      <ul aria-label="Items">
+        {shown.map((row) => (
+          <li
+            key={row.key}
+            data-testid="library-row"
+            data-kind={row.kind}
+            data-id={rowId(row)}
+            onClick={() => void run(() => actions.open(row))}
+            className="border-t border-border2 first:border-t-0 px-3 py-3 flex items-start gap-3 cursor-pointer"
+          >
+            <Thumbnail url={row.thumbnail} />
+            <div className="flex-1 min-w-0 flex flex-col gap-1">
+              {rowName(row)}
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+                <span data-testid="library-type" className="text-control text-text2">{row.type || '—'}</span>
+                <span data-testid="library-status">{rowStatus(row)}</span>
+                <span data-testid="library-when" className="font-mono text-[11.5px] text-muted whitespace-nowrap">{rowWhen(row, now)}</span>
+              </div>
+            </div>
+            <div className="flex-none flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              {rowActions(row)}
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
   } else {
     const head = 'px-3 py-[10px] text-left text-label uppercase text-muted';
     body = (
@@ -311,9 +363,9 @@ export function Library() {
             </th>
             <th scope="col" className={head}>Name</th>
             <th scope="col" className={cn(head, 'w-[15%]')}>Type</th>
-            <th scope="col" className={cn(head, 'w-[13%]')}>Status</th>
-            <th scope="col" className={cn(head, 'w-[13%]')}>Conversation</th>
-            <th scope="col" className={cn(head, 'w-[10%]')}>When</th>
+            <th scope="col" className={cn(head, 'w-[13%] max-lg:w-[18%]')}>Status</th>
+            <th scope="col" className={cn(head, 'w-[13%] max-lg:hidden')}>Conversation</th>
+            <th scope="col" className={cn(head, 'w-[10%] max-lg:w-[15%]')}>When</th>
             <th scope="col" className={cn(head, 'w-[104px]')}>
               <span className="sr-only">Actions</span>
             </th>
@@ -325,37 +377,22 @@ export function Library() {
               key={row.key}
               data-testid="library-row"
               data-kind={row.kind}
-              data-id={row.kind === 'analysis' ? row.job.id : (row.deleteId ?? row.key)}
+              data-id={rowId(row)}
               onClick={() => void run(() => actions.open(row))}
               className="border-t border-border2 cursor-pointer hover:bg-bg"
             >
               <td className="pl-4 pr-2 py-[10px]">
                 <Thumbnail url={row.thumbnail} />
               </td>
-              <td className="px-3 py-[10px] min-w-0">
-                <button type="button" className="block max-w-full text-left">
-                  <span data-testid="library-name" className="block text-control font-medium text-text truncate">{row.title}</span>
-                  {row.subtitle && <span data-testid="library-subtitle" className="block text-[11.5px] text-muted truncate">{row.subtitle}</span>}
-                </button>
-              </td>
+              <td className="px-3 py-[10px] min-w-0">{rowName(row)}</td>
               <td data-testid="library-type" className="px-3 py-[10px] text-control text-text2 truncate">{row.type || '—'}</td>
               <td data-testid="library-status" className="px-3 py-[10px]">
-                {row.kind === 'analysis' ? <StatusPill status={row.status} detail={row.duration} /> : <span className="text-control text-muted">—</span>}
+                {rowStatus(row)}
               </td>
-              <td data-testid="library-conversation" className="px-3 py-[10px] text-control text-text2 truncate">{row.conversation}</td>
+              <td data-testid="library-conversation" className="px-3 py-[10px] text-control text-text2 truncate max-lg:hidden">{row.conversation}</td>
               <td data-testid="library-when" className="px-3 py-[10px] font-mono text-[11.5px] text-muted whitespace-nowrap">{rowWhen(row, now)}</td>
               <td className="pr-3 py-[10px]" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-end gap-1">
-                  <RowActionButton
-                    row={row}
-                    onAction={() =>
-                      void run(() =>
-                        row.kind === 'file' ? actions.openInChat(row) : row.action === 'map' ? actions.openOnMap(row) : actions.retry(row),
-                      )
-                    }
-                  />
-                  {(row.kind === 'analysis' || row.deleteId) && <RowMenu row={row} onDelete={() => run(() => actions.remove(row))} />}
-                </div>
+                <div className="flex items-center justify-end gap-1">{rowActions(row)}</div>
               </td>
             </tr>
           ))}
@@ -365,7 +402,7 @@ export function Library() {
   }
 
   return (
-    <main data-testid="library-page" className="flex-1 min-w-0 overflow-y-auto bg-bg px-[40px] py-[32px]">
+    <main data-testid="library-page" className="flex-1 min-w-0 overflow-y-auto bg-bg px-[40px] py-[32px] max-md:px-4 max-md:py-6 md:max-lg:px-6">
       <header className="flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-title">Library</h1>

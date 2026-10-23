@@ -26,6 +26,7 @@
     "e2e:library": "node tests/e2e/run.mjs library",
     "e2e:result": "node tests/e2e/run.mjs result-detail",
     "e2e:run2": "npm run e2e:capabilities && npm run e2e:landing && npm run e2e:map && npm run e2e:library && npm run e2e:result",
+    "e2e:responsive": "node tests/e2e/run.mjs responsive",
     "e2e:signin": "npm run e2e:signin:fake && npm run e2e:signin:off",
     "e2e:signin:fake": "E2E_SIGNIN=fake node tests/e2e/run.mjs signin",
     "e2e:signin:off": "node tests/e2e/run.mjs signin-off",

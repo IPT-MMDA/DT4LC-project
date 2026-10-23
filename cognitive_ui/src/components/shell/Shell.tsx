@@ -1,25 +1,49 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { useLayout } from '../../hooks/useMediaQuery';
 import { useSigninNotice } from '../../hooks/useSigninNotice';
 import { useAppStore } from '../../store/useAppStore';
+import { useChatStore } from '../../store/useChatStore';
 import { cn } from '../../utils/cn';
 import { applyTheme } from '../../utils/theme';
+import { MenuDrawer, PhoneBar } from './PhoneMenu';
 import { Rail } from './Rail';
 
-/** The app frame under /app: the rail and the current destination. */
+/**
+ * The app frame under /app: the rail and the current destination. On a phone the rail
+ * becomes a top bar whose menu button opens a drawer (design/screens/workspace-phone-390.png).
+ * The frame is the dynamic viewport's height, so the composer stays above a phone's
+ * keyboard and browser bars.
+ */
 export function Shell() {
   const theme = useAppStore((state) => state.theme);
   const [notice, dismissNotice] = useSigninNotice();
+  const phone = useLayout() === 'phone';
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const { pathname } = useLocation();
+  const activeConversation = useChatStore((state) => state.activeConversationId);
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
+  // A new destination or conversation closes the menu.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname, activeConversation]);
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+    menuButton.current?.focus();
+  };
+
   return (
-    <div className="h-screen flex overflow-hidden bg-bg text-text">
-      <Rail />
-      <div className="flex-1 min-w-0 h-full flex flex-col overflow-hidden">
+    <div className={cn('h-dvh flex overflow-hidden bg-bg text-text', phone && 'flex-col')}>
+      {phone ? <PhoneBar open={menuOpen} onOpen={() => setMenuOpen(true)} buttonRef={menuButton} /> : <Rail />}
+      {phone && menuOpen && <MenuDrawer onClose={closeMenu} />}
+      <div className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden">
         {notice && (
           <div
             role="status"

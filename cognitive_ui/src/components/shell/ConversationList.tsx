@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { PanelLeftClose, Pencil, Trash2 } from 'lucide-react';
 import { useChatStore, conversationMeta } from '../../store/useChatStore';
 import type { Conversation } from '../../types';
 import { cn } from '../../utils/cn';
@@ -96,8 +96,12 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
   );
 }
 
-/** The Workspace's left column: conversations (newest first), "+ New", and the session badge. */
-export function ConversationList() {
+/**
+ * The Workspace's left column: conversations (newest first), "+ New", and the session badge.
+ * In the phone's menu it fills the drawer (`className`); on a tablet `onCollapse` adds a
+ * button that hides it.
+ */
+export function ConversationList({ className, onCollapse }: { className?: string; onCollapse?: () => void }) {
   const conversations = useChatStore((state) => state.conversations);
   const activeId = useChatStore((state) => state.activeConversationId);
   const keptHours = useChatStore((state) => state.keptHours);
@@ -106,10 +110,11 @@ export function ConversationList() {
   return (
     <aside
       aria-label="Conversations"
-      className="w-[232px] flex-none bg-surface border-r border-border flex flex-col min-h-0"
+      className={cn('w-[232px] flex-none bg-surface border-r border-border flex flex-col min-h-0', className)}
     >
-      <div className="pt-4 px-[14px] pb-[10px] flex items-center justify-between">
+      <div className="pt-4 px-[14px] pb-[10px] flex items-center justify-between gap-2">
         <h2 className="text-[13px] font-semibold">Conversations</h2>
+        {onCollapse && <div className="flex-1" />}
         <button
           type="button"
           onClick={newConversation}
@@ -117,6 +122,18 @@ export function ConversationList() {
         >
           + New
         </button>
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Hide conversations"
+            aria-expanded
+            title="Hide conversations"
+            className="w-7 h-7 flex-none flex items-center justify-center rounded-control text-muted hover:bg-surface2"
+          >
+            <PanelLeftClose aria-hidden className="w-4 h-4" strokeWidth={1.8} />
+          </button>
+        )}
       </div>
 
       {conversations.length === 0 ? (

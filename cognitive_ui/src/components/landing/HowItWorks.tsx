@@ -119,7 +119,7 @@ function Demo({ demo }: { demo: ReturnType<typeof useDemo> }) {
       <div data-anim="scene" className="pt-4 px-4 pb-[18px] flex flex-col gap-[14px]">
         <div className="self-end max-w-[520px] flex flex-col items-end gap-[6px]">
           <div className="bg-bubble rounded-[12px_12px_3px_12px] py-[9px] px-[13px] leading-[1.5] text-[13.5px] relative">
-            <span data-anim="type" className="inline-block whitespace-nowrap">
+            <span data-anim="type" className="inline-block whitespace-nowrap max-md:whitespace-normal">
               Compare water before and after the dam breach using NDWI.
             </span>
             <span data-anim="caret" className="absolute right-2 bottom-[11px] w-[2px] h-[14px] bg-text" />
@@ -198,12 +198,12 @@ function Demo({ demo }: { demo: ReturnType<typeof useDemo> }) {
 export function HowItWorks({ note }: { note: string }) {
   const demo = useDemo();
   return (
-    <section id="how" aria-labelledby="how-title" className="px-10 py-14 border-t border-border">
+    <section id="how" aria-labelledby="how-title" className="px-10 max-md:px-4 md:max-lg:px-6 py-14 max-md:py-10 border-t border-border">
       <div className="max-w-[1360px] mx-auto flex flex-col gap-[22px]">
         <h2 id="how-title" className="text-[22px] font-semibold tracking-[-.015em]">
           How it works
         </h2>
-        <div className="grid grid-cols-[380px_minmax(0,1fr)] gap-7 items-start">
+        <div className="grid grid-cols-[380px_minmax(0,1fr)] max-lg:grid-cols-1 gap-7 items-start">
           <div className="flex flex-col gap-[10px]">
             {STEPS.map(({ step, title, text }) => {
               const active = demo.state.step === step;
