@@ -5,12 +5,13 @@ import type {
   AnalysisMessage,
   Attachment,
   ChatMessage,
+  ChatRegion,
   Conversation,
   JobResultData,
   NewChatMessage,
+  PendingIntent,
   UserMessage,
 } from '../types';
-import type { DrawnRegion } from './useAppStore';
 
 // The single owner of chat state: conversations, their messages and the composer.
 // Map and UI state stay in useAppStore.
@@ -31,6 +32,7 @@ function generateId(prefix: string): string {
 }
 
 function titleFrom(text: string): string {
+  if (!text.trim()) return NEW_CONVERSATION_TITLE;  // files sent without a message
   return text.length > 50 ? text.slice(0, 47) + '...' : text;
 }
 
@@ -135,6 +137,9 @@ function toPersistedMessage(message: ChatMessage): ChatMessage {
         path: att.path,
         preview_url: att.preview_url,
         group: att.group,
+        mime_type: att.mime_type,
+        size_bytes: att.size_bytes,
+        metadata: att.metadata,
       })),
     };
   }
@@ -165,13 +170,15 @@ export interface ChatStore {
   // Composer (not persisted)
   draft: string;
   pendingAttachments: Attachment[];
-  pendingRegion: DrawnRegion | null;
+  pendingRegion: ChatRegion | null;
 
   // Conversations
   newConversation: () => void;
   selectConversation: (conversationId: string) => void;
   renameConversation: (conversationId: string, title: string) => void;
   deleteConversation: (conversationId: string) => void;
+  /** Keep the latest reply's `pending` (null clears it); sent back with the next message. */
+  setConversationPending: (conversationId: string, pending: PendingIntent | null) => void;
 
   // Messages. addMessage targets `conversationId`, else the active conversation;
   // when that does not exist it starts a new one and makes it active.
@@ -188,7 +195,7 @@ export interface ChatStore {
   addAttachment: (attachment: Attachment) => void;
   removeAttachment: (attachmentId: string) => void;
   clearAttachments: () => void;
-  setPendingRegion: (region: DrawnRegion | null) => void;
+  setPendingRegion: (region: ChatRegion | null) => void;
 }
 
 /** Messages of the active conversation (a stable empty array when there is none). */
@@ -273,6 +280,11 @@ export const useChatStore = create<ChatStore>()(
           activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
         })),
 
+      setConversationPending: (conversationId, pending) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) => (c.id === conversationId ? { ...c, pending } : c)),
+        })),
+
       addMessage: (input, conversationId) => {
         const now = new Date().toISOString();
         const message = { ...input, id: input.id ?? generateId('msg'), createdAt: input.createdAt ?? now } as ChatMessage;
@@ -294,7 +306,11 @@ export const useChatStore = create<ChatStore>()(
           return { conversationId: conversation.id, messageId: message.id };
         }
 
-        const isFirstUserMessage = message.kind === 'user' && !existing.messages.some((m) => m.kind === 'user');
+        // The title comes from the first user message with text.
+        const isFirstUserMessage =
+          message.kind === 'user' &&
+          message.text.trim() !== '' &&
+          !existing.messages.some((m) => m.kind === 'user' && m.text.trim() !== '');
         const updated: Conversation = {
           ...existing,
           title: isFirstUserMessage ? titleFrom((message as UserMessage).text) : existing.title,
