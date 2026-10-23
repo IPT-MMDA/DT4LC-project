@@ -3,6 +3,19 @@
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 
+/** Provider keys of the E2E_SETTINGS=1 API env: present for the server, never in the page. */
+export const FAKE_PROVIDER_KEYS = { GEMINI_API_KEY: 'e2e-secret-key-123', GROQ_API_KEY: 'e2e-secret-key-456' };
+
+/** Pick who signs in next at the fake GitHub (E2E_SIGNIN=fake): a key of FAKE_USERS in fake-github.mjs. */
+export async function signInAs(user) {
+  const res = await fetch(`${required('E2E_FAKE_GITHUB_URL')}/__e2e/user`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ user }),
+  });
+  if (!res.ok) throw new Error(`signInAs: ${res.status} ${await res.text()}`);
+}
+
 function required(name) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set: run flows through \`npm run e2e\`, not directly`);
