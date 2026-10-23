@@ -29,8 +29,9 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
+from dta.dti.algorithms.change_detection import INCREASE_CLASS_NAMES, change_class_statistics
 from dta.dti.algorithms.spectral_index import COLORMAPS, HAS_MATPLOTLIB, _render_index_png
-from dta.dti.raster import _BAND_CODE, _band_summary, band_indices, reflectance_divisor
+from dta.dti.raster import _BAND_CODE, _band_summary, band_indices, pixel_area_km2, reflectance_divisor
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ ROLES = ("red", "nir", "green", "blue", "swir")
 # |after - before| above this counts as an increase / decrease in change mode.
 DEFAULT_THRESHOLD = 0.2
 COLORMAP = "ndwi"  # brown (low) -> white -> blue (high)
+# ``class_statistics`` names (increase, decrease, unchanged) by the step's ``name``; other names use
+# ``Increase`` / ``Decrease`` / ``Stable``.
+CHANGE_CLASS_NAMES = {"NDMI": ("Wetter", "Drier", "No change")}
 
 _ALLOWED = "numbers, band names (B5, SR_B5, nir, swir, red, green, blue), + - * / and parentheses"
 _BINOPS = {ast.Add: np.add, ast.Sub: np.subtract, ast.Mult: np.multiply, ast.Div: np.divide}
@@ -312,7 +316,10 @@ def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) 
     with ``threshold`` from ``config.threshold``, default 0.2, and the areas in
     km² when the pixel size is in metres: ``increase_area_km2``, ``decrease_area_km2``
     and ``areas_km2: {increase, decrease, stable}``, else ``areas_km2: None``);
-    ``index_statistics`` the per-date ones.
+    ``index_statistics`` the per-date ones. ``class_statistics`` (as
+    :func:`dta.dti.algorithms.change_detection.change_class_statistics`) classes the change at
+    ±``threshold``: ``Wetter`` / ``Drier`` / ``No change`` for NDMI, else ``Increase`` /
+    ``Decrease`` / ``Stable``.
     """
     tree, formula, name, threshold = _settings(config)
     before, _, _ = _compute(before_path, tree, formula)
@@ -336,8 +343,8 @@ def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) 
                 "stable_pixels": int(np.sum(np.abs(valid) <= threshold)),
             }
         )
-        if crs is not None and crs.is_projected:
-            pixel_km2 = abs(transform.a * transform.e) * crs.linear_units_factor[1] ** 2 / 1e6
+        pixel_km2 = pixel_area_km2(crs, transform)
+        if pixel_km2 is not None:
             stats["increase_area_km2"] = round(stats["increase_pixels"] * pixel_km2, 3)
             stats["decrease_area_km2"] = round(stats["decrease_pixels"] * pixel_km2, 3)
             # Same shape as algorithms/change-detection's.
@@ -348,12 +355,17 @@ def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) 
             }
         else:
             stats["areas_km2"] = None
+    with np.errstate(invalid="ignore"):
+        increase, decrease = change > threshold, change < -threshold
+    names = CHANGE_CLASS_NAMES.get(name.upper(), INCREASE_CLASS_NAMES)
+    class_statistics = change_class_statistics(change, increase, decrease, names, pixel_area_km2(crs, transform))
     change_range = _percentile_range(change, symmetric=True)
     stats.update({"display_range": list(change_range), "display_range_source": "98th percentile of |change|"})
 
     index_range, _ = _display_range(tree, np.concatenate([before.ravel(), after.ravel()]))
     result: dict[str, Any] = {
         "statistics": stats,
+        "class_statistics": class_statistics,
         "index_statistics": {"before": _stats(before), "after": _stats(after)},
         "metadata": {**metadata, "before_path": str(before_path), "after_path": str(after_path)},
         "before_path": str(before_path),
