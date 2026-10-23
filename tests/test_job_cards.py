@@ -359,8 +359,8 @@ async def test_statistics_csv_has_a_row_per_band(queue: JobQueue) -> None:
     assert header == [
         "band", "min", "max", "mean", "std", "median", "p5", "p25", "p75", "p95", "valid_pixels", "nodata_pixels"
     ]  # fmt: skip
-    assert [row[0] for row in rows] == ["band_1", "band_2", "band_3", "band_4", "band_5"]
-    first = bands["bands"]["band_1"]
+    assert [row[0] for row in rows] == ["B2", "B3", "B4", "B5", "B6"]  # the band codes, as the design shows
+    first = bands["bands"]["B2"]
     assert [float(v) for v in rows[0][1:6]] == [first[k] for k in ("min", "max", "mean", "std", "median")]
     assert int(rows[0][10]) == first["valid_pixels"]
 

@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 import rasterio
 
+from dta.dti.raster import _BAND_CODE
+
 
 def calculate_statistics(raster_path: str) -> dict[str, Any]:
     """Calculate comprehensive statistics for a raster.
@@ -22,7 +24,8 @@ def calculate_statistics(raster_path: str) -> dict[str, Any]:
         raster_path: Path to GeoTIFF
 
     Returns:
-        Dictionary with statistics for each band and overall metadata
+        Dictionary with statistics for each band and overall metadata; ``bands`` is keyed by the
+        band code of the band's description (``B2``, as upload metadata names it), else ``band_<n>``
 
     Raises:
         FileNotFoundError: If raster file not found
@@ -47,7 +50,7 @@ def calculate_statistics(raster_path: str) -> dict[str, Any]:
         }
 
         # Per-band statistics
-        for band_idx in range(1, src.count + 1):
+        for band_idx, description in enumerate(src.descriptions, start=1):
             band_data = src.read(band_idx, masked=True)
 
             # Convert to float for calculations
@@ -98,15 +101,13 @@ def calculate_statistics(raster_path: str) -> dict[str, Any]:
                     "nodata_pixels": int(band_array.size),
                 }
 
-            stats["bands"][f"band_{band_idx}"] = band_stats
+            m = _BAND_CODE.match((description or "").strip().lower())
+            key = f"B{m.group(1).upper()}" if m else ""
+            stats["bands"][key if key and key not in stats["bands"] else f"band_{band_idx}"] = band_stats
 
         # Overall statistics (if multi-band, average across bands)
         if src.count > 1:
-            all_means = [
-                stats["bands"][f"band_{i}"]["mean"]
-                for i in range(1, src.count + 1)
-                if stats["bands"][f"band_{i}"]["mean"] is not None
-            ]
+            all_means = [b["mean"] for b in stats["bands"].values() if b["mean"] is not None]
             if all_means:
                 stats["overall_mean"] = float(np.mean(all_means))
 

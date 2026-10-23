@@ -369,6 +369,30 @@ class TestStatisticsAlgorithm:
         result = run(synthetic_tif_2band)
         assert isinstance(result, dict)
 
+    def test_statistics_keys_bands_by_their_code(self, tmp_path: Path, synthetic_tif: str) -> None:
+        """Band codes from the descriptions (``sr_b05`` is B5), else ``band_<n>``; a repeated code too."""
+        from dta.dti.algorithms.statistics import run
+
+        path = str(tmp_path / "described.tif")
+        _create_synthetic_geotiff(path, bands=5)
+        with rasterio.open(path, "r+") as dst:
+            for i, desc in enumerate(["B2", "sr_b05", "", "Red", "B2"], start=1):
+                dst.set_band_description(i, desc)
+
+        assert list(run(path)["bands"]) == ["B2", "B5", "band_3", "band_4", "band_5"]
+        assert list(run(synthetic_tif)["bands"]) == ["band_1", "band_2", "band_3", "band_4"]  # no descriptions
+
+    @pytest.mark.skipif(
+        not (Path(__file__).parent.parent / "resources/kahovka_data").exists(), reason="Kahovka data not available"
+    )
+    def test_statistics_on_the_sample_name_b2_to_b6(self) -> None:
+        from dta.config import ROOT_DIR
+        from dta.dti.algorithms.statistics import run
+
+        result = run(str(ROOT_DIR / "resources/kahovka_data/hlsl_20230609.tif"))
+        assert list(result["bands"]) == ["B2", "B3", "B4", "B5", "B6"]
+        assert result["overall_mean"] == pytest.approx(np.mean([b["mean"] for b in result["bands"].values()]))
+
 
 class TestChangeDetection:
     """Tests for change detection algorithm."""
