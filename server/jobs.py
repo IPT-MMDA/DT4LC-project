@@ -504,7 +504,7 @@ class JobQueue:
             mode: Planning mode (hybrid/llm/template)
             attachments: Optional file attachments
             context: Optional context
-            owner: Submitter's session id
+            owner: Submitter's :attr:`~server.sessions.Session.owner` (session id, or user id once signed in)
             owner_role: Submitter's role (guest jobs expire with the guest session)
             uncount: Called once if planning ends in a proposal, which is not an analysis until confirmed
             region: The region echo (``JobRegion.echo()``); without attachments planning fetches it
@@ -558,6 +558,22 @@ class JobQueue:
             if cached is not None:
                 return cached
             return self._store.get(job_id)
+
+    async def adopt(self, old_owner: str, new_owner: str, owner_role: str) -> int:
+        """Give ``old_owner``'s jobs to ``new_owner`` with ``owner_role`` (a guest signing in).
+
+        The new role also stops the guest cleanup from removing them. Returns the number of jobs adopted.
+        """
+        async with self._lock:
+            ids = {j.id for j in self._store.list_summaries() if j.owner == old_owner}
+            ids.update(job_id for job_id, j in self._jobs_cache.items() if j.owner == old_owner)
+            for job_id in ids:
+                job = self._jobs_cache.get(job_id) or self._store.get(job_id)
+                if job is None:
+                    continue
+                job.owner, job.owner_role = new_owner, owner_role
+                self._store.save(job)
+        return len(ids)
 
     async def get_owner(self, job_id: str) -> str | None:
         """The job's ``owner`` without loading its result; ``None`` for an unknown or ownerless job."""

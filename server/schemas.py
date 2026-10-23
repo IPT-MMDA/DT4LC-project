@@ -57,6 +57,9 @@ __all__ = [
     "RegistryModelsResponse",
     "SessionAnalyses",
     "SessionResponse",
+    "SessionUser",
+    "SignInInfo",
+    "AuthStatusResponse",
     "UploadResponse",
 ]
 
@@ -249,7 +252,10 @@ class JobSummary(BaseModel):  # type: ignore[misc]
     created_at: str
     started_at: str | None = None
     completed_at: str | None = None
-    owner: str | None = Field(default=None, description="Submitter's session id; null for jobs from before v0.6.0")
+    owner: str | None = Field(
+        default=None,
+        description="Submitter's session id, or github:<id> once signed in; null for jobs from before v0.6.0",
+    )
     card: JobCard | None = Field(
         default=None, description="Library row summary once the job is finished; null before, and for older jobs"
     )
@@ -391,7 +397,7 @@ class UploadResponse(BaseModel):  # type: ignore[misc]
     preview_png_base64: str = Field(description="Grayscale PNG preview as base64 (do not persist)")
     preview_url: str = Field(description="Download URL of the PNG preview written next to the upload")
     metadata: RasterMetadata = Field(description="Sensor guess, bands, resolution, date, size and display line")
-    owner: str | None = Field(default=None, description="Uploader's session id")
+    owner: str | None = Field(default=None, description="Uploader's session id, or github:<id> once signed in")
 
 
 class SampleResponse(BaseModel):  # type: ignore[misc]
@@ -429,7 +435,9 @@ class FileInfo(BaseModel):  # type: ignore[misc]
     source: Literal["upload", "export"] = Field(description="upload or gee export")
     modified: float = Field(description="Unix modification time")
     metadata: RasterMetadata | None = Field(None, description="As in UploadResponse.metadata")
-    owner: str | None = Field(None, description="Uploader's session id; null for exports and older uploads")
+    owner: str | None = Field(
+        None, description="Uploader's session id, or github:<id> once signed in; null for exports and older uploads"
+    )
     kind: Literal["upload", "sample", "export"] = Field(
         description="upload, sample (a copy of the bundled sample from POST /v1/sample) or export (Earth Engine)"
     )
@@ -465,15 +473,39 @@ class SessionAnalyses(BaseModel):  # type: ignore[misc]
     resets_at: str | None = Field(description="ISO time (UTC) when ``used`` next drops by one; null if nothing used")
 
 
+class SessionUser(BaseModel):  # type: ignore[misc]
+    """The signed-in GitHub account."""
+
+    id: str = Field(description="Stable owner id of the user's jobs and uploads: github:<numeric id>")
+    login: str
+    name: str | None
+    email: str = Field(description="The primary, verified GitHub email the role was decided from")
+    avatar_url: str | None
+
+
+class SignInInfo(BaseModel):  # type: ignore[misc]
+    configured: bool = Field(description="GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET and OAUTH_REDIRECT_BASE are set")
+
+
 class SessionResponse(BaseModel):  # type: ignore[misc]
-    """The caller's session (``GET /v1/session``): role, guest quota and retention for the UI badge."""
+    """The caller's session (``GET /v1/session``): role, user, guest quota and retention for the UI badge."""
 
     role: Literal["guest", "member", "operator"]
     guest: bool
+    user: SessionUser | None = Field(description="The signed-in user; null for a guest")
+    sign_in: SignInInfo
     analyses: SessionAnalyses
     kept_hours: int | None = Field(description="Hours a guest's jobs and uploads are kept; null for other roles")
     expires_at: str = Field(description="ISO time (UTC) when the session cookie expires")
     can_download_models: bool = Field(description="Whether this role may download model weights on demand")
+
+
+class AuthStatusResponse(BaseModel):  # type: ignore[misc]
+    """``GET /v1/auth/status``: whether sign-in is configured, and who the caller is."""
+
+    configured: bool
+    user: SessionUser | None
+    role: Literal["guest", "member", "operator"]
 
 
 # --- Health / registry ---

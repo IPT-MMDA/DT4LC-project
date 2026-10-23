@@ -136,7 +136,7 @@ async def upload_geotiff(
             preview_png_base64=b64,
             preview_url=preview_url,
             metadata=metadata,
-            owner=session.id,
+            owner=session.owner,
         )
     except Exception as e:
         # Clean up saved file on error

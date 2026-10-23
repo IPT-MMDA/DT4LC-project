@@ -25,7 +25,7 @@ def owner_file(path: Path) -> Path:
 
 
 def write_owner(path: Path, session: Session) -> None:
-    record = {"owner": session.id, "role": session.role, "created_at": datetime.now().isoformat()}
+    record = {"owner": session.owner, "role": session.role, "created_at": datetime.now().isoformat()}
     owner_file(path).write_text(json.dumps(record), encoding="utf-8")
 
 
@@ -38,10 +38,37 @@ def _read(path: Path) -> dict[str, str] | None:
 
 
 def read_owner(path: Path) -> str | None:
-    """The session id that uploaded ``path`` (or the upload ``path`` previews), ``None`` if unknown."""
+    """The owner (session or user id) of upload ``path`` (or the upload ``path`` previews), ``None`` if unknown."""
     record = _read(path)
     owner = record.get("owner") if record else None
     return owner if isinstance(owner, str) else None
+
+
+def read_adopted_from(path: Path) -> str | None:
+    """The guest session id ``path`` belonged to before its owner signed in (:func:`adopt_uploads`)."""
+    record = _read(path)
+    adopted = record.get("adopted_from") if record else None
+    return adopted if isinstance(adopted, str) else None
+
+
+def adopt_uploads(upload_dir: Path, old_owner: str, new_owner: str, role: str) -> int:
+    """Give ``old_owner``'s uploads to ``new_owner`` with ``role`` (a guest signing in); blocking.
+
+    Rewrites each matching sidecar's ``owner`` and ``role`` (so the guest cleanup keeps it) and
+    records ``adopted_from``. Returns the number of uploads adopted.
+    """
+    adopted = 0
+    for sidecar in upload_dir.glob(f"*{_SUFFIX}") if upload_dir.is_dir() else []:
+        try:
+            record = json.loads(sidecar.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(record, dict) or record.get("owner") != old_owner:
+            continue
+        record.update(owner=new_owner, role=role, adopted_from=old_owner)
+        sidecar.write_text(json.dumps(record), encoding="utf-8")
+        adopted += 1
+    return adopted
 
 
 def read_created_at(path: Path) -> str | None:
