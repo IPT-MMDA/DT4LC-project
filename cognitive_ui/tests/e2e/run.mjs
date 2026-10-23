@@ -73,6 +73,10 @@ function apiEnv(stateDir, fakeURL) {
     ...process.env,
     PYTHONUNBUFFERED: '1',
     JOB_STORAGE: 'sqlite',
+    // Cache root plus its temp and outputs dirs, so job runs never write to resources/.cache.
+    DT4LC_CACHE_PATH: path.join(stateDir, 'cache'),
+    DT4LC_TEMP_PATH: path.join(stateDir, 'tmp'),
+    DT4LC_OUTPUTS_PATH: path.join(stateDir, 'outputs'),
     DT4LC_JOBS_DB: path.join(stateDir, 'jobs.db'),
     DT4LC_UPLOADS_PATH: path.join(stateDir, 'uploads'),
     DT4LC_MODEL_CACHE: path.join(stateDir, 'models'),
