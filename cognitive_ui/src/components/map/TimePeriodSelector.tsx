@@ -16,38 +16,38 @@ export function TimePeriodSelector() {
   const nowPeriod = useNowForPost ? calculateNowPeriod() : null;
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+    <div className="border border-border rounded-lg">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg"
+        className="w-full flex items-center justify-between p-3 hover:bg-surface2 rounded-t-lg"
       >
-        <span className="text-sm font-semibold text-gray-900 dark:text-white">Time Periods (Change Detection)</span>
+        <span className="text-sm font-semibold text-text">Time Periods (Change Detection)</span>
         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
       {isExpanded && (
         <div className="p-3 pt-0 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pre-Event Period</label>
+            <label className="block text-sm font-medium text-text2 mb-2">Pre-Event Period</label>
             <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={prePeriod.start}
                 onChange={(e) => setPrePeriod(e.target.value, prePeriod.end)}
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                className="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
               />
-              <span className="text-sm text-gray-500">to</span>
+              <span className="text-sm text-muted">to</span>
               <input
                 type="date"
                 value={prePeriod.end}
                 onChange={(e) => setPrePeriod(prePeriod.start, e.target.value)}
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+                className="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
               />
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Post-Event Period</label>
+          <div className="border-t border-border pt-4">
+            <label className="block text-sm font-medium text-text2 mb-2">Post-Event Period</label>
 
             <label className="flex items-center gap-2 mb-2 cursor-pointer">
               <input
@@ -55,11 +55,11 @@ export function TimePeriodSelector() {
                 checked={useNowForPost}
                 onChange={(e) => setUseNowForPost(e.target.checked)}
               />
-              <span className="text-sm text-gray-700 dark:text-gray-300">Use "Now" (last 7 days)</span>
+              <span className="text-sm text-text2">Use "Now" (last 7 days)</span>
             </label>
 
             {nowPeriod && useNowForPost && (
-              <div className="p-2 mb-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-200">
+              <div className="p-2 mb-2 bg-accent-tint border border-accent/30 rounded text-xs text-accent-ink">
                 Using: {nowPeriod.start} to {nowPeriod.end}
               </div>
             )}
@@ -70,20 +70,20 @@ export function TimePeriodSelector() {
                 value={postPeriod.start}
                 onChange={(e) => setPostPeriod(e.target.value, postPeriod.end)}
                 disabled={useNowForPost}
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              <span className="text-sm text-gray-500">to</span>
+              <span className="text-sm text-muted">to</span>
               <input
                 type="date"
                 value={postPeriod.end}
                 onChange={(e) => setPostPeriod(postPeriod.start, e.target.value)}
                 disabled={useNowForPost}
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+          <p className="text-xs text-muted mt-3">
             Change detection will compare data between these two time periods
           </p>
         </div>

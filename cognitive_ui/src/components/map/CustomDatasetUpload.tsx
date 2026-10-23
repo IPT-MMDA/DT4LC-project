@@ -104,30 +104,30 @@ export function CustomDatasetUpload() {
 
     return (
       <div className="mb-4">
-        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{label}</div>
+        <div className="text-sm font-medium text-text2 mb-2">{label}</div>
         <div
           className={`p-4 text-center border-2 border-dashed rounded-lg ${
             state.uploaded
-              ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+              ? 'border-done bg-done-tint'
               : state.error
-              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-              : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800'
+              ? 'border-fail bg-fail-tint'
+              : 'border-border bg-surface2'
           }`}
         >
           {state.uploaded ? (
             <div>
-              <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-2" />
-              <div className="text-sm text-green-800 dark:text-green-200">Uploaded: {state.file?.name}</div>
-              <div className="text-xs text-green-600 dark:text-green-400">Layer added to map</div>
+              <CheckCircle2 className="w-10 h-10 text-done mx-auto mb-2" />
+              <div className="text-sm text-done-ink">Uploaded: {state.file?.name}</div>
+              <div className="text-xs text-done">Layer added to map</div>
             </div>
           ) : (
             <div>
-              <CloudUpload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-              <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <CloudUpload className="w-10 h-10 text-faint mx-auto mb-2" />
+              <div className="text-sm text-muted mb-2">
                 {state.file ? state.file.name : 'No file selected'}
               </div>
 
-              <label className="inline-block px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
+              <label className="inline-block px-3 py-1 text-sm border border-border rounded cursor-pointer hover:bg-surface2">
                 {state.file ? 'Change File' : 'Select GeoTIFF'}
                 <input type="file" accept=".tif,.tiff" className="hidden" onChange={handleFileSelect(period)} />
               </label>
@@ -136,7 +136,7 @@ export function CustomDatasetUpload() {
                 <button
                   onClick={() => handleUpload(period)}
                   disabled={state.uploading}
-                  className="ml-2 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="ml-2 px-3 py-1 text-sm bg-accent text-on-accent rounded hover:bg-accent/90 disabled:bg-faint disabled:cursor-not-allowed"
                 >
                   {state.uploading ? (
                     <span className="flex items-center gap-1">
@@ -150,17 +150,17 @@ export function CustomDatasetUpload() {
               )}
 
               {state.uploading && (
-                <div className="mt-2 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
-                  <div className="bg-blue-600 h-1 rounded-full animate-pulse" style={{ width: '50%' }} />
+                <div className="mt-2 w-full bg-border rounded-full h-1">
+                  <div className="bg-accent h-1 rounded-full animate-pulse" style={{ width: '50%' }} />
                 </div>
               )}
             </div>
           )}
 
           {state.error && (
-            <div className="flex items-start gap-2 mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded">
-              <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-red-800 dark:text-red-200">{state.error}</p>
+            <div className="flex items-start gap-2 mt-2 p-2 bg-fail-tint border border-fail/30 rounded">
+              <AlertCircle className="w-4 h-4 text-fail mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-fail-ink">{state.error}</p>
             </div>
           )}
         </div>
@@ -170,14 +170,14 @@ export function CustomDatasetUpload() {
 
   return (
     <div>
-      <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+      <p className="text-sm text-muted mb-4">
         Upload your own GeoTIFF files for pre and post periods
       </p>
 
       {renderUploadZone('pre')}
       {renderUploadZone('post')}
 
-      <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-800 dark:text-blue-200">
+      <div className="mt-4 p-3 bg-accent-tint border border-accent/30 rounded text-xs text-accent-ink">
         Supported format: GeoTIFF (.tif, .tiff) with valid CRS and georeferencing
       </div>
     </div>

@@ -83,30 +83,30 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl"
+        className="bg-surface rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Export for AI Analysis</h3>
+          <h3 className="text-lg font-semibold text-text">Export for AI Analysis</h3>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            className="p-1 hover:bg-surface2 rounded transition-colors"
             aria-label="Close"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-muted" />
           </button>
         </div>
 
         {/* Description */}
         <div className="mb-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            Export <span className="font-medium text-gray-900 dark:text-white">"{layerName}"</span> as GeoTIFF for AI analysis.
+          <p className="text-sm text-muted mb-3">
+            Export <span className="font-medium text-text">"{layerName}"</span> as GeoTIFF for AI analysis.
           </p>
 
           {/* Export name input */}
           <div className="space-y-2 mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="block text-sm font-medium text-text2">
               Export Name
             </label>
             <input
@@ -114,20 +114,20 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
               value={exportName}
               onChange={(e) => setExportName(e.target.value)}
               placeholder="e.g., forest_area_study"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text placeholder-faint focus:ring-2 focus:ring-accent focus:border-transparent"
               disabled={exportMutation.isPending || exportMutation.isSuccess}
             />
           </div>
 
           {/* Data source selector */}
           <div className="space-y-2 mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="block text-sm font-medium text-text2">
               Data Source
             </label>
             <select
               value={source}
               onChange={(e) => setSource(e.target.value as 'auto' | 'gee' | 'microsoft')}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text focus:ring-2 focus:ring-accent focus:border-transparent"
               disabled={exportMutation.isPending || exportMutation.isSuccess}
             >
               <option value="auto">Auto</option>
@@ -138,13 +138,13 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
 
           {/* Resolution selector */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="block text-sm font-medium text-text2">
               Resolution
             </label>
             <select
               value={scale}
               onChange={(e) => setScale(Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-border rounded-lg bg-surface text-text focus:ring-2 focus:ring-accent focus:border-transparent"
               disabled={exportMutation.isPending || exportMutation.isSuccess}
             >
               <option value={10}>10m</option>
@@ -158,18 +158,18 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
         {/* Status messages */}
         <div className="mb-4 min-h-[60px]">
           {exportMutation.isIdle && (
-            <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <Download className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-800 dark:text-blue-200">
+            <div className="flex items-start gap-2 p-3 bg-accent-tint border border-accent/30 rounded-lg">
+              <Download className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-accent-ink">
                 <p className="font-medium">Ready to export</p>
               </div>
             </div>
           )}
 
           {exportMutation.isPending && (
-            <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
-              <div className="text-sm text-blue-800 dark:text-blue-200">
+            <div className="flex items-center gap-3 p-3 bg-accent-tint border border-accent/30 rounded-lg">
+              <Loader2 className="w-5 h-5 text-accent animate-spin flex-shrink-0" />
+              <div className="text-sm text-accent-ink">
                 <p className="font-medium">
                   {isExportAll
                     ? `Exporting ${exportingIndex + 1} of ${totalLayers}...`
@@ -180,17 +180,17 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
           )}
 
           {exportMutation.isSuccess && exportMutation.data && exportMutation.data.ok && (
-            <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-green-800 dark:text-green-200">
+            <div className="flex items-start gap-2 p-3 bg-done-tint border border-done/30 rounded-lg">
+              <CheckCircle className="w-5 h-5 text-done mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-done-ink">
                 <p className="font-medium mb-1">Export completed!</p>
                 {isExportAll ? (
-                  <p className="text-xs text-green-700 dark:text-green-300">
+                  <p className="text-xs text-done-ink">
                     Exported {completedExports.length} of {totalLayers} layers
                     {failedExports.length > 0 && <><br />{failedExports.length} failed</>}
                   </p>
                 ) : (
-                  <p className="text-xs text-green-700 dark:text-green-300">
+                  <p className="text-xs text-done-ink">
                     {exportMutation.data.size_mb?.toFixed(2)} MB - Added to chat
                   </p>
                 )}
@@ -199,11 +199,11 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
           )}
 
           {exportMutation.isSuccess && exportMutation.data && !exportMutation.data.ok && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-red-800 dark:text-red-200">
+            <div className="flex items-start gap-2 p-3 bg-fail-tint border border-fail/30 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-fail mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-fail-ink">
                 <p className="font-medium mb-1">Export failed</p>
-                <p className="text-xs text-red-700 dark:text-red-300">
+                <p className="text-xs text-fail-ink">
                   {exportMutation.data.error || 'Unknown error occurred'}
                 </p>
               </div>
@@ -211,11 +211,11 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
           )}
 
           {exportMutation.isError && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-red-800 dark:text-red-200">
+            <div className="flex items-start gap-2 p-3 bg-fail-tint border border-fail/30 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-fail mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-fail-ink">
                 <p className="font-medium mb-1">Export failed</p>
-                <p className="text-xs text-red-700 dark:text-red-300">
+                <p className="text-xs text-fail-ink">
                   {exportMutation.error?.message || 'Unknown error occurred'}
                 </p>
               </div>
@@ -227,14 +227,14 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+            className="flex-1 px-4 py-2 border border-border text-text2 rounded-lg hover:bg-surface2 transition-colors font-medium"
           >
             {exportMutation.isSuccess && exportMutation.data?.ok ? 'Done' : 'Cancel'}
           </button>
           <button
             onClick={handleExport}
             disabled={exportMutation.isPending || (exportMutation.isSuccess && exportMutation.data?.ok)}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2 bg-accent hover:bg-accent/90 disabled:bg-faint disabled:cursor-not-allowed text-on-accent rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
           >
             {exportMutation.isPending ? (
               <>

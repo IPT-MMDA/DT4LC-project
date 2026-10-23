@@ -11,18 +11,18 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between px-4">
+    <header className="h-16 border-b border-border bg-surface flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
         <button
           onClick={toggleSidebar}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          className="p-2 hover:bg-surface2 rounded-lg"
         >
           <Menu className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold">DT4LC</h1>
           {health?.ok && (
-            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+            <span className="w-2 h-2 bg-done rounded-full"></span>
           )}
         </div>
       </div>
@@ -30,7 +30,7 @@ export function Header() {
       <div className="flex items-center gap-2">
         <button
           onClick={toggleTheme}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          className="p-2 hover:bg-surface2 rounded-lg"
         >
           {theme === 'light' ? (
             <Moon className="w-5 h-5" />
@@ -38,7 +38,7 @@ export function Header() {
             <Sun className="w-5 h-5" />
           )}
         </button>
-        <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
+        <button className="p-2 hover:bg-surface2 rounded-lg">
           <Settings className="w-5 h-5" />
         </button>
       </div>

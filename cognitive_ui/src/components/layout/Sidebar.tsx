@@ -27,7 +27,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'h-full border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300',
+        'h-full border-r border-border bg-surface transition-all duration-300',
         sidebarCollapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -40,8 +40,8 @@ export function Sidebar() {
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
                 isActive
-                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                  ? 'bg-accent-tint text-accent-ink'
+                  : 'hover:bg-surface2 text-text2'
               )
             }
           >

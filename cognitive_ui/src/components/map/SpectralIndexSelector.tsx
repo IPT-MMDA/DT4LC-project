@@ -34,15 +34,15 @@ export function SpectralIndexSelector() {
   }
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+    <div className="border border-border rounded-lg">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg"
+        className="w-full flex items-center justify-between p-3 hover:bg-surface2 rounded-t-lg"
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">Spectral Indices (Optional)</span>
+          <span className="text-sm font-semibold text-text">Spectral Indices (Optional)</span>
           {selectedIndices.length > 0 && (
-            <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs font-medium rounded">
+            <span className="px-2 py-0.5 bg-accent-tint text-accent-ink text-xs font-medium rounded">
               {selectedIndices.length} selected
             </span>
           )}
@@ -52,7 +52,7 @@ export function SpectralIndexSelector() {
 
       {isExpanded && (
         <div className="p-3 pt-0 space-y-2">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <p className="text-xs text-muted mb-3">
             Each index will be fetched as a separate layer
           </p>
 
@@ -65,7 +65,7 @@ export function SpectralIndexSelector() {
                 <label
                   key={indexType}
                   className={`flex items-start gap-2 p-2 rounded ${
-                    isSupported ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : 'opacity-50 cursor-not-allowed'
+                    isSupported ? 'cursor-pointer hover:bg-surface2' : 'opacity-50 cursor-not-allowed'
                   }`}
                 >
                   <input
@@ -76,11 +76,11 @@ export function SpectralIndexSelector() {
                     className="mt-1"
                   />
                   <div className="flex-1">
-                    <div className="text-sm text-gray-900 dark:text-white">
+                    <div className="text-sm text-text">
                       {info.name}
-                      {!isSupported && <span className="text-gray-400 dark:text-gray-500 ml-1">(Not supported)</span>}
+                      {!isSupported && <span className="text-faint ml-1">(Not supported)</span>}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{info.description}</div>
+                    <div className="text-xs text-muted">{info.description}</div>
                   </div>
                 </label>
               );

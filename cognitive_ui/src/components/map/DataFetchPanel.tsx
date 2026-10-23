@@ -55,24 +55,24 @@ export function DataFetchPanel() {
   };
 
   return (
-    <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-900 rounded-lg shadow-lg p-4 w-80 z-10">
+    <div className="absolute bottom-4 left-4 bg-surface rounded-lg shadow-lg p-4 w-80 z-10">
       <div className="flex items-center gap-2 mb-4">
-        <Satellite className="w-5 h-5 text-blue-500" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <Satellite className="w-5 h-5 text-accent" />
+        <h3 className="text-lg font-semibold text-text">
           Fetch Satellite Data
         </h3>
       </div>
 
       {/* Migration Banner */}
-      <div className="flex items-start gap-2 p-3 mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+      <div className="flex items-start gap-2 p-3 mb-4 bg-accent-tint border border-accent/30 rounded-lg">
+        <Info className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
         <div className="flex-1">
-          <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+          <p className="text-sm text-accent-ink mb-2">
             Try our new Dataset Selection panel with multi-dataset support!
           </p>
           <button
             onClick={toggleDatasetPanelVersion}
-            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            className="text-xs font-medium text-accent hover:underline"
           >
             Switch to New Panel →
           </button>
@@ -80,9 +80,9 @@ export function DataFetchPanel() {
       </div>
 
       {!selectedRegion && (
-        <div className="flex items-start gap-2 p-3 mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-500 mt-0.5 flex-shrink-0" />
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+        <div className="flex items-start gap-2 p-3 mb-4 bg-canc-tint border border-canc/30 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-canc mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-canc-ink">
             Please draw or select a region on the map first
           </p>
         </div>
@@ -91,7 +91,7 @@ export function DataFetchPanel() {
       <div className="space-y-4">
         {/* Data Type Selector */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-text2 mb-2">
             Data Type
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -101,8 +101,8 @@ export function DataFetchPanel() {
                 onClick={() => setDataType(type)}
                 className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                   dataType === type
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    ? 'bg-accent text-on-accent'
+                    : 'bg-surface2 text-text2 hover:bg-border'
                 }`}
               >
                 {type.toUpperCase()}
@@ -113,30 +113,30 @@ export function DataFetchPanel() {
 
         {/* Date Range */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-text2 mb-2">
             Date Range
           </label>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+              <label className="block text-xs text-muted mb-1">
                 Start
               </label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="w-full px-2 py-1.5 text-sm border border-border rounded-lg bg-surface text-text"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+              <label className="block text-xs text-muted mb-1">
                 End
               </label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                className="w-full px-2 py-1.5 text-sm border border-border rounded-lg bg-surface text-text"
               />
             </div>
           </div>
@@ -144,7 +144,7 @@ export function DataFetchPanel() {
 
         {/* Cloud Cover Slider */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-text2 mb-2">
             Max Cloud Cover: {cloudCover}%
           </label>
           <input
@@ -154,7 +154,7 @@ export function DataFetchPanel() {
             step="5"
             value={cloudCover}
             onChange={(e) => setCloudCover(Number(e.target.value))}
-            className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            className="w-full h-2 bg-border rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
@@ -162,7 +162,7 @@ export function DataFetchPanel() {
         <button
           onClick={handleFetch}
           disabled={!selectedRegion || fetchSentinel2.isPending}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-accent text-on-accent rounded-lg hover:bg-accent/90 disabled:bg-border disabled:cursor-not-allowed transition-colors"
         >
           {fetchSentinel2.isPending ? (
             <>
@@ -179,9 +179,9 @@ export function DataFetchPanel() {
 
         {/* Status Messages */}
         {fetchSentinel2.isSuccess && (
-          <div className="flex items-start gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-            <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-500 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-green-800 dark:text-green-200">
+          <div className="flex items-start gap-2 p-3 bg-done-tint border border-done/30 rounded-lg">
+            <CheckCircle2 className="w-4 h-4 text-done mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-done-ink">
               <p className="font-medium">Data fetched successfully!</p>
               <p className="text-xs mt-1">
                 Found {fetchSentinel2.data?.image_count} images. Layer added to map.
@@ -191,9 +191,9 @@ export function DataFetchPanel() {
         )}
 
         {fetchSentinel2.isError && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-500 mt-0.5 flex-shrink-0" />
-            <div className="text-sm text-red-800 dark:text-red-200">
+          <div className="flex items-start gap-2 p-3 bg-fail-tint border border-fail/30 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-fail mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-fail-ink">
               <p className="font-medium">Failed to fetch data</p>
               <p className="text-xs mt-1">
                 {fetchSentinel2.error?.message || 'Unknown error occurred'}

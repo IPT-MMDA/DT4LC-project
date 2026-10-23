@@ -16,7 +16,7 @@ export function DataSourceSelector() {
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label className="block text-sm font-medium text-text2">
         Data Source
       </label>
 
@@ -24,7 +24,7 @@ export function DataSourceSelector() {
         <select
           value={selectedDatasetId}
           onChange={handleDatasetChange}
-          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white appearance-none cursor-pointer focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className="w-full px-3 py-2 text-sm border border-border rounded-lg bg-surface text-text appearance-none cursor-pointer focus:ring-2 focus:ring-accent focus:border-accent"
         >
           {Object.values(DATASETS).map((dataset) => (
             <option key={dataset.id} value={dataset.id}>
@@ -32,11 +32,11 @@ export function DataSourceSelector() {
             </option>
           ))}
         </select>
-        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none" />
       </div>
 
       {selectedDataset && (
-        <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-xs text-gray-600 dark:text-gray-300">
+        <div className="p-3 bg-surface2 rounded-lg text-xs text-muted">
           <div>{selectedDataset.description}</div>
           <div className="mt-1">Temporal: {selectedDataset.temporalResolution}</div>
         </div>
