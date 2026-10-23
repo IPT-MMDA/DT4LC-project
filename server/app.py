@@ -35,6 +35,7 @@ from .routes.gee import router as gee_router  # noqa: E402
 from .routes.health import router as health_router  # noqa: E402
 from .routes.jobs import router as jobs_router  # noqa: E402
 from .routes.session import router as session_router  # noqa: E402
+from .routes.settings import router as settings_router  # noqa: E402
 from .routes.tiles import router as tiles_router  # noqa: E402
 from .schemas import ErrorCode, ErrorDetail, ErrorResponse  # noqa: E402
 from .sessions import (  # noqa: E402
@@ -103,6 +104,7 @@ app = FastAPI(
         {"name": "tiles", "description": "XYZ map tiles from GeoTIFF files"},
         {"name": "gee", "description": "Google Earth Engine data fetch and layer export"},
         {"name": "models", "description": "ML model download and cache management"},
+        {"name": "settings", "description": "Operator settings (404 for everyone else)"},
     ],
 )
 
@@ -152,3 +154,4 @@ app.include_router(files_router)
 app.include_router(tiles_router)
 app.include_router(gee_router)
 app.include_router(model_router)
+app.include_router(settings_router)

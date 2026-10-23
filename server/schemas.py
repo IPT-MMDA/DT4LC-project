@@ -6,9 +6,19 @@ job submission, chat messages, and file attachments.
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Literal
+import re
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from dta import __version__
 
@@ -58,6 +68,9 @@ __all__ = [
     "SessionAnalyses",
     "SessionResponse",
     "SessionUser",
+    "SettingsResponse",
+    "SettingsTestResponse",
+    "SettingsUpdate",
     "SignInInfo",
     "AuthStatusResponse",
     "UploadResponse",
@@ -778,3 +791,227 @@ class GEELayerIdResponse(BaseModel):  # type: ignore[misc]
 
     ok: bool = True
     layer_id: str
+
+
+# --- Operator settings (GET/PUT /v1/settings) ---------------------------------
+#
+# Convention: every section object, and every provider in ``assistant.providers``, carries
+# ``editable: {field: bool}`` with one entry per sibling field (``editable`` and ``source``
+# excluded), and ``source: {field: "override" | "env" | "default"}`` for its editable fields.
+# A nested read-only object (``sign_in``, ``earth_engine``, ``storage``...) is one ``false``
+# entry of its parent's map.
+
+LLMProviderName = Literal["gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai"]
+DownloadPolicy = Literal["all", "members", "operators", "none"]
+SettingSource = Literal["override", "env", "default"]
+
+_EMAIL_RE = r"^[^@\s,]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"
+_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
+
+
+def _domain(value: str) -> str:
+    domain = value.strip().lower().removeprefix("@")
+    if not _DOMAIN_RE.match(domain):
+        raise ValueError("not a domain name, e.g. unige.ch")
+    return domain
+
+
+_ModelName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:/@+-]+$")
+]
+_Email = Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, max_length=254, pattern=_EMAIL_RE)]
+_Domain = Annotated[str, AfterValidator(_domain)]
+_STRICT = ConfigDict(extra="forbid", strict=True)
+SINGLE_MODEL_PROVIDERS = ("groq", "ollama", "apertus")
+
+
+class SettingsProviderUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    enabled: bool | None = Field(None, description="LLM_ENABLE_<NAME>; null resets to the environment")
+    models: list[_ModelName] | None = Field(
+        None, min_length=1, max_length=10, description="groq, ollama, apertus: exactly one; null resets"
+    )
+
+
+class SettingsAssistantUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    provider_order: list[LLMProviderName] | None = Field(
+        None, min_length=1, description="LLM_PROVIDER_ORDER, no duplicates; null resets"
+    )
+    providers: dict[LLMProviderName, SettingsProviderUpdate] = Field(default_factory=dict)
+
+    @field_validator("provider_order")  # type: ignore[misc]
+    @classmethod
+    def _unique(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("lists a provider twice")
+        return value
+
+    @model_validator(mode="after")  # type: ignore[misc]
+    def _single_model(self) -> "SettingsAssistantUpdate":
+        for name, update in self.providers.items():
+            if name in SINGLE_MODEL_PROVIDERS and update.models is not None and len(update.models) > 1:
+                raise ValueError(f"{name} takes exactly one model")
+        return self
+
+
+class SettingsModelsUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    download_policy: DownloadPolicy | None = Field(None, description="MODEL_DOWNLOAD_ON_DEMAND; null resets")
+
+
+class SettingsAccessUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    allowed_emails: list[_Email] | None = Field(None, max_length=1000, description="ALLOWED_EMAILS; null resets")
+    allowed_domains: list[_Domain] | None = Field(None, max_length=1000, description="ALLOWED_DOMAINS; null resets")
+    operator_emails: list[_Email] | None = Field(None, max_length=1000, description="OPERATOR_EMAILS; null resets")
+    guest_analyses_per_hour: int | None = Field(None, ge=0, le=1000, description="GUEST_ANALYSES_PER_HOUR")
+    guest_session_hours: int | None = Field(None, ge=1, le=720, description="GUEST_SESSION_HOURS")
+
+
+class SettingsUpdate(BaseModel):  # type: ignore[misc]
+    """``PUT /v1/settings``: any subset of the writable fields; an unknown or read-only key is a 422.
+
+    A field set to ``null`` drops its override, so the environment (or the default) applies again.
+    """
+
+    model_config = _STRICT
+
+    assistant: SettingsAssistantUpdate | None = None
+    models: SettingsModelsUpdate | None = None
+    access: SettingsAccessUpdate | None = None
+
+
+class SettingsProvider(BaseModel):  # type: ignore[misc]
+    enabled: bool = Field(description="LLM_ENABLE_<NAME> (default true)")
+    models: list[str] = Field(description="Configured model(s); providers with several rotate through them")
+    multiple_models: bool = Field(description="False: exactly one model")
+    key_required: bool = Field(description="False for ollama and apertus (local)")
+    key_present: bool = Field(description="An API key is set in the environment; the value is never returned")
+    available: bool = Field(
+        description="In the assistant's router: listed in provider_order, enabled, credentials present. "
+        "No network; POST /v1/settings/assistant/test probes."
+    )
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsAssistant(BaseModel):  # type: ignore[misc]
+    provider_order: list[str]
+    providers: dict[str, SettingsProvider] = Field(description="Every known provider, provider_order first")
+    connected: bool = Field(description="From the /v1/health assistant status")
+    provider: str | None = None
+    model: str | None = None
+    test_path: str = Field(description="POST it to probe the configured providers")
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsPreDownload(BaseModel):  # type: ignore[misc]
+    method: str = "POST"
+    path: str = Field(description="The operator-gated download route; replace {id} with a model id")
+
+
+class SettingsModels(BaseModel):  # type: ignore[misc]
+    items: list[dict[str, Any]] = Field(
+        description="model_states(): {id, display_name, installed, size_bytes, est_download_s, licence, ...}"
+    )
+    download_policy: DownloadPolicy
+    download_policy_options: list[DownloadPolicy]
+    pre_download: SettingsPreDownload
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsBounds(BaseModel):  # type: ignore[misc]
+    min: int
+    max: int
+
+
+class SettingsAccess(BaseModel):  # type: ignore[misc]
+    allowed_emails: list[str]
+    allowed_domains: list[str]
+    operator_emails: list[str]
+    guest_analyses_per_hour: int
+    guest_session_hours: int
+    bounds: dict[str, SettingsBounds] = Field(description="Accepted range of each integer field")
+    sign_in: SignInInfo
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsEarthEngine(BaseModel):  # type: ignore[misc]
+    configured: bool = Field(description="Initialised, or GEE_PROJECT_ID and an existing key file")
+    project_id_present: bool
+    key_file_present: bool = Field(description="GEE_SERVICE_ACCOUNT_KEY names an existing file")
+
+
+class SettingsUploads(BaseModel):  # type: ignore[misc]
+    path: str
+    files: int = Field(description="Uploaded files, not counting previews and owner sidecars")
+    bytes: int = Field(description="Everything in the directory")
+
+
+class SettingsSample(BaseModel):  # type: ignore[misc]
+    name: str
+    bundled: bool
+    path: str
+
+
+class SettingsDataSources(BaseModel):  # type: ignore[misc]
+    earth_engine: SettingsEarthEngine
+    uploads: SettingsUploads
+    sample: SettingsSample
+    editable: dict[str, bool]
+
+
+class SettingsStorage(BaseModel):  # type: ignore[misc]
+    bytes: int
+    files: int
+    truncated: bool = Field(description="The walk stopped at its entry cap; bytes and files are lower bounds")
+
+
+class SettingsJobs(BaseModel):  # type: ignore[misc]
+    total: int
+    by_status: dict[str, int]
+    queue_size: int
+    workers: int
+
+
+class SettingsServer(BaseModel):  # type: ignore[misc]
+    version: str
+    deployment: Literal["demo", "local"] = Field(description="DT4LC_DEPLOYMENT; read-only")
+    paths: dict[str, str] = Field(description="cache, outputs, temp, uploads, models")
+    storage: dict[str, SettingsStorage] = Field(description="Per path; cache contains the others by default")
+    jobs: SettingsJobs
+    editable: dict[str, bool]
+
+
+class SettingsResponse(BaseModel):  # type: ignore[misc]
+    """``GET /v1/settings`` (operators only): five sections; never a key value."""
+
+    assistant: SettingsAssistant
+    models: SettingsModels
+    access: SettingsAccess
+    data_sources: SettingsDataSources
+    server: SettingsServer
+
+
+class SettingsProbe(BaseModel):  # type: ignore[misc]
+    name: str
+    model: str
+    ok: bool
+    latency_ms: int
+    error: str | None = Field(None, description="Why it failed, API keys redacted")
+
+
+class SettingsTestResponse(BaseModel):  # type: ignore[misc]
+    """``POST /v1/settings/assistant/test``: one probe per router provider, in order."""
+
+    connected: bool = Field(description="At least one probe answered")
+    providers: list[SettingsProbe]
+    error: str | None = Field(None, description="The router could not be built (keys redacted)")
