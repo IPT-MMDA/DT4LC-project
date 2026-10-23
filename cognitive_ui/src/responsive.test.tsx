@@ -301,7 +301,7 @@ describe('map mode on a phone', () => {
     mockApi();
     renderApp('/app/map');
     const panel = screen.getByRole('complementary', { name: 'Imagery' });
-    const map = screen.getByRole('region', { name: 'Map' });
+    const map = screen.getByRole('main', { name: 'Map' });
     expect(map.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const toggle = within(panel).getByRole('button', { name: 'Imagery panel' });
     const body = document.getElementById(toggle.getAttribute('aria-controls')!)!;
@@ -324,7 +324,7 @@ describe('map mode on a phone', () => {
     renderApp('/app/map');
     const panel = screen.getByRole('complementary', { name: 'Imagery' });
     expect(within(panel).queryByRole('button', { name: 'Imagery panel' })).toBeNull();
-    expect(panel.compareDocumentPosition(screen.getByRole('region', { name: 'Map' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(panel.compareDocumentPosition(screen.getByRole('main', { name: 'Map' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

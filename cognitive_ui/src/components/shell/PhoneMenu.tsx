@@ -81,7 +81,7 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
         <div className="h-[52px] flex-none flex items-center gap-[10px] pl-4 pr-2 border-b border-border">
           <Link
             to="/"
-            aria-label="DT4LC home"
+            aria-label="DT, DT4LC home"
             className="w-[30px] h-[30px] rounded-[7px] bg-ink text-ink-bg font-bold text-[11px] flex items-center justify-center"
           >
             DT

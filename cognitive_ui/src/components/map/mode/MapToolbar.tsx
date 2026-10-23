@@ -33,7 +33,7 @@ export function MapToolbar() {
           type="button"
           disabled={!selected}
           onClick={() => selected && deleteRegion(selected.id)}
-          aria-label="Delete selected region"
+          aria-label="Clear selected region"
           title={selected ? `Delete ${selected.name}` : 'Select a region to delete it'}
           className="px-[10px] py-[5px] rounded-[5px] text-text2 hover:bg-surface2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         >

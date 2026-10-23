@@ -87,7 +87,7 @@ describe('Workspace shell', () => {
       expect(within(rail).getByRole('link', { name }).getAttribute('href')).toBe(href);
     }
     expect(within(rail).getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBe('page');
-    expect(within(rail).getByRole('link', { name: 'DT4LC home' })).toBeTruthy();
+    expect(within(rail).getByRole('link', { name: 'DT, DT4LC home' })).toBeTruthy();
     expect(within(rail).getByRole('button', { name: 'Switch to dark theme' })).toBeTruthy();
     expect(within(rail).getByRole('button', { name: 'Account: Guest' })).toBeTruthy();
 

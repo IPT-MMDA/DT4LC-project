@@ -85,10 +85,11 @@ function Header() {
 
   return (
     <header ref={ref} className="absolute inset-x-0 top-0 z-[5] h-16 flex items-center px-[80px] max-md:px-4 md:max-lg:px-8 gap-[28px] text-[#fff]">
-      <Link to="/" aria-label="DT4LC home" className="flex items-center gap-[10px]">
-        <span aria-hidden className="w-7 h-7 rounded-[7px] bg-[#fff] text-[#1a1d23] flex items-center justify-center text-[11px] font-bold">
+      {/* The name holds the visible "DT" and "DT4LC" (WCAG 2.5.3, label in name). */}
+      <Link to="/" aria-label="DT, DT4LC home" className="flex items-center gap-[10px]">
+        <span className="w-7 h-7 rounded-[7px] bg-[#fff] text-[#1a1d23] flex items-center justify-center text-[11px] font-bold">
           DT
-        </span>
+        </span>{' '}
         <span className="font-semibold tracking-[-.01em]">DT4LC</span>
       </Link>
       <div className="flex-1" />
