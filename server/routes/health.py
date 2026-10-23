@@ -13,10 +13,13 @@ from dta.config import CACHE_PATH, MODELS_PATH, UPLOADS_PATH
 from dta.dti.coe.llm.config import get_default_config
 from dta.dti.coe.llm.dependencies import get_llm_router
 from dta.dti.coe.llm.router import LLMRouter
+from dta.dti.data_sources.gee_common import is_configured as ee_is_configured
 from dta.dti.data_sources.gee_common import is_initialized
 from dta.dti.metrics import get_metrics_collector
+from dta.dti.models import model_states
 from dta.dti.models.registry import get_model_registry
 from dta.dti.registry import load_registry
+from server.capabilities import build_capabilities
 from server.schemas import (
     AssistantStatus,
     CapabilitiesResponse,
@@ -30,6 +33,7 @@ from server.schemas import (
     ModelsInfo,
     RegistryModelsResponse,
 )
+from server.sessions import CurrentSession
 
 logger = logging.getLogger(__name__)
 
@@ -189,20 +193,17 @@ async def health(
 @router.get(  # type: ignore[misc]
     "/capabilities",
     response_model=CapabilitiesResponse,
-    summary="List registry capabilities",
+    summary="What this server can do for the caller",
 )
-async def list_capabilities() -> CapabilitiesResponse:
-    """List algorithms, models, and components from ``registry.yaml``."""
-    try:
-        registry = load_registry()
-        return CapabilitiesResponse(
-            version=registry.version,
-            types=registry.types,
-            instances=[item.model_dump() for item in registry.instances],
-            count=len(registry.instances),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load registry: {e}") from e
+async def get_capabilities(session: CurrentSession) -> CapabilitiesResponse:
+    """The Capabilities page document: summary line, six tiers with statuses, guest limits and the session.
+
+    No network: the assistant status is the cached ``/v1/health`` one, model states are
+    file checks, Earth Engine is the configuration check (never ``ee.Initialize``).
+    """
+    assistant = await asyncio.to_thread(_collect_assistant_status)
+    doc = build_capabilities(session, assistant, model_states(), ee_is_configured())
+    return CapabilitiesResponse.model_validate(doc)  # type: ignore[no-any-return]
 
 
 @router.get(  # type: ignore[misc]
