@@ -33,6 +33,8 @@ from dta.dti.coe.named_indices import named_index_request
 from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate, require_analysis_step
 from dta.dti.coe.plan_validator import PlanError, validate
 from dta.dti.coe.planner import plan_template
+from dta.dti.data_sources import gee_common
+from dta.dti.data_sources.gee_region import EarthEngineNotConfiguredError, inject_region_fetch
 from dta.dti.executor import PipelineExecutor, model_not_installed_error
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment as COEAttachment
@@ -114,6 +116,8 @@ class Job:
     # ``None`` for jobs from before v0.6.0, which only operators see.
     owner: str | None = None
     owner_role: str | None = None
+    # The region sent from the map (``JobRegion.echo()``): fetched from Earth Engine when no file is attached.
+    region: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary.
@@ -135,6 +139,7 @@ class Job:
             "events": list(self.events),
             "owner": self.owner,
             "proposal": self.proposal,
+            "region": self.region,
         }
 
     @property
@@ -241,7 +246,7 @@ class MemoryJobStore(JobStore):
 class SQLiteJobStore(JobStore):
     """SQLite-backed persistent job storage."""
 
-    _ADDED_COLUMNS = {"events": "TEXT NOT NULL DEFAULT '[]'", "owner": "TEXT", "owner_role": "TEXT"}
+    _ADDED_COLUMNS = {"events": "TEXT NOT NULL DEFAULT '[]'", "owner": "TEXT", "owner_role": "TEXT", "region": "TEXT"}
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path)
@@ -293,6 +298,7 @@ class SQLiteJobStore(JobStore):
             json.dumps(list(job.events)),
             job.owner,
             job.owner_role,
+            json.dumps(job.region) if job.region is not None else None,
         )
 
     def _deserialize_row(self, row: sqlite3.Row) -> Job:
@@ -313,14 +319,15 @@ class SQLiteJobStore(JobStore):
             events=json.loads(row["events"]),
             owner=row["owner"],
             owner_role=row["owner_role"],
+            region=json.loads(row["region"]) if row["region"] else None,
         )
 
     def save(self, job: Job) -> None:
         self._conn.execute(
             """INSERT OR REPLACE INTO jobs
                (id, status, prompt, attachments, context, plan, result,
-                progress, error, created_at, started_at, completed_at, events, owner, owner_role)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                progress, error, created_at, started_at, completed_at, events, owner, owner_role, region)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             self._serialize_job(job),
         )
         self._conn.commit()
@@ -468,6 +475,7 @@ class JobQueue:
         owner: str | None = None,
         owner_role: str | None = None,
         uncount: Callable[[], None] | None = None,
+        region: dict[str, Any] | None = None,
     ) -> str:
         """Submit a new job.
 
@@ -479,6 +487,8 @@ class JobQueue:
             owner: Submitter's session id
             owner_role: Submitter's role (guest jobs expire with the guest session)
             uncount: Called once if planning ends in a proposal, which is not an analysis until confirmed
+            region: The region echo (``JobRegion.echo()``); without attachments planning fetches it
+                from Earth Engine, or fails with ``EE_NOT_CONFIGURED`` before any network call
 
         Returns:
             Job ID
@@ -499,6 +509,7 @@ class JobQueue:
             context=context,
             owner=owner,
             owner_role=owner_role,
+            region=region,
         )
         self._emit(job, "intent", text=self._intent_text(job))
 
@@ -621,10 +632,16 @@ class JobQueue:
             else:
                 self._subscribers.pop(job_id, None)
 
+    @staticmethod
+    def _active_region(job: Job) -> dict[str, Any] | None:
+        """The job's region, unless files are attached (attachments win; a region wins over the context's files)."""
+        return job.region if job.region and not any(a.get("path") for a in job.attachments) else None
+
     def _intent_text(self, job: Job) -> str:
         """The ``intent`` sentence: the template plan for the deterministic context, no LLM call."""
         attachments = [a for a in job.attachments if a.get("path")]
-        if not attachments and job.context:
+        region = self._active_region(job)
+        if not attachments and job.context and region is None:
             attachments = [a for a in job.context.get("previous_attachments", []) if a.get("path")]
         try:
             req = COEChatRequest(
@@ -641,7 +658,7 @@ class JobQueue:
             )
             named = named_index_request(req.prompt, req.attachments, self._registry)
             plan = named.plan if named else plan_template(_deterministic_context(req), self._registry)
-            return intent_text(plan, self._registry, attachments)
+            return intent_text(plan, self._registry, attachments, region)
         except Exception as e:
             logger.warning(f"Job {job.id}: no intent sentence from the template plan ({e})")
             return "I'll work out which analysis fits this request."
@@ -719,7 +736,11 @@ class JobQueue:
         path_types = {t for it in self._registry.instances if it.kind == "input" for t in it.outputs}
         for step in plan.steps:
             step.binds = {k: v for k, v in step.binds.items() if k not in path_types}
-        _inject_file_bindings(plan, self._coe_attachments(job))
+        region = self._active_region(job)
+        if region is not None:
+            inject_region_fetch(plan, region)
+        else:
+            _inject_file_bindings(plan, self._coe_attachments(job))
         try:
             return require_analysis_step(validate(plan, self._registry), self._registry)
         except KeyError as e:  # get_item: a component id that is not in the registry
@@ -964,10 +985,11 @@ class JobQueue:
             else:
                 logger.warning(f"Job {job_id}: Attachment missing path: {att.get('filename', 'unknown')}")
 
-        # If no current attachments, check context for previous attachments
+        # If no current attachments, check context for previous attachments (a region wins over them)
+        region = self._active_region(job)
         context_status = "present" if job.context else "None"
         logger.debug(f"Job {job_id}: {len(coe_attachments)} direct attachments with paths, context={context_status}")
-        if not coe_attachments and job.context:
+        if not coe_attachments and job.context and region is None:
             context_attachments = job.context.get("previous_attachments", [])
             logger.debug(f"Job {job_id}: Found {len(context_attachments)} previous attachments in context")
             for att in context_attachments:
@@ -995,8 +1017,13 @@ class JobQueue:
         else:
             job.progress = 0.2
             self._emit(job, "planning", phase="started")
+            if region is not None and not gee_common.is_configured():
+                # Before the planner (and any LLM or Earth Engine call): the Capabilities page says the same.
+                raise EarthEngineNotConfiguredError()
             logger.debug(f"Job {job_id}: Calling orchestrate with {len(coe_attachments)} attachments")
-            coe_req = COEChatRequest(prompt=job.prompt, attachments=coe_attachments)
+            coe_req = COEChatRequest(
+                prompt=job.prompt, attachments=coe_attachments, metadata={"region": region} if region else {}
+            )
             plan_result = orchestrate(coe_req)
             logger.debug(f"Job {job_id}: Orchestrate returned ok={plan_result.get('ok')}")
 

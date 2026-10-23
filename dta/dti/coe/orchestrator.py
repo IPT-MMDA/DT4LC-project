@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from dta.dti.data_sources.gee_region import inject_region_fetch
 from dta.dti.registry import get_item, load_registry
 from dta.dti.schemas import ChatRequest, ExecutionPlan, Registry
 
@@ -22,7 +23,9 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
     - CONVERSATION: Returns helpful response without pipeline execution
     - PIPELINE: Plans and validates the data processing pipeline
 
-    Handles both single-file and multi-file (change detection) requests.
+    Handles both single-file and multi-file (change detection) requests. Without attachments,
+    ``req.metadata["region"]`` (a job's region echo) replaces the file inputs with Earth Engine
+    fetches of that region (:func:`~dta.dti.data_sources.gee_region.inject_region_fetch`).
 
     Args:
         req: Chat request with prompt and optional attachments
@@ -70,10 +73,14 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
 
     ctx = analyze(req, registry_types=reg.types)
     candidate = plan(ctx, reg)
+    # A region sent from the map (the job queue passes it only when no file is attached): fetch it.
+    region = req.metadata.get("region") if not req.attachments else None
 
     # Inject file paths from attachments into input steps
     if req.attachments:
         _inject_file_bindings(candidate, req.attachments)
+    elif region:
+        inject_region_fetch(candidate, region)
     else:
         logger.warning("No attachments provided - input steps will have no file bindings")
 
@@ -88,6 +95,8 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         fallback = plan(ctx, reg, use_llm=False)
         if req.attachments:
             _inject_file_bindings(fallback, req.attachments)
+        elif region:
+            inject_region_fetch(fallback, region)
         if fallback.model_dump() == candidate.model_dump():
             logger.debug("Template plan equals the rejected LLM plan; returning original error")
             return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}

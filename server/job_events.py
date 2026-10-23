@@ -43,6 +43,7 @@ from typing import Any
 
 from dta.config import RESOURCES_PATH
 from dta.dti.coe.llm.router import _KEY_PATTERN
+from dta.dti.data_sources.gee_region import EarthEngineNotConfiguredError
 from dta.dti.executor import InputBandsError, MissingInputError, ModelGatedError, ModelNotInstalledError
 from dta.dti.models import AVAILABLE_MODELS
 from dta.dti.schemas import ExecutionPlan, PlanStep, Registry, RegistryItem
@@ -84,10 +85,13 @@ def _base_label(item: RegistryItem) -> str:
 
 
 def step_name(step: PlanStep, item: RegistryItem, filenames: dict[str, str] | None = None) -> str:
-    """Display name of a plan step, e.g. ``"NDVI"``, ``"Read hlsl_20230601.tif"``, ``"Change Detection · NDWI"``.
+    """Display name of a plan step, e.g. ``"NDVI"``, ``"Read hlsl_20230601.tif"``, ``"Change Detection · NDWI"``,
+    ``"Fetch HLS L30 · 2023-05-29 → 06-04"`` (an Earth Engine fetch names itself in its config).
 
     ``filenames`` maps a bound path to the name the user uploaded it as.
     """
+    if item.kind == "input" and step.config.get("name"):
+        return str(step.config["name"])
     if item.kind == "input":
         path = next(iter(step.binds.values()), "")
         if not path:
@@ -192,10 +196,13 @@ def _day_month(dates: list[str]) -> list[str]:
     return [f"{d.day} {d:%B}" + (f" {d.year}" if with_year else "") for d in parsed]
 
 
-def intent_text(plan: ExecutionPlan, registry: Registry, attachments: list[dict[str, Any]]) -> str:
+def intent_text(
+    plan: ExecutionPlan, registry: Registry, attachments: list[dict[str, Any]], region: dict[str, Any] | None = None
+) -> str:
     """Plain-language sentence for the ``intent`` event, from a deterministic (template) plan and the attachments.
 
-    Dates come from the upload metadata (``attachment["metadata"]["date"]``) when present.
+    Dates come from the upload metadata (``attachment["metadata"]["date"]``) when present. Without
+    attachments, a ``region`` (the job's region echo) is the source, with its start and end dates.
     """
     names = [str(a.get("filename") or "") for a in attachments]
     if names and all(n in _sample_names() for n in names):
@@ -208,6 +215,11 @@ def intent_text(plan: ExecutionPlan, registry: Registry, attachments: list[dict[
         source = ""
     dates = [d for a in attachments if (d := (a.get("metadata") or {}).get("date"))]
     days = _day_month(dates) if len(dates) == len(attachments) else []
+    if region and not attachments:
+        source = region.get("name") or "the region"
+        # A change analysis fetches a composite per date; a single-date one a composite over the range.
+        change = any(s.uses == "input/file-before" for s in plan.steps)
+        days = _day_month([region["start_date"], region["end_date"]]) if change else []
     for_days = f" for {' and '.join(days)}" if days else ""
     from_source = f" from {source}" if source else ""
 
@@ -234,11 +246,12 @@ def intent_text(plan: ExecutionPlan, registry: Registry, attachments: list[dict[
 # --- Failures ------------------------------------------------------------------
 #
 # A fix is a button the UI renders under a failed analysis:
-#   {"label": str, "kind": "prompt" | "retry" | "upload" | "open_map", "prompt"?: str, "params"?: dict}
+#   {"label": str, "kind": "prompt" | "retry" | "upload" | "open_map" | "sample", "prompt"?: str, "params"?: dict}
 #   prompt:   put ``prompt`` in the composer (or send it) as a new request.
 #   retry:    resubmit the same prompt and attachments, with ``params`` merged into the request.
 #   upload:   open the file picker, then retry with the new file.
 #   open_map: open the map to pick a region.
+#   sample:   attach the bundled Kakhovka sample (both dates) instead of the region and resend the prompt.
 
 _ASK_CAPABILITIES = {"label": "See what I can do", "kind": "prompt", "prompt": "What can you do?"}
 _BUILT_IN = {
@@ -251,7 +264,7 @@ _RETRY = {"label": "Retry", "kind": "retry"}
 
 # (code, exception types in the cause chain, message pattern, stage, fixes): the first matching row wins.
 # ``stage`` limits a row to "planning" or "running" failures. Later stories add their codes here
-# (EE_NOT_CONFIGURED, GUEST_QUOTA, ...).
+# (GUEST_QUOTA, ...).
 FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str | None, list[dict[str, Any]]]] = [
     (
         "INPUT_MISSING",
@@ -262,6 +275,13 @@ FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str 
             {"label": "Upload a GeoTIFF", "kind": "upload"},
             {"label": "Pick a region on the map", "kind": "open_map"},
         ],
+    ),
+    (
+        "EE_NOT_CONFIGURED",
+        (EarthEngineNotConfiguredError,),
+        r"Earth Engine (isn't configured on|refused) this server",
+        None,
+        [_UPLOAD_OWN, {"label": "Try the Kakhovka sample", "kind": "sample"}],
     ),
     (
         "BAND_MISSING",
