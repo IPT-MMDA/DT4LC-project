@@ -23,3 +23,24 @@ describe('API base URL', () => {
     expect(resolveApiUrl('/v1/session')).toBe('/v1/session');
   });
 });
+
+describe('ApiError', () => {
+  it('a rejected request keeps the message, the HTTP status and the body (a 422 detail[])', async () => {
+    const { AxiosError } = await import('axios');
+    const { default: apiClient, ApiError } = await import('./client');
+    const body = { detail: [{ loc: ['body', 'access', 'operator_emails'], msg: 'Keep your own address' }] };
+    const err = await apiClient
+      .put('/v1/settings', {}, {
+        adapter: async (config) => {
+          const response = { data: body, status: 422, statusText: 'Unprocessable Entity', headers: {}, config };
+          throw new AxiosError('Request failed with status code 422', 'ERR_BAD_REQUEST', config, null, response);
+        },
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as InstanceType<typeof ApiError>).message).toBe('Keep your own address');
+    expect((err as InstanceType<typeof ApiError>).status).toBe(422);
+    expect((err as InstanceType<typeof ApiError>).body).toEqual(body);
+  });
+});
