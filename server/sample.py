@@ -38,9 +38,19 @@ class SampleNotBundledError(Exception):
     """The sample files are not on this server."""
 
 
+def _sample_id(session_id: str) -> str:
+    return hashlib.sha256(f"sample:{session_id}".encode()).hexdigest()[:8]
+
+
 def _file_id(session: Session) -> str:
     """8 hex characters, like an upload id, fixed per session (the id itself stays secret)."""
-    return hashlib.sha256(f"sample:{session.id}".encode()).hexdigest()[:8]
+    return _sample_id(session.id)
+
+
+def is_sample_copy(path: Path, owner: str | None) -> bool:
+    """Whether upload ``path`` is ``owner``'s copy of a bundled sample file (from :func:`attach_sample`)."""
+    file_id, _, name = path.name.partition("_")
+    return owner is not None and name in SAMPLE_FILES and file_id == _sample_id(owner)
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:

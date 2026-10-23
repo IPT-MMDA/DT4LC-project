@@ -2,7 +2,7 @@
 
 Results never carry pixel data: rasters are written as single-band float32
 GeoTIFFs (nodata NaN) and visualizations as PNG files, and the result holds a
-``{kind, path, url, stats}`` reference per file.
+``{kind, path, url, stats, size_bytes}`` reference per file.
 
 A raster saved with a *style* carries it in its GeoTIFF tags (``DT4LC_KIND``
 ``change|index|class``; ``DT4LC_VMIN``, ``DT4LC_VMAX``, ``DT4LC_RAMP`` for change
@@ -16,6 +16,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 import io
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -52,9 +53,20 @@ def step_outputs(directory: Path, prefix: str) -> Iterator[None]:
 
 
 def ref(kind: str, path: Path | str, stats: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Artifact reference for a file the API serves through ``/v1/download``."""
+    """Artifact reference for a file the API serves through ``/v1/download``.
+
+    ``size_bytes`` is the file's size when the reference is made (right after writing it),
+    ``None`` if there is no file yet.
+    """
     path = str(path)
-    return {"kind": kind, "path": path, "url": "/v1/download?path=" + quote(path, safe=""), "stats": stats or {}}
+    size = os.path.getsize(path) if os.path.isfile(path) else None
+    return {
+        "kind": kind,
+        "path": path,
+        "url": "/v1/download?path=" + quote(path, safe=""),
+        "stats": stats or {},
+        "size_bytes": size,
+    }
 
 
 def hex_colour(colour: str | tuple[float, float, float]) -> str:

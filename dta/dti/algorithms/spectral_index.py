@@ -119,7 +119,7 @@ def run(raster_path: str, index_config: dict[str, Any]) -> dict[str, Any]:
         The :func:`calculate_index` result with the array in
         ``rasters["<formula>"]``, ``visualizations["<formula>_map"]`` and its
         map-only ``visualizations["<formula>_map_bare"]`` as artifact
-        references (``{kind, path, url, stats}``).
+        references (``{kind, path, url, stats, size_bytes}``).
     """
     result, index_array, (crs, transform) = calculate_index(raster_path, index_config)
     key = result["index_type"]

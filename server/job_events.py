@@ -29,7 +29,8 @@ fields below; optional fields are left out when unknown.
 - ``done`` ``{elapsed_s, summary, followups}``: fetch ``GET /v1/jobs/{id}`` for the result
   (which carries the same ``followups``, full prompts for the chips under it, :func:`followups`).
 - ``failed`` ``{code, message, fixes, step_index?, raw?}``, see :func:`classify_failure`.
-- ``cancelled`` ``{at_step?, reason?}``; ``reason: "expired"`` for a proposal never confirmed.
+- ``cancelled`` ``{at_step?, reason?}``; ``reason: "expired"`` for a proposal never confirmed, ``"deleted"``
+  for a proposal deleted (``DELETE /v1/jobs/{id}``).
 
 ``done``, ``failed`` and ``cancelled`` are terminal: nothing follows them.
 """

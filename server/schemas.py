@@ -216,6 +216,27 @@ class JobStatus(BaseModel):  # type: ignore[misc]
 # --- Jobs ---
 
 
+class JobCardAnalysis(BaseModel):  # type: ignore[misc]
+    id: str = Field(description="Registry id of the main analysis step, e.g. 'algorithms/change-detection'")
+    label: str = Field(description="e.g. 'Change detection', 'Band math', 'Statistics', 'Delineate-Anything'")
+
+
+class JobCardError(BaseModel):  # type: ignore[misc]
+    code: str = Field(description="The failed event's code, e.g. 'EE_NOT_CONFIGURED'")
+    message: str
+
+
+class JobCard(BaseModel):  # type: ignore[misc]
+    """A Library row without the result (server/library.py), stored when the job reaches a terminal state."""
+
+    title: str = Field(description="e.g. 'Water change · NDWI difference', 'NDVI · 2023-06-01'")
+    analysis: JobCardAnalysis | None = None
+    kind: Literal["change", "index", "classification", "fields", "statistics", "composed", "image"] | None = None
+    thumbnail_url: str | None = Field(None, description="Download URL of the main map-only PNG (*_bare)")
+    duration_s: float | None = Field(None, description="completed_at - started_at, seconds")
+    error: JobCardError | None = Field(None, description="Failed jobs: the failed event's code and message")
+
+
 class JobSummary(BaseModel):  # type: ignore[misc]
     """Async job status without results (``GET /v1/jobs`` list item)."""
 
@@ -229,13 +250,16 @@ class JobSummary(BaseModel):  # type: ignore[misc]
     started_at: str | None = None
     completed_at: str | None = None
     owner: str | None = Field(default=None, description="Submitter's session id; null for jobs from before v0.6.0")
+    card: JobCard | None = Field(
+        default=None, description="Library row summary once the job is finished; null before, and for older jobs"
+    )
 
 
 class JobRecord(JobSummary):
     """Async job status and results (``GET /v1/jobs/{id}``)."""
 
     result: dict[str, Any] | None = Field(
-        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats}"
+        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats, size_bytes}"
     )
     events: list[dict[str, Any]] = Field(
         default_factory=list,
@@ -249,6 +273,13 @@ class JobRecord(JobSummary):
         default=None,
         description="The submitted region with bounds, area_km2 and the chip line; note if attachments won",
     )
+
+
+class JobDeleteResponse(BaseModel):  # type: ignore[misc]
+    """``DELETE /v1/jobs/{id}``: the job and its output files are gone."""
+
+    ok: bool = True
+    id: str
 
 
 class JobConfirmRequest(BaseModel):  # type: ignore[misc]
@@ -373,10 +404,22 @@ class SampleResponse(BaseModel):  # type: ignore[misc]
     )
 
 
+class FileGroup(BaseModel):  # type: ignore[misc]
+    """Files the Library shows as one row: the two dates of the bundled sample."""
+
+    name: str = Field(description="Row name, 'kakhovka_hls_l30.tif'")
+    line: str = Field(description="e.g. 'HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09 · EPSG:32636'")
+
+
 class FileInfo(BaseModel):  # type: ignore[misc]
     """Metadata for an on-disk GeoTIFF."""
 
-    id: str
+    id: str = Field(description="The file name without its extension")
+    upload_id: str | None = Field(
+        None,
+        description="The id POST /v1/upload or POST /v1/sample returned (the sample pair shares one); "
+        "DELETE /v1/files/{upload_id}; null for exports",
+    )
     filename: str
     path: str
     size: list[int]
@@ -387,6 +430,19 @@ class FileInfo(BaseModel):  # type: ignore[misc]
     modified: float = Field(description="Unix modification time")
     metadata: RasterMetadata | None = Field(None, description="As in UploadResponse.metadata")
     owner: str | None = Field(None, description="Uploader's session id; null for exports and older uploads")
+    kind: Literal["upload", "sample", "export"] = Field(
+        description="upload, sample (a copy of the bundled sample from POST /v1/sample) or export (Earth Engine)"
+    )
+    group: FileGroup | None = Field(None, description="Set on both sample files: show them as one row")
+    preview_url: str | None = Field(None, description="Download URL of the PNG preview; null if there is none")
+    created_at: str = Field(description="ISO time of the upload (the owner record), else of the last modification")
+
+
+class FileDeleteResponse(BaseModel):  # type: ignore[misc]
+    """``DELETE /v1/files/{id}``: the files removed with their previews and owner records."""
+
+    ok: bool = True
+    deleted: list[str] = Field(description="File names removed, e.g. both sample dates")
 
 
 class FileListResponse(BaseModel):  # type: ignore[misc]

@@ -1,6 +1,6 @@
 """Job artifact contract (docs/ARCHITECTURE.md "Job artifacts"; #65, #67 bug 2).
 
-Results carry ``{kind, path, url, stats}`` references to GeoTIFF/PNG files,
+Results carry ``{kind, path, url, stats, size_bytes}`` references to GeoTIFF/PNG files,
 never pixel arrays or base64 images, so job records, list responses and
 SQLite rows stay small.
 """
@@ -56,9 +56,10 @@ def _pixel_data(obj: Any, path: str = "") -> list[str]:
 def _assert_ref(ref: dict[str, Any], kind: str) -> None:
     from urllib.parse import quote
 
-    assert set(ref) == {"kind", "path", "url", "stats"}, ref
+    assert set(ref) == {"kind", "path", "url", "stats", "size_bytes"}, ref
     assert ref["kind"] == kind
     assert Path(ref["path"]).is_absolute() and Path(ref["path"]).exists()
+    assert ref["size_bytes"] == Path(ref["path"]).stat().st_size > 0
     assert ref["url"] == "/v1/download?path=" + quote(ref["path"], safe="")
     if kind == "geotiff":
         assert set(ref["stats"]) == {"min", "max", "mean", "valid_pixels"}

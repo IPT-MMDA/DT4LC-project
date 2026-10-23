@@ -39,8 +39,9 @@ from dta.dti.executor import PipelineExecutor, model_not_installed_error
 from dta.dti.registry import load_registry
 from dta.dti.schemas import Attachment as COEAttachment
 from dta.dti.schemas import ChatRequest as COEChatRequest
-from dta.dti.schemas import ExecutionPlan
+from dta.dti.schemas import ExecutionPlan, Registry
 
+from . import library
 from .job_events import TERMINAL_EVENTS, classify_failure, done_summary, followups, intent_text, step_skeleton
 from .sessions import ROLES, Role, can_download_models
 
@@ -118,6 +119,9 @@ class Job:
     owner_role: str | None = None
     # The region sent from the map (``JobRegion.echo()``): fetched from Earth Engine when no file is attached.
     region: dict[str, Any] | None = None
+    # Library row summary (server/library.py), set once the job reaches a terminal state; ``None`` before
+    # that and for jobs finished before v0.6.0.
+    card: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert job to dictionary.
@@ -140,6 +144,7 @@ class Job:
             "owner": self.owner,
             "proposal": self.proposal,
             "region": self.region,
+            "card": self.card,
         }
 
     @property
@@ -182,7 +187,8 @@ class JobStore(ABC):
 
     @abstractmethod
     def list_summaries(self) -> list[Job]:
-        """Return all jobs without ``result``, ``context``, ``attachments`` and ``events`` (``GET /v1/jobs`` fields).
+        """Return all jobs without ``result``, ``context``, ``attachments`` and ``events`` (``GET /v1/jobs`` fields,
+        including the stored ``card``).
 
         The returned jobs are partial: never ``save()`` them.
         """
@@ -246,7 +252,13 @@ class MemoryJobStore(JobStore):
 class SQLiteJobStore(JobStore):
     """SQLite-backed persistent job storage."""
 
-    _ADDED_COLUMNS = {"events": "TEXT NOT NULL DEFAULT '[]'", "owner": "TEXT", "owner_role": "TEXT", "region": "TEXT"}
+    _ADDED_COLUMNS = {
+        "events": "TEXT NOT NULL DEFAULT '[]'",
+        "owner": "TEXT",
+        "owner_role": "TEXT",
+        "region": "TEXT",
+        "card": "TEXT",
+    }
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path)
@@ -299,6 +311,7 @@ class SQLiteJobStore(JobStore):
             job.owner,
             job.owner_role,
             json.dumps(job.region) if job.region is not None else None,
+            json.dumps(job.card) if job.card is not None else None,
         )
 
     def _deserialize_row(self, row: sqlite3.Row) -> Job:
@@ -320,14 +333,15 @@ class SQLiteJobStore(JobStore):
             owner=row["owner"],
             owner_role=row["owner_role"],
             region=json.loads(row["region"]) if row["region"] else None,
+            card=json.loads(row["card"]) if row["card"] else None,
         )
 
     def save(self, job: Job) -> None:
         self._conn.execute(
             """INSERT OR REPLACE INTO jobs
                (id, status, prompt, attachments, context, plan, result,
-                progress, error, created_at, started_at, completed_at, events, owner, owner_role, region)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                progress, error, created_at, started_at, completed_at, events, owner, owner_role, region, card)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             self._serialize_job(job),
         )
         self._conn.commit()
@@ -347,8 +361,8 @@ class SQLiteJobStore(JobStore):
 
     def list_summaries(self) -> list[Job]:
         rows = self._conn.execute(
-            "SELECT id, status, prompt, plan, progress, error, created_at, started_at, completed_at, owner, owner_role"
-            " FROM jobs"
+            "SELECT id, status, prompt, plan, progress, error, created_at, started_at, completed_at,"
+            " owner, owner_role, card FROM jobs"
         ).fetchall()
         return [
             Job(
@@ -363,6 +377,7 @@ class SQLiteJobStore(JobStore):
                 completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
                 owner=row["owner"],
                 owner_role=row["owner_role"],
+                card=json.loads(row["card"]) if row["card"] else None,
             )
             for row in rows
         ]
@@ -440,6 +455,11 @@ class JobQueue:
 
         # Recover any interrupted jobs from previous run
         self._store.recover_interrupted()
+
+    @property
+    def registry(self) -> Registry:
+        """The registry the queue plans and runs with."""
+        return self._registry
 
     async def start(self) -> None:
         """Start worker pool."""
@@ -638,34 +658,58 @@ class JobQueue:
         """The job's region, unless files are attached (attachments win; a region wins over the context's files)."""
         return job.region if job.region and not any(a.get("path") for a in job.attachments) else None
 
-    def _intent_text(self, job: Job) -> str:
-        """The ``intent`` sentence: the template plan for the deterministic context, no LLM call."""
+    def _template_plan(self, job: Job) -> tuple[ExecutionPlan, list[dict[str, Any]], dict[str, Any] | None]:
+        """``(plan, attachments, region)``: the template plan for the deterministic context (no LLM call),
+        with the attachments and region it reads; whatever planning raises propagates."""
         attachments = [a for a in job.attachments if a.get("path")]
         region = self._active_region(job)
         if not attachments and job.context and region is None:
             attachments = [a for a in job.context.get("previous_attachments", []) if a.get("path")]
+        req = COEChatRequest(
+            prompt=job.prompt,
+            attachments=[
+                COEAttachment(
+                    id=a.get("id", ""),
+                    filename=a.get("filename", ""),
+                    mime_type=a.get("mime_type", "image/tiff"),
+                    path=a["path"],
+                    metadata=a.get("metadata"),
+                )
+                for a in attachments
+            ],
+        )
+        named = named_index_request(req.prompt, req.attachments, self._registry)
+        plan = named.plan if named else plan_template(_deterministic_context(req), self._registry)
+        if named is None:
+            _inject_file_bindings(plan, req.attachments)  # names the file a single-image analysis reads
+        return plan, attachments, region
+
+    def _intent_text(self, job: Job) -> str:
+        """The ``intent`` sentence: the template plan for the deterministic context, no LLM call."""
         try:
-            req = COEChatRequest(
-                prompt=job.prompt,
-                attachments=[
-                    COEAttachment(
-                        id=a.get("id", ""),
-                        filename=a.get("filename", ""),
-                        mime_type=a.get("mime_type", "image/tiff"),
-                        path=a["path"],
-                        metadata=a.get("metadata"),
-                    )
-                    for a in attachments
-                ],
-            )
-            named = named_index_request(req.prompt, req.attachments, self._registry)
-            plan = named.plan if named else plan_template(_deterministic_context(req), self._registry)
-            if named is None:
-                _inject_file_bindings(plan, req.attachments)  # names the file a single-image analysis reads
+            plan, attachments, region = self._template_plan(job)
             return intent_text(plan, self._registry, attachments, region)
         except Exception as e:
             logger.warning(f"Job {job.id}: no intent sentence from the template plan ({e})")
             return "I'll work out which analysis fits this request."
+
+    def _set_card(self, job: Job) -> None:
+        """Store the Library card of a job that reached a terminal state (server/library.py).
+
+        A job that failed or was cancelled before planning names the analysis of its template plan
+        (the one its ``intent`` sentence announced). A card that cannot be made is left ``None``.
+        """
+        try:
+            planned = None
+            if job.plan is None and job.status != JobStatus.COMPLETED:
+                try:
+                    planned = self._template_plan(job)[0]
+                except Exception:
+                    planned = None
+            job.card = library.card(job, self._registry, planned)
+        except Exception as e:
+            logger.warning(f"Job {job.id}: no library card ({e})", exc_info=True)
+            job.card = None
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a job.
@@ -687,11 +731,38 @@ class JobQueue:
             job.status = JobStatus.CANCELLED
             job.completed_at = datetime.now()
             self._emit(job, "cancelled", at_step=self._current_step(job))
+            self._set_card(job)
             self._store.save(job)
             self._jobs_cache.pop(job_id, None)
             self._uncount.pop(job_id, None)
             logger.info(f"Cancelled job {job_id}")
             return True
+
+    async def delete_job(self, job_id: str) -> bool:
+        """Delete a finished job or a proposal: its row and ``OUTPUTS_PATH/<job_id>/``.
+
+        A deleted proposal's open event streams end with ``cancelled {reason: "deleted"}``.
+
+        Returns:
+            True if deleted, False if there is no such job.
+
+        Raises:
+            JobConflictError: The job is pending or running (cancel it first).
+        """
+        async with self._lock:
+            job = self._jobs_cache.get(job_id) or self._store.get(job_id)
+            if job is None:
+                return False
+            if job.status in (JobStatus.PENDING, JobStatus.RUNNING):
+                raise JobConflictError(f"Job {job_id} is {job.status.value}: cancel it first")
+            if job.status == JobStatus.PROPOSAL:
+                self._emit(job, "cancelled", reason="deleted")
+            self._store.delete(job_id)
+            self._jobs_cache.pop(job_id, None)
+            self._uncount.pop(job_id, None)
+        await asyncio.to_thread(self._remove_output_dirs, [job_id])
+        logger.info(f"Deleted job {job_id}")
+        return True
 
     async def confirm_job(
         self, job_id: str, plan: ExecutionPlan | None = None, count: Callable[[], object] | None = None
@@ -1191,6 +1262,7 @@ class JobQueue:
                 job.progress = 1.0
                 job.completed_at = datetime.now()
                 self._emit(job, "done", **self._done_data(job))
+                self._set_card(job)
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 
@@ -1210,6 +1282,7 @@ class JobQueue:
                 job.result = e.to_dict()  # Include model info for frontend
                 job.completed_at = datetime.now()
                 self._emit(job, "failed", **classify_failure(e, "running", self._current_step(job)))
+                self._set_card(job)
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 
@@ -1224,6 +1297,7 @@ class JobQueue:
                     job.completed_at = datetime.now()
                     stage = "running" if job.plan is not None else "planning"
                     self._emit(job, "failed", **classify_failure(e, stage, self._current_step(job)))
+                    self._set_card(job)
                 self._store.save(job)
                 self._jobs_cache.pop(job_id, None)
 
