@@ -4,14 +4,17 @@
 // EE_NOT_CONFIGURED. Then the rows, types, statuses and conversation names; each
 // filter narrows the list; CSV downloads; Map opens map mode with the layer; a row
 // opens /app/results/:id; Retry and Chat go back to the Workspace; Delete removes a
-// row and the API confirms 404. An empty session shows "Nothing here yet".
+// row and the API confirms 404; Upload GeoTIFF adds a file row. An empty session
+// shows "Nothing here yet".
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';
 
 const NDWI = 'Compare water before and after the dam breach';
 const STATS = 'Give me statistics for every band';
 const ANALYSIS_TIMEOUT = 60_000;
+const UPLOAD = fileURLToPath(new URL('../../../../resources/kahovka_data/hlsl_20230601.tif', import.meta.url));
 
 // About 410 km² of the Lower Dnipro floodplain, as the map store persists a drawn region.
 const REGION = {
@@ -225,6 +228,14 @@ test('library: analyses and files, filters, CSV, Map, Result detail, Retry, Chat
     await statsRow.waitFor({ state: 'detached' });
     assert.equal(await count(page), '4 items');
     assert.equal((await page.request.get(`${h.baseURL}/v1/jobs/${statsId}`)).status(), 404);
+
+    // Upload GeoTIFF: a File · upload row with the file's metadata line.
+    await page.getByLabel('GeoTIFF file').setInputFiles(UPLOAD);
+    const uploaded = page.getByTestId('library-row').filter({ hasText: 'File · upload' });
+    await uploaded.waitFor();
+    assert.equal(await uploaded.getByTestId('library-name').innerText(), 'hlsl_20230601.tif');
+    assert.equal(await uploaded.getByTestId('library-subtitle').innerText(), 'HLS L30 · B2–B6 · 30 m · 2023-06-01 · 4.0 MB');
+    assert.equal(await count(page), '5 items');
 
     assert.deepEqual(errors, []);
   } finally {
