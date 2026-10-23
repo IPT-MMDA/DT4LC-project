@@ -205,8 +205,11 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
       {comparing && <CompareSwipe viewState={viewState} mapStyle={mapStyle} />}
       {!docked && (
         <>
-          <MapToolbar />
-          <MapControls map={loaded ? mapRef.current : null} />
+          {/* The toolbar top left and the controls top right; below 1024 px the controls go under the toolbar. */}
+          <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-[6px] max-lg:flex-col max-lg:justify-start pointer-events-none">
+            <MapToolbar />
+            <MapControls map={loaded ? mapRef.current : null} />
+          </div>
           <MapLegend />
         </>
       )}

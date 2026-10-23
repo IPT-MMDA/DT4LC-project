@@ -30,7 +30,7 @@ function Coordinates({ map }: { map: MapRef | null }) {
   }, [map]);
 
   return (
-    <div data-testid="map-coordinates" aria-label="Coordinates" className={cn(box, 'font-mono')}>
+    <div data-testid="map-coordinates" aria-label="Coordinates" className={cn(box, 'font-mono max-md:hidden')}>
       {at ? `${at[0].toFixed(3)}, ${at[1].toFixed(3)}` : '—'}
     </div>
   );
@@ -83,7 +83,7 @@ function BasemapPicker() {
   );
 }
 
-/** Top right of the map: coordinates, Fit to result, Compare, Basemap ▾. */
+/** Top right of the map (MapContainer places it): coordinates, Fit to result, Compare, Basemap ▾. A phone has no pointer to follow, so no coordinates. */
 export function MapControls({ map }: { map: MapRef | null }) {
   const layers = useAppStore((s) => s.mapLayers);
   const requestFit = useAppStore((s) => s.requestFit);
@@ -93,7 +93,7 @@ export function MapControls({ map }: { map: MapRef | null }) {
   const sides = defaultCompareSides(layers);
 
   return (
-    <div data-testid="map-controls" className="absolute top-3 right-3 flex gap-[6px] text-[12px]">
+    <div data-testid="map-controls" className="pointer-events-auto flex gap-[6px] text-[12px]">
       <Coordinates map={map} />
       <button
         type="button"

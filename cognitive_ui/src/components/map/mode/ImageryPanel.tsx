@@ -1,4 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCapabilities } from '../../../api/hooks/useCapabilities';
 import { useAppStore, type DrawnRegion } from '../../../store/useAppStore';
@@ -178,8 +179,10 @@ function RegionSection({ sample }: { sample: MessageAttachment[] }) {
 /**
  * Map mode's left column (design/screens/map-mode.png): Imagery with Back to chat;
  * the region; dataset, dates, cloud and bands; Fetch to map and Send to chat; the layers.
+ * `sheet`: on a phone, a sheet under the map that shows only its header until opened.
  */
-export function ImageryPanel() {
+export function ImageryPanel({ sheet = false }: { sheet?: boolean }) {
+  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const region = useAppStore((s) => s.selectedRegion);
   const stored = useAppStore((s) => s.imagery);
@@ -205,16 +208,32 @@ export function ImageryPanel() {
   return (
     <aside
       aria-label="Imagery"
-      className="w-[312px] flex-none bg-surface border-r border-border flex flex-col overflow-hidden text-[13px]"
+      className={cn(
+        'flex-none bg-surface border-border flex flex-col overflow-hidden text-[13px]',
+        sheet ? 'w-full max-h-[62%] border-t' : 'w-[312px] md:max-lg:w-[272px] border-r',
+      )}
     >
-      <div className="px-4 py-[14px] border-b border-border flex items-center justify-between">
+      <div className={cn('px-4 py-[14px] border-b border-border flex items-center justify-between', sheet && 'pr-2 py-[6px] gap-3')}>
         <h1 className="text-[14px] font-semibold">Imagery</h1>
+        {sheet && <div className="flex-1" />}
         <Link to="/app" className="text-[12px] text-accent-ink hover:underline">
           Back to chat
         </Link>
+        {sheet && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-label="Imagery panel"
+            aria-expanded={open}
+            aria-controls="imagery-sheet"
+            className="w-10 h-10 flex items-center justify-center rounded-control text-muted hover:bg-surface2"
+          >
+            {open ? <ChevronDown aria-hidden className="w-5 h-5" /> : <ChevronUp aria-hidden className="w-5 h-5" />}
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto flex flex-col">
+      <div id={sheet ? 'imagery-sheet' : undefined} className={cn('flex-1 min-h-0 overflow-y-auto flex flex-col', sheet && !open && 'hidden')}>
         <RegionSection sample={sample} />
 
         <div className={cn(section, 'gap-[10px]')} role="group" aria-label="Dataset">

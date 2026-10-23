@@ -7,7 +7,7 @@ const TOOLS: { tool: MapTool; label: string; hint: string }[] = [
   { tool: 'rectangle', label: 'Rectangle', hint: 'Drag to draw a rectangle · Esc cancels' },
 ];
 
-/** Pan / Polygon / Rectangle / Clear, top left of the map. Clear deletes the selected region. */
+/** Pan / Polygon / Rectangle / Clear, top left of the map (MapContainer places it). Clear deletes the selected region. */
 export function MapToolbar() {
   const tool = useAppStore((s) => s.mapTool);
   const setMapTool = useAppStore((s) => s.setMapTool);
@@ -16,7 +16,7 @@ export function MapToolbar() {
   const hint = TOOLS.find((t) => t.tool === tool)?.hint;
 
   return (
-    <div className="absolute top-3 left-3 flex flex-col items-start gap-[6px] pointer-events-none">
+    <div className="flex flex-col items-start gap-[6px] pointer-events-none">
       <div role="toolbar" aria-label="Draw" data-testid="map-toolbar" className="pointer-events-auto flex gap-1 p-1 bg-surface border border-border rounded-[8px] text-[12px]">
         {TOOLS.map((t) => (
           <button
