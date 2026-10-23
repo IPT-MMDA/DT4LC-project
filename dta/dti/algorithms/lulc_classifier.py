@@ -253,7 +253,8 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
             - class_statistics: Per-class pixel counts and percentages
             - indices: Computed spectral indices (NDVI, NDWI, NDSI)
             - metadata: Raster metadata
-            - visualizations: PNG references to the classification map and histogram
+            - visualizations: PNG references to the classification map, its map-only
+              ``classification_map_bare`` and the histogram
 
     Raises:
         FileNotFoundError: If raster file not found
@@ -435,7 +436,16 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
         }
         # Class 0 is "No Data" -> NaN in the GeoTIFF.
         rasters = {"classification": np.where(classification == 0, np.nan, classification)}
-        return artifact_files.save(result, rasters, visualizations, crs=src.crs, transform=src.transform)
+        styles = {"classification": artifact_files.class_style({i: LULC_CLASSES[i]["color"] for i in range(1, 7)})}
+        return artifact_files.save(
+            result,
+            rasters,
+            visualizations,
+            crs=src.crs,
+            transform=src.transform,
+            styles=styles,
+            bare={"classification_map": "classification"},
+        )
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

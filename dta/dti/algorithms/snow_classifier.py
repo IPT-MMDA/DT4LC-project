@@ -46,6 +46,9 @@ NDVI_CENTER = 0.1
 NDVI_TOLERANCE = 0.025
 BRIGHTNESS_THRESHOLD = 0.3
 
+# snow_mask value -> (name, colour), the colours of the classification PNG.
+SNOW_CLASSES = {0: ("No Snow", "#667f4c"), 1: ("Snow", "#ffcc66")}
+
 
 def _create_snow_classification_visualization(
     snow_mask: np.ndarray,
@@ -171,7 +174,7 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
             - rasters: GeoTIFF references ``snow_mask`` (binary snow classification),
               ``ndsi``, ``ndvi`` and ``brightness`` (green band brightness)
             - metadata: Raster metadata
-            - visualizations: PNG references
+            - visualizations: PNG references (+ the map-only ``snow_classification_bare``)
             - statistics: Classification statistics
             - path: Input path
 
@@ -325,7 +328,16 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
             "ndvi": ndvi,
             "brightness": brightness,
         }
-        return artifact_files.save(result, rasters, visualizations, crs=src.crs, transform=src.transform)
+        styles = {"snow_mask": artifact_files.class_style({k: colour for k, (_, colour) in SNOW_CLASSES.items()})}
+        return artifact_files.save(
+            result,
+            rasters,
+            visualizations,
+            crs=src.crs,
+            transform=src.transform,
+            styles=styles,
+            bare={"snow_classification": "snow_mask"},
+        )
 
 
 # Convenience function for registry integration

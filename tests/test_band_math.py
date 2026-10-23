@@ -255,7 +255,14 @@ def test_change_is_after_minus_before() -> None:
     assert stats["areas_km2"] == {"increase": 37.927, "decrease": 41.961, "stable": 450.94}
     assert result["index_statistics"]["before"]["mean"] == pytest.approx(np.nanmean(before), abs=1e-6)
     assert (result["formula"], result["name"]) == (NDMI["formula"], "NDMI")
-    assert set(result["visualizations"]) == {"change_map", "index_before", "index_after"}
+    assert set(result["visualizations"]) == {
+        "change_map",
+        "index_before",
+        "index_after",
+        "change_map_bare",
+        "index_before_bare",
+        "index_after_bare",
+    }
 
 
 # --- Plans ------------------------------------------------------------------------
@@ -305,7 +312,7 @@ def test_executor_runs_composed_ndmi_change(_outputs_in_tmp: Path) -> None:
     out = result["artifacts"]["BandMathChangeMap"]
     assert (out["formula"], out["name"]) == (NDMI["formula"], "NDMI")
     files = [Path(r["path"]) for r in [*out["rasters"].values(), *out["visualizations"].values()]]
-    assert len(files) == 6
+    assert len(files) == 9  # 3 GeoTIFFs, 3 PNGs and their 3 bare maps
     for f in files:
         assert f.is_file() and f.is_relative_to(_outputs_in_tmp)
         assert f.name.startswith("2_BandMathChangeMap_")

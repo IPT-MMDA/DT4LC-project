@@ -406,7 +406,8 @@ def calculate_change(
               threshold}`` (see :data:`COVER_THRESHOLDS`); ``None`` otherwise
             - classification: Pixel classification counts
             - metadata: Raster metadata
-            - visualizations: PNG references (if matplotlib available)
+            - visualizations: PNG references (if matplotlib available) and the
+              map-only ``change_map_bare``, ``<index>_before_bare``, ``<index>_after_bare``
             - index_type: The index type used
 
     Raises:
@@ -581,7 +582,19 @@ def calculate_change(
             result["ndvi_statistics"] = result["index_statistics"]
 
         rasters = {"change": change, "index_before": index_before, "index_after": index_after}
-        return artifact_files.save(result, rasters, visualizations, crs=src_after.crs, transform=src_after.transform)
+        # Tiles and bare PNGs: change on the legend ramp over the change PNG's ±0.5, indices as their PNGs.
+        index_look = artifact_files.index_style(config["index_colors"], config["vmin"], config["vmax"])
+        styles = {"change": artifact_files.change_style(0.5), "index_before": index_look, "index_after": index_look}
+        bare = {"change_map": "change", f"{index_type}_before": "index_before", f"{index_type}_after": "index_after"}
+        return artifact_files.save(
+            result,
+            rasters,
+            visualizations,
+            crs=src_after.crs,
+            transform=src_after.transform,
+            styles=styles,
+            bare=bare,
+        )
 
 
 def run(

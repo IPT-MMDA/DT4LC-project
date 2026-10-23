@@ -29,7 +29,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
-from dta.dti.algorithms.spectral_index import HAS_MATPLOTLIB, _render_index_png
+from dta.dti.algorithms.spectral_index import COLORMAPS, HAS_MATPLOTLIB, _render_index_png
 from dta.dti.raster import _BAND_CODE, _band_summary, band_indices, reflectance_divisor
 
 logger = logging.getLogger(__name__)
@@ -272,7 +272,7 @@ def _settings(config: dict[str, Any] | None) -> tuple[ast.expr, str, str, float]
 
 
 def calculate(raster_path: str, config: dict[str, Any]) -> dict[str, Any]:
-    """Band math on one raster; writes ``rasters["index"]`` and ``visualizations["index_map"]``.
+    """Band math on one raster; writes ``rasters["index"]`` and ``visualizations["index_map"]`` (+ ``index_map_bare``).
 
     Returns ``{metadata, statistics, visualizations, rasters, path, index_type, formula, name}``;
     ``statistics`` holds min/max/mean/std/median, valid/total pixels, and the
@@ -291,14 +291,23 @@ def calculate(raster_path: str, config: dict[str, Any]) -> dict[str, Any]:
         "name": name,
     }
     visualizations = {"index_map": _png(index, vrange, name, f"{name} - {Path(raster_path).stem}")}
-    return artifact_files.save(result, {"index": index}, visualizations, crs=crs, transform=transform)
+    return artifact_files.save(
+        result,
+        {"index": index},
+        visualizations,
+        crs=crs,
+        transform=transform,
+        styles={"index": artifact_files.index_style(COLORMAPS[COLORMAP], *vrange)},
+        bare={"index_map": "index"},
+    )
 
 
 def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) -> dict[str, Any]:
     """Band math on two dates and the difference ``after - before``.
 
     Writes rasters ``change``, ``index_before``, ``index_after`` and PNGs
-    ``change_map``, ``index_before``, ``index_after``. ``statistics`` holds the
+    ``change_map``, ``index_before``, ``index_after`` (each with a map-only
+    ``<key>_bare``: change on the legend ramp over ``display_range``). ``statistics`` holds the
     change statistics (as :func:`dta.dti.algorithms.spectral_index.run_change`,
     with ``threshold`` from ``config.threshold``, default 0.2, and the areas in
     km² when the pixel size is in metres: ``increase_area_km2``, ``decrease_area_km2``
@@ -359,7 +368,14 @@ def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) 
         "index_after": _png(after, index_range, name, f"{name} - {Path(after_path).stem}"),
     }
     rasters = {"change": change, "index_before": before, "index_after": after}
-    return artifact_files.save(result, rasters, visualizations, crs=crs, transform=transform)
+    index_look = artifact_files.index_style(COLORMAPS[COLORMAP], *index_range)
+    styles = {
+        "change": artifact_files.change_style(change_range[1]),
+        "index_before": index_look,
+        "index_after": index_look,
+    }
+    bare = {"change_map": "change", "index_before": "index_before", "index_after": "index_after"}
+    return artifact_files.save(result, rasters, visualizations, crs=crs, transform=transform, styles=styles, bare=bare)
 
 
 def run(
