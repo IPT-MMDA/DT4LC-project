@@ -102,6 +102,13 @@ def _collect_assistant_status() -> AssistantStatus:
         return _assistant_cache[1]
 
 
+def invalidate_assistant_status() -> None:
+    """Drop the cached assistant status, so the next caller probes the (rebuilt) router."""
+    global _assistant_cache
+    with _assistant_lock:
+        _assistant_cache = None
+
+
 def _collect_gee_status() -> GEEStatus:
     sa_configured = bool(os.environ.get("GEE_SERVICE_ACCOUNT_KEY"))
     if not is_initialized():
