@@ -71,6 +71,10 @@ module.exports = {
         label: ['10.5px', { lineHeight: '1.4', letterSpacing: '.06em', fontWeight: '600' }],
         // Pair with `font-mono`.
         stat: ['16px', { lineHeight: '1.3', fontWeight: '500' }],
+        // Landing hero (DESIGN section 2): 84/1/-0.03em and 20/1.4, smaller on short
+        // viewports as in the prototype.
+        hero: ['min(84px, 9.3vh)', { lineHeight: '1', letterSpacing: '-0.03em', fontWeight: '600' }],
+        'hero-sub': ['min(20px, 2.3vh)', { lineHeight: '1.4' }],
       },
       spacing: {
         1: '4px',

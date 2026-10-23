@@ -1,0 +1,85 @@
+/* Landing motion, from design/prototype/Landing v2.dc.html. prefers-reduced-motion
+   stops all of it (DESIGN section 7); the demo then shows its poster frame. */
+
+/* Hero B: the image drifts for 20 s each way; the headline settles once. */
+@keyframes drift {
+  from { transform: scale(1.04) translate(-1%, 0); }
+  to { transform: scale(1.04) translate(1%, -1%); }
+}
+@keyframes settle {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.landing-drift { animation: drift 20s ease-in-out infinite alternate; }
+.landing-settle { animation: settle .6s ease-out both; }
+
+/* How it works: one 8-s timeline, played once (demoMachine.ts). */
+@keyframes h-scene { 0% { opacity: 0; } 2.5%, 100% { opacity: 1; } }
+@keyframes h-type { 0%, 4% { clip-path: inset(0 100% 0 0); } 20%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes h-caret { 0%, 19% { opacity: 1; } 20%, 100% { opacity: 0; } }
+@keyframes h-chip1 { 0%, 20% { opacity: 0; transform: translateY(-10px); } 24%, 100% { opacity: 1; transform: none; } }
+@keyframes h-chip2 { 0%, 22% { opacity: 0; transform: translateY(-10px); } 26%, 100% { opacity: 1; transform: none; } }
+@keyframes h-intent { 0%, 27% { clip-path: inset(0 100% 0 0); opacity: 0; } 27.5% { opacity: 1; } 40%, 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes h-tl { 0%, 40% { opacity: 0; transform: translateY(6px); } 43%, 100% { opacity: 1; transform: none; } }
+@keyframes h-check1 { 0%, 43% { opacity: 0; transform: scale(.4); } 45%, 100% { opacity: 1; transform: none; } }
+@keyframes h-check2 { 0%, 48% { opacity: 0; transform: scale(.4); } 50%, 100% { opacity: 1; transform: none; } }
+@keyframes h-check3 { 0%, 54% { opacity: 0; transform: scale(.4); } 56%, 100% { opacity: 1; transform: none; } }
+@keyframes h-ring1 { 0%, 43% { opacity: 1; } 45%, 100% { opacity: 0; } }
+@keyframes h-ring2 { 0%, 48% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes h-ring3 { 0%, 54% { opacity: 1; } 56%, 100% { opacity: 0; } }
+@keyframes h-pill { 0%, 55% { opacity: 0; } 57%, 100% { opacity: 1; } }
+@keyframes h-card { 0%, 55% { opacity: 0; transform: translateY(8px); } 58%, 100% { opacity: 1; transform: none; } }
+@keyframes h-swipe { 0%, 58% { clip-path: inset(0 0 0 100%); } 66%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes h-handle { 0%, 58% { left: 100%; opacity: 1; } 66% { left: 0%; opacity: 1; } 68%, 100% { left: 0%; opacity: 0; } }
+@keyframes h-lblb { 0%, 58% { opacity: 1; } 64%, 100% { opacity: 0; } }
+@keyframes h-lbla { 0%, 62% { opacity: 0; } 66%, 100% { opacity: 1; } }
+@keyframes h-diff { 0%, 66% { opacity: 0; } 71%, 100% { opacity: 1; } }
+@keyframes h-legend { 0%, 67% { opacity: 0; transform: translateY(4px); } 71%, 100% { opacity: 1; transform: none; } }
+@keyframes h-cntA { 0%, 61% { opacity: 0; transform: translateY(8px); } 66%, 100% { opacity: 1; transform: none; } }
+@keyframes h-cntB { 0%, 64% { opacity: 0; transform: translateY(8px); } 69%, 100% { opacity: 1; transform: none; } }
+@keyframes h-cntC { 0%, 67% { opacity: 0; transform: translateY(8px); } 72%, 100% { opacity: 1; transform: none; } }
+@keyframes h-stats { 0%, 59% { opacity: 0; } 61%, 100% { opacity: 1; } }
+@keyframes h-interp { 0%, 72% { clip-path: inset(0 100% 0 0); opacity: 0; } 72.5% { opacity: 1; } 83%, 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+@keyframes h-follow { 0%, 83% { opacity: 0; transform: translateY(6px); } 86%, 100% { opacity: 1; transform: none; } }
+
+[data-anim="scene"] { animation: h-scene 8s linear both; }
+[data-anim="type"] { animation: h-type 8s steps(57) both; }
+[data-anim="caret"] { opacity: 0; animation: h-caret 8s linear both; }
+[data-anim="chip1"] { animation: h-chip1 8s ease-out both; }
+[data-anim="chip2"] { animation: h-chip2 8s ease-out both; }
+[data-anim="intent"] { animation: h-intent 8s linear both; }
+[data-anim="tl"] { animation: h-tl 8s ease-out both; }
+[data-anim="check1"] { animation: h-check1 8s ease-out both; }
+[data-anim="check2"] { animation: h-check2 8s ease-out both; }
+[data-anim="check3"] { animation: h-check3 8s ease-out both; }
+[data-anim="ring1"] { opacity: 0; animation: h-ring1 8s linear both; }
+[data-anim="ring2"] { opacity: 0; animation: h-ring2 8s linear both; }
+[data-anim="ring3"] { opacity: 0; animation: h-ring3 8s linear both; }
+[data-anim="pill"] { animation: h-pill 8s linear both; }
+[data-anim="card"] { animation: h-card 8s ease-out both; }
+[data-anim="swipe"] { animation: h-swipe 8s cubic-bezier(.4, 0, .2, 1) both; }
+[data-anim="handle"] { opacity: 0; animation: h-handle 8s cubic-bezier(.4, 0, .2, 1) both; }
+[data-anim="lblb"] { opacity: 0; animation: h-lblb 8s linear both; }
+[data-anim="lbla"] { animation: h-lbla 8s linear both; }
+[data-anim="diff"] { animation: h-diff 8s linear both; }
+[data-anim="legend"] { animation: h-legend 8s ease-out both; }
+[data-anim="cntA"] { animation: h-cntA 8s ease-out both; }
+[data-anim="cntB"] { animation: h-cntB 8s ease-out both; }
+[data-anim="cntC"] { animation: h-cntC 8s ease-out both; }
+[data-anim="stats"] { animation: h-stats 8s linear both; }
+[data-anim="interp"] { animation: h-interp 8s linear both; }
+[data-anim="follow"] { animation: h-follow 8s ease-out both; }
+
+/* The modes (demoMachine.ts). off and poster: every element at its end state. */
+[data-demo][data-mode="idle"] [data-anim] { animation-play-state: paused; }
+[data-demo][data-mode="off"] [data-anim],
+[data-demo][data-mode="poster"] [data-anim] { animation: none; }
+[data-demo][data-mode="scrub"] [data-anim] { animation-delay: var(--scrub); animation-play-state: paused; }
+[data-demo][data-mode="play"]:hover [data-anim] { animation-play-state: paused; }
+
+/* A scrubbed demo is a still frame, so the step buttons keep working. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-drift,
+  .landing-settle,
+  [data-demo]:not([data-mode="scrub"]) [data-anim] { animation: none; }
+}

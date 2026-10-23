@@ -19,7 +19,10 @@
     "e2e:capabilities": "npm run e2e:capabilities:offline && npm run e2e:capabilities:demo",
     "e2e:capabilities:offline": "E2E_DEV_ROLE=member E2E_LLM=none node tests/e2e/run.mjs capabilities-offline",
     "e2e:capabilities:demo": "E2E_SERVER=demo E2E_LLM=fake E2E_GUEST_LIMIT=5 node tests/e2e/run.mjs capabilities-demo",
-    "e2e:run2": "npm run e2e:capabilities"
+    "e2e:landing": "npm run e2e:landing:guest && npm run e2e:landing:member",
+    "e2e:landing:guest": "E2E_GUEST_LIMIT=5 node tests/e2e/run.mjs landing",
+    "e2e:landing:member": "E2E_DEV_ROLE=member node tests/e2e/run.mjs landing-member",
+    "e2e:run2": "npm run e2e:capabilities && npm run e2e:landing"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.0",

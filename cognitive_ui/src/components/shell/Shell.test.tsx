@@ -166,8 +166,8 @@ describe('docked map', () => {
 });
 
 describe('routes', () => {
+  // `/` without a query is the guest landing (pages/Landing.test.tsx).
   it.each([
-    ['/', '/app'],
     ['/?sample=0', '/app?sample=0'],
     ['/chat', '/app'],
     ['/dashboard', '/app'],

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from './api/hooks/useSession';
+import { landingDecision } from './components/landing/landingDecision';
 import { Shell } from './components/shell/Shell';
 import { Capabilities } from './pages/Capabilities';
+import { Landing } from './pages/Landing';
 import { MapPage } from './pages/MapPage';
 import { Placeholder } from './pages/Placeholder';
 import { Workspace } from './pages/Workspace';
@@ -39,6 +41,26 @@ function ResultRoute() {
   return conversation ? null : <Placeholder title="Result" />;
 }
 
+/**
+ * `/`: the landing for a first-time guest, the Workspace (query kept) for everyone
+ * else. Renders nothing until GET /v1/session answers, unless the stored
+ * conversations already decide it, so neither page flashes.
+ */
+function LandingRoute() {
+  const { search } = useLocation();
+  const { data: session, isPending } = useSession();
+  const hasConversations = useChatStore((state) => state.conversations.length > 0 || state.activeConversationId !== null);
+  const params = new URLSearchParams(search);
+  const decision = landingDecision({
+    role: session?.role,
+    sessionPending: isPending,
+    hasConversations,
+    deepLink: params.has('sample') || params.has('prompt'),
+  });
+  if (decision === 'app') return <Navigate to={{ pathname: '/app', search }} replace />;
+  return decision === 'landing' ? <Landing session={session} /> : null;
+}
+
 /** `/app/settings` is for operators only. */
 function SettingsRoute() {
   const { data: session, isPending } = useSession();
@@ -50,8 +72,7 @@ function SettingsRoute() {
 export function AppRoutes() {
   return (
     <Routes>
-      {/* The guest landing page is Phase 3; until then / opens the Workspace. */}
-      <Route path="/" element={<RedirectTo to="/app" />} />
+      <Route path="/" element={<LandingRoute />} />
 
       <Route path="/app" element={<Shell />}>
         <Route index element={<Workspace />} />
