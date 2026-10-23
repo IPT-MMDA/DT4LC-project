@@ -1,7 +1,8 @@
 // The running timeline against the real API, caught mid-run: design/screens/
 // workspace-analysis-running.png. Needs E2E_LLM=fake (`npm run e2e:workspace:fake`): the
 // fake Ollama holds the Interpretation step's LLM call back for INTERPRETATION_MS, so
-// the Interpretation row is reliably running while the flow looks at it.
+// the Interpretation row is reliably running while the flow looks at it. A reload
+// at that point restores the conversation and resumes the event stream.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { outPath, resetLLMRules, setLLMRules, setup, trackPageErrors } from '../harness.mjs';
@@ -99,6 +100,30 @@ test('cancel mid-run: Cancelled, and nothing is logged after it', fake, async ()
     assert.equal(types.filter((t) => t === 'step_started').length, 4, 'no row started after the cancel');
     assert.equal(types.includes('done'), false);
     assert.equal(await message.getAttribute('data-phase'), 'cancelled');
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test('reload mid-run: the active conversation comes back and the analysis reconnects and finishes', fake, async () => {
+  const { context, page, errors, message } = await startNDWI();
+  try {
+    const jobId = await message.getAttribute('data-job-id');
+    const title = await page.getByRole('main', { name: 'Chat' }).getByRole('heading', { level: 1 }).innerText();
+    const resumed = page.waitForRequest((req) => req.url().includes(`/v1/jobs/${jobId}/events?after=`));
+    await page.reload();
+
+    // The persisted timeline shows at once; the stream resumes after its last event.
+    assert.equal(await page.getByRole('main', { name: 'Chat' }).getByRole('heading', { level: 1 }).innerText(), title);
+    const again = page.getByTestId('analysis-message').first();
+    assert.equal(await again.getAttribute('data-job-id'), jobId);
+    const after = Number(new URL((await resumed).url()).searchParams.get('after'));
+    assert.ok(after > 0, `resumed after seq ${after}`);
+    await again.and(page.locator('[data-phase="done"]')).waitFor({ timeout: INTERPRETATION_MS + 15_000 });
+    await again.getByTestId('interpretation').waitFor();
+    assert.equal(await again.getByTestId('interpretation').innerText(), INTERPRETATION);
+    assert.equal((await jobOf(page, again)).status, 'completed');
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

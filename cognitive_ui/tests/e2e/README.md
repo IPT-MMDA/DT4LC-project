@@ -7,7 +7,7 @@ cd cognitive_ui
 npm run build          # the harness serves dist/; it refuses to run without it
 npm run e2e:smoke      # flows/smoke.e2e.mjs only
 npm run e2e            # every flows/*.e2e.mjs (guest, E2E_LLM=none; fake- and member-only flows skip)
-npm run e2e:workspace  # the Workspace screens: the three env groups below, one API run each
+npm run e2e:workspace  # the Workspace screens: the four env groups below, one API run each
 node tests/e2e/run.mjs smoke other   # pick flows by name (flows/<name>.e2e.mjs) or by path
 ```
 
@@ -15,11 +15,12 @@ One API process serves a run, so flows that need another role or LLM mode run in
 
 | Script | Env | Flows | Screens (`out/`) |
 |---|---|---|---|
-| `e2e:workspace:guest` | guest, `E2E_LLM=none` | `workspace-empty`, `workspace-messages`, `workspace-composer`, `workspace-analysis`, `workspace-result` | empty states, assistant offline, region chip, proposal, composed done, failed and retry, model gated for guest, done with the result card |
-| `e2e:workspace:fake` | guest, `E2E_LLM=fake` | `workspace-running` | analysis running (and cancel) |
-| `e2e:workspace:member` | `E2E_DEV_ROLE=member`, `E2E_LLM=none` | `workspace-preparing` | preparing model, assistant offline |
+| `e2e:workspace:guest` | guest, `E2E_LLM=none` | `workspace-empty`, `workspace-messages`, `workspace-composer`, `workspace-analysis`, `workspace-result`, `workspace-conversations` | empty states, assistant offline, region chip, proposal, composed done, failed and retry, model gated for guest, done with the result card, no conversations (`workspace-no-conversations.png`); rename, delete and reload of the conversation list |
+| `e2e:workspace:fake` | guest, `E2E_LLM=fake` | `workspace-running` | analysis running (and cancel; a reload mid-run resumes the stream) |
+| `e2e:workspace:member` | `E2E_DEV_ROLE=member`, `E2E_LLM=none` | `workspace-preparing` | preparing model, assistant offline, the member badge |
+| `e2e:workspace:quota` | guest, `E2E_GUEST_LIMIT=2`, `E2E_LLM=none` | `workspace-quota` | two analyses, then the quota refusal inline and the composer's quota line (`workspace-guest-quota.png`) |
 
-`workspace-running` skips itself unless `E2E_LLM=fake`, and `workspace-preparing` unless `E2E_DEV_ROLE=member`.
+`workspace-running` skips itself unless `E2E_LLM=fake`, `workspace-preparing` unless `E2E_DEV_ROLE=member`, and `workspace-quota` unless `E2E_GUEST_LIMIT=2`.
 
 The API runs with `uv run`, so the Python env must exist (`uv sync --extra dev --extra server` at the repo root).
 
