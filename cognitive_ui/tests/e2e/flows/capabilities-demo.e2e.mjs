@@ -86,6 +86,10 @@ test('public demo, Models and Data: Delineate installed, Prithvi gated, Earth En
     ]);
     assert.deepEqual(await page.getByTestId('tier-data').getByTestId('capability-status').allInnerTexts(), ['Always', 'Always', 'Configured']);
     await page.getByText('Guests: up to 5 analyses per hour, results kept 24 h in this browser, no account needed.').waitFor();
+    assert.equal(
+      await page.locator('[data-testid="data-item"][data-id="sample"]').innerText().then((t) => t.split('\n')[1]?.trim()),
+      'kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09',
+    );
     const coming = page.getByTestId('tier-coming').getByRole('button');
     assert.equal(await coming.getAttribute('aria-expanded'), 'false');
     assert.match(await coming.innerText(), /Show$/);
@@ -94,6 +98,13 @@ test('public demo, Models and Data: Delineate installed, Prithvi gated, Earth En
     await coming.click();
     assert.equal(await coming.getAttribute('aria-expanded'), 'true');
     await page.getByTestId('tier-coming').getByText('ConvLSTM NDVI forecast', { exact: true }).nth(0).waitFor();
+    // Four entries, the runoff ensemble last.
+    assert.deepEqual(await page.locator('#tier-coming-items > div > span:first-child').allInnerTexts(), [
+      'ConvLSTM NDVI forecast',
+      'PINN-LINDA nowcasting',
+      'VI forecasting DTI',
+      'Runoff ensemble',
+    ]);
     assert.deepEqual(gee, []);
     assert.deepEqual(errors, []);
   } finally {

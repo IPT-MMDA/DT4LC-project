@@ -211,7 +211,7 @@
           ],
           "time_estimate": "~10 s",
           "runs_without_assistant": true,
-          "prompt": "Map snow cover in the Brienz sample",
+          "prompt": "Map snow cover with NDSI",
           "model": null,
           "status": "available",
           "status_label": "Runs without the assistant"
@@ -416,7 +416,7 @@
       "badge": null,
       "collapsed": false,
       "groups": null,
-      "note": "Guests: up to 1000 analyses per hour, results kept 24 h in this browser, no account needed.",
+      "note": "Member on a local server: no analysis limit; results are kept until you delete them.",
       "items": [
         {
           "id": "uploads",
@@ -428,7 +428,7 @@
         {
           "id": "sample",
           "title": "Bundled sample",
-          "detail": "kahovka_data · HLS L30 · 2023-06-01 → 06-09",
+          "detail": "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09",
           "status": "always",
           "status_label": "Always"
         },
@@ -468,6 +468,11 @@
           "id": "models/vi-forecasting-dti",
           "title": "VI forecasting DTI",
           "description": "Vegetation Index Forecasting DTI - Time-series forecasting model for vegetation indices using Google Earth Engine integration."
+        },
+        {
+          "id": "models/runoff-ensemble",
+          "title": "Runoff ensemble",
+          "description": "Ensemble runoff estimates from precipitation and land-cover inputs."
         }
       ]
     }
@@ -479,6 +484,10 @@
   "session": {
     "role": "member",
     "guest": false,
+    "user": null,
+    "sign_in": {
+      "configured": false
+    },
     "analyses": {
       "limit": null,
       "used": 0,
@@ -486,7 +495,7 @@
       "resets_at": null
     },
     "kept_hours": null,
-    "expires_at": "2026-10-24T13:17:03+00:00",
+    "expires_at": "2026-10-24T22:02:08+00:00",
     "can_download_models": true
   },
   "example_prompts": [

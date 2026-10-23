@@ -71,6 +71,8 @@ test('offline laptop: banner, tiers 1-2 greyed, member summary, models download 
     });
     await page.waitForTimeout(300);
     await screenshot(page, 'capabilities-offline-models-data.png');
+    // The Data note follows the role: a member has no guest limits.
+    await page.getByTestId('tier-data').getByText('Member on a local server: no analysis limit; results are kept until you delete them.').waitFor();
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
