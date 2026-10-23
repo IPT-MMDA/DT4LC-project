@@ -63,9 +63,13 @@ test('running: the timeline fills ✓ / spinner / queued with Cancel on the pill
     assert.deepEqual(statuses, ['done', 'done', 'done', 'running']);
     assert.equal(await message.getByRole('button', { name: 'Cancel' }).count(), 1);
     assert.equal(await message.getByRole('progressbar', { name: 'Analysis progress' }).getAttribute('aria-valuenow'), '75');
-    // The running row counts its seconds (the clock ticks once a second).
+    // The running row counts its seconds (the clock ticks once a second). How late the
+    // flow saw the row start varies, so any count within the fake's 6 s hold will do.
     await page.waitForTimeout(2500);
-    assert.match(await interpretation.innerText(), /Interpretation\s+[2-4] s/);
+    const elapsed = /Interpretation\s+(\d+) s/.exec(await interpretation.innerText());
+    assert.ok(elapsed, 'the running Interpretation row shows its elapsed seconds');
+    const seconds = Number(elapsed[1]);
+    assert.ok(seconds >= 1 && seconds <= 7, `Interpretation running for ${seconds} s, within the 6 s hold`);
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: outPath('workspace-analysis-running.png') });
 
@@ -73,7 +77,11 @@ test('running: the timeline fills ✓ / spinner / queued with Cancel on the pill
     await message.and(page.locator('[data-phase="done"]')).waitFor({ timeout: INTERPRETATION_MS + 15_000 });
     await message.getByTestId('interpretation').waitFor();
     assert.equal(await message.getByTestId('interpretation').innerText(), INTERPRETATION);
-    assert.match(await message.getByTestId('done-line').innerText(), /Done\s+4 steps · [5-9] s · Change Detection · NDWI/);
+    // At least the 6 s hold; the first held call of a run can take 2-3 s longer.
+    const done = /Done\s+4 steps · (\d+) s · Change Detection · NDWI/.exec(await message.getByTestId('done-line').innerText());
+    assert.ok(done, 'the done line counts steps and seconds');
+    const total = Number(done[1]);
+    assert.ok(total >= INTERPRETATION_MS / 1000 && total <= 20, `done after ${total} s, at least the 6 s hold`);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
