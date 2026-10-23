@@ -228,7 +228,7 @@ function Maps({ job, model, meta, dates: [from, to] }: { job: DetailJob; model: 
     return (
       <>
         <MapPanel title="Difference map" meta={meta} view={difference} legend={<ChangeLegend model={model} index={index} />} height="h-[360px]" actions />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
           {dates.map((v) => (
             <MapPanel key={v.key} title={`${index || 'Index'} · ${v.key}`} meta={(v.key === 'before' ? from : to) ?? ''} view={v} height="h-[170px]" />
           ))}
@@ -424,7 +424,11 @@ export function ResultDetail() {
   }
 
   return (
-    <main data-testid="result-detail" data-status={job.status} className="flex-1 min-w-0 overflow-y-auto bg-bg px-[40px] pt-[28px] pb-[40px] flex flex-col gap-[20px]">
+    <main
+      data-testid="result-detail"
+      data-status={job.status}
+      className="flex-1 min-w-0 overflow-y-auto bg-bg px-[40px] pt-[28px] pb-[40px] max-md:px-4 max-md:pt-4 md:max-lg:px-6 flex flex-col gap-[20px]"
+    >
       <nav aria-label="Breadcrumb">
         <ol data-testid="detail-breadcrumb" className="flex items-center gap-2 text-control text-muted min-w-0">
           <li>
@@ -456,13 +460,13 @@ export function ResultDetail() {
           <h1 data-testid="detail-title" className="text-title">
             {title}
           </h1>
-          <div data-testid="detail-meta" className="flex items-center gap-[10px] text-control text-muted">
+          <div data-testid="detail-meta" className="flex items-center max-lg:flex-wrap gap-[10px] max-lg:gap-y-1 text-control text-muted">
             <StatusPill status={status} />
             {headerLine && <span>{headerLine}</span>}
             <span className="font-mono">{job.id}</span>
           </div>
         </div>
-        <div role="group" aria-label="Result actions" className="flex gap-2">
+        <div role="group" aria-label="Result actions" className="flex max-lg:flex-wrap gap-2">
           <button type="button" onClick={() => void run(actions.openInWorkspace)} className={outline}>
             Open in workspace
           </button>
@@ -495,7 +499,8 @@ export function ResultDetail() {
         }}
       />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+      {/* Below 1024 px the side column goes under the maps. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_360px] max-lg:grid-cols-1 gap-6 items-start">
         <div className="flex flex-col gap-4 min-w-0">{main}</div>
 
         <aside aria-label="About this result" className="flex flex-col gap-4">
@@ -548,7 +553,8 @@ export function ResultDetail() {
                 {downloads.map((d) => (
                   <li key={d.url} className="border-b border-border2 last:border-b-0">
                     <a data-testid="download-row" href={resolveApiUrl(d.url)} download={d.name} className="flex items-baseline justify-between gap-3 py-[6px] text-control hover:text-accent-ink">
-                      <span className="font-mono truncate min-w-0" title={d.name}>
+                      {/* Long names wrap: the whole name is read and seen. */}
+                      <span data-testid="download-name" className="font-mono min-w-0 [overflow-wrap:anywhere]">
                         {d.name}
                       </span>
                       <span className="text-muted flex-none">{d.detail}</span>
