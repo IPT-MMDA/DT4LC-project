@@ -356,7 +356,13 @@ def test_demo_coming_tier_is_collapsed_with_whole_descriptions(demo: dict[str, A
         "ConvLSTM NDVI forecast",
         "PINN-LINDA nowcasting",
         "VI forecasting DTI",
+        "Runoff ensemble",
     ]
+    assert coming["items"][3] == {
+        "id": "models/runoff-ensemble",
+        "title": "Runoff ensemble",
+        "description": "Ensemble runoff estimates from precipitation and land-cover inputs.",
+    }
     # The whole registry description, not its first line.
     assert coming["items"][0]["description"].endswith(
         "Trained on Cherkasy, Vinnytsia, and Mykolaiv oblasts (2018-2021)."

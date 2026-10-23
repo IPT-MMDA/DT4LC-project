@@ -17,11 +17,13 @@ import pytest
 from dta.config import ROOT_DIR
 from dta.dti.coe.llm import get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
+from dta.dti.coe.llm_planner import format_registry_for_llm
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.coe.planner import plan_template
 from dta.dti.coe.triggers import get_trigger_index, phrase_in
 from dta.dti.registry import load_registry
-from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
+from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, ExecutionPlan, PlanStep
+from dta.dti.validation import PlanValidator, ValidationError
 
 SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
 SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
@@ -185,6 +187,27 @@ def test_planned_hosted_models_are_not_picked_by_keywords() -> None:
     steps = [s.uses for s in plan_template(_llm_like_context("custom index"), load_registry()).steps]
 
     assert "models/vi-forecasting-dti" not in steps
+
+
+RUNOFF = "models/runoff-ensemble"
+RUNOFF_PROMPT = "Estimate runoff discharge with the runoff ensemble"
+
+
+def test_runoff_ensemble_is_never_plannable() -> None:
+    """The fourth Coming entry is listed on the Capabilities page only: no planner picks it."""
+    reg = load_registry()
+    contexts = (
+        _llm_like_context(RUNOFF_PROMPT),
+        ContextUnderstanding(goal=RUNOFF_PROMPT, desired_outputs=["DischargeSeries"], required_inputs=[]),
+    )
+    for ctx in contexts:
+        assert RUNOFF not in [s.uses for s in plan_template(ctx, reg).steps]
+    assert RUNOFF not in format_registry_for_llm(reg)  # not offered to the LLM planner
+    out = orchestrate(ChatRequest(prompt=RUNOFF_PROMPT, attachments=_attachments(SAMPLE_0609)))
+    planned = out.get("plan") or out.get("candidate") or {"steps": []}
+    assert RUNOFF not in [s["uses"] for s in planned["steps"]], out
+    with pytest.raises(ValidationError, match="has no runner"):  # nor can a hand-written plan run it
+        PlanValidator(reg).validate_plan(ExecutionPlan(flow="runoff", steps=[PlanStep(uses=RUNOFF)]))
 
 
 @pytest.mark.parametrize(

@@ -259,7 +259,7 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     if not added_step:
         for want in ctx.desired_outputs or []:
             candidates = [i for i in kw_ranked if want in i.outputs] or find_items_producing(reg, want)
-            candidates = [i for i in candidates if not _is_band_math(i)]
+            candidates = [i for i in candidates if not _is_band_math(i) and i.integration is None]
             if not candidates:
                 continue
             chosen = candidates[0]

@@ -886,3 +886,23 @@ instances:
       author: "sofidrozd13"
       hosting: "gee"
       platform: "Google Earth Engine"
+
+  # Coming only (Capabilities): a planned remote service with no runner, so it is never planned or run.
+  - id: models/runoff-ensemble
+    kind: model
+    ui:
+      tier: coming
+      order: 4
+      title: Runoff ensemble
+    keywords: [runoff, discharge, streamflow, hydrology, ensemble]
+    description: |
+      Ensemble runoff estimates from precipitation and land-cover inputs.
+    inputs: [BasinId, DateSplits]
+    outputs: [DischargeSeries]
+    integration:
+      type: http-service
+      url: "https://github.com/IPT-MMDA/runoff-physics-ensemble"
+      status: planned
+    metadata:
+      team: "IPT-MMDA"
+      hosting: "remote"
