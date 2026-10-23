@@ -143,7 +143,7 @@ class JobSummary(BaseModel):  # type: ignore[misc]
     """Async job status without results (``GET /v1/jobs`` list item)."""
 
     id: str
-    status: str = Field(description="pending, running, completed, failed, or cancelled")
+    status: str = Field(description="pending, proposal, running, completed, failed, or cancelled")
     prompt: str
     plan: dict[str, Any] | None = None
     progress: float = Field(ge=0.0, le=1.0)
@@ -163,6 +163,18 @@ class JobRecord(JobSummary):
     events: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Event log as replayed by GET /v1/jobs/{id}/events: [{seq, type, data}] (server/job_events.py)",
+    )
+    proposal: dict[str, Any] | None = Field(
+        default=None,
+        description="{text, plan} when planning proposed a composed plan (status proposal until confirmed)",
+    )
+
+
+class JobConfirmRequest(BaseModel):  # type: ignore[misc]
+    """``POST /v1/jobs/{id}/confirm``: run the proposal, or ``plan`` if the user changed it."""
+
+    plan: dict[str, Any] | None = Field(
+        default=None, description="Edited execution plan; its file inputs are the job's own attachments"
     )
 
 

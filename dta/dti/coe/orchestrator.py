@@ -1,12 +1,14 @@
 import logging
 from pathlib import Path
+import re
 from typing import Any
 
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import ChatRequest
+from dta.dti.schemas import ChatRequest, ExecutionPlan, Registry
 
 from .context_agent import analyze
 from .intent_classifier import IntentType, classify_intent
+from .named_indices import named_index_request, proposal_text
 from .plan_validator import PlanError, validate
 from .planner import plan
 
@@ -29,9 +31,11 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         Dictionary with:
             - ok: True if successful
             - intent: "pipeline" or "conversation"
-            - plan: Execution plan (if pipeline)
+            - plan: Execution plan (if pipeline); ``plan["composed"]`` when it is not a single template
+            - proposal: Sentence offering a composed plan for confirmation (if composed)
             - response: Helpful response (if conversation)
-            - error: Error message if failed
+            - error: Error message if failed (also when the plan has no analysis step, or
+              names a band the input lacks: no template retry then)
     """
     # First, classify the user's intent
     intent_result = classify_intent(req)
@@ -50,6 +54,20 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
 
     # Continue with pipeline planning
     reg = load_registry()
+
+    # A named index no built-in analysis computes (NDMI, NBR, ...): composed from the table, or
+    # refused when a file lacks its bands, before any LLM or template planning.
+    named = named_index_request(req.prompt, req.attachments, reg)
+    if named is not None:
+        if named.missing:
+            logger.info(f"Named index {named.index.name} refused: {named.missing}")
+            return {"ok": False, "intent": "pipeline", "error": named.missing, "candidate": named.plan.model_dump()}
+        try:
+            final_plan = validate(named.plan, reg)
+        except PlanError as e:
+            return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": named.plan.model_dump()}
+        return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump(), "proposal": named.text}
+
     ctx = analyze(req, registry_types=reg.types)
     candidate = plan(ctx, reg)
 
@@ -60,32 +78,66 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
         logger.warning("No attachments provided - input steps will have no file bindings")
 
     try:
-        final_plan = validate(candidate, reg)
-        return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump()}
+        final_plan = require_analysis_step(validate(candidate, reg), reg)
     except PlanError as e:
+        if BAND_NOT_IN_FILE.search(str(e)):
+            # The plan names a band the file lacks: say so; an unrelated template plan would not help.
+            logger.info(f"Plan needs a band the input lacks ({e}); not retrying with the template planner")
+            return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
         # Retry once with the template planner; keep the original error if it doesn't help.
         fallback = plan(ctx, reg, use_llm=False)
         if req.attachments:
             _inject_file_bindings(fallback, req.attachments)
-        if fallback.model_dump() != candidate.model_dump():
-            try:
-                final_plan = validate(fallback, reg)
-                # A template plan with only input/post-processing steps would silently drop the user's goal.
-                if any(get_item(reg, s.uses).kind in ("algorithm", "model") for s in final_plan.steps):
-                    logger.warning(
-                        f"LLM plan failed validation ({e}); using template plan instead: "
-                        f"{[s.uses for s in final_plan.steps]}"
-                    )
-                    return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump()}
-                logger.warning(
-                    f"Template fallback has no algorithm or model step ({[s.uses for s in final_plan.steps]}); "
-                    "returning original error"
-                )
-            except PlanError as e2:
-                logger.warning(f"Template fallback also failed validation ({e2}); returning original error")
-        else:
+        if fallback.model_dump() == candidate.model_dump():
             logger.debug("Template plan equals the rejected LLM plan; returning original error")
-        return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
+            return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
+        try:
+            final_plan = validate(fallback, reg)
+        except PlanError as e2:
+            logger.warning(f"Template fallback also failed validation ({e2}); returning original error")
+            return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
+        # A template plan with only input/post-processing steps would silently drop the user's goal.
+        if not _analysis_steps(final_plan, reg):
+            logger.warning(
+                f"Template fallback has no algorithm or model step ({[s.uses for s in final_plan.steps]}); "
+                "returning original error"
+            )
+            return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": candidate.model_dump()}
+        logger.warning(
+            f"LLM plan failed validation ({e}); using template plan instead: {[s.uses for s in final_plan.steps]}"
+        )
+
+    result: dict[str, Any] = {"ok": True, "intent": "pipeline"}
+    if is_composed(final_plan, reg):
+        final_plan.composed = True
+        result["proposal"] = proposal_text(final_plan, reg)
+    result["plan"] = final_plan.model_dump()
+    return result
+
+
+# The band-math validator's message for a band the input file lacks (dta.dti.algorithms.band_math).
+BAND_NOT_IN_FILE = re.compile(r"Band \w+ is not in this file")
+NO_ANALYSIS_STEP = (
+    "I can't map this request to an analysis I can run here: no built-in analysis matches it, "
+    "and I couldn't compose one."
+)
+
+
+def _analysis_steps(plan: ExecutionPlan, reg: Registry) -> list[str]:
+    return [s.uses for s in plan.steps if get_item(reg, s.uses).kind in ("algorithm", "model")]
+
+
+def require_analysis_step(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
+    """``plan``, unless it has no algorithm or model step (only reads and summarises): PlanError."""
+    if not _analysis_steps(plan, reg):
+        raise PlanError(NO_ANALYSIS_STEP)
+    return plan
+
+
+def is_composed(plan: ExecutionPlan, reg: Registry) -> bool:
+    """True unless ``plan`` is a single registered template: exactly one analysis step, not band math."""
+    analysis = _analysis_steps(plan, reg)
+    return plan.composed or len(analysis) != 1 or analysis[0].startswith("algorithms/band-math")
 
 
 def _inject_file_bindings(candidate: Any, attachments: list[Any]) -> None:

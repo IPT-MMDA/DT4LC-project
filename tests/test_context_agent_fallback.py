@@ -26,7 +26,7 @@ from dta.dti.coe.context_agent import analyze
 from dta.dti.coe.llm import BaseLLMProvider, LLMResponse, LLMRouter, get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate
-from dta.dti.coe.plan_validator import PlanError, validate
+from dta.dti.coe.plan_validator import validate
 from dta.dti.coe.planner import plan
 from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import get_item, load_registry
@@ -280,11 +280,14 @@ def _p1_cases() -> Iterator[Any]:
         if item.triggers is None:
             continue
         files = [BEFORE, AFTER] if "RasterPathBefore" in item.inputs else [BEFORE]
-        # Band math needs a formula, which only the LLM planner (or a proposal) writes.
+        # Band math needs a formula, which only the LLM planner or the named-index table writes, as a
+        # proposal: the template planner never picks it, so its phrases plan no analysis step.
         marks = (
             [
                 pytest.mark.xfail(
-                    raises=PlanError, strict=True, reason="band math needs a formula; no template writes one"
+                    raises=AssertionError,
+                    strict=True,
+                    reason="band math is composed only; the template planner never picks it (no formula)",
                 )
             ]
             if item.id == "algorithms/band-math"

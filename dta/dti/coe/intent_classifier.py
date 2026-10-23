@@ -7,7 +7,8 @@ no change to this file.
 
 Routing logic:
 1. Capability question framing → CONVERSATION with per-item capability response.
-2. Attachments + action keyword → PIPELINE (fast path, no LLM call).
+2. Attachments + action keyword, or a named index to compose (NDMI, NBR, ...;
+   ``coe/named_indices.py``) → PIPELINE (fast path, no LLM call).
 3. Imperative action without attachments → CONVERSATION asking for the file.
 4. Clear action phrase (with or without attachments) → PIPELINE.
 5. Otherwise fall through to the LLM (system prompt also rendered from the
@@ -23,10 +24,12 @@ import re
 from typing import Any
 
 from dta.dti.coe.llm import LLMMessage, get_llm_router
+from dta.dti.coe.named_indices import match_named_index
 from dta.dti.coe.triggers import (
     GENERIC_ACTION_VERBS,
     get_trigger_index,
     is_capability_question,
+    looks_like_explanation_question,
 )
 from dta.dti.schemas import ChatRequest
 
@@ -69,8 +72,9 @@ def classify_intent(req: ChatRequest) -> dict[str, Any]:
             "response": idx.render_capability_response(req.prompt),
         }
 
-    # 2. Attachments + action keyword → PIPELINE (no LLM needed).
-    if req.attachments and idx.has_keyword(req.prompt):
+    # 2. Attachments + action keyword, or a named index to compose (NDMI, NBR, ...) → PIPELINE (no LLM needed).
+    named = match_named_index(req.prompt) is not None and not looks_like_explanation_question(req.prompt)
+    if req.attachments and (idx.has_keyword(req.prompt) or named):
         logger.info("Quick classification: PIPELINE (has attachments + action keywords)")
         return {"intent": IntentType.PIPELINE, "reason": "Has attachments and action keywords"}
 

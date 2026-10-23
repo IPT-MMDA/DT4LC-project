@@ -66,6 +66,18 @@ _CAPABILITY_QUESTION_PATTERNS = [
 _PLEASANTRY_PREFIX = re.compile(r"^(so|ok|okay|well|hey|hi|hello),?\s*", re.I)
 
 
+def phrase_in(phrase: str, text: str) -> bool:
+    """True if ``phrase`` occurs in ``text`` as whole words, case-insensitively.
+
+    A trailing plural ``s``/``es`` is allowed ("water change" matches "water changes"),
+    nothing else: "detect" does not match "detection", nor "land" "landsat" or "landscape".
+    """
+    phrase = phrase.strip().lower()
+    if not phrase:
+        return False
+    return re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?:e?s)?(?![a-z0-9])", text.lower()) is not None
+
+
 def _strip_pleasantries(prompt: str) -> str:
     return _PLEASANTRY_PREFIX.sub("", prompt.strip())
 
@@ -181,7 +193,8 @@ class TriggerIndex:
     def find_matching_item(self, prompt: str) -> RegistryItem | None:
         """Return the user-runnable item whose triggers best match the prompt,
         or None if no item matches. Score = number of distinct trigger keywords
-        appearing in the prompt; tie-broken by length of the longest match.
+        appearing in the prompt as whole words (:func:`phrase_in`); tie-broken by
+        length of the longest match.
         """
         p = prompt.lower()
         best: RegistryItem | None = None
@@ -192,7 +205,7 @@ class TriggerIndex:
                 continue
             keywords = [k.lower() for k in item.triggers.keywords]
             phrases = [k.lower() for k in item.triggers.action_phrases]
-            matches = [kw for kw in keywords + phrases if kw in p]
+            matches = [kw for kw in keywords + phrases if phrase_in(kw, p)]
             if not matches:
                 continue
             score = len(matches)

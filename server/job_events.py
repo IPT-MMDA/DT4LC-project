@@ -13,8 +13,10 @@ fields below; optional fields are left out when unknown.
 
 - ``intent`` ``{text}``: one sentence of what will happen, written from the
   registry triggers and the template planner at submission (no LLM call).
-- ``proposal`` ``{text, plan}``: a composed plan waiting for confirmation
-  (emitted by the plan-proposal story).
+- ``proposal`` ``{text, plan}``: planning composed a plan that is not a single
+  built-in analysis (``plan.composed``); the job waits at status ``proposal``
+  for ``POST /v1/jobs/{id}/confirm``, which continues the same log with
+  ``planning`` ready. ``proposal`` is not terminal: the stream stays open.
 - ``planning`` ``{phase: "started"}`` when planning starts, then
   ``{phase: "ready", steps: [{index, id, name, kind}], composed}`` when the
   plan is ready (``index`` is 1-based, ``kind`` is the registry kind). When a
@@ -26,7 +28,7 @@ fields below; optional fields are left out when unknown.
 - ``step_finished`` ``{index, id, elapsed_s}``.
 - ``done`` ``{elapsed_s, summary}``: fetch ``GET /v1/jobs/{id}`` for the result.
 - ``failed`` ``{code, message, fixes, step_index?, raw?}``, see :func:`classify_failure`.
-- ``cancelled`` ``{at_step?}``.
+- ``cancelled`` ``{at_step?, reason?}``; ``reason: "expired"`` for a proposal never confirmed.
 
 ``done``, ``failed`` and ``cancelled`` are terminal: nothing follows them.
 """
@@ -274,7 +276,21 @@ FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str 
     (
         "BAND_MISSING",
         (),
-        r"Band \w+ is not in this file|requires band",
+        r"uses NBR = .*, which needs bands? ",
+        None,
+        [
+            {
+                "label": "Map moisture change with NDMI instead",
+                "kind": "prompt",
+                "prompt": "Map moisture change with NDMI between the two dates",
+            },
+            _UPLOAD_OWN,
+        ],
+    ),
+    (
+        "BAND_MISSING",
+        (),
+        r"Band \w+ is not in this file|requires band|, which needs bands? ",
         None,
         [
             _UPLOAD_OWN,
@@ -300,6 +316,7 @@ FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str 
         [_ASK_CAPABILITIES, _BUILT_IN],
     ),
     ("INTERRUPTED", (), r"Server restarted while job was in progress", None, [_RETRY]),
+    ("PLAN_FAILED", (), r"^I can't map this request", "planning", [_ASK_CAPABILITIES, _BUILT_IN]),
     ("PLAN_FAILED", (), None, "planning", [_ASK_CAPABILITIES, _RETRY]),
     ("INTERNAL", (), None, None, [_RETRY]),
 ]

@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncIterator
+import functools
 import logging
 from typing import Any
 
@@ -9,17 +10,21 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
+from dta.dti.coe.plan_validator import PlanError
+from dta.dti.schemas import ExecutionPlan
+
 from ..job_events import KEEPALIVE_FRAME, TERMINAL_EVENTS, sse_event_frame
-from ..jobs import JobQueue, JobStatus, get_job_queue
+from ..jobs import JobConflictError, JobQueue, JobStatus, get_job_queue
 from ..schemas import (
     CancelJobResponse,
+    JobConfirmRequest,
     JobListResponse,
     JobRecord,
     JobSubmitRequest,
     JobSummary,
     QueueStatsResponse,
 )
-from ..sessions import CurrentSession, Session, enforce_analysis_quota
+from ..sessions import CurrentSession, Session, enforce_analysis_quota, release_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +54,13 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
     The job is queued and processed in the background.
     Poll ``GET /v1/jobs/{job_id}`` for status and results.
     A guest beyond ``GUEST_ANALYSES_PER_HOUR`` gets 429 with code ``GUEST_QUOTA``.
+
+    When planning composes a plan that is not a single built-in analysis (band math, or a new
+    combination of steps), the job stops at status ``proposal`` with a ``proposal`` event
+    ``{text, plan}`` and waits for ``POST /v1/jobs/{job_id}/confirm``; a proposal does not count
+    against the guest quota, its confirmation does.
     """
-    enforce_analysis_quota(session)
+    counted_at = enforce_analysis_quota(session)
     try:
         queue = get_job_queue()
 
@@ -64,6 +74,7 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
             context=req.context,
             owner=session.id,
             owner_role=session.role,
+            uncount=functools.partial(release_analysis, session, counted_at),
         )
 
         job = await queue.get_job(job_id)
@@ -198,6 +209,42 @@ async def cancel_job(job_id: str, session: CurrentSession) -> CancelJobResponse:
         raise HTTPException(status_code=500, detail=f"Failed to cancel job: {e}") from e
 
 
+@router.post(  # type: ignore[misc]
+    "/jobs/{job_id}/confirm",
+    status_code=202,
+    response_model=JobRecord,
+    summary="Confirm a proposed plan",
+    response_description="The job, queued to run the confirmed plan",
+)
+async def confirm_job(job_id: str, session: CurrentSession, req: JobConfirmRequest | None = None) -> JobRecord:
+    """Run a job's proposal (status ``proposal``): its plan, or ``plan`` from the body (the user's edit).
+
+    The job keeps its id and event stream: ``planning`` ready (``composed: true``), the steps,
+    then ``done`` or ``failed``. The confirmation counts against the guest quota (429
+    ``GUEST_QUOTA``). 404 for an unknown job or another session's, 409 if the job is not a
+    proposal (e.g. confirmed already), 422 with the validator's message for an invalid edited plan.
+    """
+    queue = get_job_queue()
+    await _ensure_visible(queue, job_id, session)
+    plan = None
+    if req is not None and req.plan is not None:
+        try:
+            plan = ExecutionPlan.model_validate(req.plan)
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=f"Invalid plan: {e.error_count()} error(s): {e}") from e
+    try:
+        job = await queue.confirm_job(job_id, plan, count=functools.partial(enforce_analysis_quota, session))
+    except JobConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except PlanError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except RuntimeError as e:
+        raise HTTPException(status_code=429, detail=str(e)) from e
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    return _job_record(job.to_dict())
+
+
 @router.get(  # type: ignore[misc]
     "/jobs",
     response_model=JobListResponse,
@@ -205,7 +252,9 @@ async def cancel_job(job_id: str, session: CurrentSession) -> CancelJobResponse:
 )
 async def list_jobs(
     session: CurrentSession,
-    status: str | None = Query(None, description="Filter by status: pending, running, completed, failed, cancelled"),
+    status: str | None = Query(
+        None, description="Filter by status: pending, proposal, running, completed, failed, cancelled"
+    ),
     limit: int = Query(20, ge=1, le=100, description="Maximum results"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ) -> JobListResponse:

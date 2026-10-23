@@ -295,8 +295,9 @@ class AnalysisCounter:
             return 0, None
         return used, max(w[0] for w in windows if len(w) == used) + WINDOW_S
 
-    def enforce(self, session: Session) -> None:
-        """Record one analysis for ``session``, or raise :class:`GuestQuotaError` if a guest has none left."""
+    def enforce(self, session: Session) -> float:
+        """Record one analysis for ``session`` and return its time, or raise :class:`GuestQuotaError`
+        if a guest has none left."""
         now = clock()
         limit = guest_analyses_per_hour()
         with self._lock:
@@ -310,6 +311,15 @@ class AnalysisCounter:
             for key, starts in windows.items():
                 starts.append(now)
                 self._starts[key] = starts
+        return now
+
+    def release(self, session: Session, at: float) -> None:
+        """Forget the analysis :meth:`enforce` recorded for ``session`` at ``at``."""
+        with self._lock:
+            for key in self._keys(session):
+                starts = self._starts.get(key)
+                if starts is not None and at in starts:
+                    starts.remove(at)
 
     def prune(self) -> None:
         """Drop keys with no analysis in the window (run by the periodic cleanup)."""
@@ -327,13 +337,19 @@ class AnalysisCounter:
 analysis_counter = AnalysisCounter()
 
 
-def enforce_analysis_quota(session: Session) -> None:
-    """Count one analysis for ``session``; raises :class:`GuestQuotaError` for a guest over the limit.
+def enforce_analysis_quota(session: Session) -> float:
+    """Count one analysis for ``session`` and return when; raises :class:`GuestQuotaError` for a guest over the limit.
 
     Call it once per analysis that will run: ``POST /v1/jobs`` does; a proposal counts only
-    when it is confirmed, so the confirm endpoint calls this instead of the submit.
+    when it is confirmed, so a submission whose planning ends in a proposal is released
+    (:func:`release_analysis`) and the confirm endpoint calls this again.
     """
-    analysis_counter.enforce(session)
+    return analysis_counter.enforce(session)
+
+
+def release_analysis(session: Session, at: float) -> None:
+    """Uncount the analysis :func:`enforce_analysis_quota` counted at ``at`` (it became a proposal)."""
+    analysis_counter.release(session, at)
 
 
 def session_info(session: Session) -> dict[str, Any]:

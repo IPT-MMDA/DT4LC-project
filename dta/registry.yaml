@@ -634,12 +634,12 @@ instances:
       Field count and total area characterize agricultural parcelization. Mean field size
       (total_area/num_fields) indicates farming scale: <1 ha suggests smallholder systems;
       >10 ha indicates mechanized agriculture. Output GeoPackage preserves source CRS.
-    keywords: [delineate, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, detect, farm, crop, plot, land, polygon, vector, outline, edges]
+    keywords: [delineate, delineation, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, farm, crop, plot, polygon, vector, outline, edges]
     inputs: [RasterPath]
     outputs: [FieldBoundaries]
     model_id: delineate-anything-small
     triggers:
-      keywords: [delineate, field, fields, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
+      keywords: [delineate, delineation, field, fields, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
       action_phrases:
         - "detect field boundaries"
         - "find field boundaries"
