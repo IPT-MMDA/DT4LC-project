@@ -121,6 +121,7 @@ _ERROR_CODES = {
     403: ErrorCode.UNAUTHORIZED,
     404: ErrorCode.NOT_FOUND,
     413: ErrorCode.FILE_TOO_LARGE,
+    422: ErrorCode.VALIDATION_ERROR,
 }
 
 
