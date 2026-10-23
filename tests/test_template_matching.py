@@ -113,12 +113,31 @@ def test_phrase_in_matches_whole_words(phrase: str, text: str, expected: bool) -
         ("Classify snow and ice robustly", "algorithms/snow-classifier"),
         ("Map snow cover with NDSI", "algorithms/ndsi"),
         ("Compare with NDVI change between the same dates", "algorithms/change-detection"),
+        # Prithvi only for its own phrases (D3, D4).
+        ("Fill the cloud gaps in the 9 June image", "models/prithvi-reconstruction"),
+        ("Reconstruct the masked pixels", "models/prithvi-reconstruction"),
+        ("Extract the main features of this scene", None),
+        ("Compute embeddings for this image", None),
+        # Delineate only for boundaries, parcels or delineation, not for any "fields".
+        ("Detect field boundaries east of the river", "models/delineate-anything"),
+        ("Classify land cover on the flooded fields", "algorithms/lulc-classifier"),
+        ("In these fields, map vegetation health", "algorithms/ndvi"),
     ],
 )
 def test_find_matching_item(prompt: str, item_id: str | None) -> None:
     item = get_trigger_index().find_matching_item(prompt)
 
     assert (item.id if item else None) == item_id
+
+
+@pytest.mark.parametrize("prompt", ["Extract the main features of this scene", "Compute embeddings for this image"])
+@pytest.mark.parametrize("files", [[SAMPLE_0601], [SAMPLE_0601, SAMPLE_0609]], ids=["one-file", "two-files"])
+def test_generic_words_never_plan_prithvi(prompt: str, files: list[str]) -> None:
+    """D3: "features" planned Prithvi, so a member's unrelated prompt would start a 450 MB download."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_attachments(*files)))
+
+    planned = out.get("plan") or out.get("candidate") or {"steps": []}
+    assert "models/prithvi-reconstruction" not in [s["uses"] for s in planned["steps"]], out
 
 
 @pytest.mark.parametrize("prompt", UNRELATED)
