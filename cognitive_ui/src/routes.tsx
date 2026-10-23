@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { useSession } from './api/hooks/useSession';
+import { useApplyTheme } from './hooks/useTheme';
 import { landingDecision } from './components/landing/landingDecision';
 import { Shell } from './components/shell/Shell';
 import { Capabilities } from './pages/Capabilities';
@@ -53,6 +54,7 @@ function SettingsRoute() {
 }
 
 export function AppRoutes() {
+  useApplyTheme();
   return (
     <Routes>
       <Route path="/" element={<LandingRoute />} />

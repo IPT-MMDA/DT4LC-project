@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient from '../api/client';
 import { REDUCED_MOTION_QUERY } from '../hooks/useReducedMotion';
 import { AppRoutes } from '../routes';
+import { useAppStore } from '../store/useAppStore';
 import { useChatStore } from '../store/useChatStore';
 import { GUEST_SESSION, MEMBER_SESSION, OPERATOR_SESSION, SAMPLE } from '../test/fixtures';
 import type { SessionInfo } from '../types';
@@ -56,6 +57,8 @@ function renderApp(url: string) {
 beforeEach(() => {
   localStorage.clear();
   useChatStore.setState({ conversations: [], activeConversationId: null, pendingAttachments: [], draft: '' });
+  useAppStore.setState({ theme: 'light' });
+  delete document.documentElement.dataset.theme;
   stubMotion(false);
 });
 
@@ -105,6 +108,13 @@ describe('Landing', () => {
     renderApp('/');
     return screen.findByTestId('landing');
   }
+
+  it('renders in the stored theme, outside the app shell too', async () => {
+    useAppStore.setState({ theme: 'dark' });
+    await openLanding();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+  });
 
   it("hero B: headline, both buttons as real links, the caption with the bundled crop's figure", async () => {
     await openLanding();
