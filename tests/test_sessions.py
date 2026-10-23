@@ -357,6 +357,8 @@ def test_session_endpoint_for_guest(monkeypatch: pytest.MonkeyPatch, queue: JobQ
     assert client.get("/v1/session").json() == {
         "role": "guest",
         "guest": True,
+        "user": None,
+        "sign_in": {"configured": False},
         "analyses": {"limit": 5, "used": 0, "remaining": 5, "resets_at": None},
         "kept_hours": 24,
         "expires_at": "2027-01-16T08:00:00+00:00",
@@ -382,6 +384,8 @@ def test_session_endpoint_for_member_and_operator(
     assert client.get("/v1/session").json() == {
         "role": role,
         "guest": False,
+        "user": None,
+        "sign_in": {"configured": False},
         "analyses": {"limit": None, "used": 1, "remaining": None, "resets_at": None},
         "kept_hours": None,
         "expires_at": "2027-01-16T08:00:00+00:00",

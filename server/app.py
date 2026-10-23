@@ -28,6 +28,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa
 
 from .jobs import JobQueue, get_job_queue  # noqa: E402
 from .model_routes import router as model_router  # noqa: E402
+from .routes.auth import router as auth_router  # noqa: E402
 from .routes.chat import router as chat_router  # noqa: E402
 from .routes.files import router as files_router  # noqa: E402
 from .routes.gee import router as gee_router  # noqa: E402
@@ -97,6 +98,7 @@ app = FastAPI(
         {"name": "chat", "description": "COE planning, execution, and streaming chat"},
         {"name": "jobs", "description": "Async analysis job queue"},
         {"name": "session", "description": "Session cookie, role and guest quota"},
+        {"name": "auth", "description": "GitHub sign-in and sign-out"},
         {"name": "files", "description": "GeoTIFF upload, listing, and download"},
         {"name": "tiles", "description": "XYZ map tiles from GeoTIFF files"},
         {"name": "gee", "description": "Google Earth Engine data fetch and layer export"},
@@ -143,6 +145,7 @@ async def guest_quota_handler(request: Request, exc: GuestQuotaError) -> JSONRes
 
 app.include_router(health_router)
 app.include_router(session_router)
+app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(jobs_router)
 app.include_router(files_router)

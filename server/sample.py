@@ -27,7 +27,7 @@ from dta.dti.schemas import RasterMetadata
 
 from .schemas import UploadResponse
 from .sessions import Session
-from .uploads import owner_file, read_owner, write_owner
+from .uploads import owner_file, read_adopted_from, read_owner, write_owner
 
 SAMPLE_NAME = "kakhovka_hls_l30"
 SAMPLE_DIR = RESOURCES_PATH / "kahovka_data"
@@ -43,14 +43,18 @@ def _sample_id(session_id: str) -> str:
 
 
 def _file_id(session: Session) -> str:
-    """8 hex characters, like an upload id, fixed per session (the id itself stays secret)."""
-    return _sample_id(session.id)
+    """8 hex characters, like an upload id, fixed per owner (the session id itself stays secret)."""
+    return _sample_id(session.owner)
 
 
 def is_sample_copy(path: Path, owner: str | None) -> bool:
-    """Whether upload ``path`` is ``owner``'s copy of a bundled sample file (from :func:`attach_sample`)."""
+    """Whether upload ``path`` is ``owner``'s copy of a bundled sample file (from :func:`attach_sample`),
+    including one it adopted from its guest session on sign-in."""
     file_id, _, name = path.name.partition("_")
-    return owner is not None and name in SAMPLE_FILES and file_id == _sample_id(owner)
+    if owner is None or name not in SAMPLE_FILES:
+        return False
+    adopted_from = read_adopted_from(path)
+    return file_id == _sample_id(owner) or (adopted_from is not None and file_id == _sample_id(adopted_from))
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -91,7 +95,7 @@ def _attachment(file_id: str, filename: str, saved: Path, session: Session) -> U
             preview_png_base64="",  # not inlined: use preview_url
             preview_url=artifact_files.ref("png", preview)["url"],
             metadata=describe_raster(src, filename, saved.stat().st_size),
-            owner=session.id,
+            owner=session.owner,
         )
 
 
@@ -117,7 +121,7 @@ def attach_sample(upload_dir: Path, session: Session) -> tuple[str, list[UploadR
     attachments = []
     for src_path in sources:
         saved = upload_dir / f"{file_id}_{src_path.name}"
-        if not (saved.is_file() and read_owner(saved) == session.id):
+        if not (saved.is_file() and read_owner(saved) == session.owner):
             for stale in (saved, saved.with_suffix(".png"), owner_file(saved)):
                 stale.unlink(missing_ok=True)
             _link_or_copy(src_path, saved)

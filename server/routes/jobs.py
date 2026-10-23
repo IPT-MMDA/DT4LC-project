@@ -87,7 +87,7 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
             mode=req.mode,
             attachments=attachments_dict,
             context=req.context,
-            owner=session.id,
+            owner=session.owner,
             owner_role=session.role,
             uncount=functools.partial(release_analysis, session, counted_at),
             region=region,
@@ -343,7 +343,7 @@ async def list_jobs(
                     detail=f"Invalid status: {status}. Must be one of: {', '.join(s.value for s in JobStatus)}",
                 ) from None
 
-        owner = None if session.operator else session.id
+        owner = None if session.operator else session.owner
         jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset, owner=owner)
         total = await queue.get_total_count(owner=owner)
 

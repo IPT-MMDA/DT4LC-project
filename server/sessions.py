@@ -2,12 +2,15 @@
 
 Every request carries a signed, ``httpOnly`` session cookie (:data:`COOKIE_NAME`); the
 middleware issues one when the request has none or a cookie that fails the check, and
-puts the :class:`Session` on ``request.state.session``. Until sign-in exists every
-session is a guest; ``DEV_ROLE`` overrides the role of every request.
+puts the :class:`Session` on ``request.state.session``. A session is a guest until it signs
+in with GitHub (``server/routes/auth.py``); then the cookie also carries the :class:`User`,
+and the role comes from the allowlists on every request. ``DEV_ROLE`` overrides the role of
+every request.
 
-Ownership: jobs and uploads record the session id as ``owner``. A caller sees only its
-own; operators see everything. Rows without an owner (created before v0.6.0) are
-visible to operators only.
+Ownership: jobs and uploads record :attr:`Session.owner` as ``owner``: the session id for a
+guest, the stable user id (``github:<id>``) once signed in. A caller sees only its own;
+operators see everything. Rows without an owner (created before v0.6.0) are visible to
+operators only.
 
 Quota: guests get ``GUEST_ANALYSES_PER_HOUR`` analyses per rolling hour, counted per
 session and per client IP; :func:`enforce_analysis_quota` refuses when either is used up.
@@ -19,7 +22,7 @@ from __future__ import annotations
 import base64
 from collections import deque
 from collections.abc import Awaitable, Callable, MutableMapping
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import hmac
@@ -33,6 +36,8 @@ from typing import Annotated, Any, Literal
 
 from fastapi import Depends, Request
 from starlette.datastructures import MutableHeaders
+
+from .github_oauth import sign_in_configured
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +90,7 @@ def _secret() -> bytes:
 
 @dataclass(frozen=True)
 class SignInConfig:
-    """Allowlists for the sign-in story (Phase 5); nothing reads them yet. Lower-cased."""
+    """Sign-in allowlists, lower-cased (see :func:`role_for_email`)."""
 
     allowed_emails: frozenset[str]
     allowed_domains: frozenset[str]
@@ -99,6 +104,18 @@ def sign_in_config() -> SignInConfig:
         allowed_domains=frozenset(d.lstrip("@") for d in _env_list("ALLOWED_DOMAINS")),
         operator_emails=_env_list("OPERATOR_EMAILS"),
     )
+
+
+def role_for_email(email: str) -> Role | None:
+    """``operator`` for ``OPERATOR_EMAILS``, ``member`` for ``ALLOWED_EMAILS`` or ``ALLOWED_DOMAINS``,
+    ``None`` (not allowed to sign in) otherwise."""
+    config = sign_in_config()
+    email = email.strip().lower()
+    if email in config.operator_emails:
+        return "operator"
+    if email in config.allowed_emails or email.rpartition("@")[2] in config.allowed_domains:
+        return "member"
+    return None
 
 
 def can_download_models(role: Role) -> bool:
@@ -131,14 +148,31 @@ def log_startup_warnings() -> None:
 
 
 @dataclass(frozen=True)
+class User:
+    """A signed-in GitHub account; ``id`` is ``github:<numeric id>``, stable across logins and devices."""
+
+    id: str
+    login: str
+    name: str | None
+    email: str
+    avatar_url: str | None
+
+
+@dataclass(frozen=True)
 class Session:
-    """The caller: ``id`` is the owner of its jobs and uploads; ``role`` already reflects ``DEV_ROLE``."""
+    """The caller; ``role`` already reflects ``DEV_ROLE``, ``user`` is set once it signed in."""
 
     id: str
     role: Role
     created_at: float
     expires_at: float
     ip: str = ""
+    user: User | None = None
+
+    @property
+    def owner(self) -> str:
+        """What its jobs and uploads record as ``owner``: the user id if signed in, else the session id."""
+        return self.user.id if self.user else self.id
 
     @property
     def guest(self) -> bool:
@@ -150,7 +184,7 @@ class Session:
 
     def can_see(self, owner: str | None) -> bool:
         """Operators see everything; everyone else only what it owns (never an ownerless legacy row)."""
-        return self.operator or (owner is not None and owner == self.id)
+        return self.operator or (owner is not None and owner == self.owner)
 
 
 def new_session() -> Session:
@@ -163,25 +197,36 @@ def new_session() -> Session:
     )
 
 
-def _sign(payload: str) -> str:
+def sign(payload: str) -> str:
+    """HMAC-SHA256 hex of ``payload`` with ``SESSION_SECRET`` (the session and OAuth state cookies)."""
     return hmac.new(_secret(), payload.encode(), hashlib.sha256).hexdigest()
 
 
 def encode_cookie(session: Session) -> str:
-    """``<base64url JSON>.<HMAC-SHA256 hex>`` of id, role, created_at and expires_at."""
-    data = {"sid": session.id, "role": session.role, "iat": int(session.created_at), "exp": int(session.expires_at)}
+    """``<base64url JSON>.<HMAC-SHA256 hex>`` of id, role, created_at, expires_at and the user, if any."""
+    data: dict[str, Any] = {
+        "sid": session.id,
+        "role": session.role,
+        "iat": int(session.created_at),
+        "exp": int(session.expires_at),
+    }
+    if session.user is not None:
+        data["usr"] = asdict(session.user)
     payload = base64.urlsafe_b64encode(json.dumps(data, separators=(",", ":")).encode()).decode().rstrip("=")
-    return f"{payload}.{_sign(payload)}"
+    return f"{payload}.{sign(payload)}"
 
 
 def decode_cookie(value: str) -> Session | None:
     """The session in ``value``, or ``None`` if it is malformed, tampered with or expired."""
     payload, _, signature = value.partition(".")
-    if not payload or not hmac.compare_digest(signature, _sign(payload)):
+    if not payload or not hmac.compare_digest(signature, sign(payload)):
         return None
     try:
         data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-        session = Session(id=str(data["sid"]), role=data["role"], created_at=data["iat"], expires_at=data["exp"])
+        user = User(**data["usr"]) if data.get("usr") else None
+        session = Session(
+            id=str(data["sid"]), role=data["role"], created_at=data["iat"], expires_at=data["exp"], user=user
+        )
     except (ValueError, KeyError, TypeError):
         return None
     if session.role not in ROLES or session.expires_at <= clock():
@@ -200,8 +245,20 @@ Message = MutableMapping[str, Any]
 ASGIApp = Callable[[Scope, Callable[[], Awaitable[Message]], Callable[[Message], Awaitable[None]]], Awaitable[None]]
 
 
+# ``scope["state"]`` key of a session a route set with :func:`set_session` (sign-in, logout).
+_COOKIE_SESSION = "session_cookie"
+
+
+def _effective(session: Session, scope: Scope) -> Session:
+    """``session`` as routes see it: ``DEV_ROLE`` applied, ``ip`` the client's (the forwarded one
+    when uvicorn runs with ``--proxy-headers`` behind a trusted proxy)."""
+    client = scope.get("client")
+    return replace(session, role=dev_role() or session.role, ip=client[0] if client else "")
+
+
 class SessionMiddleware:
-    """Puts the caller's :class:`Session` on ``request.state.session``; sets the cookie when it issues one."""
+    """Puts the caller's :class:`Session` on ``request.state.session``; sets the cookie when it issues
+    one, when a signed-in user's role changed with the allowlists, or when a route called :func:`set_session`."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -217,20 +274,39 @@ class SessionMiddleware:
         issued = session is None
         if session is None:
             session = new_session()
-        client = scope.get("client")
-        session = replace(session, role=dev_role() or session.role, ip=client[0] if client else "")
-        scope.setdefault("state", {})["session"] = session
-        if not issued:
-            await self.app(scope, receive, send)
-            return
-        set_cookie = _set_cookie_header(session)
+        elif session.user is not None:
+            # The allowlists decide the role on every request, so removing an email takes effect at once.
+            role = role_for_email(session.user.email)
+            if role is None:
+                session, issued = new_session(), True
+            elif role != session.role:
+                session, issued = replace(session, role=role), True
+        elif session.role != "guest":
+            # Only sign-in makes a member or operator (cookies issued under DEV_ROLE before v0.6.0 run 3 carry it).
+            session, issued = replace(session, role="guest"), True
+        state = scope.setdefault("state", {})
+        state["session"] = _effective(session, scope)
+        stored = session
 
         async def send_with_cookie(message: Message) -> None:
             if message["type"] == "http.response.start":
-                MutableHeaders(scope=message).append("set-cookie", set_cookie)
+                written: Session | None = state.get(_COOKIE_SESSION) or (stored if issued else None)
+                if written is not None:
+                    MutableHeaders(scope=message).append("set-cookie", _set_cookie_header(written))
             await send(message)
 
         await self.app(scope, receive, send_with_cookie)
+
+
+def set_session(request: Request, session: Session) -> Session:
+    """Make ``session`` the caller's for the rest of this request and write its cookie on the response.
+
+    Returns it as routes see it (``DEV_ROLE`` and the client IP applied).
+    """
+    request.scope["state"][_COOKIE_SESSION] = session
+    effective = _effective(session, request.scope)
+    request.scope["state"]["session"] = effective
+    return effective
 
 
 def current_session(request: Request) -> Session:
@@ -353,12 +429,14 @@ def release_analysis(session: Session, at: float) -> None:
 
 
 def session_info(session: Session) -> dict[str, Any]:
-    """``GET /v1/session``: what the UI badge needs."""
+    """``GET /v1/session``: what the UI badge and the account menu need."""
     used, resets_at = analysis_counter.usage(session)
     limit = guest_analyses_per_hour() if session.guest else None
     return {
         "role": session.role,
         "guest": session.guest,
+        "user": asdict(session.user) if session.user else None,
+        "sign_in": {"configured": sign_in_configured()},
         "analyses": {
             "limit": limit,
             "used": used,

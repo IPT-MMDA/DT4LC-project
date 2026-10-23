@@ -53,10 +53,22 @@ def _outputs_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
 def _dev_role_operator(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Run every request as an operator: no guest quota, and ownerless rows (as most tests store
     them) stay visible. Session tests opt into ``guest`` or ``member`` with ``monkeypatch.setenv``.
-    The in-memory analysis counter starts empty for each test."""
+    GitHub sign-in is not configured and the allowlists are empty, whatever ``.env`` says (the
+    auth tests set them). The in-memory analysis counter starts empty for each test."""
     from server.sessions import analysis_counter
 
     monkeypatch.setenv("DEV_ROLE", "operator")
+    for name in (
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "OAUTH_REDIRECT_BASE",
+        "GITHUB_OAUTH_BASE",
+        "GITHUB_API_BASE",
+        "ALLOWED_EMAILS",
+        "ALLOWED_DOMAINS",
+        "OPERATOR_EMAILS",
+    ):
+        monkeypatch.delenv(name, raising=False)
     analysis_counter.clear()
     yield
     analysis_counter.clear()
