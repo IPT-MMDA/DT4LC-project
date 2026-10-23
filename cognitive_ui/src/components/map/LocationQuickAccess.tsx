@@ -32,8 +32,8 @@ const QUICK_LOCATIONS: Location[] = [
 export function LocationQuickAccess({ onLocationSelect }: LocationQuickAccessProps) {
   return (
     <div className="absolute top-20 right-4 flex flex-col gap-2 z-10">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-2">
-        <div className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 mb-2">
+      <div className="bg-surface rounded-lg shadow-lg p-2">
+        <div className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted border-b border-border mb-2">
           <MapPin className="w-3 h-3" />
           <span>Quick Locations</span>
         </div>
@@ -41,13 +41,13 @@ export function LocationQuickAccess({ onLocationSelect }: LocationQuickAccessPro
           <button
             key={location.name}
             onClick={() => onLocationSelect(location)}
-            className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-surface2 transition-colors"
             title={location.description}
           >
-            <div className="font-medium text-gray-900 dark:text-white">
+            <div className="font-medium text-text">
               {location.name}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            <div className="text-xs text-muted mt-0.5">
               {location.description}
             </div>
           </button>

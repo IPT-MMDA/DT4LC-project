@@ -30,11 +30,11 @@ export function LayerControl() {
   const geeLayers = mapLayers.filter((layer) => layer.type === 'gee-tiles');
 
   return (
-    <div className="absolute top-4 right-4 bg-white dark:bg-gray-900 rounded-lg shadow-lg p-4 w-64 z-10">
+    <div className="absolute top-4 right-4 bg-surface rounded-lg shadow-lg p-4 w-64 z-10">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Layers className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <Layers className="w-5 h-5 text-text2" />
+          <h3 className="text-lg font-semibold text-text">
             Map Layers
           </h3>
         </div>
@@ -42,7 +42,7 @@ export function LayerControl() {
         {geeLayers.length > 0 && (
           <button
             onClick={() => setExportAllDialogOpen(true)}
-            className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors flex items-center gap-1"
+            className="px-2 py-1 text-xs font-medium text-accent hover:text-accent-ink hover:bg-accent-tint rounded transition-colors flex items-center gap-1"
             title="Export all layers"
           >
             <Download className="w-3 h-3" />
@@ -55,7 +55,7 @@ export function LayerControl() {
         {mapLayers.map((layer) => (
           <div key={layer.id} className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
+              <span className="text-sm font-medium text-text truncate flex-1">
                 {layer.name}
               </span>
               <div className="flex items-center gap-1">
@@ -63,7 +63,7 @@ export function LayerControl() {
                 {layer.type === 'gee-tiles' && (
                   <button
                     onClick={() => handleExportClick(layer.id, layer.name)}
-                    className="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                    className="p-1 text-accent hover:text-accent-ink hover:bg-accent-tint rounded transition-colors"
                     title="Export for AI Analysis"
                     aria-label="Export layer for analysis"
                   >
@@ -72,7 +72,7 @@ export function LayerControl() {
                 )}
                 <button
                   onClick={() => toggleLayerVisibility(layer.id)}
-                  className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                  className="p-1 text-muted hover:text-text2 hover:bg-surface2 rounded transition-colors"
                   aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
                 >
                   {layer.visible ? (
@@ -84,7 +84,7 @@ export function LayerControl() {
                 {/* Delete button */}
                 <button
                   onClick={() => removeLayer(layer.id)}
-                  className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                  className="p-1 text-fail hover:text-fail-ink hover:bg-fail-tint rounded transition-colors"
                   aria-label="Delete layer"
                   title="Delete layer"
                 >
@@ -94,7 +94,7 @@ export function LayerControl() {
             </div>
             {layer.visible && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                <span className="text-xs text-muted whitespace-nowrap">
                   Opacity
                 </span>
                 <input
@@ -103,10 +103,10 @@ export function LayerControl() {
                   max="100"
                   value={layer.opacity * 100}
                   onChange={(e) => setLayerOpacity(layer.id, parseInt(e.target.value) / 100)}
-                  className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer"
                   aria-label={`Opacity for ${layer.name}`}
                 />
-                <span className="text-xs text-gray-500 dark:text-gray-400 w-8 text-right">
+                <span className="text-xs text-muted w-8 text-right">
                   {Math.round(layer.opacity * 100)}%
                 </span>
               </div>

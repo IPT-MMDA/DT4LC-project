@@ -11,6 +11,7 @@ import { ModelsPage } from './pages/ModelsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { useAppStore } from './store/useAppStore';
 import { useEffect } from 'react';
+import { applyTheme } from './utils/theme';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,11 +27,7 @@ function App() {
   const theme = useAppStore((state) => state.theme);
 
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    applyTheme(theme);
   }, [theme]);
 
   return (
