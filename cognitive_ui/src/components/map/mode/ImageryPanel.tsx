@@ -1,8 +1,9 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCapabilities } from '../../../api/hooks/useCapabilities';
 import { useAppStore, type DrawnRegion } from '../../../store/useAppStore';
 import { useChatStore } from '../../../store/useChatStore';
+import type { MessageAttachment } from '../../../types';
 import { cn } from '../../../utils/cn';
 import { formatArea, sampleDates } from '../../chat/regionChip';
 import {
@@ -18,6 +19,7 @@ import {
   withDataset,
 } from './imagery';
 import { LayersSection } from './LayersSection';
+import { GeoJSONError, presetRegion, regionFromGeoJSON, type PresetId } from './regionPresets';
 import { useFetchToMap } from './useFetchToMap';
 import { useMapSample } from './useMapSample';
 
@@ -40,7 +42,7 @@ function RegionCard({ region }: { region: DrawnRegion }) {
 
   return (
     <div data-testid="region-card" className="flex items-center gap-2 px-[10px] py-2 rounded-[7px] bg-bg border border-border">
-      <span aria-hidden className="w-3 h-3 flex-none rounded-[3px] bg-accent" />
+      <span aria-hidden className="w-3 h-3 flex-none rounded-[3px] bg-region" />
       <div className="flex-1 min-w-0">
         {draft === null ? (
           <div className="font-medium truncate">{region.name}</div>
@@ -69,12 +71,76 @@ function RegionCard({ region }: { region: DrawnRegion }) {
   );
 }
 
-function RegionSection() {
+const presetButton = 'px-[10px] py-[6px] rounded-[7px] border border-border bg-surface text-[12.5px] leading-[1.25] text-left text-text2 hover:bg-surface2';
+
+/** Kakhovka dam · Brienz · Upload GeoJSON: each adds (or reselects) a region and zooms to it. */
+function RegionPresets({ sample }: { sample: MessageAttachment[] }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = (region: DrawnRegion) => {
+    const { drawnRegions, addRegion, updateRegion, setSelectedRegion, requestFit } = useAppStore.getState();
+    if (drawnRegions.some((r) => r.id === region.id)) {
+      // A preset picked again: the same region, its geometry refreshed (the sample may have changed).
+      updateRegion(region.id, { geometry: region.geometry, bbox: region.bbox });
+      setSelectedRegion(useAppStore.getState().drawnRegions.find((r) => r.id === region.id) ?? region);
+    } else {
+      addRegion(region);
+    }
+    requestFit(region.bbox);
+  };
+  const preset = (id: PresetId) => {
+    setError(null);
+    pick(presetRegion(id, sample));
+  };
+  const upload = async (file: File | undefined) => {
+    if (fileInput.current) fileInput.current.value = '';
+    if (!file) return;
+    setError(null);
+    try {
+      pick(regionFromGeoJSON(await file.text(), file.name));
+    } catch (err) {
+      setError(err instanceof GeoJSONError ? err.message : `Couldn't read ${file.name}.`);
+    }
+  };
+
+  return (
+    <>
+      <div role="group" aria-label="Region presets" className="flex gap-[6px]">
+        <button type="button" onClick={() => preset('kakhovka')} className={presetButton}>
+          Kakhovka dam
+        </button>
+        <button type="button" onClick={() => preset('brienz')} className={presetButton}>
+          Brienz
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".geojson,.json,application/geo+json,application/json"
+          hidden
+          aria-label="GeoJSON file"
+          onChange={(e) => void upload(e.target.files?.[0])}
+        />
+        <button type="button" onClick={() => fileInput.current?.click()} className={cn(presetButton, 'flex-1')}>
+          Upload GeoJSON
+        </button>
+      </div>
+      {error && (
+        <p role="alert" data-testid="geojson-error" className="text-[11.5px] leading-[1.45] text-fail-ink">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+function RegionSection({ sample }: { sample: MessageAttachment[] }) {
   const regions = useAppStore((s) => s.drawnRegions);
   const selected = useAppStore((s) => s.selectedRegion);
   const setSelectedRegion = useAppStore((s) => s.setSelectedRegion);
   const setMapTool = useAppStore((s) => s.setMapTool);
-  const others = regions.filter((r) => r.id !== selected?.id);
+  // Presets are picked with their own buttons.
+  const others = regions.filter((r) => r.id !== selected?.id && !r.id.startsWith('preset-'));
 
   return (
     <div className={cn(section, 'gap-2')} aria-label="Region" role="group">
@@ -89,6 +155,7 @@ function RegionSection() {
       ) : (
         <p className="text-[11.5px] leading-[1.45] text-faint">Draw a region on the map with Polygon or Rectangle.</p>
       )}
+      <RegionPresets sample={sample} />
       {others.length > 0 && (
         <div className="flex flex-wrap gap-[6px]">
           {others.map((r) => (
@@ -148,7 +215,7 @@ export function ImageryPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto flex flex-col">
-        <RegionSection />
+        <RegionSection sample={sample} />
 
         <div className={cn(section, 'gap-[10px]')} role="group" aria-label="Dataset">
           <div className={sectionLabel}>Dataset</div>

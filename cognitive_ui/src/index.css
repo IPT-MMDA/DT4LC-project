@@ -140,6 +140,7 @@
   --canc: oklch(0.65 0.13 75);
   --canc-tint: oklch(0.96 0.04 75);
   --canc-ink: oklch(0.45 0.12 75);
+  --region: oklch(0.85 0.12 85);  /* drawn regions on the map, their swatches (the prototype's region amber) */
   --lost: oklch(0.45 0.14 25);
   --ink: #1a1d23;
   --ink-bg: #fff;
@@ -172,6 +173,7 @@
   --canc: oklch(0.7 0.12 75);
   --canc-tint: oklch(0.3 0.05 75);
   --canc-ink: oklch(0.88 0.08 75);
+  --region: oklch(0.8 0.11 85);
   --lost: oklch(0.75 0.12 25);
   --ink: oklch(0.94 0.005 255);
   --ink-bg: oklch(0.16 0.008 255);

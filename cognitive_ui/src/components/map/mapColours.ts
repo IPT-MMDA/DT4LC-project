@@ -6,8 +6,9 @@ import { useEffect, useState } from 'react';
 
 /** Which token paints what on the map. */
 const ROLES = {
-  regionSelected: 'accent',
-  region: 'done',
+  // Light amber, as the design draws regions; the selected one is bolder (MapContainer).
+  regionSelected: 'region',
+  region: 'region',
   drawing: 'canc',
   vertexFill: 'surface',
   boundaries: 'canc',

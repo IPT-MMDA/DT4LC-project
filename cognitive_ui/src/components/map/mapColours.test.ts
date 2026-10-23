@@ -33,8 +33,8 @@ describe('toMapColour', () => {
 describe('map colours follow the theme tokens (QA D2)', () => {
   const sheet = document.createElement('style');
   sheet.textContent = `
-    :root, [data-theme="light"] { --accent: oklch(0 0 0); --done: #00ff00; --canc: #ffaa00; --surface: #ffffff; }
-    [data-theme="dark"] { --accent: oklch(1 0 0); --done: #008800; --canc: #aa5500; --surface: #111111; }
+    :root, [data-theme="light"] { --accent: #0000ff; --region: oklch(0 0 0); --canc: #ffaa00; --surface: #ffffff; }
+    [data-theme="dark"] { --region: oklch(1 0 0); --canc: #aa5500; --surface: #111111; }
   `;
 
   afterEach(() => {
@@ -47,12 +47,20 @@ describe('map colours follow the theme tokens (QA D2)', () => {
     document.documentElement.dataset.theme = 'light';
     expect(readMapColours()).toEqual({
       regionSelected: 'rgb(0, 0, 0)',
-      region: '#00ff00',
+      region: 'rgb(0, 0, 0)',
       drawing: '#ffaa00',
       vertexFill: '#ffffff',
       boundaries: '#ffaa00',
       footprint: '#ffaa00',
     });
+  });
+
+  it('paints regions amber (--region), not with the accent', () => {
+    document.head.append(sheet);
+    document.documentElement.dataset.theme = 'light';
+    const colours = readMapColours();
+    expect([colours.region, colours.regionSelected]).toEqual(['rgb(0, 0, 0)', 'rgb(0, 0, 0)']);
+    expect(Object.values(colours)).not.toContain('#0000ff');
   });
 
   it('re-reads when data-theme changes', async () => {
@@ -66,6 +74,6 @@ describe('map colours follow the theme tokens (QA D2)', () => {
       await Promise.resolve(); // MutationObserver callbacks run as a microtask
     });
     expect(result.current.regionSelected).toBe('rgb(255, 255, 255)');
-    expect(result.current.region).toBe('#008800');
+    expect(result.current.region).toBe('rgb(255, 255, 255)');
   });
 });

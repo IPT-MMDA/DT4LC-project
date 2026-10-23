@@ -28,6 +28,8 @@ One API process serves a run, so flows that need another role or LLM mode run in
 
 `workspace-running` skips itself unless `E2E_LLM=fake`, `workspace-preparing` unless `E2E_DEV_ROLE=member`, and `workspace-quota` unless `E2E_GUEST_LIMIT=2`. `capabilities-offline` runs only as a member with `E2E_LLM=none` on a local server, and `capabilities-demo` only as a guest with `E2E_SERVER=demo` and `E2E_LLM=fake`. `landing` runs only as a guest, `landing-member` only with `E2E_DEV_ROLE=member`.
 
+`map-mode` also covers the region presets: at 1280×800 the presets row sits under the region card and regions are amber; Kakhovka dam (the sample footprint here), Brienz (zooms to the lake) and Upload GeoJSON (a point is refused, a polygon becomes the region).
+
 The API runs with `uv run`, so the Python env must exist (`uv sync --extra dev --extra server` at the repo root).
 
 ## What the runner does
