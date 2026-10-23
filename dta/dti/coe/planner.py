@@ -7,6 +7,8 @@ Intelligently chooses between:
 
 import logging
 
+from dta.dti.coe.plan_validator import BAND_MATH_ENTRYPOINT
+from dta.dti.coe.triggers import phrase_in
 from dta.dti.registry import find_items_by_keywords, find_items_producing
 from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep, Registry, RegistryItem
 
@@ -48,6 +50,12 @@ def plan(ctx: ContextUnderstanding, reg: Registry, use_llm: bool = True) -> Exec
     return plan_template(ctx, reg)
 
 
+def _is_band_math(item: RegistryItem) -> bool:
+    """Band math needs a formula, which no template writes: only the LLM planner or the
+    named-index table (:mod:`dta.dti.coe.named_indices`) compose it."""
+    return item.runner is not None and item.runner.entrypoint == BAND_MATH_ENTRYPOINT
+
+
 def _get_change_detection_item(reg: Registry) -> RegistryItem | None:
     """Return the change-detection registry item, or None if missing.
 
@@ -78,12 +86,12 @@ def _is_change_detection_request(ctx: ContextUnderstanding, reg: Registry) -> bo
     goal_lower = (ctx.goal or "").lower()
     keywords_lower = " ".join(kw.lower() for kw in keywords)
 
-    has_strong_signal = any(kw in goal_lower or kw in keywords_lower for kw in triggers_kw)
+    has_strong_signal = any(phrase_in(kw, goal_lower) or phrase_in(kw, keywords_lower) for kw in triggers_kw)
 
     # Structural signals — generic, not algorithm-specific:
     # "before" + "after" co-occurrence, or explicit ChangeMap desired output.
-    has_before_after = ("before" in goal_lower and "after" in goal_lower) or (
-        "before" in keywords_lower and "after" in keywords_lower
+    has_before_after = (phrase_in("before", goal_lower) and phrase_in("after", goal_lower)) or (
+        phrase_in("before", keywords_lower) and phrase_in("after", keywords_lower)
     )
     wants_changemap = "ChangeMap" in (ctx.desired_outputs or [])
 
@@ -119,7 +127,7 @@ def _detect_index_type(ctx: ContextUnderstanding, reg: Registry) -> str:
     combined = goal_lower + " " + keywords_lower
 
     for index_name, kws in index_map.items():
-        if any(kw.lower() in combined for kw in kws):
+        if any(phrase_in(kw, combined) for kw in kws):
             logger.info(f"Detected {index_name.upper()} change detection from registry triggers")
             return index_name
 
@@ -185,15 +193,25 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     keywords_lower = [kw.lower() for kw in keywords]
     goal_lower = (ctx.goal or "").lower()
 
-    # Find best matching algorithm/model
+    def mentions(phrase: str) -> bool:
+        return phrase_in(phrase, goal_lower) or any(phrase_in(phrase, uk) for uk in keywords_lower)
+
+    # Find best matching algorithm/model; keywords and trigger phrases match as whole words.
     best_item = None
     best_score = 0
     for item in kw_ranked:
-        if item.kind in ("algorithm", "model"):
-            item_keywords = [k.lower() for k in (item.keywords or [])]
-            match_count = sum(1 for kw in item_keywords if kw in goal_lower or any(kw in uk for uk in keywords_lower))
+        # Hosted integrations don't run locally (the LLM planner skips them too).
+        if item.kind in ("algorithm", "model") and item.integration is None and not _is_band_math(item):
+            # An item with triggers is picked only when the request names one of them, so its broad
+            # keywords alone ("detect", "extract") never select it.
+            trigger_count = 0
+            if item.triggers is not None:
+                trigger_count = sum(1 for t in item.triggers.keywords + item.triggers.action_phrases if mentions(t))
+                if trigger_count == 0:
+                    continue
+            match_count = trigger_count + sum(1 for kw in item.keywords or [] if mentions(kw))
             id_name = item.id.split("/")[-1].lower()
-            if id_name in goal_lower:
+            if phrase_in(id_name, goal_lower):
                 match_count += 5
             if match_count > best_score:
                 best_score = match_count
@@ -241,6 +259,7 @@ def plan_template(ctx: ContextUnderstanding, reg: Registry) -> ExecutionPlan:
     if not added_step:
         for want in ctx.desired_outputs or []:
             candidates = [i for i in kw_ranked if want in i.outputs] or find_items_producing(reg, want)
+            candidates = [i for i in candidates if not _is_band_math(i)]
             if not candidates:
                 continue
             chosen = candidates[0]
