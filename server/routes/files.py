@@ -1,5 +1,6 @@
 """File upload, listing, and download endpoints."""
 
+import asyncio
 import base64
 import io
 import logging
@@ -7,7 +8,7 @@ from typing import Annotated
 import uuid
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import numpy as np
 from PIL import Image
 from rasterio.io import MemoryFile
@@ -17,7 +18,8 @@ from dta.dti.raster import describe_raster, format_size
 from dta.dti.schemas import RasterMetadata
 
 from ..paths import ensure_served_owner, resolve_served_path
-from ..schemas import FileInfo, FileListResponse, UploadResponse
+from ..sample import SAMPLE_NAME, SampleNotBundledError, attach_sample
+from ..schemas import ErrorDetail, ErrorResponse, FileInfo, FileListResponse, SampleResponse, UploadResponse
 from ..sessions import CurrentSession
 from ..uploads import owner_file, read_owner, write_owner
 from ..utils import MAX_UPLOAD_SIZE, UPLOAD_DIR
@@ -132,6 +134,28 @@ async def upload_geotiff(
         preview_path.unlink(missing_ok=True)
         owner_file(saved_path).unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
+
+
+@router.post(  # type: ignore[misc]
+    "/sample",
+    response_model=SampleResponse,
+    summary="Attach the bundled Kakhovka sample",
+    responses={404: {"model": ErrorResponse, "description": "SAMPLE_NOT_BUNDLED"}},
+)
+async def attach_bundled_sample(session: CurrentSession) -> SampleResponse | JSONResponse:
+    """Add the bundled Kakhovka pair (2023-06-01, 2023-06-09) to the caller's uploads.
+
+    Each file is an upload of the caller (owner-scoped, with metadata and a true-colour
+    ``preview_url``) and expires with a guest session like any upload; ``line`` is the pair's
+    chip line. A second call in the same session returns the same files. 404
+    ``SAMPLE_NOT_BUNDLED`` if the server has no sample.
+    """
+    try:
+        line, attachments = await asyncio.to_thread(attach_sample, UPLOAD_DIR, session)
+    except SampleNotBundledError as e:
+        error = ErrorDetail(code="SAMPLE_NOT_BUNDLED", message=str(e))
+        return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=404)
+    return SampleResponse(name=SAMPLE_NAME, line=line, attachments=attachments)
 
 
 def _raster_metadata(src: object, filename: str, size_bytes: int) -> RasterMetadata:

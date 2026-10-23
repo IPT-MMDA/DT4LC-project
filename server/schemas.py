@@ -363,6 +363,16 @@ class UploadResponse(BaseModel):  # type: ignore[misc]
     owner: str | None = Field(default=None, description="Uploader's session id")
 
 
+class SampleResponse(BaseModel):  # type: ignore[misc]
+    """The bundled Kakhovka sample attached as the caller's uploads (``POST /v1/sample``)."""
+
+    name: str = Field(description="Chip name, 'kakhovka_hls_l30'")
+    line: str = Field(description="Pair chip line, e.g. 'HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09'")
+    attachments: list[UploadResponse] = Field(
+        description="Both dates, oldest first, as uploads (preview_png_base64 is empty: use preview_url)"
+    )
+
+
 class FileInfo(BaseModel):  # type: ignore[misc]
     """Metadata for an on-disk GeoTIFF."""
 
