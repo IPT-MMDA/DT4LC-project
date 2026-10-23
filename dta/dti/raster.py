@@ -278,6 +278,13 @@ def reflectance_divisor(dtype: Any, data: np.ndarray) -> float:
     return 10000.0 if finite.size and float(finite.max()) > 1000 else 1.0
 
 
+def pixel_area_km2(crs: Any, transform: Any) -> float | None:
+    """Area of one pixel in km² for a projected ``crs``, else ``None``."""
+    if crs is None or not crs.is_projected:
+        return None
+    return float(abs(transform.a * transform.e) * crs.linear_units_factor[1] ** 2 / 1e6)
+
+
 def validate_geotiff(raster_path: str | Path) -> tuple[bool, str]:
     """Validate that a file is a readable GeoTIFF.
 

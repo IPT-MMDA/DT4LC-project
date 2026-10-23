@@ -27,6 +27,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
+from dta.dti.raster import pixel_area_km2
 
 # Try to import matplotlib for visualization
 try:
@@ -250,7 +251,9 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
     Returns:
         Dictionary containing:
             - rasters: GeoTIFF reference ``classification`` (class values 1-6, No Data as NaN)
-            - class_statistics: Per-class pixel counts and percentages
+            - class_statistics: Per class name ``{id, name, colour, pixels, percent,
+              area_km2}`` (area ``None`` for an unprojected CRS; ``class_id`` and
+              ``percentage`` repeat ``id`` and ``percent``)
             - indices: Computed spectral indices (NDVI, NDWI, NDSI)
             - metadata: Raster metadata
             - visualizations: PNG references to the classification map, its map-only
@@ -351,9 +354,10 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
         # No Data: invalid pixels
         classification[~valid_mask] = 0
 
-        # Calculate class statistics
+        # Calculate class statistics (area only for a projected CRS)
         total_valid = np.sum(valid_mask)
-        class_statistics = {}
+        class_statistics: dict[str, dict[str, Any]] = {}
+        pixel_km2 = pixel_area_km2(src.crs, src.transform)
 
         for class_id in range(1, 7):
             class_name = LULC_CLASSES[class_id]["name"]
@@ -364,6 +368,11 @@ def classify_land_cover(raster_path: str) -> dict[str, Any]:
                 "class_id": class_id,
                 "pixels": pixel_count,
                 "percentage": percentage,
+                "id": class_id,
+                "name": class_name,
+                "colour": LULC_CLASSES[class_id]["color"],
+                "percent": percentage,
+                "area_km2": round(pixel_count * pixel_km2, 3) if pixel_km2 is not None else None,
             }
 
         # Index statistics

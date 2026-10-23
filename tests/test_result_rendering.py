@@ -1,4 +1,4 @@
-"""Result rendering: styles in GeoTIFF tags and bare map PNGs.
+"""Result rendering: styles in GeoTIFF tags, bare map PNGs and class legends.
 
 Tiles and bare PNGs share :func:`dta.dti.artifact_files.colourize`: a change raster
 goes lost -> no change -> gained in the map legend colours (design/DESIGN.md §2).
@@ -150,3 +150,47 @@ def test_bare_png_is_capped_at_1024_on_the_long_side(tmp_path: Path) -> None:
 
     assert img.shape[1] == 1024 and abs(img.shape[0] - 1000 * 1024 / 2050) <= 1
     assert (img[:40, :, 3] == 0).all() and tuple(img[-1, -1]) == (*NO_CHANGE, 255)
+
+
+# --- Class legends ---------------------------------------------------------------
+
+
+def test_lulc_class_statistics_carry_colour_and_area(tmp_path: Path) -> None:
+    from dta.dti.algorithms import lulc_classifier
+
+    result = lulc_classifier.run(_scene(tmp_path / "scene.tif"))
+    classes = result["class_statistics"]
+    valid = result["statistics"]["valid_pixels"]
+
+    assert valid == 40 * 100 - 5 * 10
+    for name, c in classes.items():
+        assert {"id", "name", "colour", "pixels", "percent", "area_km2"} <= set(c)
+        assert c["name"] == name and c["colour"] == lulc_classifier.LULC_CLASSES[c["id"]]["color"]
+        assert (c["class_id"], c["percentage"]) == (c["id"], c["percent"])  # the old keys keep their meaning
+    assert sum(c["pixels"] for c in classes.values()) == valid
+    assert sum(c["area_km2"] for c in classes.values()) == pytest.approx(valid * 0.0009, abs=1e-3)
+    assert classes["Water"]["pixels"] > 0 and classes["Dense Vegetation"]["pixels"] > 0
+
+    bare = _open_bare(result["visualizations"]["classification_map_bare"])
+    assert bare.shape[:2] == (40, 100) and (bare[:5, :10, 3] == 0).all()
+    assert tuple(bare[20, 20, :3]) == (0x00, 0x77, 0xBE)  # water
+    with rasterio.open(result["rasters"]["classification"]["path"]) as src:
+        assert artifact_files.read_style(src.tags())["kind"] == "class"
+
+
+def test_snow_class_statistics_carry_colour_and_area(tmp_path: Path, synthetic_raster_path: str) -> None:
+    from dta.dti.algorithms import snow_classifier
+
+    result = snow_classifier.run(_scene(tmp_path / "scene.tif"))
+    classes = result["class_statistics"]
+    valid = result["statistics"]["valid_pixels"]
+
+    assert set(classes) == {"No Snow", "Snow"}
+    assert [c["colour"] for c in classes.values()] == ["#667f4c", "#ffcc66"]
+    assert sum(c["pixels"] for c in classes.values()) == valid
+    assert sum(c["area_km2"] for c in classes.values()) == pytest.approx(valid * 0.0009, abs=1e-3)
+    assert _open_bare(result["visualizations"]["snow_classification_bare"]).shape[:2] == (40, 100)
+
+    # Unprojected CRS: no area.
+    unprojected = snow_classifier.run(synthetic_raster_path)["class_statistics"]
+    assert all(c["area_km2"] is None for c in unprojected.values())
