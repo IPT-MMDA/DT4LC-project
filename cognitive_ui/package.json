@@ -30,7 +30,13 @@
     "e2e:signin": "npm run e2e:signin:fake && npm run e2e:signin:off",
     "e2e:signin:fake": "E2E_SIGNIN=fake node tests/e2e/run.mjs signin",
     "e2e:signin:off": "node tests/e2e/run.mjs signin-off",
-    "e2e:settings": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs settings"
+    "e2e:settings": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs settings",
+    "e2e:a11y": "npm run e2e:a11y:guest && npm run e2e:a11y:operator",
+    "e2e:a11y:guest": "node tests/e2e/run.mjs a11y",
+    "e2e:a11y:operator": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs a11y",
+    "e2e:dark": "npm run e2e:dark:guest && npm run e2e:dark:operator",
+    "e2e:dark:guest": "node tests/e2e/run.mjs dark",
+    "e2e:dark:operator": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs dark"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.0",
@@ -51,6 +57,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "^9.15.0",
     "@testing-library/react": "^16.3.3",
     "@types/mapbox__mapbox-gl-draw": "^1.4.9",
