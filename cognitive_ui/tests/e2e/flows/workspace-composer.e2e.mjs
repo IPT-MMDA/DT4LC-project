@@ -1,7 +1,10 @@
 // The composer against the real API (guest + E2E_LLM=none, so the assistant is offline):
 // design/screens/workspace-assistant-offline.png (the offline line, sample attached) and
-// workspace-region-from-map.png (a drawn region attached with From map, as a chip).
+// workspace-region-from-map.png (a drawn region attached with From map, as a chip); and
+// the + upload and the drop zone, which vitest cannot reach.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';
 
@@ -99,6 +102,43 @@ test('region from map: From map attaches the selected drawn region as a chip in 
     assert.equal(await chip.getByRole('button', { name: 'Remove region' }).count(), 1);
 
     await screenshot(page, 'workspace-region-from-map.png');
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test('+ uploads a GeoTIFF and a drop on the chat column attaches another', async () => {
+  const { context, page, errors } = await newPage();
+  try {
+    const sample = (name) => fileURLToPath(new URL(`../../../../resources/kahovka_data/${name}`, import.meta.url));
+    await page.goto(`${h.baseURL}/app?sample=0`);
+    await page.getByRole('heading', { name: 'What do you want to know?' }).waitFor();
+
+    // + opens the file picker; the hidden input takes the file.
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Attach GeoTIFF' }).click();
+    await (await chooser).setFiles(sample('hlsl_20230601.tif'));
+    const chips = page.getByTestId('attachment-chip');
+    await chips.first().waitFor();
+    assert.match(await chips.first().innerText(), /hlsl_20230601\.tif\s+HLS L30 · B2–B6 · 30 m · [\d.]+ MB · 2023-06-01/);
+
+    // Drop the other date on the chat column (a DataTransfer built in the page).
+    const bytes = readFileSync(sample('hlsl_20230609.tif')).toString('base64');
+    const transfer = await page.evaluateHandle((b64) => {
+      const data = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const dt = new DataTransfer();
+      dt.items.add(new File([data], 'hlsl_20230609.tif', { type: 'image/tiff' }));
+      return dt;
+    }, bytes);
+    const column = page.getByRole('main', { name: 'Chat' });
+    await column.dispatchEvent('dragover', { dataTransfer: transfer });
+    await page.getByText('Drop GeoTIFFs to attach').waitFor();
+    await column.dispatchEvent('drop', { dataTransfer: transfer });
+    await page.getByText('Drop GeoTIFFs to attach').waitFor({ state: 'detached' });
+    await chips.nth(1).waitFor();
+    assert.match(await chips.nth(1).innerText(), /hlsl_20230609\.tif\s+HLS L30 · B2–B6 · 30 m · [\d.]+ MB · 2023-06-09/);
+    assert.equal(await page.getByRole('heading', { name: 'What do you want to know about this area?' }).count(), 1);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
