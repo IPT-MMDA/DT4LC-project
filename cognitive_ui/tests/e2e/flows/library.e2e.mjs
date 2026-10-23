@@ -19,7 +19,7 @@ const UPLOAD = fileURLToPath(new URL('../../../../resources/kahovka_data/hlsl_20
 // About 410 km² of the Lower Dnipro floodplain, as the map store persists a drawn region.
 const REGION = {
   id: 'region-e2e',
-  name: 'Dnipro floodplain',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',

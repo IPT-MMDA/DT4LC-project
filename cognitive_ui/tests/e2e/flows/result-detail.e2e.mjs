@@ -17,7 +17,7 @@ const ANALYSIS_TIMEOUT = 60_000;
 // About 410 km² of the Lower Dnipro floodplain, as the map store persists a drawn region.
 const REGION = {
   id: 'region-e2e',
-  name: 'Dnipro floodplain',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -183,7 +183,7 @@ test('result detail: from the Library row, maps, statistics, plan, downloads, CS
     assert.equal(await failure.getByTestId('failure-code').innerText(), 'EE_NOT_CONFIGURED');
     assert.deepEqual(await failure.getByRole('group', { name: 'Fixes' }).getByRole('button').allInnerTexts(), ['Use my own image', 'Try the Kakhovka sample']);
     assert.equal(await page.getByTestId('detail-map').count(), 0);
-    assert.match(await page.getByTestId('detail-asked').getByTestId('region-chip').innerText(), /Dnipro floodplain/);
+    assert.match(await page.getByTestId('detail-asked').getByTestId('region-chip').innerText(), /Dnipro floodplain · Kherson/);
     await settle(page);
     await page.screenshot({ path: outPath('result-detail-failed.png') });
 

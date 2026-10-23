@@ -14,7 +14,7 @@ const NO_CONVERSATIONS = 'No conversations yet. They appear here as you work and
 // About 410 km² of the Lower Dnipro floodplain, inside the sample's footprint.
 const REGION = {
   id: 'region-e2e',
-  name: 'Dnipro floodplain',
+  name: 'Dnipro floodplain · Kherson',
   type: 'polygon',
   geometry: {
     type: 'Feature',
@@ -100,7 +100,7 @@ test('region from map: From map attaches the selected drawn region as a chip in 
     // The sample is in the conversation, so its dates apply; the area is turf's.
     assert.match(
       (await chip.innerText()).replace(/\s+/g, ' '),
-      /^Region · Dnipro floodplain 4\d\d km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud ×$/,
+      /^Region · Dnipro floodplain · Kherson 4\d\d km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud ×$/,
     );
     assert.equal(await input.getAttribute('placeholder'), 'Ask a follow-up…');
     assert.equal(await chip.getByRole('button', { name: 'Remove region' }).count(), 1);
