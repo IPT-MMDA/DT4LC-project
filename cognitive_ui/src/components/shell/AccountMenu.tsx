@@ -25,8 +25,9 @@ function Avatar({ user, fallback, size }: { user: SessionUser | null | undefined
  * badge, the theme toggle, Settings for operators, and GitHub sign-in or sign-out
  * (design/DESIGN.md §1, §6). Without GITHUB_CLIENT_ID and friends the server reports
  * `sign_in.configured: false` and the menu says so instead of offering a button.
+ * `placement`: beside the rail's button (`side`), or above it in the phone's menu (`up`).
  */
-export function AccountMenu() {
+export function AccountMenu({ placement = 'side' }: { placement?: 'side' | 'up' }) {
   const [open, setOpen] = useState(false);
   const [signOutError, setSignOutError] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -99,7 +100,7 @@ export function AccountMenu() {
           id={menuId}
           role="menu"
           aria-label="Account"
-          className="absolute left-full bottom-0 ml-2 z-20 w-64 p-1 bg-surface border border-border rounded-card flex flex-col"
+          className={`absolute z-20 w-64 p-1 bg-surface border border-border rounded-card flex flex-col ${placement === 'up' ? 'left-0 bottom-full mb-2' : 'left-full bottom-0 ml-2'}`}
         >
           {user ? (
             <div data-testid="account-user" className="px-3 py-2 flex items-start gap-[10px]">

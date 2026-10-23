@@ -1,23 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Contrast, LayoutGrid, Library, Map as MapIcon, MessageSquare, type LucideIcon } from 'lucide-react';
+import { Contrast } from 'lucide-react';
 import { useThemeToggle } from '../../hooks/useThemeToggle';
 import { cn } from '../../utils/cn';
 import { AccountMenu } from './AccountMenu';
-
-interface RailItem {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  isActive: (pathname: string) => boolean;
-}
-
-// The four destinations of design/DESIGN.md section 1. Result detail is under the Library (its breadcrumb).
-const ITEMS: RailItem[] = [
-  { to: '/app', label: 'Chat', icon: MessageSquare, isActive: (p) => p === '/app' },
-  { to: '/app/map', label: 'Map', icon: MapIcon, isActive: (p) => p.startsWith('/app/map') },
-  { to: '/app/library', label: 'Library', icon: Library, isActive: (p) => p.startsWith('/app/library') || p.startsWith('/app/results') },
-  { to: '/app/capabilities', label: 'Can do', icon: LayoutGrid, isActive: (p) => p.startsWith('/app/capabilities') },
-];
+import { NAV_ITEMS } from './navigation';
 
 export function Rail() {
   const { pathname } = useLocation();
@@ -36,7 +22,7 @@ export function Rail() {
         DT
       </Link>
 
-      {ITEMS.map(({ to, label, icon: Icon, isActive }) => {
+      {NAV_ITEMS.map(({ to, label, icon: Icon, isActive }) => {
         const active = isActive(pathname);
         return (
           <Link
