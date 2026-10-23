@@ -24,9 +24,9 @@ const MIME = {
   '.map': 'application/json',
 };
 
-// A plain `npm run build` bakes VITE_API_URL's fallback into the bundle
-// (src/api/client.ts). Rewrite it to this server's origin so the browser talks
-// to the proxy below instead of whatever listens on :8000.
+// The API base defaults to the page's own origin (src/api/client.ts). A build
+// made with VITE_API_URL=http://localhost:8000 bakes that origin in; rewrite it
+// to this server's origin so the browser still talks to the proxy below.
 const BUILD_API_ORIGIN = 'http://localhost:8000';
 
 function proxy(req, res, apiURL) {
