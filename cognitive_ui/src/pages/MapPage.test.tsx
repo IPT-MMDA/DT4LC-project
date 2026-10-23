@@ -41,7 +41,6 @@ function mockApi(caps: Capabilities, onPost: (url: string, body: unknown) => unk
     if (url === '/v1/capabilities') return caps as never;
     if (url === '/v1/session') return GUEST_SESSION as never;
     if (url === '/v1/health') return HEALTH as never;
-    if (url === '/v1/files') return { ok: true, files: [] } as never;
     throw new Error(`unexpected GET ${url}`);
   });
   post = vi.spyOn(apiClient, 'post').mockImplementation(async (url: string, body?: unknown) => onPost(url, body) as never);
