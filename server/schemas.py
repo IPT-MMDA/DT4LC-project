@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from dta import __version__
 
 # Re-export Attachment from domain schemas to avoid duplication
-from dta.dti.schemas import Attachment
+from dta.dti.schemas import Attachment, RasterMetadata
 
 __all__ = [
     "Attachment",
@@ -213,6 +213,7 @@ class UploadResponse(BaseModel):  # type: ignore[misc]
     bounds: list[float] = Field(description="Bounding box [left, bottom, right, top]")
     preview_png_base64: str = Field(description="Grayscale PNG preview as base64 (do not persist)")
     preview_url: str = Field(description="Download URL of the PNG preview written next to the upload")
+    metadata: RasterMetadata = Field(description="Sensor guess, bands, resolution, date, size and display line")
 
 
 class FileInfo(BaseModel):  # type: ignore[misc]
@@ -227,6 +228,7 @@ class FileInfo(BaseModel):  # type: ignore[misc]
     size_bytes: int
     source: Literal["upload", "export"] = Field(description="upload or gee export")
     modified: float = Field(description="Unix modification time")
+    metadata: RasterMetadata | None = Field(None, description="As in UploadResponse.metadata")
 
 
 class FileListResponse(BaseModel):  # type: ignore[misc]

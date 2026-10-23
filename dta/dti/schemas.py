@@ -4,6 +4,29 @@ from pydantic import BaseModel, Field
 
 
 # --- HTTP payloads ---
+class BandInfo(BaseModel):  # type: ignore[misc]
+    """One raster band as stored in the GeoTIFF."""
+
+    index: int = Field(description="1-based band index")
+    code: str | None = Field(None, description="Sensor band code parsed from the description, e.g. 'B5' or 'B8A'")
+    description: str | None = Field(None, description="Band description as stored in the file, if any")
+
+
+class RasterMetadata(BaseModel):  # type: ignore[misc]
+    """What an uploaded raster appears to be; every field is a best guess and may be missing."""
+
+    sensor: str | None = Field(None, description="Guessed sensor: 'HLS L30', 'HLS S30', 'Sentinel-2', 'Landsat 8/9'")
+    bands: list[BandInfo] = Field(default_factory=list)
+    dtype: str | None = Field(None, description="Band data type, e.g. 'int16'")
+    resolution_m: float | None = Field(None, description="Pixel size in metres (approximate for degree CRSs)")
+    date: str | None = Field(None, description="Acquisition date YYYY-MM-DD, from the GeoTIFF tags or the file name")
+    size_bytes: int | None = None
+    size_label: str | None = Field(None, description="File size for display, e.g. '4.0 MB' (1 MB = 1024² bytes)")
+    crs: str | None = Field(None, description="e.g. 'EPSG:32636'")
+    bounds_wgs84: list[float] | None = Field(None, description="[west, south, east, north] in degrees")
+    line: str = Field("", description="Display line, e.g. 'HLS L30 · B2–B6 · 30 m · 2023-06-01' (no size)")
+
+
 class Attachment(BaseModel):  # type: ignore[misc]
     id: str
     filename: str
@@ -11,6 +34,7 @@ class Attachment(BaseModel):  # type: ignore[misc]
     path: str | None = None  # local temp path
     url: str | None = None  # remote URL (optional)
     size_bytes: int | None = None
+    metadata: RasterMetadata | None = Field(None, description="Raster metadata as returned by POST /v1/upload")
 
 
 class ChatRequest(BaseModel):  # type: ignore[misc]
