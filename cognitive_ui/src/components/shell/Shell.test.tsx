@@ -183,14 +183,12 @@ describe('routes', () => {
     await waitFor(() => expect(location.current).toBe(to));
   });
 
-  it.each([
-    ['/app/library', 'Library'],
-  ])('%s is a placeholder inside the shell', (url, title) => {
+  it('/app/library is the Library page inside the shell', () => {
     mockApi();
-    renderApp(url);
-    expect(screen.getByRole('heading', { name: title })).toBeTruthy();
-    expect(screen.getByText('Arrives in the next run.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Back to chat' }).getAttribute('href')).toBe('/app');
+    renderApp('/app/library');
+    expect(screen.getByRole('heading', { name: 'Library' })).toBeTruthy();
+    expect(screen.getByTestId('library-page')).toBeTruthy();
+    expect(screen.queryByText('Arrives in the next run.')).toBeNull();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
   });
 

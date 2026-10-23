@@ -5,6 +5,7 @@ import { landingDecision } from './components/landing/landingDecision';
 import { Shell } from './components/shell/Shell';
 import { Capabilities } from './pages/Capabilities';
 import { Landing } from './pages/Landing';
+import { Library } from './pages/Library';
 import { MapPage } from './pages/MapPage';
 import { Placeholder } from './pages/Placeholder';
 import { Workspace } from './pages/Workspace';
@@ -77,7 +78,7 @@ export function AppRoutes() {
       <Route path="/app" element={<Shell />}>
         <Route index element={<Workspace />} />
         <Route path="map" element={<MapPage />} />
-        <Route path="library" element={<Placeholder title="Library" />} />
+        <Route path="library" element={<Library />} />
         <Route path="capabilities" element={<Capabilities />} />
         <Route path="results/:id" element={<ResultRoute />} />
         <Route path="settings" element={<SettingsRoute />} />
