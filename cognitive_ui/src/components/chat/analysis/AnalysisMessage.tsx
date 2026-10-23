@@ -180,7 +180,7 @@ function pillOf(view: AnalysisView): PillStatus {
   }
 }
 
-function Failure({ view, onFix }: { view: AnalysisView; onFix: (fix: Fix) => void }) {
+export function Failure({ view, onFix }: { view: AnalysisView; onFix: (fix: Fix) => void }) {
   const [showRaw, setShowRaw] = useState(false);
   const failure = view.failure;
   if (!failure) return null;
