@@ -93,13 +93,17 @@ python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 
 ```bash
 curl http://localhost:8000/v1/health
-# {"ok":true,"service":"DT4LC","version":"0.5.0","llm_providers":null,"gee":null,"models":null,"disk":null}
+# {"ok":true,"service":"DT4LC","version":"0.5.1","assistant":{"connected":false,"offline":true,"provider":null,"model":null},"llm_providers":null,"gee":null,"models":null,"disk":null}
 ```
+
+`assistant` names the LLM provider that answers, or shows `"offline": true` when none is available (see [API.md](API.md#get-v1health)).
 
 ### Submit Job
 
+Jobs belong to the session cookie, so keep it in a jar (`-c`/`-b`); otherwise the next call is a new guest session and gets 404 for the job (see [API.md](API.md#sessions)).
+
 ```bash
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{"prompt": "calculate ndvi"}'
 ```
@@ -107,18 +111,18 @@ curl -X POST http://localhost:8000/v1/jobs \
 ### Check Job Status
 
 ```bash
-curl http://localhost:8000/v1/jobs/{job_id}
+curl -b cookies.txt http://localhost:8000/v1/jobs/{job_id}
 ```
 
 ### Upload File and Analyze
 
 ```bash
 # 1. Upload GeoTIFF
-curl -X POST http://localhost:8000/v1/upload \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
   -F "file=@/path/to/data.tif"
 
 # 2. Submit job with attachment
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "calculate ndvi",
@@ -154,7 +158,7 @@ pytest tests/test_orchestrator.py -v
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
 | `/v1/jobs` | GET | List jobs (paginated) |
 | `/v1/upload` | POST | Upload GeoTIFF file |
-| `/v1/capabilities` | GET | List available algorithms |
+| `/v1/capabilities` | GET | What this server can do for the caller, in six tiers (see [API.md](API.md#get-v1capabilities)) |
 | `/v1/models` | GET | List available models |
 | `/v1/metrics` | GET | System metrics |
 | `/v1/queue/stats` | GET | Queue statistics |

@@ -144,6 +144,14 @@ Frontend tests (vitest):
 cd cognitive_ui && npm test
 ```
 
+Browser end-to-end flows (Playwright, against the built UI and a real API with its state in a temp directory, no LLM keys and no Earth Engine):
+
+```bash
+cd cognitive_ui && npm run build && npm run e2e:smoke
+```
+
+They need the Python environment (`uv sync --extra dev --extra server`) and a Chromium headless shell in `~/.cache/ms-playwright`. `npm run e2e` runs every flow. The modes, environment variables and the Linux library workaround are in [cognitive_ui/tests/e2e/README.md](cognitive_ui/tests/e2e/README.md).
+
 ### Using Task
 
 ```bash
@@ -361,6 +369,23 @@ LLM_PROVIDER_ORDER=groq,ollama
 LLM_PROVIDER_ORDER=gemini,anthropic,mistral
 ```
 
+### Sessions, Roles and Storage Paths
+
+Every browser gets a signed session cookie, and jobs and uploads belong to the session that made them. Until sign-in exists every request is a guest. These variables are described in `.env.example` ("Sessions, roles and guest limits"; `DT4LC_DEPLOYMENT` under "Server Configuration"):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SESSION_SECRET` | random per start | Signs the cookie; when unset, sessions reset at every server restart |
+| `SESSION_COOKIE_SECURE` | `false` | Send the cookie over HTTPS only |
+| `DEV_ROLE` | unset | Treat every request as `guest`, `member` or `operator` (for development) |
+| `GUEST_ANALYSES_PER_HOUR` | `5` | Analyses a guest may start per rolling hour, per session and per IP |
+| `GUEST_SESSION_HOURS` | `24` | Session length; guest jobs, outputs and uploads older than this are removed |
+| `MODEL_DOWNLOAD_ON_DEMAND` | `members` | Who may download missing model weights during a job: `members` (members and operators), `operators`, `all` or `none` |
+| `ALLOWED_EMAILS`, `ALLOWED_DOMAINS`, `OPERATOR_EMAILS` | empty | Sign-in allowlists, comma-separated; unused until sign-in exists |
+| `DT4LC_DEPLOYMENT` | `local` | `demo` adds "public demo" to the Capabilities summary line |
+
+The cache lives in `resources/.cache/`. `DT4LC_CACHE_PATH` moves the cache root; `DT4LC_TEMP_PATH` (default `<cache>/tmp`) and `DT4LC_OUTPUTS_PATH` (job outputs, default `<cache>/outputs`) move single directories, like `DT4LC_UPLOADS_PATH`, `DT4LC_MODEL_CACHE` and `DT4LC_JOBS_DB`. These path variables are read in `dta/config/__init__.py`. The API behaviour of sessions and quotas is in [docs/API.md](docs/API.md#sessions).
+
 ### Intent Classification
 
 The system automatically classifies user requests into two categories:
@@ -494,27 +519,35 @@ The spectral-index algorithms (`dta/dti/algorithms/spectral_index.py`) also norm
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/health` | GET | Health check |
-| `/v1/upload` | POST | Upload a GeoTIFF |
-| `/v1/jobs` | POST | Submit an analysis job (prompt and attachments) |
-| `/v1/jobs` | GET | List job summaries (without `result`) |
-| `/v1/jobs/{id}` | GET | Get job status and result |
+| `/v1/health` | GET | Health check, with the assistant (LLM provider) status |
+| `/v1/session` | GET | The caller's role, guest quota and retention (session cookie) |
+| `/v1/capabilities` | GET | What this server can do for the caller, in six tiers |
+| `/v1/upload` | POST | Upload a GeoTIFF; the response includes its metadata line |
+| `/v1/sample` | POST | Attach the bundled Kakhovka sample as the caller's uploads |
+| `/v1/chat` | POST | Send a Workspace message: a markdown reply, or an analysis job (JSON or Server-Sent Events) |
+| `/v1/jobs` | POST | Submit an analysis job (prompt with attachments or a map region) |
+| `/v1/jobs` | GET | List the caller's job summaries (without `result`) |
+| `/v1/jobs/{id}` | GET | Get job status, result and event log |
+| `/v1/jobs/{id}/events` | GET | Stream the job's events (Server-Sent Events) |
+| `/v1/jobs/{id}/confirm` | POST | Run a proposed (composed) plan |
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
 | `/v1/download` | GET | Download a job output file or upload preview by its `url` |
-| `/v1/chat` | POST | Legacy: plan and run the last of `messages` as a Server-Sent Events stream (no attachments) |
 
-All routes, including file listing and download, map tiles, Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). See also [docs/API.md](docs/API.md).
+All routes, including file listing and download, map tiles, Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). Requests, responses, event types and error codes for the routes above are in [docs/API.md](docs/API.md).
 
 ### Example Request
 
 ```bash
+# Jobs and uploads belong to the session cookie: keep it in a jar (-c/-b),
+# or each call starts a new guest session, which cannot see the job of the previous one.
+
 # 1. Upload a GeoTIFF; the response contains its server-side "path"
-curl -X POST http://localhost:8000/v1/upload \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
   -F "file=@image.tif"
 # {"id": "1a2b3c4d", "filename": "image.tif", "path": "/.../resources/.cache/uploads/1a2b3c4d_image.tif", ...}
 
 # 2. Submit an analysis job with the uploaded file attached (202 Accepted)
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Calculate NDVI for vegetation analysis",
@@ -523,13 +556,14 @@ curl -X POST http://localhost:8000/v1/jobs \
 # {"id": "<job id>", "status": "pending", ...}
 
 # 3. Poll the job until "status" is "completed", "failed" or "cancelled"
-curl http://localhost:8000/v1/jobs/<job id>
+#    (or follow its events: curl -N -b cookies.txt http://localhost:8000/v1/jobs/<job id>/events)
+curl -b cookies.txt http://localhost:8000/v1/jobs/<job id>
 
 # 4. The result references output files instead of embedding pixels. For NDVI,
 #    result.execution.artifacts.NDVIMap.rasters.ndvi is the GeoTIFF and
 #    result.execution.artifacts.NDVIMap.visualizations.ndvi_map the PNG;
 #    download each with its "url"
-curl -o ndvi.tif "http://localhost:8000<url>"
+curl -b cookies.txt -o ndvi.tif "http://localhost:8000<url>"
 ```
 
 Each reference has `kind` (`geotiff` or `png`), `path`, `url` and `stats`; the keys each algorithm returns are listed under [Job artifacts](docs/ARCHITECTURE.md#job-artifacts). The upload response also has a `preview_url` for the PNG preview of the uploaded file.
