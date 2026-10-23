@@ -119,7 +119,7 @@ describe('Workspace shell', () => {
     renderApp('/app');
 
     const list = screen.getByRole('complementary', { name: 'Conversations' });
-    const items = within(list).getAllByRole('button').filter((b) => b.textContent !== '+ New');
+    const items = within(list).getAllByTestId('conversation').map((li) => li.querySelector('button') as HTMLButtonElement);
     expect(items.map((b) => b.textContent)).toEqual([
       'Kakhovka reservoir — water change after breach1 file · 1 result',
       'Older chat',

@@ -1,12 +1,111 @@
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { useChatStore, conversationMeta } from '../../store/useChatStore';
+import type { Conversation } from '../../types';
 import { cn } from '../../utils/cn';
 import { SessionBadge } from './SessionBadge';
+
+/** The empty list's line: a guest's conversations stay for `keptHours`, a member's until deleted. */
+export function emptyListText(keptHours: number | null): string {
+  const kept = keptHours === null ? '' : ` and stay for ${keptHours} h`;
+  return `No conversations yet. They appear here as you work${kept}.`;
+}
+
+const iconButton = 'w-6 h-6 flex items-center justify-center rounded-[5px] text-muted hover:text-text hover:bg-surface';
+
+function ConversationItem({ conversation, active }: { conversation: Conversation; active: boolean }) {
+  const selectConversation = useChatStore((state) => state.selectConversation);
+  const renameConversation = useChatStore((state) => state.renameConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const [mode, setMode] = useState<'view' | 'rename' | 'confirm-delete'>('view');
+  const meta = conversationMeta(conversation);
+  const done = useRef(false);  // this rename was committed or cancelled
+
+  const startRename = () => {
+    done.current = false;
+    setMode('rename');
+  };
+  const commit = (value: string) => {
+    if (done.current) return;  // already done: the blur of the input Enter or Escape removed
+    done.current = true;
+    const title = value.trim();
+    if (title && title !== conversation.title) renameConversation(conversation.id, title);
+    setMode('view');
+  };
+  const onRenameKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') commit(e.currentTarget.value);
+    else if (e.key === 'Escape') {
+      done.current = true;
+      setMode('view');
+    }
+  };
+
+  return (
+    <li className={cn('group relative rounded-control', active ? 'bg-surface2' : 'hover:bg-surface2/60')} data-testid="conversation">
+      {mode === 'rename' ? (
+        <div className="px-[10px] py-[7px]">
+          <input
+            aria-label="Conversation name"
+            defaultValue={conversation.title}
+            autoFocus
+            onFocus={(e) => e.currentTarget.select()}
+            onKeyDown={onRenameKey}
+            onBlur={(e) => commit(e.currentTarget.value)}
+            className="w-full bg-surface border border-border rounded-[5px] px-[6px] py-[2px] text-[13px] font-medium outline-none focus:border-accent"
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => selectConversation(conversation.id)}
+          aria-current={active ? 'true' : undefined}
+          className="w-full text-left px-[10px] py-[9px] rounded-control"
+        >
+          <div className="text-[13px] font-medium leading-[1.3]">{conversation.title}</div>
+          {meta && <div className="text-[11px] text-muted mt-[3px]">{meta}</div>}
+        </button>
+      )}
+
+      {mode === 'view' && (
+        <div className="absolute right-[6px] top-[6px] flex gap-[2px] rounded-[6px] bg-surface2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+          <button type="button" onClick={startRename} aria-label={`Rename “${conversation.title}”`} title="Rename" className={iconButton}>
+            <Pencil size={13} aria-hidden />
+          </button>
+          <button type="button" onClick={() => setMode('confirm-delete')} aria-label={`Delete “${conversation.title}”`} title="Delete" className={iconButton}>
+            <Trash2 size={13} aria-hidden />
+          </button>
+        </div>
+      )}
+
+      {mode === 'confirm-delete' && (
+        <div role="group" aria-label="Delete this conversation?" className="px-[10px] pb-[9px] flex items-center gap-2 text-[11.5px]">
+          <span className="flex-1 text-text2">Delete this conversation?</span>
+          <button
+            type="button"
+            onClick={() => deleteConversation(conversation.id)}
+            className="px-2 py-[2px] rounded-[5px] bg-fail text-on-accent font-medium"
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            autoFocus
+            onClick={() => setMode('view')}
+            className="px-2 py-[2px] rounded-[5px] border border-border bg-surface text-text2 hover:bg-surface2"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
 
 /** The Workspace's left column: conversations (newest first), "+ New", and the session badge. */
 export function ConversationList() {
   const conversations = useChatStore((state) => state.conversations);
   const activeId = useChatStore((state) => state.activeConversationId);
-  const selectConversation = useChatStore((state) => state.selectConversation);
+  const keptHours = useChatStore((state) => state.keptHours);
   const newConversation = useChatStore((state) => state.newConversation);
 
   return (
@@ -26,31 +125,14 @@ export function ConversationList() {
       </div>
 
       {conversations.length === 0 ? (
-        <p className="px-5 py-[30px] text-control leading-[1.5] text-faint text-center">
-          No conversations yet. They appear here as you work and stay for 24 h.
+        <p className="px-5 py-[30px] text-control leading-[1.5] text-faint text-center" data-testid="no-conversations">
+          {emptyListText(keptHours)}
         </p>
       ) : (
         <ul className="px-[10px] flex flex-col gap-[2px] overflow-y-auto min-h-0">
-          {conversations.map((c) => {
-            const active = c.id === activeId;
-            const meta = conversationMeta(c);
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => selectConversation(c.id)}
-                  aria-current={active ? 'true' : undefined}
-                  className={cn(
-                    'w-full text-left px-[10px] py-[9px] rounded-control',
-                    active ? 'bg-surface2' : 'hover:bg-surface2/60',
-                  )}
-                >
-                  <div className="text-[13px] font-medium leading-[1.3]">{c.title}</div>
-                  {meta && <div className="text-[11px] text-muted mt-[3px]">{meta}</div>}
-                </button>
-              </li>
-            );
-          })}
+          {conversations.map((c) => (
+            <ConversationItem key={c.id} conversation={c} active={c.id === activeId} />
+          ))}
         </ul>
       )}
 
