@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useJobs } from '../api/hooks/useJobs';
 import { Loader2, Search, MessageSquare } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useChatStore } from '../store/useChatStore';
+import { findConversationByJobId, useChatStore } from '../store/useChatStore';
 import type { Job } from '../types';
 
 const PAGE_SIZE = 20;
@@ -12,7 +12,7 @@ export function JobsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [page, setPage] = useState(1);
   const navigate = useNavigate();
-  const { jobToSessionMap } = useChatStore();
+  const conversations = useChatStore((state) => state.conversations);
 
   const { data, isLoading } = useJobs({
     status: statusFilter || undefined,
@@ -22,7 +22,7 @@ export function JobsPage() {
 
   // Check if a job has an associated chat session
   const hasChat = (jobId: string) => {
-    return !!jobToSessionMap[jobId];
+    return !!findConversationByJobId(conversations, jobId);
   };
 
   // Navigate to chat with job context

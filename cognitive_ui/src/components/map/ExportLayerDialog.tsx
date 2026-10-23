@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Download, Loader2, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { useExportLayer } from '../../api/hooks/useGEEData';
-import { useAppStore } from '../../store/useAppStore';
+import { useChatStore } from '../../store/useChatStore';
 
 interface Layer {
   id: string;
@@ -27,7 +27,7 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
   const [completedExports, setCompletedExports] = useState<string[]>([]);
   const [failedExports, setFailedExports] = useState<string[]>([]);
   const exportMutation = useExportLayer();
-  const { addAttachment } = useAppStore();
+  const addAttachment = useChatStore((state) => state.addAttachment);
 
   const isExportAll = layerId === 'all' && allLayers && allLayers.length > 0;
   const totalLayers = isExportAll ? allLayers.length : 1;

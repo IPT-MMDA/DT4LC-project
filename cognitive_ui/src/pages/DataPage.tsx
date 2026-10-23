@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, CheckCircle, AlertCircle, Loader2, Download, Database } from 'lucide-react';
 import { useUploadFile, useListFiles, GeoTIFFFile } from '../api/hooks/useUpload';
-import { useAppStore } from '../store/useAppStore';
+import { useChatStore } from '../store/useChatStore';
 
 export function DataPage() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadFile = useUploadFile();
   const { data: allFiles, isLoading: isLoadingFiles, refetch: refetchFiles } = useListFiles();
-  const { addAttachment, uploadedAttachments } = useAppStore();
+  const addAttachment = useChatStore((state) => state.addAttachment);
+  const uploadedAttachments = useChatStore((state) => state.pendingAttachments);
 
   // Refetch files after successful upload
   useEffect(() => {
