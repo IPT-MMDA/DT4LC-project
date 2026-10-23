@@ -14,6 +14,8 @@ types:
  - Statistics
  - ChangeMap
  - FieldBoundaries
+ - BandMathMap  # Index from a band-math formula
+ - BandMathChangeMap  # Band-math index for two dates and their difference
 
 instances:
   # Standard single-file input (default for most analyses)
@@ -406,6 +408,62 @@ instances:
         I'd be happy to classify land cover for you! Please upload a multispectral
         GeoTIFF image (4+ bands with NIR) and I'll identify the 6 LULC classes.
       summary_template: "Classifying land cover into 6 classes"
+
+  - id: algorithms/band-math
+    kind: algorithm
+    display_name: "Band Math"
+    description: |
+      Band math: an index from a formula over band codes or roles, e.g. NDMI = (B5 - B6) / (B5 + B6).
+      The formula takes numbers, band codes (B5, SR_B5) resolved through the band descriptions,
+      band roles (nir, swir, red, green, blue), + - * / and parentheses. Outputs the index
+      map (GeoTIFF + PNG) and its statistics.
+    interpretation: |
+      The value is the formula evaluated per pixel on 0-1 reflectance. A normalized difference
+      (a - b) / (a + b) ranges from -1 to 1 and is positive where band a is brighter than band b;
+      for NDMI = (NIR - SWIR1) / (NIR + SWIR1), higher values mean more vegetation water content
+      or wetter surfaces, negative values dry, bare or built-up surfaces. Other formulas have no
+      fixed range; the map is stretched to the data's 2nd-98th percentile.
+    keywords: [band-math, "band math", "custom index"]
+    inputs: [RasterPath]
+    outputs: [BandMathMap]
+    runner:
+      type: python
+      entrypoint: "dta.dti.algorithms.band_math"
+    triggers:
+      keywords: ["band math", "band-math", "custom index"]
+      action_phrases:
+        - "compute band math"
+    user_guide:
+      capability_response: |
+        Yes, I can compute an index from your own formula over the image's bands, for example
+        NDMI = (B5 - B6) / (B5 + B6). Formulas use band codes (B5) or roles (nir, swir, red,
+        green, blue), numbers, + - * / and parentheses. Please upload a GeoTIFF image.
+      missing_file_response: |
+        I can compute that band-math index for you. Please upload a GeoTIFF image with the
+        bands the formula uses.
+      summary_template: "Computing a band-math index from a formula"
+
+  # Same runner as algorithms/band-math, for two dates: a registry item's inputs are all
+  # required, so "RasterPath or RasterPathBefore + RasterPathAfter" needs a second id. No
+  # triggers: plans name it explicitly, so it never competes with change-detection.
+  - id: algorithms/band-math-change
+    kind: algorithm
+    display_name: "Band Math Change"
+    description: |
+      Band math for two dates: the formula on the before and after images and the difference
+      (after minus before), with both index maps, the difference map and change statistics.
+    interpretation: |
+      The difference is the formula's value after minus before. Positive values mean the index
+      rose (for NDMI: wetter), negative values that it fell (drier); pixels beyond the threshold
+      (default 0.2) count as increase or decrease, with their areas in km².
+    keywords: [band-math-change, "band math change"]
+    inputs: [RasterPathBefore, RasterPathAfter]
+    outputs: [BandMathChangeMap]
+    runner:
+      type: python
+      entrypoint: "dta.dti.algorithms.band_math"
+    user_guide:
+      summary_template: "Computing a band-math index for both dates and their difference"
 
   - id: models/prithvi-reconstruction
     kind: model

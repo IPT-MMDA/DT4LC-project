@@ -307,8 +307,9 @@ def _render_index_png(
     vmin: float,
     vmax: float,
     title: str,
+    label: str | None = None,
 ) -> bytes | None:
-    """Render an index array to PNG bytes using a registered colormap."""
+    """Render an index array to PNG bytes using a registered colormap (colorbar ``label``, default its name)."""
     if not HAS_MATPLOTLIB:
         return None
 
@@ -322,7 +323,7 @@ def _render_index_png(
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.axis("off")
     cbar = fig.colorbar(im, ax=ax, shrink=0.8, aspect=30)
-    cbar.set_label(colormap_name.upper(), fontsize=10)
+    cbar.set_label(label or colormap_name.upper(), fontsize=10)
 
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor="white")

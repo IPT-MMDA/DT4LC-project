@@ -26,7 +26,7 @@ from dta.dti.coe.context_agent import analyze
 from dta.dti.coe.llm import BaseLLMProvider, LLMResponse, LLMRouter, get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate
-from dta.dti.coe.plan_validator import validate
+from dta.dti.coe.plan_validator import PlanError, validate
 from dta.dti.coe.planner import plan
 from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import get_item, load_registry
@@ -280,8 +280,18 @@ def _p1_cases() -> Iterator[Any]:
         if item.triggers is None:
             continue
         files = [BEFORE, AFTER] if "RasterPathBefore" in item.inputs else [BEFORE]
+        # Band math needs a formula, which only the LLM planner (or a proposal) writes.
+        marks = (
+            [
+                pytest.mark.xfail(
+                    raises=PlanError, strict=True, reason="band math needs a formula; no template writes one"
+                )
+            ]
+            if item.id == "algorithms/band-math"
+            else []
+        )
         for phrase in dict.fromkeys(item.triggers.keywords + item.triggers.action_phrases):
-            yield pytest.param(phrase, files, id=f"{item.id}:{phrase}")
+            yield pytest.param(phrase, files, id=f"{item.id}:{phrase}", marks=marks)
 
 
 @pytest.mark.parametrize(("phrase", "files"), list(_p1_cases()))
