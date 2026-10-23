@@ -8,6 +8,7 @@ npm run build          # the harness serves dist/; it refuses to run without it
 npm run e2e:smoke      # flows/smoke.e2e.mjs only
 npm run e2e            # every flows/*.e2e.mjs (guest, E2E_LLM=none; fake- and member-only flows skip)
 npm run e2e:workspace  # the Workspace screens: the four env groups below, one API run each
+npm run e2e:run2       # the run-2 screens (today: e2e:capabilities, its two groups below)
 node tests/e2e/run.mjs smoke other   # pick flows by name (flows/<name>.e2e.mjs) or by path
 ```
 
@@ -19,8 +20,10 @@ One API process serves a run, so flows that need another role or LLM mode run in
 | `e2e:workspace:fake` | guest, `E2E_LLM=fake` | `workspace-running` | analysis running (and cancel; a reload mid-run resumes the stream) |
 | `e2e:workspace:member` | `E2E_DEV_ROLE=member`, `E2E_LLM=none` | `workspace-preparing` | preparing model, assistant offline, the member badge |
 | `e2e:workspace:quota` | guest, `E2E_GUEST_LIMIT=2`, `E2E_LLM=none` | `workspace-quota` | two analyses, then the quota refusal inline and the composer's quota line (`workspace-guest-quota.png`) |
+| `e2e:capabilities:offline` | `E2E_DEV_ROLE=member`, `E2E_LLM=none` | `capabilities-offline` | the offline laptop (`capabilities-offline-top.png`; `capabilities-offline-models-data.png`, not a design screen); a built-in prompt opens the Workspace with it in the composer and the sample kept, nothing sent |
+| `e2e:capabilities:demo` | guest, `E2E_SERVER=demo`, `E2E_LLM=fake`, `E2E_GUEST_LIMIT=5` | `capabilities-demo` | the public demo (`capabilities-demo-top.png`, `capabilities-demo-models-data.png`, `capabilities-prithvi-gated.png`); an Ask prompt opens the Workspace with it in the composer, nothing sent |
 
-`workspace-running` skips itself unless `E2E_LLM=fake`, `workspace-preparing` unless `E2E_DEV_ROLE=member`, and `workspace-quota` unless `E2E_GUEST_LIMIT=2`.
+`workspace-running` skips itself unless `E2E_LLM=fake`, `workspace-preparing` unless `E2E_DEV_ROLE=member`, and `workspace-quota` unless `E2E_GUEST_LIMIT=2`. `capabilities-offline` runs only as a member with `E2E_LLM=none` on a local server, and `capabilities-demo` only as a guest with `E2E_SERVER=demo` and `E2E_LLM=fake`.
 
 The API runs with `uv run`, so the Python env must exist (`uv sync --extra dev --extra server` at the repo root).
 
@@ -46,9 +49,10 @@ One path stays outside the temp dir: Delineate-Anything works in `<system temp>/
 | `E2E_OUT` | `tests/e2e/out/` | Where screenshots and `api.log` go. Git-ignored. |
 | `E2E_DEV_ROLE` | `guest` | Role of every request (`DEV_ROLE` for the API): `guest`, `member` or `operator`. One API serves the whole run, so a flow that needs another role needs its own run. |
 | `E2E_GUEST_LIMIT` | `1000` | Guest analyses per hour (`GUEST_ANALYSES_PER_HOUR` for the API); set it low to test the quota refusal. |
+| `E2E_SERVER` | `local` | Server state. `local` sets `DT4LC_DEPLOYMENT=local`. `demo` stages the public demo as the backend computes it from env and files: `DT4LC_DEPLOYMENT=demo`; Delineate-Anything "installed" (empty `DelineateAnything-S.pt` and `delineate.py` in the temp `DT4LC_MODEL_CACHE`, the files `ModelManager.get_model_status` checks); Earth Engine "configured" (`GEE_PROJECT_ID=e2e-demo`, `GEE_SERVICE_ACCOUNT_KEY` pointing at a dummy JSON in the temp dir, which is all `gee_common.is_configured()` checks). Nothing real is behind them: a demo flow must never run Delineate or call `/v1/gee/*`. |
 | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | newest `~/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell` | Browser binary. The cached revision does not have to match the `playwright-core` version. |
 
-Flows receive these from the runner (don't set them yourself): `E2E_BASE_URL` (UI origin), `E2E_API_URL` (API origin, direct), `E2E_WS_ENDPOINT` (browser server), `E2E_OUT`, `E2E_LLM`, `E2E_FAKE_LLM_URL`, `E2E_FAKE_HF_URL` and `E2E_DEV_ROLE`.
+Flows receive these from the runner (don't set them yourself): `E2E_BASE_URL` (UI origin), `E2E_API_URL` (API origin, direct), `E2E_WS_ENDPOINT` (browser server), `E2E_OUT`, `E2E_LLM`, `E2E_FAKE_LLM_URL`, `E2E_FAKE_HF_URL`, `E2E_DEV_ROLE` and `E2E_SERVER`.
 
 ## Fake HuggingFace Hub
 
@@ -64,7 +68,7 @@ Delineate-Anything can't be faked this way: its download fetches a zip from `htt
 - **`fake`**: same blanking, plus `LLM_ENABLE_OLLAMA=true`, `OLLAMA_BASE_URL=http://127.0.0.1:<port>` and `OLLAMA_MODEL=fake`, all pointing at `fake-ollama.mjs`. It implements `/api/version`, `/api/tags` and `/api/chat` as `dta/dti/coe/llm/ollama.py` calls them. A reply is the first rule whose `match` regex matches the **last user message or the last system message**; if none matches, it is `default`. A rule's `delay_ms` holds its reply back that long: `workspace-running` delays the agent-analysis call (system prompt "interpreting satellite imagery analysis results") by 6 s to catch the Interpretation row running.
 - **`live`**: the runner leaves the LLM env alone, so `.env` providers are used. It is for local checks only: it is slow, costs quota, and is never part of gates or CI.
 
-In `none` and `fake` the runner also blanks `GEE_PROJECT_ID` and `GEE_SERVICE_ACCOUNT_KEY`, so Earth Engine is never initialised and region flows fail cleanly. Other `.env` values still apply, and a `dta/config/llm.yaml` would replace the env-based LLM config entirely.
+In `none` and `fake` the runner also blanks `GEE_PROJECT_ID` and `GEE_SERVICE_ACCOUNT_KEY`, so Earth Engine is never initialised and region flows fail cleanly (`E2E_SERVER=demo` sets them to its dummy values instead). Other `.env` values still apply, and a `dta/config/llm.yaml` would replace the env-based LLM config entirely.
 
 Rules file format:
 
