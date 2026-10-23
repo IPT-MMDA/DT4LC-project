@@ -41,7 +41,7 @@ from dta.dti.schemas import Attachment as COEAttachment
 from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
-from .job_events import TERMINAL_EVENTS, classify_failure, done_summary, intent_text, step_skeleton
+from .job_events import TERMINAL_EVENTS, classify_failure, done_summary, followups, intent_text, step_skeleton
 from .sessions import ROLES, Role, can_download_models
 
 logger = logging.getLogger(__name__)
@@ -580,13 +580,14 @@ class JobQueue:
         return running
 
     def _done_data(self, job: Job) -> dict[str, Any]:
-        """``done`` data: ``elapsed_s`` and the one-line summary (a conversation reply ran no steps)."""
+        """``done`` data: ``elapsed_s``, the one-line summary (a conversation reply ran no steps) and
+        the follow-up prompts."""
         elapsed = job.duration_seconds or 0.0
         if job.plan is None:
             summary = "Answered without running an analysis"
         else:
             summary = done_summary(step_skeleton(job.plan, self._registry), elapsed)
-        return {"elapsed_s": round(elapsed, 1), "summary": summary}
+        return {"elapsed_s": round(elapsed, 1), "summary": summary, "followups": followups(job.plan, self._registry)}
 
     def _terminal_event(self, job: Job) -> None:
         """Append the terminal event a finished job lacks (a job from before the event log, or one
@@ -1179,7 +1180,7 @@ class JobQueue:
                         f"Job {job_id} proposes a composed plan: {[s['uses'] for s in result['plan']['steps']]}"
                     )
                     return
-                job.result = result
+                job.result = {**result, "followups": followups(job.plan, self._registry)}
                 job.status = JobStatus.COMPLETED
                 job.progress = 1.0
                 job.completed_at = datetime.now()

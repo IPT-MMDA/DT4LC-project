@@ -123,12 +123,13 @@ class UIModel(BaseModel):  # type: ignore[misc]
 
 
 class UI(BaseModel):  # type: ignore[misc]
-    """Capabilities page fields (``GET /v1/capabilities``); items without one are not listed."""
+    """Capabilities page fields (``GET /v1/capabilities``; items without a ``tier`` are not listed)
+    and the follow-up prompts under a result."""
 
-    tier: Literal["builtin", "coming"]
+    tier: Literal["builtin", "coming"] | None = None
     group: Literal["spectral", "change", "models"] | None = None  # builtin only
     order: int = 0  # position within the group (or the coming list)
-    title: str
+    title: str | None = None  # required with a tier
     formula: str | None = None
     description: str | None = None
     inputs: list[str] = []  # empty: derived from config.required_bands
@@ -136,6 +137,10 @@ class UI(BaseModel):  # type: ignore[misc]
     time: str | None = None  # e.g. "~10 s"
     prompt: str | None = None  # full prompt for the composer
     model: UIModel | None = None
+    # Full prompts for the chips under a result (``done.followups``): a list, or lists per
+    # variant (change detection: the IndexType, band math: the step's name; lower case) with
+    # a ``default``. See server.job_events.followups.
+    followups: list[str] | dict[str, list[str]] = []
 
 
 class RegistryItem(BaseModel):  # type: ignore[misc]
