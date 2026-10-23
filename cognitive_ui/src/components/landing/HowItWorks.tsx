@@ -174,7 +174,7 @@ function Demo({ demo }: { demo: ReturnType<typeof useDemo> }) {
               <div data-anim="stats" className="grid grid-cols-3 py-[10px] px-3 gap-2">
                 <Stat anim="cntA" label="Water before" value={WATER.before} />
                 <Stat anim="cntB" label="Water after" value={WATER.after} />
-                <Stat anim="cntC" label="Gained" value={WATER.gained} className="text-legend-gained" />
+                <Stat anim="cntC" label="Gained" value={WATER.gained} className="text-gained" />
               </div>
             </div>
             <div data-anim="interp" className="leading-[1.55] text-[13.5px]">

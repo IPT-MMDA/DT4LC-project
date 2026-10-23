@@ -3,10 +3,8 @@ import { X } from 'lucide-react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useLayout } from '../../hooks/useMediaQuery';
 import { useSigninNotice } from '../../hooks/useSigninNotice';
-import { useAppStore } from '../../store/useAppStore';
 import { useChatStore } from '../../store/useChatStore';
 import { cn } from '../../utils/cn';
-import { applyTheme } from '../../utils/theme';
 import { MenuDrawer, PhoneBar } from './PhoneMenu';
 import { Rail } from './Rail';
 
@@ -17,17 +15,12 @@ import { Rail } from './Rail';
  * keyboard and browser bars.
  */
 export function Shell() {
-  const theme = useAppStore((state) => state.theme);
   const [notice, dismissNotice] = useSigninNotice();
   const phone = useLayout() === 'phone';
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const { pathname } = useLocation();
   const activeConversation = useChatStore((state) => state.activeConversationId);
-
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
 
   // A new destination or conversation closes the menu.
   useEffect(() => {

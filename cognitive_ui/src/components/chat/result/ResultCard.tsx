@@ -31,7 +31,7 @@ const jobQueryKey = (jobId: string) => ['job', jobId] as const;
 
 const outline = 'px-[11px] py-[6px] rounded-control border border-border text-text2 hover:bg-surface2';
 const SWATCH: Record<Tone, string> = { gained: 'bg-legend-gained', lost: 'bg-legend-lost', neutral: 'bg-legend-no-change' };
-const TONE_TEXT: Record<Tone, string> = { gained: 'text-legend-gained', lost: 'text-lost', neutral: '' };
+const TONE_TEXT: Record<Tone, string> = { gained: 'text-gained', lost: 'text-lost', neutral: '' };
 const COLS: Record<number, string> = { 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
 
 /** Keep the card's kind on the message, so the conversation's "N results" counts cards shown. */
@@ -108,7 +108,7 @@ function MapImage({ view, alt }: { view: CardView; alt: string }) {
           className={cn('absolute inset-0 w-full h-full', view.bare ? 'object-cover' : 'object-contain')}
         />
       ) : (
-        <p className="absolute inset-0 flex items-center justify-center text-control text-faint">No image for this view</p>
+        <p className="absolute inset-0 flex items-center justify-center text-control text-muted">No image for this view</p>
       )}
       {view.overlay && (
         <span
@@ -389,7 +389,7 @@ export function ResultCard({ jobId, context, fallbackTitle }: { jobId: string; c
 
   if (job.isPending) {
     return (
-      <div data-testid="result-loading" aria-busy="true" className="h-[120px] border border-border rounded-card bg-surface2 flex items-center justify-center text-control text-faint">
+      <div data-testid="result-loading" aria-busy="true" className="h-[120px] border border-border rounded-card bg-surface2 flex items-center justify-center text-control text-muted">
         Loading the result…
       </div>
     );

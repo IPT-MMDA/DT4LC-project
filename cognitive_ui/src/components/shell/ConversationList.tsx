@@ -46,7 +46,7 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
             onFocus={(e) => e.currentTarget.select()}
             onKeyDown={onRenameKey}
             onBlur={(e) => commit(e.currentTarget.value)}
-            className="w-full bg-surface border border-border rounded-[5px] px-[6px] py-[2px] text-[13px] font-medium outline-none focus:border-accent"
+            className="w-full bg-surface border border-border rounded-[5px] px-[6px] py-[2px] text-[13px] font-medium focus:border-accent"
           />
         </div>
       ) : (
@@ -54,15 +54,16 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
           type="button"
           onClick={() => selectConversation(conversation.id)}
           aria-current={active ? 'true' : undefined}
-          className="w-full text-left px-[10px] py-[9px] rounded-control"
+          className="w-full text-left px-[10px] py-[9px] rounded-control max-md:pr-[62px] [@media(hover:none)]:pr-[62px]"
         >
           <div className="text-[13px] font-medium leading-[1.3]">{conversation.title}</div>
           {meta && <div className="text-[11px] text-muted mt-[3px]">{meta}</div>}
         </button>
       )}
 
+      {/* Shown on hover and on focus; always on a phone or a touch screen, which have no hover. */}
       {mode === 'view' && (
-        <div className="absolute right-[6px] top-[6px] flex gap-[2px] rounded-[6px] bg-surface2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-[6px] top-[6px] flex gap-[2px] rounded-[6px] bg-surface2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 max-md:opacity-100 [@media(hover:none)]:opacity-100">
           <button type="button" onClick={startRename} aria-label={`Rename “${conversation.title}”`} title="Rename" className={iconButton}>
             <Pencil size={13} aria-hidden />
           </button>
@@ -137,7 +138,7 @@ export function ConversationList({ className, onCollapse }: { className?: string
       </div>
 
       {conversations.length === 0 ? (
-        <p className="px-5 py-[30px] text-control leading-[1.5] text-faint text-center" data-testid="no-conversations">
+        <p className="px-5 py-[30px] text-control leading-[1.5] text-muted text-center" data-testid="no-conversations">
           {emptyListText(keptHours)}
         </p>
       ) : (

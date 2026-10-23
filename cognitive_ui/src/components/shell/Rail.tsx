@@ -16,7 +16,7 @@ export function Rail() {
     >
       <Link
         to="/"
-        aria-label="DT4LC home"
+        aria-label="DT, DT4LC home"
         className="w-[30px] h-[30px] mb-[14px] rounded-[7px] bg-ink text-ink-bg font-bold text-[11px] flex items-center justify-center"
       >
         DT

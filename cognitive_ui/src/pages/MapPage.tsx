@@ -22,9 +22,9 @@ export function MapPage() {
   }, [sampleLayer, addBaseLayer]);
 
   const map = (
-    <section aria-label="Map" className="flex-1 min-w-0 min-h-0 relative">
+    <main aria-label="Map" className="flex-1 min-w-0 min-h-0 relative">
       <MapContainer />
-    </section>
+    </main>
   );
   if (useLayout() === 'phone') {
     return (

@@ -85,7 +85,7 @@ describe('change card (NDWI on the sample)', () => {
     const stats = screen.getByTestId('stats');
     expect([...stats.querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Open water before', 'Open water after', 'Gained', 'Lost']);
     expect([...stats.querySelectorAll('dd')].map((d) => d.textContent)).toEqual(['13.9 km²', '170 km²', '+157 km²', '0.6 km²']);
-    expect(stats.querySelectorAll('dd')[2].className).toContain('text-legend-gained');
+    expect(stats.querySelectorAll('dd')[2].className).toContain('text-gained');
     expect(stats.querySelectorAll('dd')[3].className).toContain('text-lost');
     expect(screen.queryByTestId('card-formula')).toBeNull();
   });

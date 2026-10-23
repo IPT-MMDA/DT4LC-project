@@ -125,7 +125,7 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
     assert.equal((await legend.getByTestId('map-legend-classes').innerText()).replace(/\s+/g, ' '), 'lost 0.6 km² no change 373 km² gained 157 km²');
 
     // Draw a rectangle with the toolbar: a real mouse drag over the north of the raster.
-    const mapBox = await page.locator('section[aria-label="Map"]').boundingBox();
+    const mapBox = await page.locator('main[aria-label="Map"]').boundingBox();
     await page.getByRole('toolbar', { name: 'Draw' }).getByRole('button', { name: 'Rectangle' }).click();
     const [x0, y0] = [mapBox.x + mapBox.width * 0.38, mapBox.y + mapBox.height * 0.22];
     const [x1, y1] = [mapBox.x + mapBox.width * 0.62, mapBox.y + mapBox.height * 0.5];

@@ -122,10 +122,11 @@ function TierSection({
       aria-labelledby={`tier-${tier.id}-title`}
       data-testid={`tier-${tier.id}`}
       data-dimmed={dimmed ? 'true' : 'false'}
-      className={cn('flex flex-col gap-3 scroll-mt-6', dimmed && 'opacity-[.55]')}
+      // Dimmed by colour, not opacity: its text keeps WCAG AA contrast (the status pill and badges keep their hue).
+      className={cn('flex flex-col gap-3 scroll-mt-6', dimmed && '[&_:is(h2,h3,p,button,dt,dd)]:!text-muted')}
     >
       <div className="flex items-baseline gap-3 flex-wrap">
-        <span className="font-mono text-[11px] font-medium text-faint">{tier.number}</span>
+        <span className="font-mono text-[11px] font-medium text-muted">{tier.number}</span>
         <h2 id={`tier-${tier.id}-title`} className="text-[16px] font-semibold">
           {tier.title}
         </h2>
@@ -281,7 +282,7 @@ function ComingSection({ tier, sectionRef }: { tier: ComingTier; sectionRef: (el
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-3 text-left"
       >
-        <span className="font-mono text-[11px] font-medium text-faint">{tier.number}</span>
+        <span className="font-mono text-[11px] font-medium text-muted">{tier.number}</span>
         <span className="text-[14px] font-semibold text-muted">{tier.title}</span>
         <span className="text-control text-muted truncate">{tier.items.map((i) => i.title).join(' · ')}</span>
         <span className="ml-auto flex-none text-[12px] text-muted">{open ? 'Hide' : 'Show'}</span>

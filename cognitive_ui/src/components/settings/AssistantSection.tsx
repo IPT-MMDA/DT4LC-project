@@ -91,7 +91,7 @@ function ProviderCard({
   return (
     <li data-testid="provider" data-name={name} className={cn(card, 'gap-3')}>
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="font-mono text-[11px] font-medium text-faint w-4">{position === null ? '–' : position + 1}</span>
+        <span className="font-mono text-[11px] font-medium text-muted w-4">{position === null ? '–' : position + 1}</span>
         <h3 className="text-card">{label}</h3>
         {keyStatus(provider)}
         {provider.available ? <Status hue="done">In the assistant</Status> : <Status hue="muted">Not in use</Status>}

@@ -89,7 +89,7 @@ describe('MapContainer delete tool (#67 bug 5)', () => {
     expect(drawn).not.toBeNull();
     expect(screen.getByTestId(`region-${drawn!.id}`)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete selected region' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear selected region' }));
 
     expect(useAppStore.getState().drawnRegions).toEqual([]);
     expect(useAppStore.getState().selectedRegion).toBeNull();

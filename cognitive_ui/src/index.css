@@ -114,6 +114,7 @@
 /* Design tokens: design/DESIGN.md section 2, values from the v0.6.0 prototype. */
 :root,
 [data-theme="light"] {
+  color-scheme: light;
   --bg: #f6f7f9;
   --surface: #fff;
   --surface2: #f0f1f4;
@@ -142,11 +143,13 @@
   --canc-ink: oklch(0.45 0.12 75);
   --region: oklch(0.85 0.12 85);  /* drawn regions on the map, their swatches (the prototype's region amber) */
   --lost: oklch(0.45 0.14 25);
+  --gained: #2d5f9e;  /* water gained / wetter as text: the legend's blue, lighter in dark (AA on surface) */
   --ink: #1a1d23;
   --ink-bg: #fff;
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: oklch(0.16 0.008 255);
   --surface: oklch(0.20 0.01 255);
   --surface2: oklch(0.25 0.01 255);
@@ -175,6 +178,7 @@
   --canc-ink: oklch(0.88 0.08 75);
   --region: oklch(0.8 0.11 85);
   --lost: oklch(0.75 0.12 25);
+  --gained: oklch(0.75 0.1 255);
   --ink: oklch(0.94 0.005 255);
   --ink-bg: oklch(0.16 0.008 255);
 }
@@ -205,5 +209,11 @@
 
   #root {
     min-height: 100vh;
+  }
+
+  /* One visible focus ring for every control, in the accent of the current theme. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 }

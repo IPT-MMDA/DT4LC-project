@@ -204,7 +204,7 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
       await page.waitForFunction(() => window.__dt4lcMap);
       await page.getByTestId('map-legend').waitFor();
       await page.evaluate(() => new Promise((resolve) => (window.__dt4lcMap.loaded() ? resolve() : window.__dt4lcMap.once('idle', resolve))));
-      const mapPane = page.locator('section[aria-label="Map"]');
+      const mapPane = page.locator('main[aria-label="Map"]');
       const toolbar = page.getByTestId('map-toolbar');
       const controls = page.getByTestId('map-controls');
       assert.ok(!overlapping(await box(toolbar), await box(controls)), 'the draw toolbar and the map controls do not overlap');

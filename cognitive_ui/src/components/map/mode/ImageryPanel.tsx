@@ -154,7 +154,7 @@ function RegionSection({ sample }: { sample: MessageAttachment[] }) {
       {selected ? (
         <RegionCard key={selected.id} region={selected} />
       ) : (
-        <p className="text-[11.5px] leading-[1.45] text-faint">Draw a region on the map with Polygon or Rectangle.</p>
+        <p className="text-[11.5px] leading-[1.45] text-muted">Draw a region on the map with Polygon or Rectangle.</p>
       )}
       <RegionPresets sample={sample} />
       {others.length > 0 && (

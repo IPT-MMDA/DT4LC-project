@@ -42,6 +42,7 @@ module.exports = {
         'canc-ink': token('canc-ink'),
         region: token('region'),
         lost: token('lost'),
+        gained: token('gained'),
         ink: token('ink'),
         'ink-bg': token('ink-bg'),
         // Legacy palette, unused.

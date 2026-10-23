@@ -74,7 +74,7 @@ export function DockedMap() {
           <span className="normal-case tracking-normal font-normal font-mono">opacity</span>
         </div>
         {layers.length === 0 ? (
-          <p className="text-[11.5px] leading-[1.45] text-faint">Results from the chat appear here as layers.</p>
+          <p className="text-[11.5px] leading-[1.45] text-muted">Results from the chat appear here as layers.</p>
         ) : (
           <ul className="flex flex-col gap-[6px]">
             {layers.map((layer) => {

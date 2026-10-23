@@ -30,7 +30,7 @@ function ExportMenu() {
   const [target, setTarget] = useState<{ id: string; name: string } | null>(null);
 
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       <button
         type="button"
         aria-haspopup="menu"
@@ -43,7 +43,7 @@ function ExportMenu() {
         Export ▾
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-5 z-10 min-w-[180px] py-1 bg-surface border border-border rounded-[8px] text-[12.5px]">
+        <div role="menu" aria-label="Export" className="absolute right-0 top-5 z-10 min-w-[180px] py-1 bg-surface border border-border rounded-[8px] text-[12.5px]">
           {gee.length > 1 && (
             <button type="button" role="menuitem" onClick={() => { setTarget({ id: 'all', name: 'All layers' }); setOpen(false); }} className="block w-full text-left px-3 py-[6px] hover:bg-surface2">
               All layers
@@ -83,7 +83,7 @@ export function LayersSection() {
         <ExportMenu />
       </div>
       {rows.length === 0 ? (
-        <p className="text-[11.5px] leading-[1.45] text-faint">Results from the chat appear here as layers.</p>
+        <p className="text-[11.5px] leading-[1.45] text-muted">Results from the chat appear here as layers.</p>
       ) : (
         <ul className="flex flex-col gap-[6px]">
           {rows.map((row, i) => (

@@ -143,6 +143,17 @@ describe('rename and delete from the list', () => {
     expect(titles()).toEqual(['Water after the breach', 'Kherson fields']);
   });
 
+  it('Rename and Delete show on hover and focus, and always on a phone or a touch screen (no hover there)', () => {
+    renderList();
+    const actions = within(list()).getByRole('button', { name: 'Rename “Older chat”' }).parentElement!;
+    expect(actions.className.split(' ')).toEqual(
+      expect.arrayContaining(['opacity-0', 'group-hover:opacity-100', 'group-focus-within:opacity-100', 'max-md:opacity-100', '[@media(hover:none)]:opacity-100']),
+    );
+    // The title makes room for them where they always show.
+    const title = within(list()).getByRole('button', { name: /^Older chat/ });
+    expect(title.className).toContain('[@media(hover:none)]:pr-[62px]');
+  });
+
   it('a blur saves the new name', () => {
     renderList();
     fireEvent.click(within(list()).getByRole('button', { name: 'Rename “Older chat”' }));

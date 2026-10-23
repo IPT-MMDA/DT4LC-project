@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type Ref } from 'react';
 import { Contrast, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useThemeToggle } from '../../hooks/useThemeToggle';
 import { useChatStore } from '../../store/useChatStore';
 import { cn } from '../../utils/cn';
@@ -55,8 +56,11 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
   const { pathname } = useLocation();
   const theme = useThemeToggle();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const workspace = pathname === '/app';
 
+  // Tab stays in the drawer; focus goes back to the menu button however it closes.
+  useFocusTrap(dialogRef);
   useEffect(() => {
     closeRef.current?.focus();
   }, []);
@@ -71,6 +75,7 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex">
       <div
+        ref={dialogRef}
         id={MENU_ID}
         role="dialog"
         aria-modal="true"
@@ -81,7 +86,7 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
         <div className="h-[52px] flex-none flex items-center gap-[10px] pl-4 pr-2 border-b border-border">
           <Link
             to="/"
-            aria-label="DT4LC home"
+            aria-label="DT, DT4LC home"
             className="w-[30px] h-[30px] rounded-[7px] bg-ink text-ink-bg font-bold text-[11px] flex items-center justify-center"
           >
             DT

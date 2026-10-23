@@ -41,6 +41,16 @@ describe('the map legend', () => {
     expect(screen.getByTestId('map-legend-classes').textContent).toBe('lost 0.6 km²no change 373 km²gained 157 km²');
   });
 
+  it('says what every colour means in text: the ramp and swatches are decoration, the ticks and classes are words', () => {
+    render(<MapLegend />);
+    const legend = screen.getByRole('region', { name: 'Legend' });
+    for (const el of legend.querySelectorAll<HTMLElement>('[style*="background"]')) expect(el.getAttribute('aria-hidden')).toBe('true');
+    expect(legend.textContent).toBe('Water change · NDWI difference−0.5 · 0 · +0.5lost 0.6 km²no change 373 km²gained 157 km²');
+    // Gained and lost in the theme's text tokens, which have a dark variant, not in the swatch colours.
+    const words = [...screen.getByTestId('map-legend-classes').querySelectorAll('li > span:last-child')];
+    expect(words.map((el) => el.className)).toEqual(['text-lost', '', 'text-gained']);
+  });
+
   it('is gone without a visible result layer', () => {
     useAppStore.setState({ mapLayers: [sample, { ...result, visible: false }] });
     render(<MapLegend />);

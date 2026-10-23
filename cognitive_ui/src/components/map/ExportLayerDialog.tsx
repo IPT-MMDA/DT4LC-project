@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, Loader2, CheckCircle, X, AlertCircle } from 'lucide-react';
 import { useExportLayer } from '../../api/hooks/useGEEData';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useChatStore } from '../../store/useChatStore';
 
 interface Layer {
@@ -28,6 +29,11 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
   const [failedExports, setFailedExports] = useState<string[]>([]);
   const exportMutation = useExportLayer();
   const addAttachment = useChatStore((state) => state.addAttachment);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
 
   const isExportAll = layerId === 'all' && allLayers && allLayers.length > 0;
   const totalLayers = isExportAll ? allLayers.length : 1;
@@ -83,12 +89,18 @@ export function ExportLayerDialog({ layerId, layerName, onClose, allLayers }: Ex
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-layer-title"
+        tabIndex={-1}
+        onKeyDown={(e) => e.key === 'Escape' && onClose()}
         className="bg-surface rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-text">Export for AI Analysis</h3>
+          <h3 id="export-layer-title" className="text-lg font-semibold text-text">Export for AI Analysis</h3>
           <button
             onClick={onClose}
             className="p-1 hover:bg-surface2 rounded transition-colors"

@@ -8,7 +8,7 @@ import type { SessionInfo } from '../types';
 
 // The guest landing (design/DESIGN.md section 7, design/prototype/Landing v2.dc.html):
 // hero B, "What it can do", "How it works" and the footer. The hero sits on imagery
-// in both themes, so its ink is literal white.
+// in both themes, so its ink (and its focus ring) is literal white.
 
 const GITHUB = 'https://github.com/IPT-MMDA/DT4LC-project';
 // The JOSS paper is in review and has no DOI yet: link its source in the repository.
@@ -84,11 +84,12 @@ function Header() {
   }, [menuOpen]);
 
   return (
-    <header ref={ref} className="absolute inset-x-0 top-0 z-[5] h-16 flex items-center px-[80px] max-md:px-4 md:max-lg:px-8 gap-[28px] text-[#fff]">
-      <Link to="/" aria-label="DT4LC home" className="flex items-center gap-[10px]">
-        <span aria-hidden className="w-7 h-7 rounded-[7px] bg-[#fff] text-[#1a1d23] flex items-center justify-center text-[11px] font-bold">
+    <header ref={ref} className="absolute inset-x-0 top-0 z-[5] h-16 flex items-center px-[80px] max-md:px-4 md:max-lg:px-8 gap-[28px] text-[#fff] [&_:focus-visible]:outline-[#fff]">
+      {/* The name holds the visible "DT" and "DT4LC" (WCAG 2.5.3, label in name). */}
+      <Link to="/" aria-label="DT, DT4LC home" className="flex items-center gap-[10px]">
+        <span className="w-7 h-7 rounded-[7px] bg-[#fff] text-[#1a1d23] flex items-center justify-center text-[11px] font-bold">
           DT
-        </span>
+        </span>{' '}
         <span className="font-semibold tracking-[-.01em]">DT4LC</span>
       </Link>
       <div className="flex-1" />
@@ -125,13 +126,26 @@ function Caption({ className }: { className: string }) {
   return (
     // The bundled crop's NDWI change as the app computes it (+157 km², DESIGN §8); the full scene in the image differs.
     <div data-testid="landing-caption" className={`${className} font-mono text-[12.5px] text-[rgba(255,255,255,.85)]`}>
-      <span>
+      <span className="group relative">
         Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach{' '}
-        <span data-testid="landing-caption-crop" title={FULL_SCENE} className="underline decoration-dotted underline-offset-2 cursor-help">
+        {/* Focusable, so a keyboard shows the note the pointer gets from the title. */}
+        <span
+          data-testid="landing-caption-crop"
+          tabIndex={0}
+          title={FULL_SCENE}
+          className="underline decoration-dotted underline-offset-2 cursor-help rounded-[2px]"
+        >
           (bundled crop)
         </span>{' '}
         · NASA HLS L30
         <span className="sr-only">. {FULL_SCENE}</span>
+        <span
+          aria-hidden
+          data-testid="landing-caption-note"
+          className="hidden group-focus-within:block absolute left-0 bottom-full mb-2 w-[min(420px,calc(100vw-32px))] px-3 py-2 rounded-[8px] bg-[rgba(10,12,16,.92)] border border-[rgba(255,255,255,.25)] font-sans text-[12.5px] leading-[1.45] text-[#fff]"
+        >
+          {FULL_SCENE}
+        </span>
       </span>
       <span className="flex items-center gap-[5px]">
         <span className="w-[10px] h-[10px] rounded-[2px] bg-legend-gained" />
@@ -151,7 +165,7 @@ function Hero() {
     <section
       aria-labelledby="landing-title"
       data-testid="landing-hero"
-      className="relative h-screen max-md:h-auto max-md:min-h-[100dvh] overflow-hidden bg-[#0a0c10] text-[#fff]"
+      className="relative h-screen max-md:h-auto max-md:min-h-[100dvh] overflow-hidden bg-[#0a0c10] text-[#fff] [&_:focus-visible]:outline-[#fff]"
     >
       <img
         src={`${HERO}_1920.jpg`}
@@ -252,7 +266,7 @@ function Footer() {
         <div className="flex gap-5 text-[12.5px] text-text2 border-t border-border2 pt-4 flex-wrap">
           <span>
             Open source · AGPL-3.0 ·{' '}
-            <External href={GITHUB} className="text-accent">
+            <External href={GITHUB} className="text-accent underline underline-offset-2">
               GitHub ↗
             </External>
           </span>
