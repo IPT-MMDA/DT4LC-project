@@ -44,6 +44,53 @@ instances:
     runner:
       type: passthrough
 
+  # Earth Engine fetch of a region sent from the map (POST /v1/jobs "region"). No prompt plans
+  # these: for a job with a region and no files the orchestrator swaps the file inputs above
+  # for them (dta.dti.data_sources.gee_region documents the date windows and datasets). The
+  # step config is {name, dataset, bbox, start_date, end_date, bands, cloud_max}.
+  # `integration` keeps them out of the LLM planner's component list.
+  - id: input/earth-engine
+    kind: input
+    display_name: "Earth Engine fetch"
+    description: One median composite of the region over the date range, as a GeoTIFF.
+    inputs: []
+    outputs: [RasterPath]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.gee_region"
+    integration:
+      type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
+  - id: input/earth-engine-before
+    kind: input
+    display_name: "Earth Engine fetch (before)"
+    description: Median composite of the region around the start date, as a GeoTIFF.
+    inputs: []
+    outputs: [RasterPathBefore]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.gee_region"
+    integration:
+      type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
+  - id: input/earth-engine-after
+    kind: input
+    display_name: "Earth Engine fetch (after)"
+    description: Median composite of the region around the end date, as a GeoTIFF.
+    inputs: []
+    outputs: [RasterPathAfter]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.gee_region"
+    integration:
+      type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
   - id: algorithms/ndvi
     kind: algorithm
     display_name: "NDVI Calculation"

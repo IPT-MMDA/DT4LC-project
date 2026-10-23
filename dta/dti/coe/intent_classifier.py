@@ -7,8 +7,9 @@ no change to this file.
 
 Routing logic:
 1. Capability question framing → CONVERSATION with per-item capability response.
-2. Attachments + action keyword, or a named index to compose (NDMI, NBR, ...;
-   ``coe/named_indices.py``) → PIPELINE (fast path, no LLM call).
+2. Attachments (or a region from the map, ``metadata["region"]``) + action keyword,
+   or a named index to compose (NDMI, NBR, ...; ``coe/named_indices.py``) → PIPELINE
+   (fast path, no LLM call).
 3. Imperative action without attachments → CONVERSATION asking for the file.
 4. Clear action phrase (with or without attachments) → PIPELINE.
 5. Otherwise fall through to the LLM (system prompt also rendered from the
@@ -74,7 +75,8 @@ def classify_intent(req: ChatRequest) -> dict[str, Any]:
 
     # 2. Attachments + action keyword, or a named index to compose (NDMI, NBR, ...) → PIPELINE (no LLM needed).
     named = match_named_index(req.prompt) is not None and not looks_like_explanation_question(req.prompt)
-    if req.attachments and (idx.has_keyword(req.prompt) or named):
+    has_input = bool(req.attachments) or bool(req.metadata.get("region"))  # a region from the map is fetched
+    if has_input and (idx.has_keyword(req.prompt) or named):
         logger.info("Quick classification: PIPELINE (has attachments + action keywords)")
         return {"intent": IntentType.PIPELINE, "reason": "Has attachments and action keywords"}
 
@@ -147,7 +149,7 @@ def _is_action_without_file(req: ChatRequest) -> bool:
     """True if the prompt is an imperative action request and no file is attached."""
     if req.attachments:
         return False
-    if req.metadata and req.metadata.get("previous_files"):
+    if req.metadata and (req.metadata.get("previous_files") or req.metadata.get("region")):
         return False
     prompt_lower = req.prompt.lower()
     if any(p.search(prompt_lower) for p in _IMPERATIVE_PATTERNS):
