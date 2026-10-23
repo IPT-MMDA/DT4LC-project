@@ -213,14 +213,15 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /**
  * "1 file · 2 results" for the conversation list and the chat header: files are
  * the distinct attachments sent in the conversation (a group such as the sample
- * pair counts once), results its finished analyses. Zero parts are left out.
+ * pair counts once), results the finished analyses that show a result card
+ * (`result.card`). Zero parts are left out.
  */
 export function conversationMeta(conversation: Conversation): string {
   const files = new Set<string>();
   let results = 0;
   for (const m of conversation.messages) {
     if (m.kind === 'user') m.attachments?.forEach((a) => files.add(a.group?.name ?? a.path ?? a.id));
-    if (m.kind === 'analysis' && m.status === 'done') results += 1;
+    if (m.kind === 'analysis' && m.status === 'done' && m.result?.card) results += 1;
   }
   return [files.size > 0 && plural(files.size, 'file'), results > 0 && plural(results, 'result')]
     .filter(Boolean)

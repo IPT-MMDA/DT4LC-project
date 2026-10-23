@@ -1,3 +1,4 @@
+import { carriedContext } from '../../hooks/useSendMessage';
 import type { AssistantMessage, ChatMessage, UserMessage } from '../../types';
 import { AnalysisMessage, type AnalysisMessageProps } from './analysis/AnalysisMessage';
 import { attachmentChips } from './attachmentChips';
@@ -67,6 +68,7 @@ export function MessageList({ messages, waiting, onSend, onOpenFilePicker }: Mes
             key={m.id}
             message={m}
             prompt={promptBefore(messages, i)}
+            context={carriedContext(messages.slice(0, i))}
             onSend={onSend}
             onOpenFilePicker={onOpenFilePicker}
           />

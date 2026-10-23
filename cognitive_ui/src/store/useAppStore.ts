@@ -1,13 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface Layer {
+/** WGS84 [west, south, east, north]. */
+export type LngLatBounds = [number, number, number, number];
+
+/** The colour key a result layer shows in the docked map's Layers panel. */
+export type LayerLegend =
+  | { kind: 'change' }  // lost · same · gained, the legend-* tokens
+  | { kind: 'ramp'; stops: string[]; range: [number, number] };  // an index colour ramp
+
+export interface Layer {
   id: string;
   name: string;
   type: string;
   visible: boolean;
   opacity: number;
   url?: string; // Optional URL for GeoTIFF layers
+  bounds?: LngLatBounds;  // result layers: what Fit to result zooms to
+  legend?: LayerLegend;
 }
 
 export interface DrawnRegion {
@@ -30,6 +40,7 @@ interface AppStore {
   mapLayers: Layer[];
   selectedFeature: any | null;
   mapInstance: any | null; // MapLibre map instance
+  fitRequest: LngLatBounds | null;  // bounds the mounted map should zoom to next
 
   // Map Regions
   drawnRegions: DrawnRegion[];
@@ -69,6 +80,10 @@ interface AppStore {
   setBasemap: (basemap: string) => void;
   setMapInstance: (instance: any | null) => void;
   addLayer: (layer: Layer) => void;
+  /** Add a result layer, or replace the one with the same id, and zoom the map to it. */
+  addResultLayer: (layer: Layer) => void;
+  requestFit: (bounds: LngLatBounds) => void;
+  clearFitRequest: () => void;
   removeLayer: (layerId: string) => void;
   toggleLayerVisibility: (layerId: string) => void;
   setLayerOpacity: (layerId: string, opacity: number) => void;
@@ -113,6 +128,7 @@ export const useAppStore = create<AppStore>()(
       mapLayers: [],
       selectedFeature: null,
       mapInstance: null,
+      fitRequest: null,
       drawnRegions: [],
       selectedRegion: null,
 
@@ -205,6 +221,18 @@ export const useAppStore = create<AppStore>()(
 
   addLayer: (layer) =>
     set((state) => ({ mapLayers: [...state.mapLayers, layer] })),
+
+  addResultLayer: (layer) =>
+    set((state) => ({
+      mapLayers: [...state.mapLayers.filter((l) => l.id !== layer.id), layer],
+      fitRequest: layer.bounds ?? state.fitRequest,
+    })),
+
+  requestFit: (bounds) =>
+    set({ fitRequest: bounds }),
+
+  clearFitRequest: () =>
+    set({ fitRequest: null }),
 
   removeLayer: (layerId) =>
     set((state) => ({

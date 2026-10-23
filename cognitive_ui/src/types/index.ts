@@ -125,10 +125,16 @@ export interface Conversation {
   pending?: PendingIntent | null;  // the latest reply's pending; a reply without one clears it
 }
 
+/** Which result card a finished analysis shows (components/chat/result/resultModel.ts). */
+export type ResultCardKind = 'index' | 'change' | 'classification' | 'fields' | 'statistics' | 'image';
+
 // Structured result data for context management
 export interface JobResultData {
   // Text summary for LLM context (kept small)
   summary?: string;
+
+  // The result card shown, once the job's result was read; counted as a result
+  card?: ResultCardKind;
 
   // Flag for conversational responses (no pipeline execution)
   conversational?: boolean;

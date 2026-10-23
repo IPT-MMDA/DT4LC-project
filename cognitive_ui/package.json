@@ -12,7 +12,7 @@
     "e2e": "node tests/e2e/run.mjs",
     "e2e:smoke": "node tests/e2e/run.mjs smoke",
     "e2e:workspace": "npm run e2e:workspace:guest && npm run e2e:workspace:fake && npm run e2e:workspace:member",
-    "e2e:workspace:guest": "node tests/e2e/run.mjs workspace-empty workspace-messages workspace-composer workspace-analysis",
+    "e2e:workspace:guest": "node tests/e2e/run.mjs workspace-empty workspace-messages workspace-composer workspace-analysis workspace-result",
     "e2e:workspace:fake": "E2E_LLM=fake node tests/e2e/run.mjs workspace-running",
     "e2e:workspace:member": "E2E_DEV_ROLE=member node tests/e2e/run.mjs workspace-preparing"
   },

@@ -16,6 +16,7 @@ import {
   NDVI_FOLLOWUPS,
   PRITHVI_PREPARING,
 } from '../../../test/jobEvents';
+import NDVI_JOB from '../../../test/fixtures/jobs/ndvi-single.json';
 import type { AnalysisMessage as AnalysisMessageData, JobEvent } from '../../../types';
 import { AnalysisMessage } from './AnalysisMessage';
 
@@ -181,15 +182,16 @@ describe('proposal', () => {
 });
 
 describe('done', () => {
-  it('collapses to one line with Show steps, the result slot, the interpretation and follow-ups', () => {
+  it('collapses to one line with Show steps, the result card, the interpretation and follow-ups', async () => {
+    fetchMock.mockImplementation(async (url: string) => (url.endsWith('/v1/jobs/job-1') ? json(200, NDVI_JOB) : json(500, {})));
     renderAnalysis(NDVI_DONE, { result: { summary: 'NDVI is high across the fields.' } });
     expect(screen.getByTestId('done-line').textContent).toBe('✓Done3 steps · <1 s · NDVIShow steps');
     expect(screen.queryByTestId('step-row')).toBeNull();
-    expect(screen.getByTestId('result-slot').textContent).toContain('NDVI');
     expect(screen.getByTestId('interpretation').textContent).toBe('NDVI is high across the fields.');
     expect(screen.queryByTestId('composed-badge')).toBeNull();
-    // Finished: no stream.
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await screen.findByTestId('result-card')).getAttribute('aria-label')).toBe('NDVI');
+    // Finished: the record once for its result, no stream.
+    expect(calls()).toEqual(['GET /v1/jobs/job-1']);
   });
 
   it('Show steps expands the rows and Hide steps folds them', () => {

@@ -1,0 +1,184 @@
+{
+ "id": "74abeaf6",
+ "status": "completed",
+ "prompt": "Give me statistics for every band",
+ "plan": {
+  "steps": [
+   {
+    "uses": "input/file",
+    "config": {}
+   },
+   {
+    "uses": "algorithms/statistics",
+    "config": {}
+   },
+   {
+    "uses": "post-processing/agent-analysis",
+    "config": {}
+   }
+  ],
+  "composed": false
+ },
+ "result": {
+  "execution": {
+   "artifacts": {
+    "RasterPath": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+    "Statistics": {
+     "path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+     "metadata": {
+      "crs": "EPSG:32636",
+      "bounds": [
+       453240,
+       5144820,
+       476280,
+       5167860
+      ],
+      "width": 768,
+      "height": 768,
+      "count": 5,
+      "dtype": "int16",
+      "nodata": -9999
+     },
+     "bands": {
+      "band_1": {
+       "min": -1429,
+       "max": 3533,
+       "mean": 333.7257317437066,
+       "std": 225.92327864288447,
+       "median": 243,
+       "percentiles": {
+        "p5": 111,
+        "p25": 170,
+        "p75": 448,
+        "p95": 804
+       },
+       "valid_pixels": 589824,
+       "total_pixels": 589824,
+       "nodata_pixels": 0
+      },
+      "band_2": {
+       "min": -141,
+       "max": 4498,
+       "mean": 601.8606703016493,
+       "std": 275.1492250496187,
+       "median": 478,
+       "percentiles": {
+        "p5": 330,
+        "p25": 401,
+        "p75": 768,
+        "p95": 1153
+       },
+       "valid_pixels": 589824,
+       "total_pixels": 589824,
+       "nodata_pixels": 0
+      },
+      "band_3": {
+       "min": -306,
+       "max": 5225,
+       "mean": 621.0870208740234,
+       "std": 368.75382999588834,
+       "median": 445,
+       "percentiles": {
+        "p5": 270,
+        "p25": 364,
+        "p75": 841,
+        "p95": 1380
+       },
+       "valid_pixels": 589824,
+       "total_pixels": 589824,
+       "nodata_pixels": 0
+      },
+      "band_4": {
+       "min": -251,
+       "max": 6957,
+       "mean": 1418.8385297987197,
+       "std": 1221.3636806559773,
+       "median": 937,
+       "percentiles": {
+        "p5": 147,
+        "p25": 242,
+        "p75": 2605,
+        "p95": 3340
+       },
+       "valid_pixels": 589824,
+       "total_pixels": 589824,
+       "nodata_pixels": 0
+      },
+      "band_5": {
+       "min": -345,
+       "max": 9924,
+       "mean": 1158.7803412543403,
+       "std": 1149.166412830772,
+       "median": 531,
+       "percentiles": {
+        "p5": 70,
+        "p25": 155,
+        "p75": 2182,
+        "p95": 3279
+       },
+       "valid_pixels": 589824,
+       "total_pixels": 589824,
+       "nodata_pixels": 0
+      }
+     },
+     "overall_mean": 826.8584587944879
+    },
+    "agent_result": {
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
+    }
+   }
+  },
+  "followups": [
+   "Map vegetation health with NDVI",
+   "Classify land cover in this image",
+   "What else can you do with this data?"
+  ]
+ },
+ "events": [
+  {
+   "seq": 3,
+   "type": "planning",
+   "data": {
+    "phase": "ready",
+    "steps": [
+     {
+      "index": 1,
+      "id": "input/file",
+      "name": "Read hlsl_20230609.tif",
+      "kind": "input"
+     },
+     {
+      "index": 2,
+      "id": "algorithms/statistics",
+      "name": "Raster Statistics",
+      "kind": "algorithm"
+     },
+     {
+      "index": 3,
+      "id": "post-processing/agent-analysis",
+      "name": "Interpretation",
+      "kind": "postprocess"
+     }
+    ],
+    "composed": false,
+    "t": 1792745109.991
+   }
+  },
+  {
+   "seq": 10,
+   "type": "done",
+   "data": {
+    "elapsed_s": 0.2,
+    "summary": "3 steps · <1 s · Raster Statistics",
+    "followups": [
+     "Map vegetation health with NDVI",
+     "Classify land cover in this image",
+     "What else can you do with this data?"
+    ],
+    "t": 1792745110.103
+   }
+  }
+ ],
+ "proposal": null,
+ "region": null
+}

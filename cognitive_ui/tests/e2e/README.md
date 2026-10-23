@@ -15,7 +15,7 @@ One API process serves a run, so flows that need another role or LLM mode run in
 
 | Script | Env | Flows | Screens (`out/`) |
 |---|---|---|---|
-| `e2e:workspace:guest` | guest, `E2E_LLM=none` | `workspace-empty`, `workspace-messages`, `workspace-composer`, `workspace-analysis` | empty states, assistant offline, region chip, proposal, composed done, failed and retry, model gated for guest |
+| `e2e:workspace:guest` | guest, `E2E_LLM=none` | `workspace-empty`, `workspace-messages`, `workspace-composer`, `workspace-analysis`, `workspace-result` | empty states, assistant offline, region chip, proposal, composed done, failed and retry, model gated for guest, done with the result card |
 | `e2e:workspace:fake` | guest, `E2E_LLM=fake` | `workspace-running` | analysis running (and cancel) |
 | `e2e:workspace:member` | `E2E_DEV_ROLE=member`, `E2E_LLM=none` | `workspace-preparing` | preparing model, assistant offline |
 

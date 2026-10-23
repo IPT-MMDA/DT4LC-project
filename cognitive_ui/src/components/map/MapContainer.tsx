@@ -22,6 +22,9 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
   const selectedRegion = useAppStore((state) => state.selectedRegion);
   const useNewDatasetPanel = useAppStore((state) => state.useNewDatasetPanel);
   const setMapInstance = useAppStore((state) => state.setMapInstance);
+  const fitRequest = useAppStore((state) => state.fitRequest);
+  const clearFitRequest = useAppStore((state) => state.clearFitRequest);
+  const [loaded, setLoaded] = useState(false);
   const colours = useMapColours();
   const [viewState, setViewState] = useState({
     longitude: 33.4,  // Ukraine - Kahovka region
@@ -36,6 +39,16 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
       setMapInstance(mapRef.current.getMap());
     }
   }, [mapRef.current, setMapInstance]);
+
+  // Zoom to a result once the map can (On map, Fit to result): the request outlives a
+  // navigation to /app/map, whose map consumes it after loading.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!fitRequest || !loaded || !map) return;
+    const [west, south, east, north] = fitRequest;
+    map.fitBounds([[west, south], [east, north]], { padding: 48, duration: 800 });
+    clearFitRequest();
+  }, [fitRequest, loaded, clearFitRequest]);
 
   // Handle Escape key to cancel drawing
   useEffect(() => {
@@ -157,7 +170,10 @@ export function MapContainer({ docked = false }: { docked?: boolean }) {
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
-        onLoad={docked ? collapseAttribution : undefined}
+        onLoad={() => {
+          if (docked) collapseAttribution();
+          setLoaded(true);
+        }}
         mapStyle={basemapStyles[currentBasemap] || basemapStyles.streets}
         style={{ width: '100%', height: '100%' }}
       >
