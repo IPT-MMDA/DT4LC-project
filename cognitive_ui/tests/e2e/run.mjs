@@ -109,6 +109,17 @@ function apiEnv(stateDir, fakeURL, fakeHFURL) {
     HF_HUB_OFFLINE: '0',
     HF_HOME: path.join(stateDir, 'hf'),
     DT4LC_DEPLOYMENT: 'local',
+    // GitHub sign-in stays unconfigured, whatever .env says ("Sign-in not configured").
+    // A sign-in flow sets these to a fake GitHub (GITHUB_OAUTH_BASE / GITHUB_API_BASE) and
+    // OAUTH_REDIRECT_BASE to the UI's origin, and runs without DEV_ROLE, which overrides the role.
+    GITHUB_CLIENT_ID: '',
+    GITHUB_CLIENT_SECRET: '',
+    OAUTH_REDIRECT_BASE: '',
+    GITHUB_OAUTH_BASE: '',
+    GITHUB_API_BASE: '',
+    ALLOWED_EMAILS: '',
+    ALLOWED_DOMAINS: '',
+    OPERATOR_EMAILS: '',
   };
   const demo = serverMode === 'demo' ? stageDemo(stateDir) : {};
   if (llmMode === 'live') return { ...env, ...demo };
