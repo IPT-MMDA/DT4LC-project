@@ -13,6 +13,8 @@ from PIL import Image
 from rasterio.io import MemoryFile
 
 from dta.dti import artifact_files
+from dta.dti.raster import describe_raster, format_size
+from dta.dti.schemas import RasterMetadata
 
 from ..paths import resolve_served_path
 from ..schemas import FileInfo, FileListResponse, UploadResponse
@@ -105,6 +107,7 @@ async def upload_geotiff(
             img.save(buf, format="PNG")
             b64 = base64.b64encode(buf.getvalue()).decode("ascii")
             preview_url = artifact_files.write_png(preview_path, buf.getvalue())["url"]
+            metadata = _raster_metadata(src, file.filename, len(raw))
 
         return UploadResponse(
             id=file_id,
@@ -115,6 +118,7 @@ async def upload_geotiff(
             bounds=[bounds.left, bounds.bottom, bounds.right, bounds.top],
             preview_png_base64=b64,
             preview_url=preview_url,
+            metadata=metadata,
         )
     except Exception as e:
         # Clean up saved file on error
@@ -122,6 +126,15 @@ async def upload_geotiff(
             saved_path.unlink()
         preview_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=f"Failed to read GeoTIFF: {e}") from e
+
+
+def _raster_metadata(src: object, filename: str, size_bytes: int) -> RasterMetadata:
+    """``describe_raster``, or just the size if it fails: metadata never fails an upload or a listing."""
+    try:
+        return describe_raster(src, filename, size_bytes)
+    except Exception as exc:
+        logger.warning("Raster metadata extraction failed for %s: %s", filename, exc)
+        return RasterMetadata(size_bytes=size_bytes, size_label=format_size(size_bytes))
 
 
 @router.get(  # type: ignore[misc]
@@ -158,6 +171,8 @@ async def list_files() -> FileListResponse:
                             size_bytes=file_path.stat().st_size,
                             source="upload",
                             modified=file_path.stat().st_mtime,
+                            # Uploads are stored as <id>_<original name>
+                            metadata=_raster_metadata(src, file_path.name.split("_", 1)[-1], file_path.stat().st_size),
                         )
                     )
             except Exception as e:
@@ -186,6 +201,7 @@ async def list_files() -> FileListResponse:
                                 size_bytes=file_path.stat().st_size,
                                 source="export",
                                 modified=file_path.stat().st_mtime,
+                                metadata=_raster_metadata(src, file_path.name, file_path.stat().st_size),
                             )
                         )
                 except Exception as e:
