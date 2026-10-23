@@ -11,6 +11,7 @@ import { cn } from '../../../utils/cn';
 import {
   formatRangeEnd,
   resultCardOf,
+  resultLayerOf,
   type AnalysedContext,
   type BandRow,
   type CardView,
@@ -238,19 +239,7 @@ function Actions({ jobId, model, view }: { jobId: string; model: ResultCardModel
 
   const onMap = () => {
     if (!view || !raster) return;
-    addResultLayer({
-      id: `result-${jobId}-${view.key}`,
-      name: view.layerName,
-      type: 'raster',
-      visible: true,
-      opacity: 0.8,
-      url: raster.path,
-      bounds: model.bounds,
-      legend: view.legend,
-      source: 'chat',
-      subtitle: 'from chat',
-      addedAt: new Date().toISOString(),
-    });
+    addResultLayer(resultLayerOf(jobId, model, { ...view, raster }));
     // Below 1440 px there is no docked map: open the map with the layer on it.
     if (!docked) navigate('/app/map');
   };

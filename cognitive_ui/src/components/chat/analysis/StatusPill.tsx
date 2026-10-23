@@ -50,7 +50,8 @@ export function StatusGlyph({ status, size = 12 }: { status: PillStatus; size?: 
   }
 }
 
-export function StatusPill({ status }: { status: PillStatus }) {
+/** `detail` follows the word, e.g. the run time in the Library: "Done · 48 s". */
+export function StatusPill({ status, detail }: { status: PillStatus; detail?: string }) {
   return (
     <span
       data-testid="status-pill"
@@ -58,7 +59,7 @@ export function StatusPill({ status }: { status: PillStatus }) {
       className={cn('inline-flex items-center gap-[5px] rounded-pill pl-[6px] pr-2 py-[2px] text-[11.5px] font-semibold', HUE[status])}
     >
       <StatusGlyph status={status} />
-      {WORD[status]}
+      {detail ? `${WORD[status]} · ${detail}` : WORD[status]}
     </span>
   );
 }
