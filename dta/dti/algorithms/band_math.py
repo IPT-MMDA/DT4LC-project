@@ -301,7 +301,9 @@ def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) 
     ``change_map``, ``index_before``, ``index_after``. ``statistics`` holds the
     change statistics (as :func:`dta.dti.algorithms.spectral_index.run_change`,
     with ``threshold`` from ``config.threshold``, default 0.2, and the areas in
-    km² when the pixel size is in metres); ``index_statistics`` the per-date ones.
+    km² when the pixel size is in metres: ``increase_area_km2``, ``decrease_area_km2``
+    and ``areas_km2: {increase, decrease, stable}``, else ``areas_km2: None``);
+    ``index_statistics`` the per-date ones.
     """
     tree, formula, name, threshold = _settings(config)
     before, _, _ = _compute(before_path, tree, formula)
@@ -329,6 +331,14 @@ def calculate_change(before_path: str, after_path: str, config: dict[str, Any]) 
             pixel_km2 = abs(transform.a * transform.e) * crs.linear_units_factor[1] ** 2 / 1e6
             stats["increase_area_km2"] = round(stats["increase_pixels"] * pixel_km2, 3)
             stats["decrease_area_km2"] = round(stats["decrease_pixels"] * pixel_km2, 3)
+            # Same shape as algorithms/change-detection's.
+            stats["areas_km2"] = {
+                "increase": stats["increase_area_km2"],
+                "decrease": stats["decrease_area_km2"],
+                "stable": round(stats["stable_pixels"] * pixel_km2, 3),
+            }
+        else:
+            stats["areas_km2"] = None
     change_range = _percentile_range(change, symmetric=True)
     stats.update({"display_range": list(change_range), "display_range_source": "98th percentile of |change|"})
 

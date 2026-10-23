@@ -562,3 +562,22 @@ async def test_an_expired_proposal_ends_its_stream(tmp_path: Path) -> None:
         assert await q.get_job("p1") is None
     finally:
         await q.stop()
+
+
+@pytest.mark.parametrize(
+    ("prompt", "threshold"),
+    [
+        ("Redo the moisture map with a 0.1 threshold", 0.1),
+        ("Map NDMI change with a threshold of 0.15", 0.15),
+        ("Map moisture change with NDMI between the two dates", None),
+        ("Map NDMI change with a 0 threshold", None),
+    ],
+)
+def test_named_index_change_takes_the_prompt_threshold(prompt: str, threshold: float | None) -> None:
+    """The NDMI follow-up "Redo the moisture map with a 0.1 threshold" must not run at the default 0.2."""
+    from dta.dti.coe.named_indices import named_index_request, prompt_threshold
+
+    assert prompt_threshold(prompt) == threshold
+    request = named_index_request(prompt, _attachments(SAMPLE_0601, SAMPLE_0609), load_registry())
+    assert request is not None
+    assert request.plan.steps[2].config["threshold"] == (threshold or 0.2)

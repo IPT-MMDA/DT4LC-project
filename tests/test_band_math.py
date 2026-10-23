@@ -247,6 +247,12 @@ def test_change_is_after_minus_before() -> None:
     assert stats["increase_pixels"] == int((change > 0.2).sum())
     assert stats["decrease_pixels"] == int((change < -0.2).sum())
     assert stats["increase_area_km2"] == pytest.approx(stats["increase_pixels"] * 0.0009, abs=1e-3)
+    assert stats["areas_km2"] == {
+        "increase": stats["increase_area_km2"],
+        "decrease": stats["decrease_area_km2"],
+        "stable": round(stats["stable_pixels"] * 0.0009, 3),
+    }
+    assert stats["areas_km2"] == {"increase": 37.927, "decrease": 41.961, "stable": 450.94}
     assert result["index_statistics"]["before"]["mean"] == pytest.approx(np.nanmean(before), abs=1e-6)
     assert (result["formula"], result["name"]) == (NDMI["formula"], "NDMI")
     assert set(result["visualizations"]) == {"change_map", "index_before", "index_after"}

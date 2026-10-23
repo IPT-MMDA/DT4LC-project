@@ -104,6 +104,10 @@ instances:
       outputs: [Index map, legend, stats]
       time: "~10 s"
       prompt: Map vegetation health across the region
+      followups:
+        - Use EVI for dense vegetation
+        - Map open water with NDWI
+        - Classify land cover in this image
     description: |
       NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
       Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
@@ -157,6 +161,10 @@ instances:
       outputs: [Index map, legend, stats]
       time: "~10 s"
       prompt: Use EVI instead of NDVI for the forest
+      followups:
+        - Map vegetation health with NDVI
+        - Classify land cover in this image
+        - What else can you do with this data?
     description: |
       EVI (Enhanced Vegetation Index) for vegetation health analysis.
       Computed as 2.5 * (NIR - RED) / ((NIR + 6*RED - 7.5*BLUE) + 1). Values range from -1 to 1, where higher
@@ -210,6 +218,10 @@ instances:
       outputs: [Index map, water mask, stats]
       time: "~10 s"
       prompt: Where is open water on 9 June?
+      followups:
+        - Map vegetation health with NDVI
+        - Classify land cover in this image
+        - What else can you do with this data?
     description: |
       NDWI (Normalized Difference Water Index) for water body detection.
       Computed as (Green - NIR) / (Green + NIR). Positive values indicate water.
@@ -264,6 +276,10 @@ instances:
       outputs: [Index map, snow mask, stats]
       time: "~10 s"
       prompt: Map snow cover in the Brienz sample
+      followups:
+        - Map vegetation health with NDVI
+        - Give me statistics for every band
+        - What else can you do with this data?
     description: |
       NDSI (Normalized Difference Snow Index) for snow and glacier detection.
       Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
@@ -321,6 +337,10 @@ instances:
       outputs: [Snow / ice / other map, areas]
       time: "~20 s"
       prompt: Classify snow and ice robustly
+      followups:
+        - Map snow cover with NDSI
+        - Give me statistics for every band
+        - What else can you do with this data?
     description: |
       Multi-criteria snow classification for robust snow detection. Combines
       NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
@@ -367,6 +387,10 @@ instances:
       outputs: [Table, histogram, CSV]
       time: "~5 s"
       prompt: Give me statistics for every band
+      followups:
+        - Map vegetation health with NDVI
+        - Classify land cover in this image
+        - What else can you do with this data?
     description: |
       Comprehensive raster statistics including min, max, mean, standard deviation,
       and percentiles for all bands. Generates histograms for data distribution analysis.
@@ -411,6 +435,19 @@ instances:
       outputs: [Difference map, 3 classes, areas]
       time: "~50 s"
       prompt: Compare water before and after the dam breach
+      followups:
+        ndwi:
+          - Compare with NDVI change between the same dates
+          - Map moisture change with NDMI between the two dates
+          - What else can you do with this data?
+        ndvi:
+          - Compare with NDWI water change between the same dates
+          - Map moisture change with NDMI between the two dates
+          - What else can you do with this data?
+        default:
+          - Compare with NDVI change between the same dates
+          - Compare with NDWI water change between the same dates
+          - What else can you do with this data?
     description: |
       Multi-index change detection comparing two time periods. Supports NDVI (vegetation),
       NDSI (snow/ice), and NDWI (water) indices. Computes temporal change between before
@@ -500,6 +537,10 @@ instances:
       outputs: [Class map, legend, per-class area]
       time: "~90 s"
       prompt: Classify land cover on the flooded fields
+      followups:
+        - Map vegetation health with NDVI
+        - Map open water with NDWI
+        - Give me statistics for every band
     description: |
       Land Use / Land Cover (LULC) classification using spectral index thresholds.
       Classifies pixels into Water, Snow/Ice, Bare Soil, Sparse Vegetation,
@@ -541,6 +582,11 @@ instances:
   - id: algorithms/band-math
     kind: algorithm
     display_name: "Band Math"
+    ui:  # no tier: not a Capabilities card, only the follow-ups
+      followups:
+        - Classify land cover in this image
+        - Give me statistics for every band
+        - What else can you do with this data?
     description: |
       Band math: an index from a formula over band codes or roles, e.g. NDMI = (B5 - B6) / (B5 + B6).
       The formula takes numbers, band codes (B5, SR_B5) resolved through the band descriptions,
@@ -578,6 +624,16 @@ instances:
   - id: algorithms/band-math-change
     kind: algorithm
     display_name: "Band Math Change"
+    ui:  # no tier: not a Capabilities card, only the follow-ups
+      followups:
+        ndmi:
+          - Redo the moisture map with a 0.1 threshold
+          - Compare with NDWI water change between the same dates
+          - What else can you do with this data?
+        default:
+          - Compare with NDVI change between the same dates
+          - Compare with NDWI water change between the same dates
+          - What else can you do with this data?
     description: |
       Band math for two dates: the formula on the before and after images and the difference
       (after minus before), with both index maps, the difference map and change statistics.
@@ -607,6 +663,10 @@ instances:
       outputs: [Reconstructed GeoTIFF, mask band]
       time: "~3 min"
       prompt: Fill the cloud gaps in the 9 June image
+      followups:
+        - Map vegetation health with NDVI
+        - Give me statistics for every band
+        - What else can you do with this data?
       model:
         title: Prithvi EO v1 (100M)
         short: Prithvi EO v1
@@ -669,6 +729,10 @@ instances:
       outputs: [GeoPackage, count, area histogram]
       time: "~2 min"
       prompt: Detect field boundaries east of the river
+      followups:
+        - Classify land cover in this image
+        - Give me statistics for every band
+        - What else can you do with this data?
       model:
         title: Delineate-Anything
         short: Delineate-Anything

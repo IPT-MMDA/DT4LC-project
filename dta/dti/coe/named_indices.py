@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import functools
+import re
 
 from dta.config import RESOURCES_PATH
 from dta.dti.coe.triggers import phrase_in
@@ -71,6 +72,17 @@ BAND_CODES = {
 }
 # Indices with a built-in analysis: a prompt naming one is not a named-index request ("moisture with NDWI").
 _BUILT_IN = ("ndvi", "evi", "ndwi", "ndsi")
+
+
+# "a 0.1 threshold", "threshold 0.1", "threshold of 0.1", "threshold = .1"
+_THRESHOLD = re.compile(r"(?<![\w.])(\d*\.?\d+)\s+threshold\b|\bthreshold\s*(?:of|at|=|:)?\s*(\d*\.?\d+)", re.I)
+
+
+def prompt_threshold(prompt: str) -> float | None:
+    """The change threshold a prompt asks for ("with a 0.1 threshold"), or ``None``; positive only."""
+    m = _THRESHOLD.search(prompt)
+    value = float(m.group(1) or m.group(2)) if m else 0.0
+    return value if value > 0 else None
 
 
 @dataclass(frozen=True)
@@ -157,7 +169,11 @@ def named_index_request(prompt: str, attachments: list[Attachment], reg: Registr
             PlanStep(uses="input/file-after"),
             PlanStep(
                 uses="algorithms/band-math-change",
-                config={"formula": formula, "name": index.name, "threshold": DEFAULT_THRESHOLD},
+                config={
+                    "formula": formula,
+                    "name": index.name,
+                    "threshold": prompt_threshold(prompt) or DEFAULT_THRESHOLD,
+                },
             ),
         ]
     else:

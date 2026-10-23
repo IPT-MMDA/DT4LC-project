@@ -26,7 +26,8 @@ fields below; optional fields are left out when unknown.
 - ``step_started`` ``{index, id, name}``.
 - ``step_progress`` ``{index, fraction?, message?, bytes?, total_bytes?, eta_s?}``.
 - ``step_finished`` ``{index, id, elapsed_s}``.
-- ``done`` ``{elapsed_s, summary}``: fetch ``GET /v1/jobs/{id}`` for the result.
+- ``done`` ``{elapsed_s, summary, followups}``: fetch ``GET /v1/jobs/{id}`` for the result
+  (which carries the same ``followups``, full prompts for the chips under it, :func:`followups`).
 - ``failed`` ``{code, message, fixes, step_index?, raw?}``, see :func:`classify_failure`.
 - ``cancelled`` ``{at_step?, reason?}``; ``reason: "expired"`` for a proposal never confirmed.
 
@@ -172,6 +173,30 @@ def done_summary(skeleton: list[dict[str, Any]], elapsed_s: float) -> str:
     if chain:
         parts.append(" → ".join(name if n == 1 else f"{name} (×{n})" for name, n in chain))
     return " · ".join(parts)
+
+
+# Follow-ups after an analysis whose registry item lists none.
+DEFAULT_FOLLOWUPS = ["What else can you do with this data?"]
+
+
+def followups(plan: ExecutionPlan | None, registry: Registry) -> list[str]:
+    """Follow-up prompts for the chips under a result: ``ui.followups`` of the plan's last analysis step.
+
+    Per-variant lists are chosen by the step's ``IndexType`` bind (change detection) or its
+    config ``name`` (band math), lower-cased, else ``default``. :data:`DEFAULT_FOLLOWUPS`
+    when the item has none; no plan (a conversation reply) has none.
+    """
+    if plan is None:
+        return []
+    analysis = [(s, i) for s in plan.steps if (i := _item(registry, s.uses)) and i.kind in ("algorithm", "model")]
+    if not analysis:
+        return list(DEFAULT_FOLLOWUPS)
+    step, item = analysis[-1]
+    configured = item.ui.followups if item.ui else []
+    if isinstance(configured, dict):
+        variant = str(step.binds.get("IndexType") or step.config.get("name") or "").lower()
+        configured = configured.get(variant) or configured.get("default", [])
+    return list(configured or DEFAULT_FOLLOWUPS)
 
 
 # --- Intent sentence -----------------------------------------------------------
