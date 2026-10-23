@@ -124,7 +124,15 @@ test('composed done: Run confirms the proposal, the same message runs it and car
     const line = message.getByTestId('done-line');
     assert.match(await line.innerText(), /Done\s+4 steps · \S+ s · NDMI\s+Composed by the assistant\s+Show steps/);
     assert.match(await message.innerText(), /I'll compute NDMI for 1 June and 9 June from the sample\./);
-    assert.equal(await message.getByTestId('result-slot').count(), 1);
+    // The composed card: band math change, the formula in its header, real areas.
+    const card = message.getByRole('region', { name: 'Moisture change · ΔNDMI' });
+    await card.waitFor();
+    assert.equal(await card.getByTestId('card-formula').innerText(), '(B5 − B6)/(B5 + B6) · 06-01 → 06-09 · 30 m');
+    assert.equal(
+      (await card.getByTestId('stats').innerText()).replace(/\s+/g, ' ').trim(),
+      'DRIER 42.0 km² WETTER +37.9 km² THRESHOLD ΔNDMI 0.2',
+    );
+    assert.equal(await card.getByTestId('legend').innerText(), 'drier\nwetter\nno change');
     const followups = message.getByRole('list', { name: 'Follow-ups' }).getByRole('button');
     assert.ok((await followups.count()) >= 2, 'two or three follow-ups');
 
@@ -135,6 +143,8 @@ test('composed done: Run confirms the proposal, the same message runs it and car
 
     const [job] = await jobs(page);
     assert.equal(job.status, 'completed');
+    // The design's framing: the question at the top, the proposal and the card below it.
+    await page.getByTestId('user-message').first().evaluate((el) => el.scrollIntoView({ block: 'start' }));
     await screenshot(page, 'workspace-composed-done.png');
     assert.deepEqual(errors, []);
   } finally {
