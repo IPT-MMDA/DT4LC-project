@@ -4,7 +4,8 @@
 // sample in true colour and its footprint; a rectangle is drawn with the mouse and
 // renamed; Fit to result and Compare move the view and the divider; Fetch to map is
 // disabled with its reason; Send to chat puts the region chip in the composer; at
-// 1280×800 no panel or control overlaps another.
+// 1280×800 no panel or control overlaps another, the presets row sits under the region
+// card and regions are amber; the presets and Upload GeoJSON add regions.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';
@@ -268,6 +269,24 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
       scale: await page.locator('.maplibregl-ctrl-scale').first().boundingBox(),
       attribution: await page.locator('.maplibregl-ctrl-attrib').first().boundingBox(),
     };
+    // The presets row under the region card, inside the panel.
+    const presets = panel.getByRole('group', { name: 'Region presets' });
+    assert.deepEqual(await presets.getByRole('button').allInnerTexts(), ['Kakhovka dam', 'Brienz', 'Upload GeoJSON']);
+    const presetsBox = await presets.boundingBox();
+    const panelBox = boxes.panel;
+    assert.ok(presetsBox.x >= panelBox.x && presetsBox.x + presetsBox.width <= panelBox.x + panelBox.width, 'the presets fit the panel');
+    assert.ok(presetsBox.y > (await regionCard.boundingBox()).y, 'the presets are under the region card');
+    // Regions in light amber (--region), on the map and in the swatches.
+    const regionId = await page.evaluate(() => JSON.parse(localStorage.getItem('dt4lc-app-storage')).state.selectedRegion.id);
+    const amber = (rgb) => {
+      const [r, g, b] = rgb.match(/\d+/g).map(Number);
+      return r > 200 && g > 150 && r > g && g > b + 40;
+    };
+    const outline = await page.evaluate((id) => window.__dt4lcMap.getPaintProperty(`region-outline-${id}`, 'line-color'), regionId);
+    assert.ok(amber(String(outline)), `the region outline is amber (${outline})`);
+    // --region in the light theme (src/index.css).
+    const swatch = await regionCard.locator('span[aria-hidden]').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    assert.equal(swatch, 'oklch(0.85 0.12 85)', 'the region card swatch is the region token');
     for (const [name, b] of Object.entries(boxes)) {
       assert.ok(b && b.width > 0 && b.x >= 0 && b.y >= 0 && b.x + b.width <= 1280 && b.y + b.height <= 800, `${name} on screen (${JSON.stringify(b)})`);
     }
@@ -277,6 +296,26 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
         assert.ok(!intersects(boxes[names[i]], boxes[names[j]]), `${names[i]} and ${names[j]} don't overlap`);
       }
     }
+
+    // Presets: Kakhovka is the sample's footprint here; Brienz zooms to the lake;
+    // a GeoJSON that isn't a polygon is refused, a polygon becomes the region.
+    await presets.getByRole('button', { name: 'Kakhovka dam' }).click();
+    assert.equal(await regionCard.locator('.font-medium').first().innerText(), 'Kakhovka sample area');
+    assert.match(await regionCard.getByTestId('region-detail').innerText(), / · 46\.56 N 32\.54 E$/);
+    await presets.getByRole('button', { name: 'Brienz' }).click();
+    assert.equal(await regionCard.locator('.font-medium').first().innerText(), 'Lake Brienz');
+    await page.waitForTimeout(1200);
+    const brienz = await view(page);
+    assert.ok(Math.abs(brienz.lng - 7.97) < 0.05 && Math.abs(brienz.lat - 46.73) < 0.05, `the map zooms to Lake Brienz (${brienz.lng}, ${brienz.lat})`);
+    const geojson = panel.getByLabel('GeoJSON file');
+    await geojson.setInputFiles({ name: 'pin.geojson', mimeType: 'application/geo+json', buffer: Buffer.from(JSON.stringify({ type: 'Point', coordinates: [8, 46.7] })) });
+    assert.equal(await panel.getByTestId('geojson-error').innerText(), 'pin.geojson has no Polygon or MultiPolygon. Upload a polygon Feature, FeatureCollection or geometry.');
+    const shore = { type: 'Feature', properties: { name: 'Bönigen shore' }, geometry: { type: 'Polygon', coordinates: [[[7.88, 46.68], [7.93, 46.68], [7.93, 46.71], [7.88, 46.71], [7.88, 46.68]]] } };
+    await geojson.setInputFiles({ name: 'shore.geojson', mimeType: 'application/geo+json', buffer: Buffer.from(JSON.stringify(shore)) });
+    await regionCard.getByText('Bönigen shore').waitFor();
+    assert.equal(await panel.getByTestId('geojson-error').count(), 0);
+    assert.equal(await page.getByTestId('region-label').innerText().then((t) => t.split(' · ')[0]), 'Bönigen shore');
+
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

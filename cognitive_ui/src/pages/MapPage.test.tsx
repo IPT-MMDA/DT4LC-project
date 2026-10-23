@@ -100,6 +100,46 @@ describe('map mode imagery panel', () => {
     expect(useAppStore.getState().drawnRegions[0].name).toBe('Reservoir-north');
   });
 
+  it('the presets add a selectable region each and zoom to it; picking one again reselects it', () => {
+    mockApi(OFFLINE);
+    renderMap();
+    const presets = within(panel().getByRole('group', { name: 'Region presets' }));
+    expect(presets.getAllByRole('button').map((b) => b.textContent)).toEqual(['Kakhovka dam', 'Brienz', 'Upload GeoJSON']);
+
+    fireEvent.click(presets.getByRole('button', { name: 'Brienz' }));
+    expect(useAppStore.getState().selectedRegion).toMatchObject({ id: 'preset-brienz', name: 'Lake Brienz' });
+    expect(useAppStore.getState().fitRequest).toEqual(useAppStore.getState().selectedRegion?.bbox);
+    expect(panel().getByTestId('region-detail').textContent).toMatch(/ · 46\.73 N 7\.97 E$/);
+
+    // No sample file here carries a footprint: the box around the dam.
+    fireEvent.click(presets.getByRole('button', { name: 'Kakhovka dam' }));
+    expect(useAppStore.getState().selectedRegion).toMatchObject({ id: 'preset-kakhovka', name: 'Kakhovka dam' });
+    fireEvent.click(presets.getByRole('button', { name: 'Brienz' }));
+    expect(useAppStore.getState().drawnRegions.map((r) => r.id)).toEqual(['region-1', 'preset-brienz', 'preset-kakhovka']);
+    expect(useAppStore.getState().selectedRegion?.id).toBe('preset-brienz');
+    // Presets aren't listed again as other regions.
+    expect(panel().queryByRole('button', { name: 'Select Kakhovka dam' })).toBeNull();
+    expect(panel().getByRole('button', { name: 'Select Region 10:00:00' })).toBeTruthy();
+  });
+
+  it('Upload GeoJSON adds the polygon as the selected region, or says why it cannot', async () => {
+    mockApi(OFFLINE);
+    renderMap();
+    const input = panel().getByLabelText('GeoJSON file') as HTMLInputElement;
+    // jsdom's File has no text().
+    const geojsonFile = (value: unknown, name: string) => Object.assign(new File([], name), { text: async () => JSON.stringify(value) });
+    const point = geojsonFile({ type: 'Point', coordinates: [8, 46.7] }, 'pin.geojson');
+    fireEvent.change(input, { target: { files: [point] } });
+    expect((await panel().findByTestId('geojson-error')).textContent).toBe('pin.geojson has no Polygon or MultiPolygon. Upload a polygon Feature, FeatureCollection or geometry.');
+    expect(useAppStore.getState().selectedRegion?.id).toBe('region-1');
+
+    const shore = { type: 'Feature', properties: { name: 'Bönigen shore' }, geometry: { type: 'Polygon', coordinates: [[[7.9, 46.7], [8, 46.7], [8, 46.75], [7.9, 46.7]]] } };
+    fireEvent.change(input, { target: { files: [geojsonFile(shore, 'shore.geojson')] } });
+    await waitFor(() => expect(useAppStore.getState().selectedRegion?.name).toBe('Bönigen shore'));
+    expect(panel().queryByTestId('geojson-error')).toBeNull();
+    expect(within(panel().getByTestId('region-card')).getByText('Bönigen shore')).toBeTruthy();
+  });
+
   it("Fetch to map is disabled with its reason when Earth Engine isn't configured (GET /v1/capabilities)", async () => {
     mockApi(OFFLINE);
     renderMap();
