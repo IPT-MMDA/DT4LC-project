@@ -47,6 +47,16 @@ instances:
   - id: algorithms/ndvi
     kind: algorithm
     display_name: "NDVI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 1
+      title: NDVI
+      formula: "(NIR−Red)/(NIR+Red)"
+      description: Vegetation density and health.
+      outputs: [Index map, legend, stats]
+      time: "~10 s"
+      prompt: Map vegetation health across the region
     description: |
       NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
       Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
@@ -90,6 +100,16 @@ instances:
   - id: algorithms/evi
     kind: algorithm
     display_name: "EVI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 2
+      title: EVI
+      formula: "2.5·(NIR−Red)/(NIR+6·Red−7.5·Blue+1)"
+      description: Vegetation in dense canopy where NDVI saturates.
+      outputs: [Index map, legend, stats]
+      time: "~10 s"
+      prompt: Use EVI instead of NDVI for the forest
     description: |
       EVI (Enhanced Vegetation Index) for vegetation health analysis.
       Computed as 2.5 * (NIR - RED) / ((NIR + 6*RED - 7.5*BLUE) + 1). Values range from -1 to 1, where higher
@@ -133,6 +153,16 @@ instances:
   - id: algorithms/ndwi
     kind: algorithm
     display_name: "NDWI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 3
+      title: NDWI
+      formula: "(Green−NIR)/(Green+NIR)"
+      description: Open water and surface moisture.
+      outputs: [Index map, water mask, stats]
+      time: "~10 s"
+      prompt: Where is open water on 9 June?
     description: |
       NDWI (Normalized Difference Water Index) for water body detection.
       Computed as (Green - NIR) / (Green + NIR). Positive values indicate water.
@@ -177,6 +207,16 @@ instances:
   - id: algorithms/ndsi
     kind: algorithm
     display_name: "NDSI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 4
+      title: NDSI
+      formula: "(Green−SWIR)/(Green+SWIR)"
+      description: Snow and ice; values above 0.42 usually mean snow.
+      outputs: [Index map, snow mask, stats]
+      time: "~10 s"
+      prompt: Map snow cover in the Brienz sample
     description: |
       NDSI (Normalized Difference Snow Index) for snow and glacier detection.
       Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
@@ -224,6 +264,16 @@ instances:
   - id: algorithms/snow-classifier
     kind: algorithm
     display_name: "Snow Classifier (multi-criteria)"
+    ui:
+      tier: builtin
+      group: change
+      order: 3
+      title: Snow classifier
+      description: "Multi-criteria: NDSI ≥ 0.4, NDVI below 0.1 and brightness above 0.3."
+      inputs: [Green, Red, NIR, SWIR1]
+      outputs: [Snow / ice / other map, areas]
+      time: "~20 s"
+      prompt: Classify snow and ice robustly
     description: |
       Multi-criteria snow classification for robust snow detection. Combines
       NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
@@ -260,6 +310,16 @@ instances:
   - id: algorithms/statistics
     kind: algorithm
     display_name: "Raster Statistics"
+    ui:
+      tier: builtin
+      group: change
+      order: 4
+      title: Raster statistics
+      description: Min, max, mean, standard deviation, percentiles and histogram per band.
+      inputs: [Any raster]
+      outputs: [Table, histogram, CSV]
+      time: "~5 s"
+      prompt: Give me statistics for every band
     description: |
       Comprehensive raster statistics including min, max, mean, standard deviation,
       and percentiles for all bands. Generates histograms for data distribution analysis.
@@ -294,6 +354,16 @@ instances:
   - id: algorithms/change-detection
     kind: algorithm
     display_name: "Change Detection (multi-index)"
+    ui:
+      tier: builtin
+      group: change
+      order: 1
+      title: Change detection
+      description: Difference of NDVI, NDWI or NDSI between two dates, with lost / gained / unchanged classes and areas.
+      inputs: [Two dates, same bands]
+      outputs: [Difference map, 3 classes, areas]
+      time: "~50 s"
+      prompt: Compare water before and after the dam breach
     description: |
       Multi-index change detection comparing two time periods. Supports NDVI (vegetation),
       NDSI (snow/ice), and NDWI (water) indices. Computes temporal change between before
@@ -371,6 +441,18 @@ instances:
   - id: algorithms/lulc-classifier
     kind: algorithm
     display_name: "Land Use / Land Cover (LULC) Classification"
+    ui:
+      tier: builtin
+      group: change
+      order: 2
+      title: Land-cover classification
+      description: >-
+        Six classes: water, snow/ice, bare soil, sparse vegetation, cropland/grassland,
+        dense vegetation. Legend and per-class area.
+      inputs: [Blue, Green, Red, NIR (+SWIR)]
+      outputs: [Class map, legend, per-class area]
+      time: "~90 s"
+      prompt: Classify land cover on the flooded fields
     description: |
       Land Use / Land Cover (LULC) classification using spectral index thresholds.
       Classifies pixels into Water, Snow/Ice, Bare Soil, Sparse Vegetation,
@@ -468,6 +550,20 @@ instances:
   - id: models/prithvi-reconstruction
     kind: model
     display_name: "Prithvi MAE Reconstruction"
+    ui:
+      tier: builtin
+      group: models
+      order: 2
+      title: Prithvi reconstruction
+      description: Fills masked or cloudy pixels from the surrounding dates.
+      inputs: [6 HLS bands, cloud mask]
+      outputs: [Reconstructed GeoTIFF, mask band]
+      time: "~3 min"
+      prompt: Fill the cloud gaps in the 9 June image
+      model:
+        title: Prithvi EO v1 (100M)
+        short: Prithvi EO v1
+        description: NASA/IBM foundation model; reconstructs masked or cloudy pixels.
     description: |
       NASA/IBM Prithvi foundation model for satellite imagery analysis. Uses Masked
       Autoencoder (MAE) to reconstruct HLS imagery, revealing learned spatial and
@@ -516,6 +612,20 @@ instances:
   - id: models/delineate-anything
     kind: model
     display_name: "Field Boundary Detection (Delineate-Anything)"
+    ui:
+      tier: builtin
+      group: models
+      order: 1
+      title: Field boundaries
+      description: Agricultural parcels as polygons, with an area histogram.
+      inputs: [Red, Green, Blue (10–30 m)]
+      outputs: [GeoPackage, count, area histogram]
+      time: "~2 min"
+      prompt: Detect field boundaries east of the river
+      model:
+        title: Delineate-Anything
+        short: Delineate-Anything
+        description: Field-boundary detection for agricultural parcels.
     description: |
       Delineate-Anything field boundary detection using YOLO-based segmentation.
       Auto-detects data source (Sentinel/Planet/Maxar) and configures appropriate
@@ -588,6 +698,10 @@ instances:
 
   - id: models/ndvi-convlstm
     kind: model
+    ui:
+      tier: coming
+      order: 1
+      title: ConvLSTM NDVI forecast
     keywords: [ndvi, forecast, prediction, convlstm, lstm, deep-learning, vegetation, health, greenness, time-series, temporal, ukraine, agriculture, crop, monitoring, satellite, remote-sensing]
     description: |
       ConvLSTM NDVI Forecasting Model - Predicts vegetation health in Ukrainian
@@ -607,6 +721,10 @@ instances:
 
   - id: models/pinn-linda
     kind: model
+    ui:
+      tier: coming
+      order: 2
+      title: PINN-LINDA nowcasting
     keywords: [pinn, physics-informed, neural-network, deep-learning, precipitation, rain, nowcasting, weather, forecast, prediction, linda, lagrangian, radar, meteorology, short-term, real-time]
     description: |
       PINN-LINDA Weather Nowcasting - Physics-Informed Neural Network implementing
@@ -628,6 +746,10 @@ instances:
 
   - id: models/vi-forecasting-dti
     kind: model
+    ui:
+      tier: coming
+      order: 3
+      title: VI forecasting DTI
     keywords: [vegetation, index, ndvi, evi, savi, forecast, prediction, time-series, temporal, earth-engine, gee, satellite, remote-sensing, agriculture, crop, monitoring, cloud-computing]
     description: |
       Vegetation Index Forecasting DTI - Time-series forecasting model for

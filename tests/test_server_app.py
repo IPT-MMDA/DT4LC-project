@@ -111,15 +111,13 @@ class TestHealthEndpoint:
 class TestCapabilitiesEndpoint:
     """Tests for GET /v1/capabilities."""
 
-    def test_capabilities_returns_registry(self, client: TestClient) -> None:
+    def test_capabilities_returns_the_tiered_document(self, client: TestClient) -> None:
+        """The document itself is covered by tests/test_capabilities.py."""
         resp = client.get("/v1/capabilities")
         assert resp.status_code == 200
         data = resp.json()
-        assert "version" in data
-        assert "types" in data
-        assert "instances" in data
-        assert "count" in data
-        assert data["count"] == len(data["instances"])
+        assert set(data) >= {"summary", "assistant", "offline", "tiers", "guest_limits", "session", "example_prompts"}
+        assert [t["id"] for t in data["tiers"]] == ["ask", "composed", "builtin", "models", "data", "coming"]
 
 
 class TestModelsEndpoint:

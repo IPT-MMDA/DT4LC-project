@@ -346,13 +346,62 @@ class HealthResponse(BaseModel):  # type: ignore[misc]
     disk: DiskUsage | None = None
 
 
-class CapabilitiesResponse(BaseModel):  # type: ignore[misc]
-    """Component registry snapshot."""
+class CapabilitiesSummary(BaseModel):  # type: ignore[misc]
+    """The server line: ``parts`` and their ``line`` (the deployment only when it is the public demo)."""
 
-    version: str
-    types: list[str]
-    instances: list[dict[str, Any]]
-    count: int
+    deployment: Literal["demo", "local"] = Field(description="DT4LC_DEPLOYMENT (default local)")
+    parts: dict[str, str] = Field(description="deployment, role, assistant, models, earth_engine labels")
+    line: str = Field(description="e.g. 'public demo · guest access · Gemini 3.5 Flash connected · …'")
+
+
+class CapabilitiesAssistant(BaseModel):  # type: ignore[misc]
+    """The assistant from ``/v1/health`` plus its display name."""
+
+    connected: bool
+    provider: str | None = None
+    model: str | None = None
+    display: str | None = Field(None, description="e.g. 'Gemini 3.5 Flash'; null when offline")
+
+
+class CapabilityTier(BaseModel):  # type: ignore[misc]
+    """One tier of the Capabilities page; ``items`` differ per tier (see server/capabilities.py)."""
+
+    id: Literal["ask", "composed", "builtin", "models", "data", "coming"]
+    number: int
+    title: str
+    subtitle: str | None = None
+    status: str = Field(description="ask: connected|offline; composed: available|offline; others available|coming")
+    status_label: str | None = None
+    needs_assistant: bool
+    badge: str | None = None
+    collapsed: bool = False
+    groups: list[dict[str, str]] | None = Field(None, description="builtin: [{id, title}] in display order")
+    note: str | None = None
+    items: list[dict[str, Any]]
+
+
+class GuestLimits(BaseModel):  # type: ignore[misc]
+    analyses_per_hour: int
+    kept_hours: int
+
+
+class ExamplePrompt(BaseModel):  # type: ignore[misc]
+    tier: str
+    id: str
+    prompt: str
+
+
+class CapabilitiesResponse(BaseModel):  # type: ignore[misc]
+    """What this server can do for the caller (``GET /v1/capabilities``), tier by tier."""
+
+    summary: CapabilitiesSummary
+    assistant: CapabilitiesAssistant
+    offline: bool = Field(description="No assistant: show the banner and grey tiers 1-2")
+    banner: str | None = None
+    tiers: list[CapabilityTier]
+    guest_limits: GuestLimits
+    session: SessionResponse
+    example_prompts: list[ExamplePrompt]
 
 
 class RegistryModelsResponse(BaseModel):  # type: ignore[misc]
