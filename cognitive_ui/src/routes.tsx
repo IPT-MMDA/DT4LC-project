@@ -6,8 +6,9 @@ import { Capabilities } from './pages/Capabilities';
 import { Landing } from './pages/Landing';
 import { Library } from './pages/Library';
 import { MapPage } from './pages/MapPage';
-import { Placeholder } from './pages/Placeholder';
+import { NotFound } from './pages/NotFound';
 import { ResultDetail } from './pages/ResultDetail';
+import { Settings } from './pages/Settings';
 import { Workspace } from './pages/Workspace';
 import { useChatStore } from './store/useChatStore';
 
@@ -43,12 +44,12 @@ function LandingRoute() {
   return decision === 'landing' ? <Landing session={session} /> : null;
 }
 
-/** `/app/settings` is for operators only. */
+/** `/app/settings` is for operators only: anyone else gets the not-found page, as from the API. */
 function SettingsRoute() {
   const { data: session, isPending } = useSession();
   if (isPending) return null;
-  if (session?.role !== 'operator') return <Navigate to="/app" replace />;
-  return <Placeholder title="Settings" />;
+  if (session?.role !== 'operator') return <NotFound />;
+  return <Settings />;
 }
 
 export function AppRoutes() {
@@ -63,7 +64,7 @@ export function AppRoutes() {
         <Route path="capabilities" element={<Capabilities />} />
         <Route path="results/:id" element={<ResultDetail />} />
         <Route path="settings" element={<SettingsRoute />} />
-        <Route path="*" element={<Navigate to="/app" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* v0.5 routes */}

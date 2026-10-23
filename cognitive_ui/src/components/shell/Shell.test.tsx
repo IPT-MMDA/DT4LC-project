@@ -7,6 +7,7 @@ import { AppRoutes } from '../../routes';
 import { useAppStore } from '../../store/useAppStore';
 import { useChatStore } from '../../store/useChatStore';
 import { GUEST_SESSION, MEMBER_SESSION, OPERATOR_SESSION, SAMPLE } from '../../test/fixtures';
+import SETTINGS from '../../test/fixtures/settings/operator.json';
 import type { SessionInfo } from '../../types';
 
 // jsdom has no WebGL: the map panes render a stand-in.
@@ -19,6 +20,7 @@ function mockApi(session: SessionInfo = GUEST_SESSION) {
   const get = vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/v1/session') return session as never;
     if (url === '/v1/health') return HEALTH as never;
+    if (url === '/v1/settings') return SETTINGS as never;
     throw new Error(`unexpected GET ${url}`);
   });
   const post = vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
@@ -211,16 +213,31 @@ describe('routes', () => {
     expect(within(rail).getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBeNull();
   });
 
-  it('/app/settings is for operators only', async () => {
-    mockApi(GUEST_SESSION);
-    renderApp('/settings');
-    await waitFor(() => expect(location.current).toBe('/app'));
-    cleanup();
-    vi.restoreAllMocks();
-
+  it('/app/settings is the Settings page for operators', async () => {
     mockApi(OPERATOR_SESSION);
+    renderApp('/settings');
+    await waitFor(() => expect(location.current).toBe('/app/settings'));
+    expect(await screen.findByRole('heading', { name: 'Settings · this server' })).toBeTruthy();
+    expect(screen.queryByTestId('not-found')).toBeNull();
+  });
+
+  it.each([
+    ['guest', GUEST_SESSION],
+    ['member', MEMBER_SESSION],
+  ])('/app/settings is the not-found page for a %s, as an unknown /app path', async (_, session) => {
+    const { get } = mockApi(session);
     renderApp('/app/settings');
-    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeTruthy();
+    expect(await screen.findByTestId('not-found')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+    expect(location.current).toBe('/app/settings');
+    expect(screen.queryByRole('heading', { name: 'Settings · this server' })).toBeNull();
+    expect(get.mock.calls.some(([url]) => url === '/v1/settings')).toBe(false);
+    cleanup();
+
+    renderApp('/app/no-such-page');
+    expect(await screen.findByTestId('not-found')).toBeTruthy();
+    expect(screen.getByText('/app/no-such-page')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
   });
 });
 
