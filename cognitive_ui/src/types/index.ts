@@ -10,6 +10,30 @@ export interface MessageAttachment {
   filename: string;
   path?: string;  // Server path for follow-up requests
   preview_url?: string;  // Server-relative preview URL from POST /v1/upload
+  group?: AttachmentGroup;  // Shown as one chip with the other files of the group
+}
+
+/**
+ * Files shown as one chip, e.g. the two dates of the Kakhovka sample from
+ * POST /v1/sample: `{name: "kakhovka_hls_l30", line: "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09"}`.
+ */
+export interface AttachmentGroup {
+  name: string;
+  line: string;
+}
+
+/** `metadata` of POST /v1/upload (docs/API.md); a best guess, any field may be missing. */
+export interface UploadMetadata {
+  sensor?: string;
+  bands?: { index: number; code: string; description: string }[];
+  dtype?: string;
+  resolution_m?: number;
+  date?: string;
+  size_bytes?: number;
+  size_label?: string;
+  crs?: string;
+  bounds_wgs84?: [number, number, number, number];
+  line?: string;  // chip text without the size; "" when nothing could be read
 }
 
 interface BaseMessage {
@@ -137,6 +161,8 @@ export interface Attachment {
   size_bytes?: number;
   // Server-relative preview URL for display in chat (never the image bytes)
   preview_url?: string;
+  metadata?: UploadMetadata;  // sent back with jobs and chat messages
+  group?: AttachmentGroup;
 }
 
 export interface JobSubmitRequest {
@@ -157,6 +183,28 @@ export interface HealthResponse {
   ok: boolean;
   service: string;
   version: string;
+  /** Always present since v0.6.0; `offline` is `!connected`. */
+  assistant?: {
+    connected: boolean;
+    offline: boolean;
+    provider: string | null;
+    model: string | null;
+  };
+}
+
+/** GET /v1/session: the caller's role, guest quota and retention (docs/API.md). */
+export interface SessionInfo {
+  role: 'guest' | 'member' | 'operator';
+  guest: boolean;
+  analyses: {
+    limit: number | null;  // null: no limit (members, operators)
+    used: number;
+    remaining: number | null;
+    resets_at: string | null;
+  };
+  kept_hours: number | null;
+  expires_at: string;
+  can_download_models: boolean;
 }
 
 export interface ExecutionResult {

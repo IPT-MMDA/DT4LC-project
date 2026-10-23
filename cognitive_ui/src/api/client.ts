@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
-export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? '';
 
 /** Resolve a server-relative URL (e.g. an artifact `url`) against the API base URL. */
 export function resolveApiUrl(url: string): string {

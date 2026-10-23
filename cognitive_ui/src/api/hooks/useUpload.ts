@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
+import type { UploadMetadata } from '../../types';
 
-interface UploadResponse {
+export interface UploadResponse {
   id: string;
   filename: string;
   path: string;
@@ -8,6 +9,7 @@ interface UploadResponse {
   crs: string | null;
   bounds: [number, number, number, number];
   preview_url: string;
+  metadata?: UploadMetadata;
 }
 
 export interface GeoTIFFFile {
@@ -34,7 +36,7 @@ export function useUploadFile() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/v1/upload`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/v1/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -53,7 +55,7 @@ export function useListFiles() {
   return useQuery({
     queryKey: ['files'],
     queryFn: async (): Promise<GeoTIFFFile[]> => {
-      const response = await fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/v1/files`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/v1/files`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch files');

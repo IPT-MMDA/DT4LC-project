@@ -134,6 +134,7 @@ function toPersistedMessage(message: ChatMessage): ChatMessage {
         filename: att.filename,
         path: att.path,
         preview_url: att.preview_url,
+        group: att.group,
       })),
     };
   }
@@ -198,6 +199,25 @@ export function selectActiveMessages(state: ChatStore): ChatMessage[] {
 /** The context counter for the active conversation (see estimateTokens). */
 export function selectContextTokens(state: ChatStore): number {
   return estimateTokens(selectActiveMessages(state));
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * "1 file · 2 results" for the conversation list and the chat header: files are
+ * the distinct attachments sent in the conversation (a group such as the sample
+ * pair counts once), results its finished analyses. Zero parts are left out.
+ */
+export function conversationMeta(conversation: Conversation): string {
+  const files = new Set<string>();
+  let results = 0;
+  for (const m of conversation.messages) {
+    if (m.kind === 'user') m.attachments?.forEach((a) => files.add(a.group?.name ?? a.path ?? a.id));
+    if (m.kind === 'analysis' && m.status === 'done') results += 1;
+  }
+  return [files.size > 0 && plural(files.size, 'file'), results > 0 && plural(results, 'result')]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export function findConversationByJobId(conversations: Conversation[], jobId: string): Conversation | null {
@@ -319,8 +339,13 @@ export const useChatStore = create<ChatStore>()(
 
       setDraft: (draft) => set({ draft }),
 
+      // Keyed by path: the two files of POST /v1/sample share one id.
       addAttachment: (attachment) =>
-        set((state) => ({ pendingAttachments: [...state.pendingAttachments, attachment] })),
+        set((state) =>
+          state.pendingAttachments.some((a) => a.path === attachment.path)
+            ? {}
+            : { pendingAttachments: [...state.pendingAttachments, attachment] },
+        ),
 
       removeAttachment: (attachmentId) =>
         set((state) => ({ pendingAttachments: state.pendingAttachments.filter((a) => a.id !== attachmentId) })),

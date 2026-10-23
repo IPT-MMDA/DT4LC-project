@@ -7,9 +7,11 @@ import { DrawToolbar } from './DrawToolbar';
 import { LocationQuickAccess } from './LocationQuickAccess';
 import { JobLayersManager } from './JobLayersManager';
 import { OblastBoundaries } from './OblastBoundaries';
+import { useMapColours } from './mapColours';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-export function MapContainer() {
+/** `docked`: the Workspace's map pane at ≥1440 px, without the drawing toolbar and scale bar. */
+export function MapContainer({ docked = false }: { docked?: boolean }) {
   const mapRef = useRef<MapRef>(null);
   const drawRef = useRef<DrawControlRef>(null);
   const isProcessingDraw = useRef(false);
@@ -20,6 +22,7 @@ export function MapContainer() {
   const selectedRegion = useAppStore((state) => state.selectedRegion);
   const useNewDatasetPanel = useAppStore((state) => state.useNewDatasetPanel);
   const setMapInstance = useAppStore((state) => state.setMapInstance);
+  const colours = useMapColours();
   const [viewState, setViewState] = useState({
     longitude: 33.4,  // Ukraine - Kahovka region
     latitude: 46.8,
@@ -113,6 +116,12 @@ export function MapContainer() {
     });
   };
 
+  // Docked, the pane is at most 640 px wide, so MapLibre opens its compact
+  // attribution over the Layers panel. Start it collapsed; (i) still opens it.
+  const collapseAttribution = () => {
+    mapRef.current?.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+  };
+
   // Basemap style URLs
   // Using free basemaps that don't require API keys
   const basemapStyles: Record<string, any> = {
@@ -148,11 +157,12 @@ export function MapContainer() {
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
+        onLoad={docked ? collapseAttribution : undefined}
         mapStyle={basemapStyles[currentBasemap] || basemapStyles.streets}
         style={{ width: '100%', height: '100%' }}
       >
         <NavigationControl position="bottom-right" />
-        <ScaleControl position="bottom-left" />
+        {!docked && <ScaleControl position="bottom-left" />}
         <DrawControl ref={drawRef} onCreate={handleDrawCreate} />
 
         {/* Render all drawn regions as layers */}
@@ -170,7 +180,7 @@ export function MapContainer() {
                 id={`region-fill-${region.id}`}
                 type="fill"
                 paint={{
-                  'fill-color': isSelected ? '#3b82f6' : '#10b981',
+                  'fill-color': isSelected ? colours.regionSelected : colours.region,
                   'fill-opacity': isSelected ? 0.3 : 0.15
                 }}
               />
@@ -179,7 +189,7 @@ export function MapContainer() {
                 id={`region-outline-${region.id}`}
                 type="line"
                 paint={{
-                  'line-color': isSelected ? '#2563eb' : '#059669',
+                  'line-color': isSelected ? colours.regionSelected : colours.region,
                   'line-width': isSelected ? 3 : 2,
                   'line-opacity': isSelected ? 0.9 : 0.6
                 }}
@@ -191,7 +201,7 @@ export function MapContainer() {
         <JobLayersManager />
         <OblastBoundaries />
       </Map>
-      <DrawToolbar onModeChange={handleModeChange} currentMode={drawMode} />
+      {!docked && <DrawToolbar onModeChange={handleModeChange} currentMode={drawMode} />}
       {!useNewDatasetPanel && <LocationQuickAccess onLocationSelect={handleLocationSelect} />}
     </div>
   );
