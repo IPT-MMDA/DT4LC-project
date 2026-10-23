@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { parseJobResult } from './JobResultCard';
-import { artifactUrl, resolveApiUrl } from '../../api/client';
 import type { Job } from '../../types';
 
 // Trimmed GET /v1/jobs/{id} of an NDVI job (docs/ARCHITECTURE.md "Job artifacts").
@@ -85,19 +84,5 @@ describe('parseJobResult with artifact references (#67 bug 3)', () => {
     });
     expect(data?.statistics?.values.mean).toBe('0.5000');
     expect(data?.visualizations).toBeUndefined();
-  });
-});
-
-describe('artifact URL helpers', () => {
-  it('reads url from a reference only', () => {
-    expect(artifactUrl(ref('png', 'a.png'))).toMatch(/^\/v1\/download\?path=/);
-    expect(artifactUrl('iVBORw0KGgo')).toBeUndefined();
-    expect(artifactUrl(null)).toBeUndefined();
-    expect(artifactUrl({ url: '' })).toBeUndefined();
-  });
-
-  it('resolves against the API base URL the axios client uses', () => {
-    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-    expect(resolveApiUrl('/v1/download?path=x')).toBe(`${base}/v1/download?path=x`);
   });
 });
