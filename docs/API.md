@@ -1304,7 +1304,7 @@ Neither endpoint takes a file, so it suits requests that name their inputs in th
 | `error.code` | When | `error.message` |
 |--------------|------|-----------------|
 | `NOT_AN_ANALYSIS` | A greeting, a question about methods, a capability question ("hello") | "This reads as a question, not an analysis — send it to POST /v1/chat." |
-| `missing_input` | An analysis that needs a raster ("Calculate NDVI") | "This analysis needs a raster, and this endpoint takes no file: send it to POST /v1/chat or POST /v1/jobs with the file attached." |
+| `missing_input` | An analysis that needs a raster ("Calculate NDVI"). `POST /v1/execute` also returns it, after planning, for a plan that stops on a missing input file ([below](#post-v1execute)) | "This analysis needs a raster, and this endpoint takes no file: send it to POST /v1/chat or POST /v1/jobs with the file attached." |
 
 Both carry `details: {"intent": "conversation"}`:
 
@@ -1346,7 +1346,8 @@ Generate plan and execute synchronously.
 |--------|--------------|------|
 | 429 | `GUEST_QUOTA` | A guest beyond `GUEST_ANALYSES_PER_HOUR`; counted as for [POST /v1/jobs](#post-v1jobs) |
 | 409 | `CONFIRMATION_REQUIRED` | Planning composed a plan (a proposal), which runs only after confirmation: "This request composes a new analysis, which runs only after you confirm it: submit it with POST /v1/jobs, then confirm with POST /v1/jobs/{job_id}/confirm." Not counted |
-| 400 | `planning_failed` | See [Error Responses](#error-responses) |
+| 422 | `missing_input` | Planning succeeded, but the plan stops on a missing input file, e.g. "Map moisture change with NDMI between the two dates", which needs a before and an after file. The body is the classifier's `missing_input` one above. Not counted: the quota is released |
+| 400 | `planning_failed` | See [Error Responses](#error-responses). Counted |
 
 ## Error Responses
 
