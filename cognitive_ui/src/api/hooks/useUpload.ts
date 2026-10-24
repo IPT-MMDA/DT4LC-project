@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { UploadMetadata } from '../../types';
 
 export interface UploadResponse {
@@ -40,6 +40,7 @@ interface ListFilesResponse {
 }
 
 export function useUploadFile() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File): Promise<UploadResponse> => {
       const formData = new FormData();
@@ -51,11 +52,18 @@ export function useUploadFile() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || error.detail || 'Upload failed');
+        // nginx answers an oversized body (413) or a restarting API (502) with an HTML page.
+        const error = await response.json().catch(() => null);
+        const message = error?.error?.message || error?.detail;
+        if (message) throw new Error(message);
+        throw new Error(response.status === 413 ? 'File too large for this server (HTTP 413)' : `Upload failed (HTTP ${response.status})`);
       }
 
       return response.json();
+    },
+    // The upload is among the caller's files now (From library, map mode, the Library).
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY });
     },
   });
 }
