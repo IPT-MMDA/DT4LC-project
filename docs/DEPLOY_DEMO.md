@@ -109,7 +109,7 @@ What each group does:
   - Set the keys you have and list those providers in `LLM_PROVIDER_ORDER`. The backend tries them in order and falls back on failure.
   - Anthropic, Mistral and OpenAI work the same way, with `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY` and `OPENAI_API_KEY`, once they are listed in the order.
   - The model variables (`GEMINI_MODELS`, `GROQ_MODEL`, …) are described in `.env.example`.
-  - Turn Ollama off. `.env.example` enables it, but the demo profile does not start it, and the `ollama` profile of `docker-compose.yml` would publish Ollama's port 11434 on every interface of the host.
+  - Turn Ollama off. `.env.example` enables it, but the demo profile does not start it. If you start it anyway, with `COMPOSE_PROFILES=demo,ollama`, `docker-compose.demo.yml` publishes none of its ports; the backend reaches it at `http://ollama:11434` on the compose network. (The `ollama` profile of the default stack, without the override, publishes port 11434 on every interface of the host.)
 - **`FRONTEND_PORT=127.0.0.1:8080`** publishes the frontend on the loopback interface only. The plain-HTTP port is then unreachable from outside, and every request comes through the TLS proxy. 8080 is an example: any free port works if the proxy uses the same one.
 - **`DEMO_SUBNET`:** leave it unset unless `172.30.60.0/24` clashes with a network on the host ([Troubleshooting](#11-troubleshooting)). The backend trusts `X-Forwarded-For` only from this subnet.
 - **Not needed:**
@@ -354,7 +354,7 @@ The limits are in `deploy/nginx-demo.conf.template`. nginx applies them per clie
 
 | Requests | Limit |
 |----------|-------|
-| `POST` to `/v1/jobs`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` (these exact paths) | 10 per minute, burst 5: six at once, then one every 6 s |
+| `POST` to `/v1/jobs`, `/v1/jobs/{job_id}/confirm`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` (these exact paths) | 10 per minute, burst 5: six at once, then one every 6 s |
 | Any request to `/v1/…`, `/openapi.json`, `/docs` or `/redoc` | 20 per second, burst 200 |
 
 Pages and static files are not limited. A request over a limit gets 429 with `Retry-After: 10` and the project's error body:
@@ -404,7 +404,7 @@ Operators open Settings from the account menu, or at `/app/settings`. Everyone e
 |---------|-------------------------|
 | Assistant | Set the provider order, turn each provider on or off, and pick its model or models. **Test** sends a short prompt to each enabled provider in the saved order. Keys show only as present or absent. |
 | Models | **Pre-download** a model that is not installed. Choose who may download on first use: everyone, members and operators, operators only, or nobody. With "nobody", Pre-download is refused too. |
-| Access | Edit the allowed emails, allowed domains and operator emails (you cannot remove your own address), the guest analyses per hour (0–1000) and the guest session hours (1–720). The section also shows whether sign-in is configured. |
+| Access | Edit the allowed emails, allowed domains and operator emails (you cannot remove your own address, and **Reset to .env** is refused when `OPERATOR_EMAILS` in `.env` lacks it), the guest analyses per hour (0–1000) and the guest session hours (1–720). The section also shows whether sign-in is configured. |
 | Data sources | Read-only: the Earth Engine status, the uploads directory, the bundled sample |
 | Server | Read-only: the version, the deployment, the paths, the storage used, the jobs |
 

@@ -892,6 +892,8 @@ List the caller's job summaries, newest first, with optional filtering and pagin
 }
 ```
 
+`total` counts every job the query matches, not just this page: the caller's jobs (an operator's: all of them), and only those with `status` when it is given.
+
 #### Job cards
 
 Every job record and summary has `card`, the Library row and Result-detail header of the job. It is computed once, when the job completes, fails or is cancelled, and stored with the job, so `GET /v1/jobs` shows it without loading the result. It is `null` until then (pending, proposal, running), and on jobs from before v0.6.0: show the prompt instead.
@@ -1147,6 +1149,12 @@ The raster is reprojected onto the tile's grid (EPSG:3857) on the fly, so a UTM 
 {"ok": false, "error": {"code": "validation_error", "message": "The raster has no red, green and blue bands", "details": {}}}
 ```
 
+A served file that isn't a raster, such as a job's JSON output, is 415 `NOT_A_RASTER`. The body never holds the path:
+
+```json
+{"ok": false, "error": {"code": "NOT_A_RASTER", "message": "This file isn't a raster the map can display.", "details": {}}}
+```
+
 ### Model downloads
 
 `/v1/ml-models` manages the model weights (the generated reference has every route). Listing and status are open to everyone. `POST /v1/ml-models/{model_id}/download` and `POST /v1/ml-models/{model_id}/cancel` need a role that `MODEL_DOWNLOAD_ON_DEMAND` lets download (members and operators by default), and `DELETE /v1/ml-models/{model_id}` needs an operator. Anyone else gets 403 `MODEL_GATED`, with the same sentence a job's refusal has:
@@ -1240,7 +1248,7 @@ A partial document with only the fields to change; it returns the new `GET` docu
 - A field set to `null` drops its override, so the environment (or the default) applies again: after `{"access": {"guest_analyses_per_hour": 3}}` the field's `source` is `override`; after `{"access": {"guest_analyses_per_hour": null}}` it is `env` or `default` again.
 - `provider_order` lists known providers without duplicates; `groq`, `ollama` and `apertus` take exactly one model, the others up to ten. Emails are lower-cased, and domains may start with `@`.
 - Changing the assistant rebuilds the LLM router and drops the cached assistant status, so `GET /v1/health` and `GET /v1/capabilities` show the change at once.
-- A signed-in operator cannot drop their own address from `operator_emails`: the request is refused, as are an unknown or read-only key, a wrong type and a value out of `bounds`. Each is a 422 in FastAPI's `detail` format, e.g.
+- A signed-in operator cannot drop their own address from `operator_emails`: neither with a list without it, nor with `null` (which falls back to the environment's `OPERATOR_EMAILS`) when that list lacks it. Such a request is refused and changes nothing, as are an unknown or read-only key, a wrong type and a value out of `bounds`. Each is a 422 in FastAPI's `detail` format, e.g.
 
 ```json
 {"detail": [{"type": "less_than_equal", "loc": ["body", "access", "guest_analyses_per_hour"], "msg": "Input should be less than or equal to 1000", "input": 5000, "ctx": {"le": 1000}}]}
@@ -1304,7 +1312,7 @@ Neither endpoint takes a file, so it suits requests that name their inputs in th
 | `error.code` | When | `error.message` |
 |--------------|------|-----------------|
 | `NOT_AN_ANALYSIS` | A greeting, a question about methods, a capability question ("hello") | "This reads as a question, not an analysis — send it to POST /v1/chat." |
-| `missing_input` | An analysis that needs a raster ("Calculate NDVI") | "This analysis needs a raster, and this endpoint takes no file: send it to POST /v1/chat or POST /v1/jobs with the file attached." |
+| `missing_input` | An analysis that needs a raster ("Calculate NDVI"). `POST /v1/execute` also returns it, after planning, for a plan that stops on a missing input file ([below](#post-v1execute)) | "This analysis needs a raster, and this endpoint takes no file: send it to POST /v1/chat or POST /v1/jobs with the file attached." |
 
 Both carry `details: {"intent": "conversation"}`:
 
@@ -1346,7 +1354,8 @@ Generate plan and execute synchronously.
 |--------|--------------|------|
 | 429 | `GUEST_QUOTA` | A guest beyond `GUEST_ANALYSES_PER_HOUR`; counted as for [POST /v1/jobs](#post-v1jobs) |
 | 409 | `CONFIRMATION_REQUIRED` | Planning composed a plan (a proposal), which runs only after confirmation: "This request composes a new analysis, which runs only after you confirm it: submit it with POST /v1/jobs, then confirm with POST /v1/jobs/{job_id}/confirm." Not counted |
-| 400 | `planning_failed` | See [Error Responses](#error-responses) |
+| 422 | `missing_input` | Planning succeeded, but the plan stops on a missing input file, e.g. "Map moisture change with NDMI between the two dates", which needs a before and an after file. The body is the classifier's `missing_input` one above. Not counted: the quota is released |
+| 400 | `planning_failed` | See [Error Responses](#error-responses). Counted |
 
 ## Error Responses
 
@@ -1372,6 +1381,7 @@ HTTP errors return an `ErrorResponse` body:
 | 404 | `not_found`; `SAMPLE_NOT_BUNDLED` from `POST /v1/sample`; `SIGN_IN_NOT_CONFIGURED` from the [GitHub sign-in routes](#sign-in) |
 | 409 | `CONFIRMATION_REQUIRED` from `POST /v1/execute`; otherwise `bad_request` |
 | 413 | `file_too_large` |
+| 415 | `NOT_A_RASTER` from [`GET /v1/tiles`](#get-v1tileszxy) |
 | 422 | `validation_error` (raised by a route, e.g. an invalid edited plan on confirm, or `style=truecolor` on a raster without RGB); `NOT_AN_ANALYSIS` and `missing_input` from [`POST /v1/plan` and `POST /v1/execute`](#post-v1plan) |
 | 429 | `GUEST_QUOTA` for the guest limit, with `details: {limit, used, resets_at}` and `Retry-After`; `bad_request` when the job queue is full; `RATE_LIMITED` from the demo's nginx (see [Rate Limits](#rate-limits)) |
 | 405 and other 4xx | `bad_request` |
@@ -1420,7 +1430,7 @@ Job progress streams as Server-Sent Events from [GET /v1/jobs/{job_id}/events](#
 
 Guests may start `GUEST_ANALYSES_PER_HOUR` (default 5) analyses per rolling hour, counted per session and per client IP; the next one gets 429 `GUEST_QUOTA` (see [POST /v1/jobs](#post-v1jobs)). Conversation replies and proposals do not count. Members and operators are not limited. Behind a reverse proxy, the client IP is the one in `X-Forwarded-For` when the proxy's address is in `FORWARDED_ALLOW_IPS` (uvicorn runs with `--proxy-headers` in the Docker image); otherwise it is the proxy's own address, and every guest behind it shares one count.
 
-The backend has no other limit. The public demo's nginx (`deploy/nginx-demo.conf.template`, see [DEPLOY_DEMO.md](DEPLOY_DEMO.md#7-rate-limits-and-quotas)) adds per-IP limits for every role: `POST` to `/v1/jobs`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` 10 a minute with a burst of 5, and any `/v1/` request 20 a second with a burst of 200. A request over a limit gets 429 with `Retry-After: 10`:
+The backend has no other limit. The public demo's nginx (`deploy/nginx-demo.conf.template`, see [DEPLOY_DEMO.md](DEPLOY_DEMO.md#7-rate-limits-and-quotas)) adds per-IP limits for every role: `POST` to `/v1/jobs`, `/v1/jobs/{job_id}/confirm`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` 10 a minute with a burst of 5, and any `/v1/` request 20 a second with a burst of 200. A request over a limit gets 429 with `Retry-After: 10`:
 
 ```json
 {"ok": false, "error": {"code": "RATE_LIMITED", "message": "Too many requests from your address. Wait a few seconds and try again.", "details": {}}}
