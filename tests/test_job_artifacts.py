@@ -319,7 +319,9 @@ def test_ndvi_job_record_list_and_row_are_small(
     import server.jobs as jobs_mod
 
     client, db = api
-    att = {"id": "a1", "filename": "u16_1000.tif", "path": raster_1000, "mime_type": "image/tiff"}
+    with open(raster_1000, "rb") as fh:
+        up = client.post("/v1/upload", files={"file": ("u16_1000.tif", fh, "image/tiff")}).json()
+    att = {"id": up["id"], "filename": up["filename"], "path": up["path"], "mime_type": "image/tiff"}
     job_id = client.post("/v1/jobs", json={"prompt": "calculate ndvi", "attachments": [att]}).json()["id"]
     for _ in range(240):
         if client.get(f"/v1/jobs/{job_id}").json()["status"] in ("completed", "failed", "cancelled"):

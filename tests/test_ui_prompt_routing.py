@@ -36,7 +36,6 @@ from unittest.mock import patch
 import pytest
 import rasterio
 
-from dta.config import ROOT_DIR
 from dta.dti.coe.llm import get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import orchestrate
@@ -49,9 +48,11 @@ from server.jobs import Job, JobQueue, JobStatus
 from server.routes import chat as chat_routes
 from server.schemas import AssistantStatus, ConversationReply, ConversationRequest
 from server.sessions import Session
+from server.utils import UPLOAD_DIR
 
-SAMPLE_DIR = Path(ROOT_DIR) / "resources" / "kahovka_data"
-FILES = {"0601": str(SAMPLE_DIR / "hlsl_20230601.tif"), "0609": str(SAMPLE_DIR / "hlsl_20230609.tif")}
+# The sample as attachable files (tests/conftest.py sample_uploads)
+pytestmark = pytest.mark.usefixtures("sample_uploads")
+FILES = {"0601": str(UPLOAD_DIR / "hlsl_20230601.tif"), "0609": str(UPLOAD_DIR / "hlsl_20230609.tif")}
 _KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
 _SESSION = Session(id="routing", role="operator", created_at=0.0, expires_at=0.0)
 

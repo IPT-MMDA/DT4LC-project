@@ -11,7 +11,7 @@ closed Ollama port, so no test reaches a live provider.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Sequence
 from datetime import datetime, timedelta
 import functools
 import json
@@ -24,7 +24,6 @@ import httpx
 import pytest
 import rasterio
 
-from dta.config import ROOT_DIR
 from dta.dti.coe import planner as planner_mod
 from dta.dti.coe.llm import LLMResponse, get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
@@ -37,9 +36,12 @@ from server import jobs as jobs_mod
 from server.job_events import KEEPALIVE_FRAME, sse_event_frame
 from server.jobs import Job, JobQueue, JobStatus, SQLiteJobStore
 from server.routes import jobs as job_routes
+from server.utils import UPLOAD_DIR
 
-SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
-SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
+# The sample as attachable files (tests/conftest.py sample_uploads)
+pytestmark = pytest.mark.usefixtures("sample_uploads")
+SAMPLE_0601 = str(UPLOAD_DIR / "hlsl_20230601.tif")
+SAMPLE_0609 = str(UPLOAD_DIR / "hlsl_20230609.tif")
 _KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
 
 NDMI_PROMPT = "Map moisture change with NDMI between the two dates"
@@ -342,16 +344,30 @@ async def _events_until(q: JobQueue, job_id: str, last: set[str], timeout: float
     return events[: next(i for i, e in enumerate(events) if e["type"] in last) + 1]
 
 
-async def _submit(client: httpx.AsyncClient, prompt: str, paths: list[str]) -> dict[str, Any]:
-    r = await client.post("/v1/jobs", json={"prompt": prompt, "attachments": [_sample_attachment(p) for p in paths]})
+async def _submit(client: httpx.AsyncClient, prompt: str, files: Sequence[str | dict[str, Any]]) -> dict[str, Any]:
+    attachments = [f if isinstance(f, dict) else _sample_attachment(f) for f in files]
+    r = await client.post("/v1/jobs", json={"prompt": prompt, "attachments": attachments})
     assert r.status_code == 202, r.text
     return r.json()  # type: ignore[no-any-return]
 
 
-async def _proposal(q: JobQueue, client: httpx.AsyncClient, prompt: str = NDMI_PROMPT) -> str:
-    job_id = (await _submit(client, prompt, SAMPLE_PAIR))["id"]
+async def _proposal(
+    q: JobQueue,
+    client: httpx.AsyncClient,
+    prompt: str = NDMI_PROMPT,
+    files: Sequence[str | dict[str, Any]] = SAMPLE_PAIR,
+) -> str:
+    job_id = (await _submit(client, prompt, files))["id"]
     assert (await _events_until(q, job_id, {"proposal", "failed", "done"}))[-1]["type"] == "proposal"
     return str(job_id)
+
+
+async def _own_sample(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """The client's own copy of the sample pair (``POST /v1/sample``), as the UI attaches it."""
+    r = await client.post("/v1/sample")
+    assert r.status_code == 200, r.text
+    keys = ("id", "filename", "path", "metadata")
+    return [{**{k: a[k] for k in keys}, "mime_type": "image/tiff"} for a in r.json()["attachments"]]
 
 
 async def _used(client: httpx.AsyncClient) -> int:
@@ -364,7 +380,7 @@ async def test_ndmi_job_proposes_then_confirm_runs_it_on_the_same_stream(
     monkeypatch.setenv("DEV_ROLE", "guest")
     monkeypatch.setattr(job_routes, "KEEPALIVE_S", 0.05)
     async with _client() as client:
-        submitted = await _submit(client, NDMI_PROMPT, SAMPLE_PAIR)
+        submitted = await _submit(client, NDMI_PROMPT, await _own_sample(client))
         job_id = submitted["id"]
         assert submitted["status"] == "pending"
         assert [e["type"] for e in submitted["events"]] == ["intent"]
@@ -447,7 +463,7 @@ async def test_burn_severity_job_fails_with_band_missing(queue: JobQueue, with_l
 async def test_confirm_is_owner_scoped_and_once_only(queue: JobQueue, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEV_ROLE", "guest")
     async with _client() as owner, _client() as stranger:
-        job_id = await _proposal(queue, owner)
+        job_id = await _proposal(queue, owner, files=await _own_sample(owner))
 
         r = await stranger.post(f"/v1/jobs/{job_id}/confirm")
         assert r.status_code == 404
@@ -527,8 +543,9 @@ async def test_guest_quota_counts_the_confirmation_not_the_proposal(
     monkeypatch.setenv("DEV_ROLE", "guest")
     monkeypatch.setenv("GUEST_ANALYSES_PER_HOUR", "1")
     async with _client() as client:
-        first = await _proposal(queue, client)
-        second = await _proposal(queue, client)  # proposals never use up the quota
+        sample = await _own_sample(client)
+        first = await _proposal(queue, client, files=sample)
+        second = await _proposal(queue, client, files=sample)  # proposals never use up the quota
         assert await _used(client) == 0
 
         assert (await client.post(f"/v1/jobs/{first}/confirm")).status_code == 202
