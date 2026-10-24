@@ -279,7 +279,7 @@ curl -N -b cookies.txt "http://localhost:8000/v1/jobs/<job id>/events?after=8"  
 
 React 18, TypeScript, Tailwind, MapLibre (`react-map-gl`), TanStack Query for server state, Zustand for client state, `react-markdown` for replies, and no component library. The design tokens (colours for both themes, type scale, radii) are CSS variables in `src/index.css`, exposed as Tailwind theme values.
 
-**Routes** (`src/routes.tsx`): `/` is the landing for a first-time guest (`pages/Landing.tsx`; `components/landing/landingDecision.ts` sends members, operators and returning guests to `/app`). Under `/app` the shell (`components/shell/Shell.tsx`) holds the pages: the Workspace (`/app`), Map mode (`/app/map`), the Library (`/app/library`), Capabilities (`/app/capabilities`), Result detail (`/app/results/:id`) and Settings (`/app/settings`); any other `/app/*` path, and Settings for a non-operator, is `pages/NotFound.tsx`. The v0.5 paths (`/chat`, `/jobs`, `/data`, `/models`, …) redirect.
+**Routes** (`src/routes.tsx`): `/` is the landing for every visitor (`pages/Landing.tsx`), which the DT mark in the rail and in the phone menu links to; `components/landing/landingDecision.ts` sends only a Workspace deep link (`?sample=`, `?prompt=`) on to `/app`, with its query. Under `/app` the shell (`components/shell/Shell.tsx`) holds the pages: the Workspace (`/app`), Map mode (`/app/map`), the Library (`/app/library`), Capabilities (`/app/capabilities`), Result detail (`/app/results/:id`) and Settings (`/app/settings`); any other `/app/*` path, and Settings for a non-operator, is `pages/NotFound.tsx`. The v0.5 paths (`/chat`, `/jobs`, `/data`, `/models`, …) redirect.
 
 | Area | Where | What it does |
 |------|-------|--------------|
