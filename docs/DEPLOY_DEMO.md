@@ -354,7 +354,7 @@ The limits are in `deploy/nginx-demo.conf.template`. nginx applies them per clie
 
 | Requests | Limit |
 |----------|-------|
-| `POST` to `/v1/jobs`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` (these exact paths) | 10 per minute, burst 5: six at once, then one every 6 s |
+| `POST` to `/v1/jobs`, `/v1/jobs/{job_id}/confirm`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` (these exact paths) | 10 per minute, burst 5: six at once, then one every 6 s |
 | Any request to `/v1/…`, `/openapi.json`, `/docs` or `/redoc` | 20 per second, burst 200 |
 
 Pages and static files are not limited. A request over a limit gets 429 with `Retry-After: 10` and the project's error body:
