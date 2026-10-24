@@ -38,7 +38,7 @@ Health check endpoint.
 {
   "ok": true,
   "service": "DT4LC",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "assistant": {"connected": false, "offline": true, "provider": null, "model": null},
   "llm_providers": null,
   "gee": null,
@@ -55,7 +55,7 @@ Health check endpoint.
 {
   "ok": true,
   "service": "DT4LC",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "assistant": {"connected": true, "offline": false, "provider": "gemini", "model": "gemini-3.5-flash-lite"},
   "llm_providers": [
     { "name": "gemini", "model": "gemini-3.5-flash-lite", "available": true },
@@ -1211,7 +1211,7 @@ Five sections. Every section object, and every provider in `assistant.providers`
     "editable": {"earth_engine": false, "uploads": false, "sample": false}
   },
   "server": {
-    "version": "0.5.1",
+    "version": "<dta.__version__>",
     "deployment": "local",
     "paths": {"cache": "...", "outputs": "...", "temp": "...", "uploads": "...", "models": "..."},
     "storage": {"outputs": {"bytes": 12645517, "files": 9, "truncated": false}, ...},

@@ -93,7 +93,7 @@ python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 
 ```bash
 curl http://localhost:8000/v1/health
-# {"ok":true,"service":"DT4LC","version":"0.5.1","assistant":{"connected":false,"offline":true,"provider":null,"model":null},"llm_providers":null,"gee":null,"models":null,"disk":null}
+# {"ok":true,"service":"DT4LC","version":"0.6.0","assistant":{"connected":false,"offline":true,"provider":null,"model":null},"llm_providers":null,"gee":null,"models":null,"disk":null}
 ```
 
 `assistant` names the LLM provider that answers, or shows `"offline": true` when none is available (see [API.md](API.md#get-v1health)).

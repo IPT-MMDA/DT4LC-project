@@ -4,8 +4,8 @@ message: >-
   If you use this software, please cite it using the metadata from this file
   and the preferred-citation below.
 type: software
-version: 0.5.1
-date-released: "2026-10-22"
+version: 0.6.0
+date-released: "2026-10-24"
 authors:
   - given-names: Anton
     family-names: Chernyatevich
