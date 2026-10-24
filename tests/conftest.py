@@ -98,6 +98,27 @@ def _dev_role_operator(monkeypatch: pytest.MonkeyPatch, _no_settings_file: Path)
     analysis_counter.clear()
 
 
+@pytest.fixture(scope="module")
+def sample_uploads() -> Iterator[None]:
+    """The two Kakhovka dates linked into the upload dir as ``UPLOAD_DIR/hlsl_2023060{1,9}.tif``, files
+    with no owner that an operator (the default role here) may attach; a raw ``resources/`` path is refused."""
+    from server.utils import UPLOAD_DIR
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    linked = []
+    for name in ("hlsl_20230601.tif", "hlsl_20230609.tif"):
+        src, dst = ROOT / "resources" / "kahovka_data" / name, UPLOAD_DIR / name
+        if not dst.exists():
+            try:
+                os.link(src, dst)
+            except OSError:
+                shutil.copyfile(src, dst)
+            linked.append(dst)
+    yield
+    for dst in linked:
+        dst.unlink(missing_ok=True)
+
+
 def pytest_runtest_setup(item: pytest.Item) -> None:
     """Skip ``llm``-marked tests, instead of failing them, when no provider is configured."""
     if item.get_closest_marker("llm") and (reason := _no_llm_provider_reason()):

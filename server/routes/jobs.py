@@ -16,6 +16,7 @@ from dta.dti.schemas import ExecutionPlan
 from .. import library
 from ..job_events import KEEPALIVE_FRAME, TERMINAL_EVENTS, sse_event_frame
 from ..jobs import JobConflictError, JobQueue, JobStatus, get_job_queue
+from ..paths import ensure_attachments_allowed
 from ..schemas import (
     CancelJobResponse,
     JobConfirmRequest,
@@ -37,6 +38,18 @@ REGION_IGNORED_NOTE = "Files are attached, so the analysis reads them and doesn'
 
 def _job_record(job_dict: dict[str, Any]) -> JobRecord:
     return JobRecord.model_validate(job_dict)  # type: ignore[no-any-return]
+
+
+def _attachment_paths(req: JobSubmitRequest) -> list[str | None]:
+    """The paths planning may read: the attachments', then the context's ``previous_attachments``
+    (read when nothing is attached)."""
+    previous = (req.context or {}).get("previous_attachments")
+    carried = (
+        [a["path"] for a in previous if isinstance(a, dict) and isinstance(a.get("path"), str)]
+        if isinstance(previous, list)
+        else []
+    )
+    return [att.path for att in req.attachments] + carried
 
 
 async def _ensure_visible(queue: JobQueue, job_id: str, session: Session) -> None:
@@ -69,7 +82,12 @@ async def submit_job(req: JobSubmitRequest, session: CurrentSession) -> JobRecor
     region is not fetched and its echo carries ``note``. Without Earth Engine credentials a region
     job fails at planning with ``EE_NOT_CONFIGURED``. A region job counts like any analysis. An
     invalid region is a 422.
+
+    Every attachment path must be one the session may download (its uploads, the sample, its own job
+    outputs; an operator, any file in the roots): 403 outside the roots, 404 missing or another
+    owner's file, checked before the quota counts the request.
     """
+    await ensure_attachments_allowed(_attachment_paths(req), session)
     counted_at = enforce_analysis_quota(session)
     try:
         queue = get_job_queue()

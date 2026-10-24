@@ -21,16 +21,18 @@ import httpx
 import pytest
 import rasterio
 
-from dta.config import ROOT_DIR
 from dta.dti.coe.llm import get_llm_router, reset_llm_router
 from dta.dti.data_sources import gee_common
 from dta.dti.raster import describe_raster
 from server import jobs as jobs_mod
 from server import library
 from server.jobs import Job, JobQueue, JobStatus, MemoryJobStore, SQLiteJobStore
+from server.utils import UPLOAD_DIR
 
-SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
-SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
+# The sample as attachable files (tests/conftest.py sample_uploads)
+pytestmark = pytest.mark.usefixtures("sample_uploads")
+SAMPLE_0601 = str(UPLOAD_DIR / "hlsl_20230601.tif")
+SAMPLE_0609 = str(UPLOAD_DIR / "hlsl_20230609.tif")
 SAMPLE_PAIR = [SAMPLE_0601, SAMPLE_0609]
 _KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
 WATER_PROMPT = "Compare water before and after the dam breach"
@@ -83,6 +85,14 @@ def _attachment(path: str) -> dict[str, Any]:
     with rasterio.open(path) as src:
         meta = describe_raster(src, name, os.path.getsize(path)).model_dump()
     return {"id": name, "filename": name, "mime_type": "image/tiff", "path": path, "metadata": meta}
+
+
+async def _own_sample(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """The client's own copy of the sample pair (``POST /v1/sample``), as the UI attaches it."""
+    r = await client.post("/v1/sample")
+    assert r.status_code == 200, r.text
+    keys = ("id", "filename", "path", "metadata")
+    return [{**{k: a[k] for k in keys}, "mime_type": "image/tiff"} for a in r.json()["attachments"]]
 
 
 async def _wait(q: JobQueue, job_id: str, states: set[str], timeout: float = 120) -> None:
@@ -404,7 +414,7 @@ async def test_statistics_csv_is_404_without_statistics_or_for_another_owner(
     monkeypatch.setenv("DEV_ROLE", "guest")
     async with _client() as owner, _client() as stranger:
         failed = await _run(owner, queue, WATER_PROMPT, [], region=REGION)
-        done = await _run(owner, queue, "calculate ndvi", [SAMPLE_0601])
+        done = await _run(owner, queue, "calculate ndvi", [], attachments=(await _own_sample(owner))[:1])
         await stranger.get("/v1/session")
 
         assert (await owner.get(f"/v1/jobs/{failed}/statistics.csv")).status_code == 404

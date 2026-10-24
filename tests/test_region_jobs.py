@@ -19,7 +19,6 @@ import httpx
 import pytest
 import rasterio
 
-from dta.config import ROOT_DIR
 from dta.dti.coe.llm import get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
 from dta.dti.coe.orchestrator import orchestrate
@@ -32,9 +31,12 @@ from server.job_events import classify_failure
 from server.jobs import Job, JobQueue, JobStatus, SQLiteJobStore
 from server.routes.jobs import REGION_IGNORED_NOTE
 from server.schemas import JobRegion
+from server.utils import UPLOAD_DIR
 
-SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
-SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
+# The sample as attachable files (tests/conftest.py sample_uploads)
+pytestmark = pytest.mark.usefixtures("sample_uploads")
+SAMPLE_0601 = str(UPLOAD_DIR / "hlsl_20230601.tif")
+SAMPLE_0609 = str(UPLOAD_DIR / "hlsl_20230609.tif")
 SAMPLE_BOUNDS = [32.388779, 46.455331, 32.691118, 46.663879]  # bounds_wgs84 of the Kakhovka crops
 _KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
 

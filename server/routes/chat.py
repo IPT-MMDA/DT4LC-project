@@ -19,6 +19,7 @@ from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
 from ..job_events import sse_event_frame
+from ..paths import ensure_attachments_allowed
 from ..schemas import (
     ChatRequest,
     ChatTurn,
@@ -231,7 +232,10 @@ async def _analysis(prompt: str, req: ConversationRequest, session: Session) -> 
 
 
 async def converse(req: ConversationRequest, session: Session) -> ConversationReply | ConversationAnalysis:
-    """One Workspace message: a reply (no job), or an analysis submitted through the job queue."""
+    """One Workspace message: a reply (no job), or an analysis submitted through the job queue.
+
+    Attachment paths are checked first, as in ``POST /v1/jobs``, so nothing reads a refused file."""
+    await ensure_attachments_allowed([a.path for a in req.attachments], session)
     files = sum(1 for a in req.attachments if a.path)
     pending = req.pending if req.pending is not None and not _expired(req.pending) else None
 
@@ -297,6 +301,9 @@ async def chat(req: ConversationRequest, session: CurrentSession, accept: str | 
     for the file and a ``pending``; send that ``pending`` back with the next message, and
     "here" (or any short message, or none) with the files runs it. Replace the stored pending
     with each reply's (none means clear it).
+
+    Attachment paths are checked before anything else, as in ``POST /v1/jobs``: 403 outside the
+    served roots, 404 missing or another owner's file, as JSON errors even with SSE.
 
     JSON: ``{kind: "reply", text, pending?}`` or ``{kind: "analysis", job_id, job}``. With
     ``Accept: text/event-stream``: ``reply_delta {text}`` frames then ``reply_done {text,

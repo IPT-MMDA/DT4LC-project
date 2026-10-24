@@ -21,7 +21,6 @@ import httpx
 import pytest
 import rasterio
 
-from dta.config import ROOT_DIR
 from dta.dti.coe.conversation import OFFLINE_PREFIX, conversational_rule, is_resume_message
 from dta.dti.coe.intent_classifier import IntentType, classify_intent
 from dta.dti.coe.llm import LLMResponse, get_llm_router, reset_llm_router
@@ -33,9 +32,12 @@ from server import jobs as jobs_mod
 from server.jobs import JobQueue, SQLiteJobStore
 from server.routes import chat as chat_routes
 from server.schemas import ChatTurn
+from server.utils import UPLOAD_DIR
 
-SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
-SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
+# The sample as attachable files (tests/conftest.py sample_uploads)
+pytestmark = pytest.mark.usefixtures("sample_uploads")
+SAMPLE_0601 = str(UPLOAD_DIR / "hlsl_20230601.tif")
+SAMPLE_0609 = str(UPLOAD_DIR / "hlsl_20230609.tif")
 NDMI_PROMPT = "Map moisture change with NDMI between the two dates"
 _KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
 SSE = {"Accept": "text/event-stream"}
@@ -103,6 +105,14 @@ def _attachment(path: str) -> dict[str, Any]:
     with rasterio.open(path) as src:
         meta = describe_raster(src, name, os.path.getsize(path)).model_dump()
     return {"id": name, "filename": name, "mime_type": "image/tiff", "path": path, "metadata": meta}
+
+
+async def _own_sample(client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    """The client's own copy of the sample pair (``POST /v1/sample``), as the UI attaches it."""
+    r = await client.post("/v1/sample")
+    assert r.status_code == 200, r.text
+    keys = ("id", "filename", "path", "metadata")
+    return [{**{k: a[k] for k in keys}, "mime_type": "image/tiff"} for a in r.json()["attachments"]]
 
 
 def _frames(body: str) -> list[tuple[int, str, dict[str, Any]]]:
@@ -391,14 +401,15 @@ async def test_guest_quota_counts_analyses_not_conversation(queue: JobQueue, mon
             assert (await _chat(client, message=message))["kind"] == "reply"
         assert await used(client) == 0
 
-        started = await _chat(client, message="Calculate NDVI", attachments=[_attachment(SAMPLE_0601)])
+        sample = await _own_sample(client)
+        started = await _chat(client, message="Calculate NDVI", attachments=sample[:1])
         assert started["kind"] == "analysis"
         assert await used(client) == 1
 
         for headers in ({}, SSE):
             r = await client.post(
                 "/v1/chat",
-                json={"message": "Calculate NDWI", "attachments": [_attachment(SAMPLE_0601)]},
+                json={"message": "Calculate NDWI", "attachments": sample[:1]},
                 headers=headers,
             )
             assert r.status_code == 429
