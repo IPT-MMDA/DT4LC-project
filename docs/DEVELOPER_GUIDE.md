@@ -12,7 +12,7 @@ cd DT4LC-project
 cp .env.example .env
 ```
 
-Don't copy `cognitive_ui/.env.example` for local development: it sets `VITE_API_URL=http://localhost:8000`, and a UI on another origin than the API sends no session cookie, so every request becomes a new guest that can't see the previous request's job. With `VITE_API_URL` unset, the Vite dev server proxies `/v1`, `/docs` and `/redoc` to `http://localhost:8000` on the UI's own origin.
+With `VITE_API_URL` unset, the Vite dev server proxies `/v1`, `/docs` and `/redoc` to `http://localhost:8000` on the UI's own origin.
 
 The backend loads `.env` via `load_dotenv()` in `server/app.py`. **Source of truth:** [`.env.example`](../.env.example) (commented defaults). Below is what matters for local dev.
 
