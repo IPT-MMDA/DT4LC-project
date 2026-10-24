@@ -404,7 +404,7 @@ Operators open Settings from the account menu, or at `/app/settings`. Everyone e
 |---------|-------------------------|
 | Assistant | Set the provider order, turn each provider on or off, and pick its model or models. **Test** sends a short prompt to each enabled provider in the saved order. Keys show only as present or absent. |
 | Models | **Pre-download** a model that is not installed. Choose who may download on first use: everyone, members and operators, operators only, or nobody. With "nobody", Pre-download is refused too. |
-| Access | Edit the allowed emails, allowed domains and operator emails (you cannot remove your own address), the guest analyses per hour (0–1000) and the guest session hours (1–720). The section also shows whether sign-in is configured. |
+| Access | Edit the allowed emails, allowed domains and operator emails (you cannot remove your own address, and **Reset to .env** is refused when `OPERATOR_EMAILS` in `.env` lacks it), the guest analyses per hour (0–1000) and the guest session hours (1–720). The section also shows whether sign-in is configured. |
 | Data sources | Read-only: the Earth Engine status, the uploads directory, the bundled sample |
 | Server | Read-only: the version, the deployment, the paths, the storage used, the jobs |
 
