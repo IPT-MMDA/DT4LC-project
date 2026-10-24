@@ -345,7 +345,7 @@ async def list_jobs(
 
         owner = None if session.operator else session.owner
         jobs = await queue.list_jobs(status=status_filter, limit=limit, offset=offset, owner=owner)
-        total = await queue.get_total_count(owner=owner)
+        total = await queue.get_total_count(owner=owner, status=status_filter)
 
         return JobListResponse(
             jobs=[JobSummary.model_validate(j.to_dict()) for j in jobs],
