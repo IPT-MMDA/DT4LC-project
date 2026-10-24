@@ -1430,7 +1430,7 @@ Job progress streams as Server-Sent Events from [GET /v1/jobs/{job_id}/events](#
 
 Guests may start `GUEST_ANALYSES_PER_HOUR` (default 5) analyses per rolling hour, counted per session and per client IP; the next one gets 429 `GUEST_QUOTA` (see [POST /v1/jobs](#post-v1jobs)). Conversation replies and proposals do not count. Members and operators are not limited. Behind a reverse proxy, the client IP is the one in `X-Forwarded-For` when the proxy's address is in `FORWARDED_ALLOW_IPS` (uvicorn runs with `--proxy-headers` in the Docker image); otherwise it is the proxy's own address, and every guest behind it shares one count.
 
-The backend has no other limit. The public demo's nginx (`deploy/nginx-demo.conf.template`, see [DEPLOY_DEMO.md](DEPLOY_DEMO.md#7-rate-limits-and-quotas)) adds per-IP limits for every role: `POST` to `/v1/jobs`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` 10 a minute with a burst of 5, and any `/v1/` request 20 a second with a burst of 200. A request over a limit gets 429 with `Retry-After: 10`:
+The backend has no other limit. The public demo's nginx (`deploy/nginx-demo.conf.template`, see [DEPLOY_DEMO.md](DEPLOY_DEMO.md#7-rate-limits-and-quotas)) adds per-IP limits for every role: `POST` to `/v1/jobs`, `/v1/jobs/{job_id}/confirm`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` 10 a minute with a burst of 5, and any `/v1/` request 20 a second with a burst of 200. A request over a limit gets 429 with `Retry-After: 10`:
 
 ```json
 {"ok": false, "error": {"code": "RATE_LIMITED", "message": "Too many requests from your address. Wait a few seconds and try again.", "details": {}}}
