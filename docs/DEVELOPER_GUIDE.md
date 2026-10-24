@@ -1,6 +1,6 @@
 # Developer Guide
 
-Setup, layout, tests, adding algorithms, COE flow, and git workflow for DT4LC.
+Setup, layout, tests, adding algorithms, the COE flow, the job event stream, the frontend, the browser E2E harness, and the git workflow for DT4LC.
 
 ## Environment setup
 
@@ -10,8 +10,9 @@ Setup, layout, tests, adding algorithms, COE flow, and git workflow for DT4LC.
 git clone https://github.com/IPT-MMDA/DT4LC-project.git
 cd DT4LC-project
 cp .env.example .env
-cp cognitive_ui/.env.example cognitive_ui/.env   # frontend API URL
 ```
+
+Don't copy `cognitive_ui/.env.example` for local development: it sets `VITE_API_URL=http://localhost:8000`, and a UI on another origin than the API sends no session cookie, so every request becomes a new guest that can't see the previous request's job. With `VITE_API_URL` unset, the Vite dev server proxies `/v1`, `/docs` and `/redoc` to `http://localhost:8000` on the UI's own origin.
 
 The backend loads `.env` via `load_dotenv()` in `server/app.py`. **Source of truth:** [`.env.example`](../.env.example) (commented defaults). Below is what matters for local dev.
 
@@ -27,20 +28,12 @@ The backend loads `.env` via `load_dotenv()` in `server/app.py`. **Source of tru
 | **Earth Engine** | `GEE_PROJECT_ID`, `GEE_SERVICE_ACCOUNT_KEY` | Only for the GEE data fetch routes (`/v1/gee/*`). |
 | **Jobs** | `JOB_STORAGE`, `DT4LC_JOBS_DB` | `sqlite` (default) or `memory` (lost on restart). DB path defaults to `resources/.cache/jobs.db`. |
 | **Ports (Docker)** | `BACKEND_PORT`, `FRONTEND_PORT` | Host port mapping in `docker-compose.yml`; locally `task run:api` (`dt4lc-api`) listens on 8000 (`DT4LC_PORT`). |
+| **Sessions and sign-in** | `SESSION_SECRET`, `SESSION_COOKIE_SECURE`, `DEV_ROLE`, `GUEST_ANALYSES_PER_HOUR`, `GUEST_SESSION_HOURS`, `GUEST_CLEANUP_MINUTES`, `MODEL_DOWNLOAD_ON_DEMAND`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE`, `GITHUB_OAUTH_BASE`, `GITHUB_API_BASE`, `ALLOWED_EMAILS`, `ALLOWED_DOMAINS`, `OPERATOR_EMAILS`, `FORWARDED_ALLOW_IPS` | Without the three GitHub variables sign-in is off and everyone is a guest; `DEV_ROLE=member` or `DEV_ROLE=operator` gives every request that role instead, the quickest way to see the member badge or Settings locally. See [API.md](API.md#sessions) and [API.md](API.md#sign-in). |
+| **Paths** | `DT4LC_CACHE_PATH`, `DT4LC_TEMP_PATH`, `DT4LC_OUTPUTS_PATH`, `DT4LC_UPLOADS_PATH`, `DT4LC_MODEL_CACHE`, `DT4LC_JOBS_DB`, `DT4LC_SETTINGS_PATH` | All under `resources/.cache/` by default (`dta/config/__init__.py`); the others follow `DT4LC_CACHE_PATH`. The E2E runner points them all at a temp dir. |
+| **Server** | `CORS_ORIGINS`, `DT4LC_DEPLOYMENT`, `DT4LC_HOST`, `DT4LC_PORT`, `DT4LC_RELOAD`, `DT4LC_LOG_LEVEL` | `DT4LC_DEPLOYMENT=demo` adds "public demo" to the Capabilities line. The last four are read by `dt4lc-api` (`server/cli.py`) only, not by `uvicorn` or the Docker image. |
+| **Demo** | `COMPOSE_FILE`, `COMPOSE_PROFILES`, `DEMO_SUBNET`, `DEMO_SKIP_MODEL_DOWNLOAD` | Read by Docker Compose and `docker-compose.demo.yml`; see [DEPLOY_DEMO.md](DEPLOY_DEMO.md). |
 
 **Minimal local COE (no Docker):** set at least one of `GEMINI_API_KEY` or `GROQ_API_KEY`, or run Ollama locally and set `LLM_PROVIDER_ORDER=ollama` with `LLM_ENABLE_OLLAMA=true`.
-
-**Also used in code but not in `.env.example`:**
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `CORS_ORIGINS` | `*` | Comma-separated allowed origins (`server/app.py`) |
-| `DT4LC_HOST` / `DT4LC_PORT` | `0.0.0.0` / `8000` | `server/cli.py` |
-| `DT4LC_RELOAD` | off | Hot reload for CLI server |
-| `DT4LC_LOG_LEVEL` | `info` | CLI log level |
-| `DT4LC_MODEL_CACHE` | `resources/.cache/models` | Model download cache (set in Docker) |
-| `DT4LC_UPLOADS_PATH` | `resources/.cache/uploads` | Uploaded rasters |
-| `DT4LC_JOBS_DB` | `resources/.cache/jobs.db` | SQLite job store path |
 
 Full LLM options and examples are also in [README.md](../README.md#configuration).
 
@@ -48,9 +41,9 @@ Full LLM options and examples are also in [README.md](../README.md#configuration
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `VITE_API_URL` | `http://localhost:8000` | Axios client (`src/api/client.ts`), upload/file hooks (`src/api/hooks/useUpload.ts`) and GeoTIFF tiles (`GeoTIFFLayer.tsx`) |
+| `VITE_API_URL` | unset: the UI's own origin | API origin for the API client (`src/api/client.ts`), the SSE streams, the upload/file hooks (`src/api/hooks/useUpload.ts`) and GeoTIFF tiles (`GeoTIFFLayer.tsx`) |
 
-It is the only frontend variable; the Docker image builds with `VITE_API_URL=""`, so the UI calls the API on its own origin through nginx.
+It is the only frontend variable. Leave it unset: sessions need the UI and the API on one origin (the Vite proxy in development, nginx under Docker, whose image builds with `VITE_API_URL=""`).
 
 **Backend:**
 
@@ -106,6 +99,32 @@ pytest tests/test_executor.py -v
 ```
 
 **Coverage:** `task coverage` or `pytest tests/ --cov=dta --cov=server --cov-report=html`
+
+### Running everything
+
+The gates every change must pass, backend then frontend:
+
+```bash
+uv run ruff check . && uv run ruff format --check . && uv run mypy dta server
+uv run pytest tests/ -m "not slow and not llm" -q
+cd cognitive_ui
+npm run lint                  # keep it at 0 errors and 0 warnings
+npm run build                 # tsc -b, the real type check, then vite build
+npm test                      # vitest
+npm run e2e:smoke             # Playwright, against dist/ and a real API
+```
+
+`npx tsc --noEmit` checks nothing here (`tsconfig.json` has `files: []`); `npm run build` runs the project references. `src/stockColours.test.ts` (part of `npm test`) fails on any stock Tailwind palette class in `src/`, or a hex value from that palette: take colours from the design tokens in `src/index.css` and, for MapLibre paint, from `components/map/mapColours.ts`.
+
+The browser groups, each with its own API process (see [Browser E2E harness](#browser-e2e-harness)):
+
+```bash
+npm run e2e:workspace && npm run e2e:run2 && npm run e2e:run3
+npm run e2e:signin && npm run e2e:settings
+npm run e2e:responsive && npm run e2e:dark && npm run e2e:a11y
+```
+
+To use the app locally: `task run:api` (or `uv run uvicorn server.app:app --reload --port 8000`) and `cd cognitive_ui && npm run dev`, then open <http://localhost:5173>. Under Docker: `docker compose up -d --build` (add `--profile ollama` for the local LLM) and <http://localhost>. The public demo stack is in [DEPLOY_DEMO.md](DEPLOY_DEMO.md).
 
 ## Adding a new algorithm
 
@@ -234,6 +253,65 @@ ChatRequest
 **API wiring:** in `server/routes/chat.py`, `/v1/execute` calls `orchestrate()` then `PipelineExecutor().execute()` on the validated plan, and `/v1/plan` stops after `orchestrate()`. Async jobs (`POST /v1/jobs`) use the same flow in `server/jobs.py`. `/v1/chat` classifies the message, answers conversation itself and submits an analysis as `POST /v1/jobs` does (see [API.md](API.md#post-v1chat)).
 
 **Verify:** `pytest tests/test_orchestrator.py tests/test_intent_classifier.py -v`
+
+## The job event stream
+
+An analysis is a job whose progress is a log of events (`intent`, `planning`, `proposal`, `step_started`, `step_progress`, `step_finished`, then one of `done`, `failed`, `cancelled`). The payloads and the failure codes are in [API.md](API.md#get-v1jobsjob_idevents); the server side (`server/job_events.py`, `JobQueue._emit` and `subscribe`) is described in [ARCHITECTURE.md](ARCHITECTURE.md#job-event-stream-and-proposals). To emit a new event, add its type to `EVENT_TYPES` in `server/job_events.py`, emit it from `server/jobs.py`, document it in API.md, and teach the reducer below what it means.
+
+**Consuming it from a script.** The stream is plain Server-Sent Events; keep the session cookie, as for any job route:
+
+```bash
+curl -N -b cookies.txt http://localhost:8000/v1/jobs/<job id>/events            # the whole log, then the live tail
+curl -N -b cookies.txt "http://localhost:8000/v1/jobs/<job id>/events?after=8"  # resume after seq 8
+```
+
+**In the UI** the stream goes through four layers, each with its tests next to it:
+
+1. `src/api/sse.ts`: `createSSEParser(onEvent)` turns text chunks into `{id, event, data}` frames (comments such as `: keep-alive` are dropped), and `readSSE(body)` is the async generator over a `fetch` response body. `POST /v1/chat` uses the same reader for its `reply_delta`, `reply_done` and `analysis` frames (`src/api/chat.ts`, `streamChat`).
+2. `src/api/jobs.ts`: `streamJobEvents(jobId, after, onEvent, signal)` opens `GET /v1/jobs/{id}/events?after=<after>` and hands each frame to `onEvent` as the stored `{seq, type, data}`; a 404 throws `ChatError`.
+3. `src/hooks/useJobEvents.ts`: `useJobEvents(jobId, terminal)` keeps one stream per job however many components follow it. Events are merged into the analysis message of the chat store (`applyJobEvents`, by `seq`, so a replay adds nothing twice); a dropped stream reconnects with `?after=<last seq>` after 0.5, 1, 2, 5 and then 10 s; the step into `done` fetches `GET /v1/jobs/{id}` for the result. A 404 marks the message "no longer on the server".
+4. `src/components/chat/analysis/analysisReducer.ts`: `analysisReducer(events)` is a pure function from the event list to an `AnalysisView`: the phase (`starting`, `planning`, `proposal`, `running`, `done`, `failed`, `cancelled`), the step rows with their status and progress, the proposal, the failure with its fixes, the done summary and the follow-ups. `AnalysisMessage.tsx` renders the view, so a new event usually needs only a reducer case and a test in `analysisReducer.test.ts`.
+
+## Frontend architecture
+
+React 18, TypeScript, Tailwind, MapLibre (`react-map-gl`), TanStack Query for server state, Zustand for client state, `react-markdown` for replies, and no component library. The design tokens (colours for both themes, type scale, radii) are CSS variables in `src/index.css`, exposed as Tailwind theme values.
+
+**Routes** (`src/routes.tsx`): `/` is the landing for a first-time guest (`pages/Landing.tsx`; `components/landing/landingDecision.ts` sends members, operators and returning guests to `/app`). Under `/app` the shell (`components/shell/Shell.tsx`) holds the pages: the Workspace (`/app`), Map mode (`/app/map`), the Library (`/app/library`), Capabilities (`/app/capabilities`), Result detail (`/app/results/:id`) and Settings (`/app/settings`); any other `/app/*` path, and Settings for a non-operator, is `pages/NotFound.tsx`. The v0.5 paths (`/chat`, `/jobs`, `/data`, `/models`, …) redirect.
+
+| Area | Where | What it does |
+|------|-------|--------------|
+| Shell | `components/shell/`: `Shell`, `Rail`, `ConversationList`, `ChatColumn`, `DockedMap`, `SessionBadge`, `AccountMenu`, `PhoneMenu`, `navigation.ts` | The rail (Chat, Map, Library, Can do; theme and account at the bottom), the conversation list with the session badge, the chat column, and the map docked beside the chat at 1440 px and wider. `hooks/useMediaQuery.ts` (`useLayout()`: phone under 768 px, tablet under 1024 px) switches to the phone bar and menu drawer |
+| Chat store | `store/useChatStore.ts` (persisted in `localStorage` as `dt4lc-chat-storage`, version 4) | Conversations and their messages: `user`, `assistant` (markdown) and `analysis` (one per job, with its event log). `addMessage`, `updateAnalysis`, `appendAnalysisEvent`, `findConversationByJobId`, the pending attachments and region of the composer. A guest's conversations follow the 24 h retention (`hooks/useConversationRetention.ts`) |
+| App store | `store/useAppStore.ts` (`dt4lc-app-storage`) | Drawn regions, map layers (`addResultLayer`, ids `result-<jobId>-<view>`), the imagery panel, Compare, the map tool and view |
+| Workspace | `pages/Workspace.tsx`, `components/chat/`: `MessageList`, `Composer`, `Chips`, `EmptyState`, `LibraryPicker`, `Markdown`, `analysis/AnalysisMessage`, `result/ResultCard` | One message per analysis, narrated from the event stream; the composer with +, From map, From library and drop; attachment and region chips. `hooks/useSendMessage.ts` sends a turn to `POST /v1/chat` with the history and the conversation's files; `hooks/useSample.ts` attaches the bundled pair (`?sample=1`) |
+| Result cards | `components/chat/result/resultModel.ts`, `ResultCard.tsx` | `resultCardOf(job, context)` turns `result.execution.artifacts` into a `ResultCardModel` (index, change, classification, fields, statistics, image); `ResultCard` renders it with On map, GeoTIFF, PNG and Details. See [Adding a result card kind](#adding-a-result-card-kind) |
+| Map mode | `pages/MapPage.tsx`, `components/map/mode/` (`ImageryPanel`, `LayersSection`, `MapToolbar`, `MapControls`, `MapLegend`, `RegionLabel`, `CompareSwipe`, region presets) | Draw or pick a region, choose dataset, dates, cloud and bands; Send to chat puts the region chip in the composer. Layers come from chat results, the sample (true colour, with its footprint) and Earth Engine. MapLibre can't read `oklch`, so map paint colours come from `components/map/mapColours.ts` |
+| Library | `pages/Library.tsx`, `components/library/` (`libraryModel.ts`, `useLibraryActions.ts`), `api/library.ts` | One list of analyses (`GET /v1/jobs`, each with its `card`) and files (`GET /v1/files`, the sample pair as one row), filters and row actions (Map, Chat, Retry, download, CSV, Delete). It shares the `['files']` query with Map mode and invalidates it on delete |
+| Result detail | `pages/ResultDetail.tsx`, `components/detail/` (`resultDetailModel.ts`, `useResultActions.ts`) | The maps, the class statistics with CSV, the plan steps with parameters and times, the interpretation and the downloads (`downloadName(ref)`) of one job, and Open in workspace, Re-run with changes, Open on map |
+| Capabilities | `pages/Capabilities.tsx`, `api/hooks/useCapabilities.ts` | Renders `GET /v1/capabilities`; an example prompt opens `/app?prompt=…` with the prompt in the composer, unsent (`hooks/usePromptFromQuery.ts`) |
+| Settings | `pages/Settings.tsx`, `components/settings/` (`AssistantSection`, `ModelsSection`, `AccessSection`, `ReadOnlySections`, `settingsModel.ts`, `form.ts`), `api/settings.ts` | Operators only. Reads `GET /v1/settings`, sends only the changed fields in `PUT`, `null` for Reset to .env, and runs the assistant test |
+| Account menu | `components/shell/AccountMenu.tsx`, `api/auth.ts`, `hooks/useSigninNotice.ts` | The role badge, the theme, Settings for operators, "Sign in with GitHub" (a link to `/v1/auth/github/login`) or "Sign-in not configured on this server", and Sign out (`POST /v1/auth/logout`). `useSigninNotice` turns the callback's `?signin=denied&reason=…` or `?signin=error` into a notice and cleans the URL |
+
+Server state goes through TanStack Query: the session (`api/hooks/useSession.ts`, `SESSION_QUERY_KEY`), health, capabilities (`['capabilities']`), the files list (`['files']`) and jobs (`['job', id]`). Every request goes to `API_BASE_URL` (`api/client.ts`), which is empty unless `VITE_API_URL` is set, so the UI's own origin; errors are `ApiError(message, status, body)`.
+
+## Adding a result card kind
+
+A card kind maps an analysis output to what the Workspace, Result detail and the docked map show. Example: a new algorithm whose output type `WetnessMap` has a raster `wetness`, its bare map `wetness_map_bare` and `statistics`.
+
+1. **Backend first.** Save the raster with a style: `artifact_files.save(result, {"wetness": array}, {"wetness_map": png}, crs=…, transform=…, styles={"wetness": style}, bare={"wetness_map": "wetness"})` writes the `DT4LC_*` tags into its GeoTIFF and a `wetness_map_bare` PNG whose `stats.style` is that style (see [Job artifacts](ARCHITECTURE.md#bare-maps-and-style-tags)); then tiles and legends need no frontend colour table. If it has classes, return `class_statistics` with each class's `colour`. Add the output's registry id to `_KINDS` in `server/library.py`, so the job's `card.kind` (the Library's Type) is right, and to `_SINGLE_TITLES` or `_title` there for its card title.
+2. **The model.** In `components/chat/result/resultModel.ts`, reuse a kind when the card looks the same: an index-like raster can go through `indexCard` by adding its output type to `INDEX_ARTIFACTS`. For a new look, add a member to the `ResultCardModel` union (`kind`, `views`, and what it shows), a builder that reads the artifact with `asRef` and `styleOf`, and a line in `resultCardOf`, before the generic `imageCard` fallback. `resultLayerOf` puts a view on the map.
+3. **The view.** Add the `case` to the `switch (model.kind)` in `ResultCard.tsx`, using the token classes. If Result detail should show more than the card (statistics, a table), extend `components/detail/resultDetailModel.ts`.
+4. **Tests.** Save a real `GET /v1/jobs/{id}` record from an isolated run in `src/test/fixtures/jobs/<name>.json` (as the existing fixtures are), then test the model in `resultModel.test.ts` and the render in `ResultCard.test.tsx`. Add a Playwright check of the card only if it is a new screen state.
+
+## Browser E2E harness
+
+`cognitive_ui/tests/e2e/` runs Playwright flows (`playwright-core` with the cached Chromium headless shell, driven by `node --test`) against the built `dist/` and a real API whose state lives in a temp dir. The full reference is [tests/e2e/README.md](../cognitive_ui/tests/e2e/README.md); the essentials:
+
+- **Groups.** One API process serves a run, so flows that need another role, LLM mode or server state run in their own group, e.g. `e2e:workspace:guest`, `e2e:workspace:member` (`E2E_DEV_ROLE=member`), `e2e:capabilities:demo` (`E2E_SERVER=demo`), `e2e:run3:quota` (`E2E_GUEST_LIMIT=2`). The umbrella scripts are `e2e:workspace`, `e2e:run2`, `e2e:run3` (the five user flows: upload → analyze → result, map draw → send to chat → analysis, a follow-up turn, the guest quota, sign-in), `e2e:signin`, `e2e:settings`, `e2e:responsive`, `e2e:dark` and `e2e:a11y`. Screenshots and `api.log` go to `tests/e2e/out/` (git-ignored).
+- **Fakes**, so no flow needs a key or the network: a fake Ollama (`fake-ollama.mjs`, with `E2E_LLM=fake`) answers from regex rules that a flow sets with `setLLMRules()` and logs what the backend sent (`llmRequests()`); a fake Hugging Face hub (`fake-hf.mjs`, always) serves zero-filled weights slowly enough to show download progress; a fake GitHub (`fake-github.mjs`, with `E2E_SIGNIN=fake`) has the scripted users `member`, `operator`, `outsider`, `unverified` and `denied`, picked with `signInAs()`. Earth Engine is never configured, so region flows end in `EE_NOT_CONFIGURED`.
+- **Layout and accessibility.** `layout.mjs` exports `auditLayout(page, {scrollers, clippers, overlays, scope})`: it fails a screen whose document is wider than the viewport, whose elements leave an edge, or whose visible texts overlap; the responsive and dark groups run it on every screen. The `a11y` flow runs axe (`@axe-core/playwright`, WCAG 2.0/2.1 A and AA) on the seven screens in both themes and fails on any serious or critical violation; nothing is excluded. `screens.mjs` holds the seeding steps these groups share.
+- **Writing a flow.** Add `flows/<name>.e2e.mjs`, start with `setup()` from `harness.mjs`, take screenshots with `outPath()`, assert `trackPageErrors(page)` is empty, and add the flow to its group's script in `package.json`. A flow that needs the fake LLM or another role skips itself otherwise.
+- **Linux without root:** `tests/e2e/setup-libs.sh` fetches the browser's missing shared libraries into `tests/e2e/.libroot/`.
 
 ## Git workflow
 
