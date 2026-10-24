@@ -10,7 +10,7 @@ This page describes the main routes. The generated reference covers every route,
 
 The first request without a valid `dt4lc_session` cookie gets one: signed with `SESSION_SECRET` (a random secret per server start if it is unset), `HttpOnly`, `SameSite=Lax`, and `Secure` with `SESSION_COOKIE_SECURE=true`. It lasts `GUEST_SESSION_HOURS` (24). A session is a guest until it signs in with GitHub (see [Sign-in](#sign-in)); then the cookie also carries the user, and the role comes from the allowlists on every request. `DEV_ROLE=guest|member|operator` overrides the role of every request, signed in or not, for development.
 
-Jobs and uploads record an `owner`: the session id for a guest, and the stable user id `github:<numeric id>` once signed in, so a member sees the same items from any browser. A caller sees only its own: another owner's job, its events, cancel, confirm, delete and statistics, and another owner's downloads, tiles and files answer 404, as for an unknown id. `GET /v1/jobs` lists only the caller's jobs, and `GET /v1/files` only the caller's uploads (Earth Engine exports are listed to everyone). Operators see everything, including jobs and uploads from before v0.6.0, which have no owner. When a guest signs in, the guest session's jobs and uploads move to the user id (they are *adopted*). Guest jobs, their outputs and guest uploads are removed by a periodic cleanup (every `GUEST_CLEANUP_MINUTES`, default 60) once they are older than `GUEST_SESSION_HOURS`; members' and operators' items are kept.
+Jobs and uploads record an `owner`: the session id for a guest, and the stable user id `github:<numeric id>` once signed in, so a member sees the same items from any browser. A caller sees only its own: another owner's job, its events, cancel, confirm, delete and statistics, and another owner's downloads, tiles and files answer 404, as for an unknown id. So does a job or chat message that attaches another owner's file (see [POST /v1/jobs](#post-v1jobs)). `GET /v1/jobs` lists only the caller's jobs, and `GET /v1/files` only the caller's uploads (Earth Engine exports are listed to everyone). Operators see everything, including jobs and uploads from before v0.6.0, which have no owner. When a guest signs in, the guest session's jobs and uploads move to the user id (they are *adopted*). Guest jobs, their outputs and guest uploads are removed by a periodic cleanup (every `GUEST_CLEANUP_MINUTES`, default 60) once they are older than `GUEST_SESSION_HOURS`; members' and operators' items are kept.
 
 The cookie only works same-origin (see [CORS](#cors)). With `curl`, keep it in a cookie jar; otherwise each call is a new guest that cannot see the job the previous call submitted:
 
@@ -372,7 +372,7 @@ One Workspace message. The answer is either a markdown reply, which creates no j
 |-------|---------|
 | `message` | The user's text; may be empty when only files are attached |
 | `history` | Earlier turns, oldest first, `{role: "user" \| "assistant", text}`. The server keeps the last 10, cuts each to 2000 characters and drops the oldest until the total is at most 8000. Send an analysis as an assistant turn with its summary, so a question about "the last result" can be answered |
-| `attachments` | As in `POST /v1/jobs`, with `metadata`. The server does not remember earlier attachments: send the conversation's files again with each message |
+| `attachments` | As in `POST /v1/jobs`, with `metadata`. `path` follows the same rule: a path from `POST /v1/upload` or `POST /v1/sample`, or an artifact of one of the caller's own jobs, works; see **Attachment paths** there for the rest. The server does not remember earlier attachments: send the conversation's files again with each message |
 | `region` | As in `POST /v1/jobs` |
 | `pending` | The `pending` of the previous reply, if it had one |
 
@@ -437,7 +437,11 @@ How a message is answered:
 - With a `pending`, a message that only points at the files ("here", "this one", none at all, or up to four words without an analysis verb, registry keyword or index name) runs the pending prompt once enough files (two when `needs` has two) or a region come with it, and returns `analysis`. With one file for a two-date analysis, the reply asks for both and keeps the `pending`.
 - Conversation never creates a job and does not count against the guest quota. An analysis counts, as through `POST /v1/jobs`.
 
-**Errors:** plain HTTP, before any stream starts: 422 for an invalid body (FastAPI's `detail` array), and 429 `GUEST_QUOTA` when the message would start an analysis beyond the guest limit (see [POST /v1/jobs](#post-v1jobs)).
+**Errors:** plain HTTP, before any stream starts, so they are JSON even with `Accept: text/event-stream`:
+
+- 422 for an invalid body (FastAPI's `detail` array);
+- 403 `unauthorized` or 404 `not_found` for an attachment the caller may not use, with the bodies given under [POST /v1/jobs](#post-v1jobs). The attachments are checked first, before the message is classified and before a `pending` analysis resumes, so a refused message gets no reply, starts no analysis and is not counted;
+- 429 `GUEST_QUOTA` when the message would start an analysis beyond the guest limit (see [POST /v1/jobs](#post-v1jobs)).
 
 ### Job Management
 
@@ -462,7 +466,7 @@ Submit an async job for processing.
 }
 ```
 
-`id`, `filename`, `path` and `metadata` come from the `POST /v1/upload` or `POST /v1/sample` response; `mime_type` is required. Send `metadata` as it came: the `intent` sentence takes the dates from it ("for 1 June").
+`id`, `filename`, `path` and `metadata` come from the `POST /v1/upload` or `POST /v1/sample` response; `mime_type` is required. Send `metadata` as it came: the `intent` sentence takes the dates from it ("for 1 June"). A `path` may also be an artifact of one of the caller's own jobs; **Attachment paths** below says what else is allowed and what is refused.
 
 **Response:** (202 Accepted, the job record)
 
@@ -547,6 +551,20 @@ A region over 2,500 km², an unknown field or band, or a malformed geometry is a
 ```
 
 When files are attached as well, the files are analysed, the region is not fetched, and the echo has `note`: "Files are attached, so the analysis reads them and doesn't fetch this region." The fetch steps are `input` steps named like "Fetch HLS L30 · 2023-05-29 → 06-04". Without Earth Engine credentials a region job fails at planning with `EE_NOT_CONFIGURED`.
+
+**Attachment paths.** Each attachment's `path` gets the directory and owner checks of [GET /v1/download](#get-v1download). A session may attach its own uploads and sample copies (the paths that `POST /v1/upload` and `POST /v1/sample` return) and the artifacts of its own jobs. Files in the directories that have no owners stay usable, as for downloads: temporary and model outputs, `run-*` folders in the outputs directory, Delineate-Anything's working directory and Earth Engine exports. Operators may attach any file in the served directories. A path outside them, including one that leaves them through `..`, is 403:
+
+```json
+{"ok": false, "error": {"code": "unauthorized", "message": "This attachment isn't a file you can use here. Attach files with + or the sample.", "details": {}}}
+```
+
+A path that is missing, not a file, or another owner's file is 404:
+
+```json
+{"ok": false, "error": {"code": "not_found", "message": "Attachment not found.", "details": {}}}
+```
+
+The message never contains the path. One refused attachment refuses the whole request. The check runs before the guest quota, so a refused request is not counted and creates no job, and a guest over the limit who sends one gets the 403 or 404, not the 429. [POST /v1/chat](#post-v1chat) checks its attachments the same way.
 
 **Guest quota.** A guest may start `GUEST_ANALYSES_PER_HOUR` (5) analyses per rolling hour, counted per session and per client IP. Beyond that, `POST /v1/jobs` returns 429 with a `Retry-After` header (seconds) and no job is created:
 
@@ -1377,8 +1395,8 @@ HTTP errors return an `ErrorResponse` body:
 | Status | `error.code` |
 |--------|--------------|
 | 400 | `bad_request` |
-| 403 | `unauthorized`; `MODEL_GATED` from the [model routes](#model-downloads) |
-| 404 | `not_found`; `SAMPLE_NOT_BUNDLED` from `POST /v1/sample`; `SIGN_IN_NOT_CONFIGURED` from the [GitHub sign-in routes](#sign-in) |
+| 403 | `unauthorized`, also for an attachment outside the served directories on [`POST /v1/jobs`](#post-v1jobs) and [`POST /v1/chat`](#post-v1chat); `MODEL_GATED` from the [model routes](#model-downloads) |
+| 404 | `not_found`, also for an attachment that is missing, not a file, or another owner's file; `SAMPLE_NOT_BUNDLED` from `POST /v1/sample`; `SIGN_IN_NOT_CONFIGURED` from the [GitHub sign-in routes](#sign-in) |
 | 409 | `CONFIRMATION_REQUIRED` from `POST /v1/execute`; otherwise `bad_request` |
 | 413 | `file_too_large` |
 | 415 | `NOT_A_RASTER` from [`GET /v1/tiles`](#get-v1tileszxy) |
