@@ -1,0 +1,13 @@
+{
+  "connected": true,
+  "providers": [
+    {
+      "name": "ollama",
+      "model": "fake",
+      "ok": true,
+      "latency_ms": 4,
+      "error": null
+    }
+  ],
+  "error": null
+}

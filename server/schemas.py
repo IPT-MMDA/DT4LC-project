@@ -4,15 +4,26 @@ Defines request/response models for the REST API endpoints including
 job submission, chat messages, and file attachments.
 """
 
+from datetime import date, datetime
 from enum import Enum
-from typing import Any, Literal
+import re
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from dta import __version__
 
 # Re-export Attachment from domain schemas to avoid duplication
-from dta.dti.schemas import Attachment
+from dta.dti.schemas import Attachment, RasterMetadata
 
 __all__ = [
     "Attachment",
@@ -22,6 +33,10 @@ __all__ = [
     "CapabilitiesResponse",
     "ChatMessage",
     "ChatRequest",
+    "ChatTurn",
+    "ConversationAnalysis",
+    "ConversationReply",
+    "ConversationRequest",
     "CreateJobRequest",
     "DatasetListResponse",
     "ErrorCode",
@@ -35,6 +50,7 @@ __all__ = [
     "GEEFetchResponse",
     "JobListResponse",
     "JobRecord",
+    "JobRegion",
     "JobStatus",
     "JobSubmitRequest",
     "MetricsResponse",
@@ -42,12 +58,21 @@ __all__ = [
     "MLModelDetailResponse",
     "MLModelDownloadResponse",
     "MLModelsListResponse",
+    "PendingIntent",
     "PersistLayerRequest",
     "PersistLayerResponse",
     "Plan",
     "PlanResponse",
     "QueueStatsResponse",
     "RegistryModelsResponse",
+    "SessionAnalyses",
+    "SessionResponse",
+    "SessionUser",
+    "SettingsResponse",
+    "SettingsTestResponse",
+    "SettingsUpdate",
+    "SignInInfo",
+    "AuthStatusResponse",
     "UploadResponse",
 ]
 
@@ -98,6 +123,72 @@ class ChatRequest(BaseModel):  # type: ignore[misc]
     messages: list[ChatMessage] = Field(description="Conversation messages; last user message is used as the prompt")
 
 
+class JobRegion(BaseModel):  # type: ignore[misc]
+    """A region sent from the map: what to fetch from Earth Engine for the analysis.
+
+    Exactly one of ``geometry`` and ``bbox``; ``start_date`` ≤ ``end_date``; at most
+    ``MAX_REGION_KM2`` (2500 km²). Anything else is a 422.
+    """
+
+    model_config = {"extra": "forbid"}
+
+    geometry: dict[str, Any] | None = Field(None, description="GeoJSON Polygon or MultiPolygon in WGS84")
+    bbox: list[float] | None = Field(None, description="[west, south, east, north] in degrees")
+    name: str | None = Field(None, max_length=80, description="Region name, e.g. 'Dnipro floodplain'")
+    place: str | None = Field(None, max_length=80, description="Place, e.g. 'Kherson'")
+    dataset: Literal["HLS L30", "HLS S30", "Sentinel-2", "Landsat 8/9", "MODIS"]
+    start_date: date
+    end_date: date
+    bands: list[str] | None = Field(
+        None, description="Band codes, e.g. ['B2', 'B5']; default: the dataset's optical bands"
+    )
+    cloud_max: int = Field(20, ge=0, le=100, description="Maximum cloud cover, percent")
+    _area_km2: float = PrivateAttr(0.0)
+    _bounds: list[float] = PrivateAttr(default_factory=list)
+
+    @model_validator(mode="after")  # type: ignore[misc]
+    def _check(self) -> "JobRegion":
+        from dta.dti.data_sources.gee_region import DATASETS, band_code
+
+        from .regions import MAX_REGION_KM2, area_km2, format_area, region_shape
+
+        if self.start_date > self.end_date:
+            raise ValueError("region start_date is after end_date")
+        geom = region_shape(self.geometry, self.bbox)
+        area = area_km2(geom)
+        if area > MAX_REGION_KM2:
+            raise ValueError(
+                f"region is {format_area(area)}; the limit is {format_area(MAX_REGION_KM2)}. Draw a smaller region."
+            )
+        if self.bands is not None:
+            if not self.bands:
+                raise ValueError("region bands is empty; leave it out for the dataset's default bands")
+            codes = [band_code(self.dataset, b) for b in self.bands]
+            unknown = [b for b, c in zip(self.bands, codes, strict=True) if c is None]
+            if unknown:
+                bands = ", ".join(DATASETS[self.dataset].bands)
+                raise ValueError(f"{self.dataset} has no band {', '.join(unknown)}; its bands are {bands}")
+            self.bands = list(dict.fromkeys(c for c in codes if c))
+        self._area_km2 = area
+        self._bounds = [round(v, 6) for v in geom.bounds]
+        return self
+
+    def echo(self, note: str | None = None) -> dict[str, Any]:
+        """The job's ``region``: the request (bands resolved), ``bounds``, ``area_km2``, ``line`` and ``note``."""
+        from dta.dti.data_sources.gee_region import DATASETS
+
+        from .regions import region_line
+
+        echo: dict[str, Any] = self.model_dump(mode="json")
+        echo["bands"] = self.bands or list(DATASETS[self.dataset].default_bands)
+        echo["bounds"] = self._bounds
+        echo["area_km2"] = round(self._area_km2, 1)
+        echo["line"] = region_line(echo)
+        if note:
+            echo["note"] = note
+        return echo
+
+
 class JobSubmitRequest(BaseModel):  # type: ignore[misc]
     """Request for submitting a new job."""
 
@@ -105,6 +196,10 @@ class JobSubmitRequest(BaseModel):  # type: ignore[misc]
     mode: str = Field(default="hybrid", description="Planning mode: hybrid, llm, or template")
     attachments: list[Attachment] = Field(default_factory=list, description="Uploaded GeoTIFF attachments")
     context: dict[str, Any] | None = Field(default=None, description="Optional session context for follow-up requests")
+    region: JobRegion | None = Field(
+        default=None,
+        description="Region from the map, fetched from Earth Engine when no file is attached (attachments win)",
+    )
 
 
 class Plan(BaseModel):  # type: ignore[misc]
@@ -137,11 +232,32 @@ class JobStatus(BaseModel):  # type: ignore[misc]
 # --- Jobs ---
 
 
+class JobCardAnalysis(BaseModel):  # type: ignore[misc]
+    id: str = Field(description="Registry id of the main analysis step, e.g. 'algorithms/change-detection'")
+    label: str = Field(description="e.g. 'Change detection', 'Band math', 'Statistics', 'Delineate-Anything'")
+
+
+class JobCardError(BaseModel):  # type: ignore[misc]
+    code: str = Field(description="The failed event's code, e.g. 'EE_NOT_CONFIGURED'")
+    message: str
+
+
+class JobCard(BaseModel):  # type: ignore[misc]
+    """A Library row without the result (server/library.py), stored when the job reaches a terminal state."""
+
+    title: str = Field(description="e.g. 'Water change · NDWI difference', 'NDVI · 2023-06-01'")
+    analysis: JobCardAnalysis | None = None
+    kind: Literal["change", "index", "classification", "fields", "statistics", "composed", "image"] | None = None
+    thumbnail_url: str | None = Field(None, description="Download URL of the main map-only PNG (*_bare)")
+    duration_s: float | None = Field(None, description="completed_at - started_at, seconds")
+    error: JobCardError | None = Field(None, description="Failed jobs: the failed event's code and message")
+
+
 class JobSummary(BaseModel):  # type: ignore[misc]
     """Async job status without results (``GET /v1/jobs`` list item)."""
 
     id: str
-    status: str = Field(description="pending, running, completed, failed, or cancelled")
+    status: str = Field(description="pending, proposal, running, completed, failed, or cancelled")
     prompt: str
     plan: dict[str, Any] | None = None
     progress: float = Field(ge=0.0, le=1.0)
@@ -149,13 +265,47 @@ class JobSummary(BaseModel):  # type: ignore[misc]
     created_at: str
     started_at: str | None = None
     completed_at: str | None = None
+    owner: str | None = Field(
+        default=None,
+        description="Submitter's session id, or github:<id> once signed in; null for jobs from before v0.6.0",
+    )
+    card: JobCard | None = Field(
+        default=None, description="Library row summary once the job is finished; null before, and for older jobs"
+    )
 
 
 class JobRecord(JobSummary):
     """Async job status and results (``GET /v1/jobs/{id}``)."""
 
     result: dict[str, Any] | None = Field(
-        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats}"
+        default=None, description="Pipeline result; files are referenced as {kind, path, url, stats, size_bytes}"
+    )
+    events: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Event log as replayed by GET /v1/jobs/{id}/events: [{seq, type, data}] (server/job_events.py)",
+    )
+    proposal: dict[str, Any] | None = Field(
+        default=None,
+        description="{text, plan} when planning proposed a composed plan (status proposal until confirmed)",
+    )
+    region: dict[str, Any] | None = Field(
+        default=None,
+        description="The submitted region with bounds, area_km2 and the chip line; note if attachments won",
+    )
+
+
+class JobDeleteResponse(BaseModel):  # type: ignore[misc]
+    """``DELETE /v1/jobs/{id}``: the job and its output files are gone."""
+
+    ok: bool = True
+    id: str
+
+
+class JobConfirmRequest(BaseModel):  # type: ignore[misc]
+    """``POST /v1/jobs/{id}/confirm``: run the proposal, or ``plan`` if the user changed it."""
+
+    plan: dict[str, Any] | None = Field(
+        default=None, description="Edited execution plan; its file inputs are the job's own attachments"
     )
 
 
@@ -199,6 +349,52 @@ class ExecuteResponse(BaseModel):  # type: ignore[misc]
     progress: list[dict[str, Any]] = Field(default_factory=list, description="Step progress events")
 
 
+class ChatTurn(BaseModel):  # type: ignore[misc]
+    """One earlier turn of the conversation, as the client shows it."""
+
+    role: Role
+    text: str = Field(description="Turn text; for an analysis, its summary or interpretation")
+
+
+class PendingIntent(BaseModel):  # type: ignore[misc]
+    """An analysis request that waits for its input; the client stores it and sends it back."""
+
+    prompt: str = Field(description="The request to run once the input arrives")
+    item_id: str | None = Field(None, description="Registry id of the analysis it names, if any")
+    needs: list[Literal["RasterPath", "RasterPathBefore", "RasterPathAfter"]] = Field(
+        min_length=1, description='["RasterPath"], or ["RasterPathBefore", "RasterPathAfter"] for two dates'
+    )
+    asked_at: datetime = Field(description="When the assistant asked (UTC); a pending older than 30 min expires")
+
+
+class ConversationRequest(BaseModel):  # type: ignore[misc]
+    """``POST /v1/chat``: one Workspace message."""
+
+    message: str = Field("", description="The user's message; may be empty when only files are attached")
+    history: list[ChatTurn] = Field(
+        default_factory=list, description="Earlier turns, oldest first; the server keeps the last 10 (8000 chars)"
+    )
+    attachments: list[Attachment] = Field(default_factory=list, description="Uploads, with their metadata")
+    region: JobRegion | None = Field(None, description="As in POST /v1/jobs")
+    pending: PendingIntent | None = Field(None, description="The pending of the previous reply, if any")
+
+
+class ConversationReply(BaseModel):  # type: ignore[misc]
+    """A conversation reply: markdown, no job."""
+
+    kind: Literal["reply"] = "reply"
+    text: str = Field(description="Markdown")
+    pending: PendingIntent | None = Field(None, description="Set when the reply asks for the input of an analysis")
+
+
+class ConversationAnalysis(BaseModel):  # type: ignore[misc]
+    """An analysis request: the job submitted as by POST /v1/jobs; follow GET /v1/jobs/{job_id}/events."""
+
+    kind: Literal["analysis"] = "analysis"
+    job_id: str
+    job: JobRecord
+
+
 # --- Files ---
 
 
@@ -213,12 +409,36 @@ class UploadResponse(BaseModel):  # type: ignore[misc]
     bounds: list[float] = Field(description="Bounding box [left, bottom, right, top]")
     preview_png_base64: str = Field(description="Grayscale PNG preview as base64 (do not persist)")
     preview_url: str = Field(description="Download URL of the PNG preview written next to the upload")
+    metadata: RasterMetadata = Field(description="Sensor guess, bands, resolution, date, size and display line")
+    owner: str | None = Field(default=None, description="Uploader's session id, or github:<id> once signed in")
+
+
+class SampleResponse(BaseModel):  # type: ignore[misc]
+    """The bundled Kakhovka sample attached as the caller's uploads (``POST /v1/sample``)."""
+
+    name: str = Field(description="Chip name, 'kakhovka_hls_l30'")
+    line: str = Field(description="Pair chip line, e.g. 'HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09'")
+    attachments: list[UploadResponse] = Field(
+        description="Both dates, oldest first, as uploads (preview_png_base64 is empty: use preview_url)"
+    )
+
+
+class FileGroup(BaseModel):  # type: ignore[misc]
+    """Files the Library shows as one row: the two dates of the bundled sample."""
+
+    name: str = Field(description="Row name, 'kakhovka_hls_l30.tif'")
+    line: str = Field(description="e.g. 'HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09 · EPSG:32636'")
 
 
 class FileInfo(BaseModel):  # type: ignore[misc]
     """Metadata for an on-disk GeoTIFF."""
 
-    id: str
+    id: str = Field(description="The file name without its extension")
+    upload_id: str | None = Field(
+        None,
+        description="The id POST /v1/upload or POST /v1/sample returned (the sample pair shares one); "
+        "DELETE /v1/files/{upload_id}; null for exports",
+    )
     filename: str
     path: str
     size: list[int]
@@ -227,6 +447,23 @@ class FileInfo(BaseModel):  # type: ignore[misc]
     size_bytes: int
     source: Literal["upload", "export"] = Field(description="upload or gee export")
     modified: float = Field(description="Unix modification time")
+    metadata: RasterMetadata | None = Field(None, description="As in UploadResponse.metadata")
+    owner: str | None = Field(
+        None, description="Uploader's session id, or github:<id> once signed in; null for exports and older uploads"
+    )
+    kind: Literal["upload", "sample", "export"] = Field(
+        description="upload, sample (a copy of the bundled sample from POST /v1/sample) or export (Earth Engine)"
+    )
+    group: FileGroup | None = Field(None, description="Set on both sample files: show them as one row")
+    preview_url: str | None = Field(None, description="Download URL of the PNG preview; null if there is none")
+    created_at: str = Field(description="ISO time of the upload (the owner record), else of the last modification")
+
+
+class FileDeleteResponse(BaseModel):  # type: ignore[misc]
+    """``DELETE /v1/files/{id}``: the files removed with their previews and owner records."""
+
+    ok: bool = True
+    deleted: list[str] = Field(description="File names removed, e.g. both sample dates")
 
 
 class FileListResponse(BaseModel):  # type: ignore[misc]
@@ -235,6 +472,53 @@ class FileListResponse(BaseModel):  # type: ignore[misc]
     ok: bool = True
     files: list[FileInfo]
     count: int
+
+
+# --- Session ---
+
+
+class SessionAnalyses(BaseModel):  # type: ignore[misc]
+    """Analyses in the last hour; ``limit``, ``remaining`` and ``resets_at`` are null for unlimited roles."""
+
+    limit: int | None
+    used: int
+    remaining: int | None
+    resets_at: str | None = Field(description="ISO time (UTC) when ``used`` next drops by one; null if nothing used")
+
+
+class SessionUser(BaseModel):  # type: ignore[misc]
+    """The signed-in GitHub account."""
+
+    id: str = Field(description="Stable owner id of the user's jobs and uploads: github:<numeric id>")
+    login: str
+    name: str | None
+    email: str = Field(description="The primary, verified GitHub email the role was decided from")
+    avatar_url: str | None
+
+
+class SignInInfo(BaseModel):  # type: ignore[misc]
+    configured: bool = Field(description="GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET and OAUTH_REDIRECT_BASE are set")
+
+
+class SessionResponse(BaseModel):  # type: ignore[misc]
+    """The caller's session (``GET /v1/session``): role, user, guest quota and retention for the UI badge."""
+
+    role: Literal["guest", "member", "operator"]
+    guest: bool
+    user: SessionUser | None = Field(description="The signed-in user; null for a guest")
+    sign_in: SignInInfo
+    analyses: SessionAnalyses
+    kept_hours: int | None = Field(description="Hours a guest's jobs and uploads are kept; null for other roles")
+    expires_at: str = Field(description="ISO time (UTC) when the session cookie expires")
+    can_download_models: bool = Field(description="Whether this role may download model weights on demand")
+
+
+class AuthStatusResponse(BaseModel):  # type: ignore[misc]
+    """``GET /v1/auth/status``: whether sign-in is configured, and who the caller is."""
+
+    configured: bool
+    user: SessionUser | None
+    role: Literal["guest", "member", "operator"]
 
 
 # --- Health / registry ---
@@ -290,25 +574,84 @@ class DiskUsage(BaseModel):  # type: ignore[misc]
     error: str | None = None
 
 
+class AssistantStatus(BaseModel):  # type: ignore[misc]
+    """Whether a conversational assistant (LLM provider) is reachable."""
+
+    connected: bool = Field(description="At least one configured LLM provider is available")
+    offline: bool = Field(description="No provider is available: analyses still run, answers come from the catalog")
+    provider: str | None = Field(None, description="First available provider in LLM_PROVIDER_ORDER, e.g. 'gemini'")
+    model: str | None = Field(None, description="That provider's model, e.g. 'gemini-2.5-flash'")
+
+
 class HealthResponse(BaseModel):  # type: ignore[misc]
     """Health check response."""
 
     ok: bool = True
     service: str = "DT4LC"
     version: str = __version__
+    assistant: AssistantStatus | None = None
     llm_providers: list[LLMProviderStatus] | None = None
     gee: GEEStatus | None = None
     models: ModelsInfo | None = None
     disk: DiskUsage | None = None
 
 
-class CapabilitiesResponse(BaseModel):  # type: ignore[misc]
-    """Component registry snapshot."""
+class CapabilitiesSummary(BaseModel):  # type: ignore[misc]
+    """The server line: ``parts`` and their ``line`` (the deployment only when it is the public demo)."""
 
-    version: str
-    types: list[str]
-    instances: list[dict[str, Any]]
-    count: int
+    deployment: Literal["demo", "local"] = Field(description="DT4LC_DEPLOYMENT (default local)")
+    parts: dict[str, str] = Field(description="deployment, role, assistant, models, earth_engine labels")
+    line: str = Field(description="e.g. 'public demo · guest access · Gemini 3.5 Flash connected · …'")
+
+
+class CapabilitiesAssistant(BaseModel):  # type: ignore[misc]
+    """The assistant from ``/v1/health`` plus its display name."""
+
+    connected: bool
+    provider: str | None = None
+    model: str | None = None
+    display: str | None = Field(None, description="e.g. 'Gemini 3.5 Flash'; null when offline")
+
+
+class CapabilityTier(BaseModel):  # type: ignore[misc]
+    """One tier of the Capabilities page; ``items`` differ per tier (see server/capabilities.py)."""
+
+    id: Literal["ask", "composed", "builtin", "models", "data", "coming"]
+    number: int
+    title: str
+    subtitle: str | None = None
+    status: str = Field(description="ask: connected|offline; composed: available|offline; others available|coming")
+    status_label: str | None = None
+    needs_assistant: bool
+    badge: str | None = None
+    collapsed: bool = False
+    groups: list[dict[str, str]] | None = Field(None, description="builtin: [{id, title}] in display order")
+    note: str | None = None
+    items: list[dict[str, Any]]
+
+
+class GuestLimits(BaseModel):  # type: ignore[misc]
+    analyses_per_hour: int
+    kept_hours: int
+
+
+class ExamplePrompt(BaseModel):  # type: ignore[misc]
+    tier: str
+    id: str
+    prompt: str
+
+
+class CapabilitiesResponse(BaseModel):  # type: ignore[misc]
+    """What this server can do for the caller (``GET /v1/capabilities``), tier by tier."""
+
+    summary: CapabilitiesSummary
+    assistant: CapabilitiesAssistant
+    offline: bool = Field(description="No assistant: show the banner and grey tiers 1-2")
+    banner: str | None = None
+    tiers: list[CapabilityTier]
+    guest_limits: GuestLimits
+    session: SessionResponse
+    example_prompts: list[ExamplePrompt]
 
 
 class RegistryModelsResponse(BaseModel):  # type: ignore[misc]
@@ -448,3 +791,227 @@ class GEELayerIdResponse(BaseModel):  # type: ignore[misc]
 
     ok: bool = True
     layer_id: str
+
+
+# --- Operator settings (GET/PUT /v1/settings) ---------------------------------
+#
+# Convention: every section object, and every provider in ``assistant.providers``, carries
+# ``editable: {field: bool}`` with one entry per sibling field (``editable`` and ``source``
+# excluded), and ``source: {field: "override" | "env" | "default"}`` for its editable fields.
+# A nested read-only object (``sign_in``, ``earth_engine``, ``storage``...) is one ``false``
+# entry of its parent's map.
+
+LLMProviderName = Literal["gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai"]
+DownloadPolicy = Literal["all", "members", "operators", "none"]
+SettingSource = Literal["override", "env", "default"]
+
+_EMAIL_RE = r"^[^@\s,]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$"
+_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
+
+
+def _domain(value: str) -> str:
+    domain = value.strip().lower().removeprefix("@")
+    if not _DOMAIN_RE.match(domain):
+        raise ValueError("not a domain name, e.g. unige.ch")
+    return domain
+
+
+_ModelName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:/@+-]+$")
+]
+_Email = Annotated[str, StringConstraints(strip_whitespace=True, to_lower=True, max_length=254, pattern=_EMAIL_RE)]
+_Domain = Annotated[str, AfterValidator(_domain)]
+_STRICT = ConfigDict(extra="forbid", strict=True)
+SINGLE_MODEL_PROVIDERS = ("groq", "ollama", "apertus")
+
+
+class SettingsProviderUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    enabled: bool | None = Field(None, description="LLM_ENABLE_<NAME>; null resets to the environment")
+    models: list[_ModelName] | None = Field(
+        None, min_length=1, max_length=10, description="groq, ollama, apertus: exactly one; null resets"
+    )
+
+
+class SettingsAssistantUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    provider_order: list[LLMProviderName] | None = Field(
+        None, min_length=1, description="LLM_PROVIDER_ORDER, no duplicates; null resets"
+    )
+    providers: dict[LLMProviderName, SettingsProviderUpdate] = Field(default_factory=dict)
+
+    @field_validator("provider_order")  # type: ignore[misc]
+    @classmethod
+    def _unique(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("lists a provider twice")
+        return value
+
+    @model_validator(mode="after")  # type: ignore[misc]
+    def _single_model(self) -> "SettingsAssistantUpdate":
+        for name, update in self.providers.items():
+            if name in SINGLE_MODEL_PROVIDERS and update.models is not None and len(update.models) > 1:
+                raise ValueError(f"{name} takes exactly one model")
+        return self
+
+
+class SettingsModelsUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    download_policy: DownloadPolicy | None = Field(None, description="MODEL_DOWNLOAD_ON_DEMAND; null resets")
+
+
+class SettingsAccessUpdate(BaseModel):  # type: ignore[misc]
+    model_config = _STRICT
+
+    allowed_emails: list[_Email] | None = Field(None, max_length=1000, description="ALLOWED_EMAILS; null resets")
+    allowed_domains: list[_Domain] | None = Field(None, max_length=1000, description="ALLOWED_DOMAINS; null resets")
+    operator_emails: list[_Email] | None = Field(None, max_length=1000, description="OPERATOR_EMAILS; null resets")
+    guest_analyses_per_hour: int | None = Field(None, ge=0, le=1000, description="GUEST_ANALYSES_PER_HOUR")
+    guest_session_hours: int | None = Field(None, ge=1, le=720, description="GUEST_SESSION_HOURS")
+
+
+class SettingsUpdate(BaseModel):  # type: ignore[misc]
+    """``PUT /v1/settings``: any subset of the writable fields; an unknown or read-only key is a 422.
+
+    A field set to ``null`` drops its override, so the environment (or the default) applies again.
+    """
+
+    model_config = _STRICT
+
+    assistant: SettingsAssistantUpdate | None = None
+    models: SettingsModelsUpdate | None = None
+    access: SettingsAccessUpdate | None = None
+
+
+class SettingsProvider(BaseModel):  # type: ignore[misc]
+    enabled: bool = Field(description="LLM_ENABLE_<NAME> (default true)")
+    models: list[str] = Field(description="Configured model(s); providers with several rotate through them")
+    multiple_models: bool = Field(description="False: exactly one model")
+    key_required: bool = Field(description="False for ollama and apertus (local)")
+    key_present: bool = Field(description="An API key is set in the environment; the value is never returned")
+    available: bool = Field(
+        description="In the assistant's router: listed in provider_order, enabled, credentials present. "
+        "No network; POST /v1/settings/assistant/test probes."
+    )
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsAssistant(BaseModel):  # type: ignore[misc]
+    provider_order: list[str]
+    providers: dict[str, SettingsProvider] = Field(description="Every known provider, provider_order first")
+    connected: bool = Field(description="From the /v1/health assistant status")
+    provider: str | None = None
+    model: str | None = None
+    test_path: str = Field(description="POST it to probe the configured providers")
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsPreDownload(BaseModel):  # type: ignore[misc]
+    method: str = "POST"
+    path: str = Field(description="The operator-gated download route; replace {id} with a model id")
+
+
+class SettingsModels(BaseModel):  # type: ignore[misc]
+    items: list[dict[str, Any]] = Field(
+        description="model_states(): {id, display_name, installed, size_bytes, est_download_s, licence, ...}"
+    )
+    download_policy: DownloadPolicy
+    download_policy_options: list[DownloadPolicy]
+    pre_download: SettingsPreDownload
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsBounds(BaseModel):  # type: ignore[misc]
+    min: int
+    max: int
+
+
+class SettingsAccess(BaseModel):  # type: ignore[misc]
+    allowed_emails: list[str]
+    allowed_domains: list[str]
+    operator_emails: list[str]
+    guest_analyses_per_hour: int
+    guest_session_hours: int
+    bounds: dict[str, SettingsBounds] = Field(description="Accepted range of each integer field")
+    sign_in: SignInInfo
+    editable: dict[str, bool]
+    source: dict[str, SettingSource]
+
+
+class SettingsEarthEngine(BaseModel):  # type: ignore[misc]
+    configured: bool = Field(description="Initialised, or GEE_PROJECT_ID and an existing key file")
+    project_id_present: bool
+    key_file_present: bool = Field(description="GEE_SERVICE_ACCOUNT_KEY names an existing file")
+
+
+class SettingsUploads(BaseModel):  # type: ignore[misc]
+    path: str
+    files: int = Field(description="Uploaded files, not counting previews and owner sidecars")
+    bytes: int = Field(description="Everything in the directory")
+
+
+class SettingsSample(BaseModel):  # type: ignore[misc]
+    name: str
+    bundled: bool
+    path: str
+
+
+class SettingsDataSources(BaseModel):  # type: ignore[misc]
+    earth_engine: SettingsEarthEngine
+    uploads: SettingsUploads
+    sample: SettingsSample
+    editable: dict[str, bool]
+
+
+class SettingsStorage(BaseModel):  # type: ignore[misc]
+    bytes: int
+    files: int
+    truncated: bool = Field(description="The walk stopped at its entry cap; bytes and files are lower bounds")
+
+
+class SettingsJobs(BaseModel):  # type: ignore[misc]
+    total: int
+    by_status: dict[str, int]
+    queue_size: int
+    workers: int
+
+
+class SettingsServer(BaseModel):  # type: ignore[misc]
+    version: str
+    deployment: Literal["demo", "local"] = Field(description="DT4LC_DEPLOYMENT; read-only")
+    paths: dict[str, str] = Field(description="cache, outputs, temp, uploads, models")
+    storage: dict[str, SettingsStorage] = Field(description="Per path; cache contains the others by default")
+    jobs: SettingsJobs
+    editable: dict[str, bool]
+
+
+class SettingsResponse(BaseModel):  # type: ignore[misc]
+    """``GET /v1/settings`` (operators only): five sections; never a key value."""
+
+    assistant: SettingsAssistant
+    models: SettingsModels
+    access: SettingsAccess
+    data_sources: SettingsDataSources
+    server: SettingsServer
+
+
+class SettingsProbe(BaseModel):  # type: ignore[misc]
+    name: str
+    model: str
+    ok: bool
+    latency_ms: int
+    error: str | None = Field(None, description="Why it failed, API keys redacted")
+
+
+class SettingsTestResponse(BaseModel):  # type: ignore[misc]
+    """``POST /v1/settings/assistant/test``: one probe per router provider, in order."""
+
+    connected: bool = Field(description="At least one probe answered")
+    providers: list[SettingsProbe]
+    error: str | None = Field(None, description="The router could not be built (keys redacted)")

@@ -1,0 +1,3 @@
+# E2E harness: extracted browser libraries and run artefacts
+tests/e2e/.libroot/
+tests/e2e/out/

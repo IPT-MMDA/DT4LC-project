@@ -1,48 +1,142 @@
-export type Role = 'user' | 'assistant' | 'system';
+// Chat (one store: src/store/useChatStore.ts). One assistant message narrates
+// one analysis (design/DESIGN.md §4), so a job is a single `analysis` message
+// whose status and timeline are updated in place.
 
-// Message types for chat
-export type ChatMessageType = 'text' | 'job_submitted' | 'job_result' | 'error';
-
-// Base chat message
-export interface ChatMessage {
-  role: Role;
-  content: string;
-  type?: ChatMessageType;
-  jobId?: string;
-  timestamp?: string;
-  // For job_result messages: includes the parsed result data for display
-  resultData?: JobResultData;
-  // For user messages with attachments: includes preview images and path for context
-  attachments?: Array<{
-    id: string;
-    filename: string;
-    preview_url?: string;  // Server-relative preview URL from POST /v1/upload
-    path?: string;  // Server path for follow-up requests
-  }>;
+/** A file reference kept on a sent user message: metadata and URLs, never image bytes. */
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  path?: string;  // Server path for follow-up requests
+  preview_url?: string;  // Server-relative preview URL from POST /v1/upload
+  group?: AttachmentGroup;  // Shown as one chip with the other files of the group
+  mime_type?: string;  // re-sent with follow-ups (the server requires it)
+  size_bytes?: number;
+  metadata?: UploadMetadata;  // re-sent with follow-ups (the intent names the date)
 }
 
-// Chat session for persistence
-export interface ChatSession {
+/**
+ * Files shown as one chip, e.g. the two dates of the Kakhovka sample from
+ * POST /v1/sample: `{name: "kakhovka_hls_l30", line: "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09"}`.
+ */
+export interface AttachmentGroup {
+  name: string;
+  line: string;
+}
+
+/** `metadata` of POST /v1/upload (docs/API.md); a best guess, any field may be missing. */
+export interface UploadMetadata {
+  sensor?: string;
+  bands?: { index: number; code: string; description: string }[];
+  dtype?: string;
+  resolution_m?: number;
+  date?: string;
+  size_bytes?: number;
+  size_label?: string;
+  crs?: string;
+  bounds_wgs84?: [number, number, number, number];
+  footprint_wgs84?: [number, number][];  // the raster's corners NW, NE, SE, SW (a UTM raster is rotated)
+  line?: string;  // chip text without the size; "" when nothing could be read
+}
+
+interface BaseMessage {
+  id: string;
+  createdAt: string;  // ISO 8601
+}
+
+export interface UserMessage extends BaseMessage {
+  kind: 'user';
+  text: string;
+  attachments?: MessageAttachment[];
+  region?: ChatRegion;
+}
+
+export type RegionDataset = 'HLS L30' | 'HLS S30' | 'Sentinel-2' | 'Landsat 8/9' | 'MODIS';
+
+/**
+ * A region from the map as the composer holds it and POST /v1/chat sends it
+ * (`region` of docs/API.md). `area_km2` is computed in the browser until the
+ * job echoes the region; `line` is the server's echo, which wins when present.
+ */
+export interface ChatRegion {
+  id: string;  // the map store's DrawnRegion id
+  geometry: GeoJSON.Geometry;
+  name?: string;
+  place?: string;
+  dataset: RegionDataset;
+  start_date: string;  // YYYY-MM-DD
+  end_date: string;
+  cloud_max: number;
+  bands?: string[];  // band codes; the server takes the dataset's defaults without
+  area_km2: number;
+  line?: string;
+}
+
+/** `pending` of a reply that asked for a file; sent back with the next message. */
+export interface PendingIntent {
+  prompt: string;
+  item_id: string | null;
+  needs: string[];
+  asked_at: string;
+}
+
+/** A conversational reply (or a submit error) that is not tied to a job. */
+export interface AssistantMessage extends BaseMessage {
+  kind: 'assistant';
+  text: string;
+  error?: boolean;
+}
+
+export type AnalysisStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled';
+
+/** One entry of the analysis timeline, as streamed by GET /v1/jobs/{id}/events. */
+export interface AnalysisEvent {
+  type: string;  // intent, proposal, planning, step_started, step_progress, step_finished, done, failed, cancelled
+  [key: string]: unknown;
+}
+
+/** A job event as the server stores it: `events` of a JobRecord and of the `analysis` chat frame. */
+export interface JobEvent extends AnalysisEvent {
+  seq: number;
+  data: Record<string, unknown>;
+}
+
+export interface AnalysisMessage extends BaseMessage {
+  kind: 'analysis';
+  jobId: string;
+  status: AnalysisStatus;
+  text: string;  // narration (intent); empty until the assistant says something
+  events: AnalysisEvent[];  // the timeline slot
+  result?: JobResultData;
+  error?: string;
+}
+
+export type ChatMessage = UserMessage | AssistantMessage | AnalysisMessage;
+
+/** A message as callers add it; the store assigns `id` and `createdAt` when missing. */
+export type NewChatMessage =
+  | (Omit<UserMessage, 'id' | 'createdAt'> & Partial<BaseMessage>)
+  | (Omit<AssistantMessage, 'id' | 'createdAt'> & Partial<BaseMessage>)
+  | (Omit<AnalysisMessage, 'id' | 'createdAt'> & Partial<BaseMessage>);
+
+export interface Conversation {
   id: string;
   title: string;
-  messages: ChatMessage[];
-  jobIds: string[]; // All jobs associated with this session
   createdAt: string;
   updatedAt: string;
+  messages: ChatMessage[];
+  pending?: PendingIntent | null;  // the latest reply's pending; a reply without one clears it
 }
 
-/** Extended message with job result data for display in chat. */
-export interface JobResultMessage extends ChatMessage {
-  type: 'job_result';
-  jobId: string;
-  jobStatus: JobStatus;
-  result?: JobResultData;
-}
+/** Which result card a finished analysis shows (components/chat/result/resultModel.ts). */
+export type ResultCardKind = 'index' | 'change' | 'classification' | 'fields' | 'statistics' | 'image';
 
 // Structured result data for context management
 export interface JobResultData {
   // Text summary for LLM context (kept small)
   summary?: string;
+
+  // The result card shown, once the job's result was read; counted as a result
+  card?: ResultCardKind;
 
   // Flag for conversational responses (no pipeline execution)
   conversational?: boolean;
@@ -79,36 +173,12 @@ export interface JobResultData {
   };
 }
 
-// Context item for LLM processing (images stripped out)
-export interface ContextItem {
-  role: Role;
-  content: string;
-  // Metadata for context management
-  tokenEstimate?: number;
-}
-
 export interface Plan {
   tags: string[];
   goals: string[];
   pipeline: string[];
-  inputs: Record<string, any>;
-  meta: Record<string, any>;
-}
-
-/** Job status values matching backend JobStatus enum. */
-export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-/** Job model matching backend Job.to_dict() response. */
-export interface Job {
-  id: string;
-  status: JobStatus;
-  progress: number;
-  message?: string;
-  result?: Record<string, any>;
-  plan?: Plan;
-  error?: string;
-  created_at?: string;
-  updated_at?: string;
+  inputs: Record<string, unknown>;
+  meta: Record<string, unknown>;
 }
 
 export interface Attachment {
@@ -119,33 +189,54 @@ export interface Attachment {
   size_bytes?: number;
   // Server-relative preview URL for display in chat (never the image bytes)
   preview_url?: string;
-}
-
-export interface JobSubmitRequest {
-  prompt: string;
-  mode?: 'hybrid' | 'llm' | 'template';
-  attachments?: Attachment[];
-  context?: Record<string, any>;
-}
-
-export interface JobsListResponse {
-  jobs: Job[];
-  total: number;
-  limit: number;
-  offset: number;
+  metadata?: UploadMetadata;  // sent back with jobs and chat messages
+  group?: AttachmentGroup;
 }
 
 export interface HealthResponse {
   ok: boolean;
   service: string;
   version: string;
+  /** Always present since v0.6.0; `offline` is `!connected`. */
+  assistant?: {
+    connected: boolean;
+    offline: boolean;
+    provider: string | null;
+    model: string | null;
+  };
+}
+
+/** GET /v1/session: the caller's role, guest quota and retention (docs/API.md). */
+/** The signed-in GitHub account of GET /v1/session; null for a guest. */
+export interface SessionUser {
+  id: string;  // github:<numeric id>
+  login: string;
+  name: string | null;
+  email: string;
+  avatar_url: string | null;
+}
+
+export interface SessionInfo {
+  role: 'guest' | 'member' | 'operator';
+  guest: boolean;
+  user: SessionUser | null;
+  sign_in: { configured: boolean };  // GitHub sign-in is set up on this server
+  analyses: {
+    limit: number | null;  // null: no limit (members, operators)
+    used: number;
+    remaining: number | null;
+    resets_at: string | null;
+  };
+  kept_hours: number | null;
+  expires_at: string;
+  can_download_models: boolean;
 }
 
 export interface ExecutionResult {
   ok: boolean;
   plan?: Plan;
-  result?: any;
-  progress?: any[];
+  result?: unknown;
+  progress?: unknown[];
   error?: string;
-  candidate?: any;
+  candidate?: unknown;
 }

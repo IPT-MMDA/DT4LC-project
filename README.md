@@ -6,14 +6,48 @@ It is aimed at remote sensing researchers, environmental scientists and disaster
 
 ## Features
 
-- **NDVI Analysis** - Calculate vegetation health indices from satellite imagery
-- **Change Detection** - Compare before/after images to detect land cover changes
-- **Field Boundary Detection** - Delineate-Anything model for agricultural field segmentation
-- **LLM-Powered Planning** - Natural language interface with automatic pipeline generation
-- **Intent Classification** - Smart routing between pipeline execution and conversational responses
-- **Multi-Turn Conversations** - Follow-up requests using previous context and attachments
-- **Multi-Provider LLM Support** - Gemini, Groq, OpenAI, Anthropic, Mistral, and local Ollama or Apertus with automatic fallback
-- **Prithvi Model Integration** - NASA/IBM foundation model for geospatial features
+- **Ask in plain language** - In the Workspace, one assistant message narrates one analysis: what it will do, the plan steps as they run, and a result card with the map, its legend, km² statistics and follow-up suggestions. Questions get markdown answers and never start a job.
+- **Built-in analyses** - NDVI, EVI, NDWI and NDSI; change detection between two dates; land-cover and snow classification; raster statistics; field boundaries with Delineate-Anything; Prithvi reconstruction. They run without an LLM.
+- **Composed analyses** - Band math for indices that are not in the catalog (NDMI, NBR, SAVI, NDBI or your own formula), offered as a plan that runs only after you confirm it.
+- **Map mode** - Draw or pick a region and send it to the chat, show results as map layers with their legends and class areas, and compare two layers with a swipe. The bundled sample is shown in true colour with its footprint. Fetching imagery by region needs an Earth Engine key.
+- **Library and Result detail** - Every analysis and file in one filtered list. Each result has a page with its maps, the class statistics (with CSV), the plan steps and their parameters, the interpretation, and downloads with readable names such as `water-change_ndwi_2023-06-01_2023-06-09.tif`.
+- **Capabilities** - A live page of what this server can do for you, in six tiers, computed from its state: the assistant, the installed models, Earth Engine and your role.
+- **Guests, members and operators** - No login wall. Guests get a few analyses per hour, kept for 24 h. Members sign in with GitHub, if their email is on an allowlist, and have no limit. Operators also get Settings: LLM providers and models, model downloads, allowlists and guest limits, applied without a restart.
+- **Multi-provider LLM with deterministic fallback** - Gemini, Groq, OpenAI, Anthropic, Mistral, and local Ollama or Apertus, tried in order; every stage has a deterministic fallback, so built-in analyses run with no provider at all.
+- **Public demo deployment** - A Docker Compose override with pre-installed models, per-IP rate limits and the client address forwarded through a TLS proxy ([docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md)).
+- **Phone, tablet and dark theme** - Layouts for phones and tablets (tested at 390 and 834 px wide) and a dark theme on every screen; the seven main screens pass axe with no serious or critical violation in either theme.
+
+## Screenshots
+
+From the browser end-to-end tests (`cognitive_ui/tests/e2e/`), on the bundled Kakhovka sample, with no LLM provider and no Earth Engine key.
+
+![The landing page: "What changed on the ground? Ask in plain language." over the flood map of the lower Dnipro](docs/screenshots/landing.jpg)
+
+*The landing page. The image is the full scene; the caption quotes the bundled crop's +157 km² of water.*
+
+![The Workspace: an NDWI change result card with the difference map, open water 13.9 → 170 km², +157 km² gained and 0.6 km² lost, and the map docked beside the chat](docs/screenshots/workspace-result.jpg)
+
+*The Workspace after "Compare water before and after the dam breach": one message, the result card and its follow-up, and the result on the docked map.*
+
+![Map mode: the imagery panel with a region, dataset, dates and bands, the NDWI change layer over the true-colour sample, and its legend with class areas](docs/screenshots/map-mode.jpg)
+
+*Map mode: a drawn region ready for Send to chat, the result and sample layers, and the legend with the class areas.*
+
+![Result detail: the difference map, the before and after NDWI maps, the plan's four steps and the downloads with readable names](docs/screenshots/result-detail.jpg)
+
+*Result detail: maps, plan steps with their parameters, statistics and downloads.*
+
+![The Library: analyses and files in one list with status, type, conversation and actions](docs/screenshots/library.png)
+
+*The Library: analyses (done and failed) and the sample file in one list.*
+
+![Capabilities: six tiers, here with the assistant offline, so the Ask and Composed tiers are greyed](docs/screenshots/capabilities.png)
+
+*Capabilities on a local server with the assistant offline.*
+
+<img src="docs/screenshots/workspace-phone.png" alt="The Workspace on a 390 px phone: the result card under the message, the composer at the bottom" width="260">
+
+*The Workspace on a phone.*
 
 ## Architecture
 
@@ -143,6 +177,14 @@ Frontend tests (vitest):
 ```bash
 cd cognitive_ui && npm test
 ```
+
+Browser end-to-end flows (Playwright, against the built UI and a real API with its state in a temp directory, no LLM keys and no Earth Engine):
+
+```bash
+cd cognitive_ui && npm run build && npm run e2e:smoke
+```
+
+They need the Python environment (`uv sync --extra dev --extra server`) and a Chromium headless shell in `~/.cache/ms-playwright`. `npm run e2e` runs every flow. The modes, environment variables and the Linux library workaround are in [cognitive_ui/tests/e2e/README.md](cognitive_ui/tests/e2e/README.md).
 
 ### Using Task
 
@@ -361,6 +403,27 @@ LLM_PROVIDER_ORDER=groq,ollama
 LLM_PROVIDER_ORDER=gemini,anthropic,mistral
 ```
 
+### Sessions, Roles and Storage Paths
+
+Every browser gets a signed session cookie. Visitors are guests; people on the allowlists sign in with GitHub and become members or operators. Jobs and uploads belong to the guest session that made them, or to the signed-in user (`github:<id>`), who keeps a guest session's items on sign-in. These variables are described in `.env.example` ("Sessions, roles and guest limits"; `DT4LC_DEPLOYMENT` under "Server Configuration"):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SESSION_SECRET` | random per start | Signs the cookie; when unset, sessions reset at every server restart |
+| `SESSION_COOKIE_SECURE` | `false` | Send the cookie over HTTPS only |
+| `DEV_ROLE` | unset | Treat every request as `guest`, `member` or `operator` (for development) |
+| `GUEST_ANALYSES_PER_HOUR` | `5` | Analyses a guest may start per rolling hour, per session and per IP |
+| `GUEST_SESSION_HOURS` | `24` | Session length; guest jobs, outputs and uploads older than this are removed |
+| `MODEL_DOWNLOAD_ON_DEMAND` | `members` | Who may download missing model weights during a job: `members` (members and operators), `operators`, `all` or `none` |
+| `GUEST_CLEANUP_MINUTES` | `60` | Minutes between runs of the guest cleanup |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE` | unset | GitHub sign-in, configured only when all three are set; otherwise the account menu says "Sign-in not configured on this server". How to create the OAuth app: [docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md#5-github-sign-in-the-oauth-app) |
+| `ALLOWED_EMAILS`, `ALLOWED_DOMAINS`, `OPERATOR_EMAILS` | empty | Sign-in allowlists, comma-separated, matched against the primary verified GitHub email: operators, then members by address or domain. Anyone else stays a guest |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies whose `X-Forwarded-For` gives the client IP for the per-IP guest quota (`docker-compose.yml` trusts Docker's private networks) |
+| `DT4LC_SETTINGS_PATH` | `<cache>/settings.json` | Where operator Settings are saved, as overrides of some of these variables; `.env` is never written |
+| `DT4LC_DEPLOYMENT` | `local` | `demo` adds "public demo" to the Capabilities summary line |
+
+The cache lives in `resources/.cache/`. `DT4LC_CACHE_PATH` moves the cache root; `DT4LC_TEMP_PATH` (default `<cache>/tmp`) and `DT4LC_OUTPUTS_PATH` (job outputs, default `<cache>/outputs`) move single directories, like `DT4LC_UPLOADS_PATH`, `DT4LC_MODEL_CACHE` and `DT4LC_JOBS_DB`. These path variables are read in `dta/config/__init__.py`. The API behaviour of sessions, sign-in and quotas is in [docs/API.md](docs/API.md#sessions), and operator Settings in [docs/API.md](docs/API.md#settings).
+
 ### Intent Classification
 
 The system automatically classifies user requests into two categories:
@@ -394,7 +457,7 @@ User: "Calculate NDVI"
 → Uses the previously uploaded image.tif automatically
 ```
 
-Context is maintained per chat session, including:
+Context is kept per conversation in the browser, which sends it with each message to `POST /v1/chat`:
 
 - Previous file attachments with their server paths
 - Conversation history for context-aware responses
@@ -452,7 +515,7 @@ The model outputs GeoPackage files with polygon geometries representing detected
 
 ### Model weights
 
-The Prithvi (`prithvi-eo-v1-100m`) and Delineate-Anything (`delineate-anything-small`) weights are not in the repository. Download them from the **Models** page of the UI, with `POST /v1/ml-models/{model_id}/download`, or from Python:
+The Prithvi (`prithvi-eo-v1-100m`) and Delineate-Anything (`delineate-anything-small`) weights are not in the repository. An operator downloads them with **Pre-download** in Settings → Models of the UI, or with `POST /v1/ml-models/{model_id}/download`; a job downloads a missing model on first use when `MODEL_DOWNLOAD_ON_DEMAND` allows the role (members and operators by default). From Python:
 
 ```bash
 uv run python - <<'EOF'
@@ -494,27 +557,45 @@ The spectral-index algorithms (`dta/dti/algorithms/spectral_index.py`) also norm
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/health` | GET | Health check |
-| `/v1/upload` | POST | Upload a GeoTIFF |
-| `/v1/jobs` | POST | Submit an analysis job (prompt and attachments) |
-| `/v1/jobs` | GET | List job summaries (without `result`) |
-| `/v1/jobs/{id}` | GET | Get job status and result |
+| `/v1/health` | GET | Health check, with the assistant (LLM provider) status |
+| `/v1/session` | GET | The caller's role, guest quota and retention (session cookie) |
+| `/v1/capabilities` | GET | What this server can do for the caller, in six tiers |
+| `/v1/upload` | POST | Upload a GeoTIFF; the response includes its metadata line |
+| `/v1/sample` | POST | Attach the bundled Kakhovka sample as the caller's uploads |
+| `/v1/chat` | POST | Send a Workspace message: a markdown reply, or an analysis job (JSON or Server-Sent Events) |
+| `/v1/jobs` | POST | Submit an analysis job (prompt with attachments or a map region) |
+| `/v1/jobs` | GET | List the caller's job summaries (without `result`) |
+| `/v1/jobs/{id}` | GET | Get job status, result and event log |
+| `/v1/jobs/{id}/events` | GET | Stream the job's events (Server-Sent Events) |
+| `/v1/jobs/{id}/confirm` | POST | Run a proposed (composed) plan |
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
-| `/v1/download` | GET | Download a job output file or upload preview by its `url` |
-| `/v1/chat` | POST | Legacy: plan and run the last of `messages` as a Server-Sent Events stream (no attachments) |
+| `/v1/jobs/{id}` | DELETE | Delete a finished job or a proposal, with its files |
+| `/v1/jobs/{id}/statistics.csv` | GET | The result's statistics as CSV |
+| `/v1/files` | GET | List the caller's uploads (the sample pair as one group) and Earth Engine exports |
+| `/v1/files/{id}` | DELETE | Delete an upload (both sample dates by their shared id) |
+| `/v1/download` | GET | Download a job output file or upload preview by its `url` (with `&name=` for a readable file name) |
+| `/v1/tiles/{z}/{x}/{y}` | GET | Map tiles of a GeoTIFF, reprojected to Web Mercator; true colour or the result's style |
+| `/v1/auth/status` | GET | Whether GitHub sign-in is configured, and the signed-in user |
+| `/v1/auth/github/login`, `/v1/auth/github/callback` | GET | GitHub sign-in |
+| `/v1/auth/logout` | POST | Sign out to a fresh guest session |
+| `/v1/settings` | GET, PUT | Operator settings (404 for everyone else) |
+| `/v1/settings/assistant/test` | POST | Probe the configured LLM providers (operators) |
 
-All routes, including file listing and download, map tiles, Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). See also [docs/API.md](docs/API.md).
+All routes, including Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). Requests, responses, event types and error codes for the routes above are in [docs/API.md](docs/API.md).
 
 ### Example Request
 
 ```bash
+# Jobs and uploads belong to the session cookie: keep it in a jar (-c/-b),
+# or each call starts a new guest session, which cannot see the job of the previous one.
+
 # 1. Upload a GeoTIFF; the response contains its server-side "path"
-curl -X POST http://localhost:8000/v1/upload \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
   -F "file=@image.tif"
 # {"id": "1a2b3c4d", "filename": "image.tif", "path": "/.../resources/.cache/uploads/1a2b3c4d_image.tif", ...}
 
 # 2. Submit an analysis job with the uploaded file attached (202 Accepted)
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Calculate NDVI for vegetation analysis",
@@ -523,18 +604,21 @@ curl -X POST http://localhost:8000/v1/jobs \
 # {"id": "<job id>", "status": "pending", ...}
 
 # 3. Poll the job until "status" is "completed", "failed" or "cancelled"
-curl http://localhost:8000/v1/jobs/<job id>
+#    (or follow its events: curl -N -b cookies.txt http://localhost:8000/v1/jobs/<job id>/events)
+curl -b cookies.txt http://localhost:8000/v1/jobs/<job id>
 
 # 4. The result references output files instead of embedding pixels. For NDVI,
 #    result.execution.artifacts.NDVIMap.rasters.ndvi is the GeoTIFF and
 #    result.execution.artifacts.NDVIMap.visualizations.ndvi_map the PNG;
 #    download each with its "url"
-curl -o ndvi.tif "http://localhost:8000<url>"
+curl -b cookies.txt -o ndvi.tif "http://localhost:8000<url>"
 ```
 
-Each reference has `kind` (`geotiff` or `png`), `path`, `url` and `stats`; the keys each algorithm returns are listed under [Job artifacts](docs/ARCHITECTURE.md#job-artifacts). The upload response also has a `preview_url` for the PNG preview of the uploaded file.
+Each reference has `kind` (`geotiff` or `png`), `path`, `url`, `stats`, `size_bytes` and, once the job has finished, `download_name`; the keys each algorithm returns are listed under [Job artifacts](docs/ARCHITECTURE.md#job-artifacts). The upload response also has a `preview_url` for the PNG preview of the uploaded file.
 
 ## Docker Deployment
+
+To run the public demo (GitHub sign-in, rate limits, pre-installed models, behind a TLS proxy), follow the runbook in [docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md).
 
 ### Services
 
@@ -665,7 +749,11 @@ GROQ_API_KEY=your_key  # 300+ tokens/sec
 
 Both are 768 × 768 px at 30 m (23.04 km × 23.04 km) in EPSG:32636 with the upper-left corner at (453240, 5167860), about 32.39-32.69° E, 46.46-46.66° N: the lower Dnipro around Kherson, downstream of the dam. They have five bands, B2-B6 (blue, green, red, NIR, SWIR1), named in the band descriptions, stored as int16 reflectance × 10000 with nodata -9999 and DEFLATE compression. They are cut (rows 640-1408, columns 256-1024) from 2906 × 1479 px scenes that are not in the repository.
 
-The pair shows the flooding after the breach: the share of valid pixels with NDWI = (B3 - B5) / (B3 + B5) above 0 grows from 9 % to 40 %, and NDWI changes by more than 0.3 on 41.2 % of them, almost all of it an increase. Upload both files and ask, for example:
+The pair shows the flooding after the breach. On this crop, as the app computes it (NDWI change, open water where NDWI = (B3 - B5) / (B3 + B5) > 0.2), open water grows from 13.9 km² to 170.0 km²: water is gained on 156.8 km² (about +157 km²) and lost on 0.6 km², and 373.5 km² show no change. These are the numbers that the Workspace, the Result detail, the landing caption and the docs quote for the sample.
+
+The full 2906 × 1479 px scene, which the landing page's hero image shows, differs: measured with ΔNDWI > 0.3, open water grows from 32 km² to 256 km², with 428 km² gained and 43 km² lost. Those figures describe the full scene only, not the app's result on the bundled crop.
+
+The bundled crop has bands B2-B6 only, so NBR and Prithvi, which need B7, refuse it with an explanation. Attach the pair ("Try with the Kakhovka sample" on the landing page, "+ Attach the Kakhovka sample" in an empty Workspace, or `POST /v1/sample`), or upload both files, and ask, for example:
 
 ```text
 "Compare before and after images to detect changes"      (NDVI change, the default)
@@ -723,7 +811,7 @@ task --list  # Show all available commands
 task typecheck  # or: uv run mypy .
 
 # TypeScript
-cd cognitive_ui && npm run lint
+cd cognitive_ui && npm run typecheck  # tsc -b --noEmit
 ```
 
 ## License
