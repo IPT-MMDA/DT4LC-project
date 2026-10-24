@@ -1147,6 +1147,12 @@ The raster is reprojected onto the tile's grid (EPSG:3857) on the fly, so a UTM 
 {"ok": false, "error": {"code": "validation_error", "message": "The raster has no red, green and blue bands", "details": {}}}
 ```
 
+A served file that isn't a raster, such as a job's JSON output, is 415 `NOT_A_RASTER`. The body never holds the path:
+
+```json
+{"ok": false, "error": {"code": "NOT_A_RASTER", "message": "This file isn't a raster the map can display.", "details": {}}}
+```
+
 ### Model downloads
 
 `/v1/ml-models` manages the model weights (the generated reference has every route). Listing and status are open to everyone. `POST /v1/ml-models/{model_id}/download` and `POST /v1/ml-models/{model_id}/cancel` need a role that `MODEL_DOWNLOAD_ON_DEMAND` lets download (members and operators by default), and `DELETE /v1/ml-models/{model_id}` needs an operator. Anyone else gets 403 `MODEL_GATED`, with the same sentence a job's refusal has:
@@ -1373,6 +1379,7 @@ HTTP errors return an `ErrorResponse` body:
 | 404 | `not_found`; `SAMPLE_NOT_BUNDLED` from `POST /v1/sample`; `SIGN_IN_NOT_CONFIGURED` from the [GitHub sign-in routes](#sign-in) |
 | 409 | `CONFIRMATION_REQUIRED` from `POST /v1/execute`; otherwise `bad_request` |
 | 413 | `file_too_large` |
+| 415 | `NOT_A_RASTER` from [`GET /v1/tiles`](#get-v1tileszxy) |
 | 422 | `validation_error` (raised by a route, e.g. an invalid edited plan on confirm, or `style=truecolor` on a raster without RGB); `NOT_AN_ANALYSIS` and `missing_input` from [`POST /v1/plan` and `POST /v1/execute`](#post-v1plan) |
 | 429 | `GUEST_QUOTA` for the guest limit, with `details: {limit, used, resets_at}` and `Retry-After`; `bad_request` when the job queue is full; `RATE_LIMITED` from the demo's nginx (see [Rate Limits](#rate-limits)) |
 | 405 and other 4xx | `bad_request` |
