@@ -333,6 +333,25 @@ class TestExecuteEndpoint:
         }
         assert client.get("/v1/session").json()["analyses"]["used"] == 0
 
+    def test_missing_input_is_422_and_not_counted(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A two-date plan without files: the executor's MissingInputError is a 422, not a counted 500 (BE80)."""
+        from dta.dti.executor import ExecutionError, MissingInputError
+
+        monkeypatch.setenv("DEV_ROLE", "guest")
+        missing = MissingInputError("input/file-before", "RasterPathBefore", "I need a 'before' image.")
+        failure = ExecutionError(f"Step input/file-before failed: {missing}")
+        failure.__cause__ = missing
+        with (
+            patch("server.routes.chat.orchestrate", return_value={"ok": True, "plan": self.PLAN}),
+            patch("server.routes.chat.PipelineExecutor") as executor_class,
+        ):
+            executor_class.return_value.execute.side_effect = failure
+            resp = client.post("/v1/execute", json=self.BODY)
+
+        assert resp.status_code == 422
+        assert resp.json()["error"]["code"] == "missing_input"
+        assert client.get("/v1/session").json()["analyses"]["used"] == 0
+
 
 class TestNotAnAnalysis:
     """A conversational prompt on POST /v1/plan or /v1/execute: a structured 422, not a 500 (run-1 carry-over)."""

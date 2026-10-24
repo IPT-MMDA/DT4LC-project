@@ -982,20 +982,25 @@ class JobQueue:
             ids.update(self._jobs_cache.keys())
             return list(ids)
 
-    async def get_total_count(self, owner: str | None = None) -> int:
+    async def get_total_count(self, owner: str | None = None, status: JobStatus | None = None) -> int:
         """Return total job count.
 
         Args:
             owner: Count only this owner's jobs; ``None`` counts every job
+            status: Count only jobs with this status, as :meth:`list_jobs` filters them
 
         Returns:
             Total number of jobs
         """
         async with self._lock:
-            if owner is not None:
+            if owner is not None or status is not None:
                 jobs: dict[str, Job] = {j.id: j for j in self._store.list_summaries()}
                 jobs.update(self._jobs_cache)
-                return sum(1 for j in jobs.values() if j.owner == owner)
+                return sum(
+                    1
+                    for j in jobs.values()
+                    if (owner is None or j.owner == owner) and (status is None or j.status == status)
+                )
             ids = set(self._store.keys())
             ids.update(self._jobs_cache.keys())
             return len(ids)

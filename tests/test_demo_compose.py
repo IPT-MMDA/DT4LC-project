@@ -66,6 +66,11 @@ def test_backend_publishes_no_port(demo: dict[str, Any]) -> None:
     assert isinstance(ports, Reset) and ports.value == [], "the demo must drop the base file's 8000 mapping"
 
 
+def test_ollama_publishes_no_port(demo: dict[str, Any]) -> None:
+    ports = demo["services"]["ollama"]["ports"]
+    assert isinstance(ports, Reset) and ports.value == [], "the demo must drop the base file's 11434 mapping"
+
+
 def test_backend_runs_as_the_demo_and_never_downloads_for_guests(demo: dict[str, Any]) -> None:
     env = _env(demo["services"]["backend"])
     assert env["DT4LC_DEPLOYMENT"] == "demo"
@@ -122,6 +127,9 @@ def test_demo_nginx_limits_and_forwards_the_client_ip() -> None:
     heavy = re.search(r"location ~ \^/v1/\(([^)]*)\)\$ \{(.*?)\}", conf, re.S)
     assert heavy, "no location for the rate-limited POST endpoints"
     assert {"jobs", "chat", "upload", "sample"} <= set(heavy.group(1).split("|"))
+    strict = re.compile(rf"^/v1/({heavy.group(1)})$")
+    assert strict.match("/v1/jobs/3f2c9a1e/confirm"), "confirming a proposal starts work"
+    assert not strict.match("/v1/jobs/3f2c9a1e/events") and not strict.match("/v1/jobs/a/b/confirm")
     assert "limit_req zone=dt4lc_post " in heavy.group(2)
     assert "client_max_body_size 210m;" in heavy.group(2)  # the backend's 200 MB upload limit
 

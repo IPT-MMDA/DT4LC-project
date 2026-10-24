@@ -6,12 +6,13 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 import mercantile
 import numpy as np
 from PIL import Image
 import rasterio
 from rasterio.enums import Resampling
+from rasterio.errors import RasterioIOError
 from rasterio.transform import from_bounds
 from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_bounds
@@ -20,6 +21,7 @@ from dta.dti import artifact_files
 from dta.dti.raster import band_indices
 
 from ..paths import ensure_served_owner, resolve_served_path
+from ..schemas import ErrorDetail, ErrorResponse
 from ..sessions import CurrentSession
 from ..utils import apply_colormap, detect_data_type
 
@@ -31,6 +33,7 @@ TILE_SIZE = 256
 WEB_MERCATOR = "EPSG:3857"
 # The true-colour stretch is computed on a read of at most this many pixels on the long side.
 STRETCH_MAX_SIDE = 1024
+NOT_A_RASTER = "This file isn't a raster the map can display."
 
 
 def _png(rgba: np.ndarray) -> Response:
@@ -120,6 +123,7 @@ def _overlaps(src: rasterio.DatasetReader, tile: mercantile.Tile) -> bool:
     "/{z}/{x}/{y}",
     summary="GeoTIFF map tile",
     response_description="256×256 RGBA PNG tile; transparent off the raster and on nodata",
+    responses={415: {"model": ErrorResponse, "description": "NOT_A_RASTER"}},
 )
 async def get_tile(
     z: int,
@@ -148,7 +152,12 @@ async def get_tile(
         # Detect data type from filename
         data_type = detect_data_type(file_path.name)
 
-        with rasterio.open(str(file_path)) as src:
+        try:
+            src = rasterio.open(str(file_path))
+        except RasterioIOError:  # a served file that isn't a raster; the message would echo its path
+            error = ErrorDetail(code="NOT_A_RASTER", message=NOT_A_RASTER)
+            return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=415)
+        with src:
             tagged = artifact_files.read_style(src.tags())
             true_colour = None
             if style == "truecolor" or (tagged is None and src.count >= 3):

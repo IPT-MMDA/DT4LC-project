@@ -1,13 +1,29 @@
+import atexit
 from collections.abc import Callable, Iterator
 import functools
 import itertools
+import os
 from pathlib import Path
+import shutil
+import tempfile
 
 from dotenv import load_dotenv
 import numpy as np
 import pytest
 import rasterio
 from rasterio.transform import from_origin
+
+# Uploads, temp model outputs, job artifacts and the jobs DB go to a temp dir, not resources/.cache.
+# Set before dta.config reads them. The cache and model paths stay: the GPU tests read the installed weights.
+_PYTEST_DATA = Path(tempfile.mkdtemp(prefix="dt4lc-pytest-"))
+atexit.register(shutil.rmtree, _PYTEST_DATA, ignore_errors=True)
+for _var, _name in (
+    ("DT4LC_UPLOADS_PATH", "uploads"),
+    ("DT4LC_TEMP_PATH", "tmp"),
+    ("DT4LC_OUTPUTS_PATH", "outputs"),
+    ("DT4LC_JOBS_DB", "jobs.db"),
+):
+    os.environ.setdefault(_var, str(_PYTEST_DATA / _name))
 
 # Resolve repo root via your config helper if available; else fall back.
 try:

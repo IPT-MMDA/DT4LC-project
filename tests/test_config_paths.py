@@ -83,3 +83,13 @@ def test_temp_and_outputs_overrides_win_over_cache(tmp_path: Path) -> None:
     assert paths["temp"] == tmp_path / "temp"
     assert paths["outputs"] == tmp_path / "outputs"
     assert (tmp_path / "temp").is_dir() and (tmp_path / "outputs").is_dir()
+
+
+def test_the_test_session_writes_outside_resources_cache() -> None:
+    """conftest points uploads, temp, outputs and the jobs DB at a temp dir (F-6); models stay installed."""
+    import dta.config as c
+
+    cache = RESOURCES_PATH / ".cache"
+    for written in (c.UPLOADS_PATH, c.TEMP_PATH, c.OUTPUTS_PATH, c.JOBS_DB_PATH):
+        assert not written.resolve().is_relative_to(cache.resolve()), written
+    assert c.CACHE_PATH == Path(os.environ.get("DT4LC_CACHE_PATH", str(cache)))
