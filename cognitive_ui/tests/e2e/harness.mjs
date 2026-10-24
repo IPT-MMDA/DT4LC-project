@@ -83,3 +83,10 @@ export async function resetLLMRules() {
   const res = await fetch(`${fakeLLMURL()}/__e2e/reset`, { method: 'POST' });
   if (!res.ok) throw new Error(`resetLLMRules: ${res.status} ${await res.text()}`);
 }
+
+/** Every /api/chat the fake Ollama answered so far: `[{messages, reply}]`, oldest first. */
+export async function llmRequests() {
+  const res = await fetch(`${fakeLLMURL()}/__e2e/requests`);
+  if (!res.ok) throw new Error(`llmRequests: ${res.status} ${await res.text()}`);
+  return res.json();
+}

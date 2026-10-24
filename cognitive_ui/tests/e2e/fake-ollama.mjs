@@ -13,6 +13,7 @@
 // Flows change the rules at run time through the control endpoints:
 //   PUT  /__e2e/rules  body = rules object  -> replaces the rules
 //   POST /__e2e/reset                       -> restores the rules it started with
+//   GET  /__e2e/requests                    -> [{messages, reply}] of every /api/chat so far
 import http from 'node:http';
 
 export const FAKE_MODEL = 'fake';
@@ -69,6 +70,7 @@ export function pickReply(compiled, messages) {
 export async function startFakeOllama({ rules, port = 0, model = FAKE_MODEL }) {
   const initial = compile(rules);
   let current = initial;
+  const requests = [];
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -82,6 +84,7 @@ export async function startFakeOllama({ rules, port = 0, model = FAKE_MODEL }) {
       if (req.method === 'POST' && url.pathname === '/api/chat') {
         const body = JSON.parse(await readBody(req));
         const { reply: content, delayMs } = pickRule(current, body.messages ?? []);
+        requests.push({ messages: body.messages ?? [], reply: content });
         if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
         return sendJSON(res, 200, {
           model: body.model ?? model,
@@ -96,6 +99,9 @@ export async function startFakeOllama({ rules, port = 0, model = FAKE_MODEL }) {
       if (req.method === 'PUT' && url.pathname === '/__e2e/rules') {
         current = compile(JSON.parse(await readBody(req)));
         return sendJSON(res, 200, { ok: true, rules: current.rules.length });
+      }
+      if (req.method === 'GET' && url.pathname === '/__e2e/requests') {
+        return sendJSON(res, 200, requests);
       }
       if (req.method === 'POST' && url.pathname === '/__e2e/reset') {
         current = initial;
