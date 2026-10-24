@@ -43,7 +43,7 @@ function FileChip({ anim, name, src }: { anim: string; name: string; src: string
       <img src={src} alt="" className="w-[26px] h-[26px] rounded-chip object-cover" />
       <div>
         <div className="text-[11.5px] font-mono">{name}</div>
-        <div className="text-[10px] text-muted">HLS L30 · 5 bands · 30 m</div>
+        <div data-testid="landing-chip-meta" className="text-[10px] text-muted whitespace-nowrap">HLS L30 · 5 bands · 30 m</div>
       </div>
     </div>
   );
