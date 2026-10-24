@@ -36,7 +36,12 @@
     "e2e:a11y:operator": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs a11y",
     "e2e:dark": "npm run e2e:dark:guest && npm run e2e:dark:operator",
     "e2e:dark:guest": "node tests/e2e/run.mjs dark",
-    "e2e:dark:operator": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs dark"
+    "e2e:dark:operator": "E2E_DEV_ROLE=operator E2E_SETTINGS=1 E2E_LLM=fake node tests/e2e/run.mjs dark",
+    "e2e:run3": "npm run e2e:run3:guest && npm run e2e:run3:fake && npm run e2e:run3:quota && npm run e2e:run3:signin",
+    "e2e:run3:guest": "node tests/e2e/run.mjs flow-upload-analyze-result flow-map-to-chat flow-follow-up",
+    "e2e:run3:fake": "E2E_LLM=fake node tests/e2e/run.mjs flow-follow-up",
+    "e2e:run3:quota": "E2E_GUEST_LIMIT=2 node tests/e2e/run.mjs flow-guest-quota",
+    "e2e:run3:signin": "E2E_SIGNIN=fake E2E_GUEST_LIMIT=1 node tests/e2e/run.mjs flow-signin"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.0",
