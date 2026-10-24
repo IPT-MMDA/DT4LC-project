@@ -128,7 +128,8 @@ jobs:
         run: npm run lint
 
       - name: TypeScript check
-        run: npx tsc --noEmit
+        # -b: tsconfig.json has `files: []` and only references the app and node projects.
+        run: npx tsc -b --noEmit
 
   frontend-test:
     name: Frontend Test
