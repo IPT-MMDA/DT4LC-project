@@ -6,6 +6,7 @@ import { SESSION_QUERY_KEY, roleLabel, useSession } from '../../api/hooks/useSes
 import { FILES_QUERY_KEY } from '../../api/hooks/useUpload';
 import { JOBS_QUERY_KEY } from '../../api/library';
 import { useThemeToggle } from '../../hooks/useThemeToggle';
+import { useChatStore } from '../../store/useChatStore';
 import type { SessionUser } from '../../types';
 
 /** The avatar, or the first letter of the user's name (the role's for a guest). */
@@ -57,12 +58,14 @@ export function AccountMenu({ placement = 'side' }: { placement?: 'side' | 'up' 
     };
   }, [open]);
 
-  // POST /v1/auth/logout, then everything that depends on who is asking is fetched again.
+  // POST /v1/auth/logout, then the member's conversations leave this browser (their jobs
+  // would 404 for the guest) and everything that depends on who is asking is fetched again.
   const onSignOut = async () => {
     setSigningOut(true);
     setSignOutError(false);
     try {
       await signOut();
+      useChatStore.getState().clearConversations();
       await Promise.all(
         [SESSION_QUERY_KEY, ['capabilities'], JOBS_QUERY_KEY, FILES_QUERY_KEY].map((queryKey) =>
           queryClient.invalidateQueries({ queryKey }),

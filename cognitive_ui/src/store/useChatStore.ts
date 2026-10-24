@@ -170,6 +170,8 @@ export interface ChatStore {
   selectConversation: (conversationId: string) => void;
   renameConversation: (conversationId: string, title: string) => void;
   deleteConversation: (conversationId: string) => void;
+  /** Forget every conversation and the composer's attachments and region (sign-out). */
+  clearConversations: () => void;
   /** Keep the latest reply's `pending` (null clears it); sent back with the next message. */
   setConversationPending: (conversationId: string, pending: PendingIntent | null) => void;
 
@@ -282,6 +284,9 @@ export const useChatStore = create<ChatStore>()(
           conversations: state.conversations.filter((c) => c.id !== conversationId),
           activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
         })),
+
+      clearConversations: () =>
+        set({ conversations: [], activeConversationId: null, pendingAttachments: [], pendingRegion: null }),
 
       setConversationPending: (conversationId, pending) =>
         set((state) => ({
