@@ -32,6 +32,11 @@ describe('docked map Layers panel', () => {
     expect(screen.queryByTestId('layers-legend')).toBeNull();
   });
 
+  it("Compare's tooltip points to the full map, where the swipe is", () => {
+    renderMap();
+    expect(screen.getByRole('button', { name: 'Compare' }).getAttribute('title')).toBe('Compare in map mode');
+  });
+
   it('lists a result layer with its opacity, the lost · same · gained legend, and Fit to result zooms to it', () => {
     renderMap();
     act(() => {
