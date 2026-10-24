@@ -75,13 +75,11 @@ function renderApp(url: string) {
   );
 }
 
-const conversation = (id: string, title: string): Conversation => ({
-  id,
-  title,
-  createdAt: '2026-10-23T10:00:00.000Z',
-  updatedAt: '2026-10-23T10:00:00.000Z',
-  messages: [],
-});
+// An hour old on the test's clock: a guest keeps conversations for 24 h.
+const conversation = (id: string, title: string): Conversation => {
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  return { id, title, createdAt: hourAgo, updatedAt: hourAgo, messages: [] };
+};
 
 beforeEach(() => {
   localStorage.clear();
