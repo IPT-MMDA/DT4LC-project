@@ -1,5 +1,6 @@
 """Allowlist for server files that routes read from a client-supplied path."""
 
+from collections.abc import Iterable
 from pathlib import Path
 import tempfile
 
@@ -61,3 +62,23 @@ async def ensure_served_owner(resolved: Path, session: Session) -> None:
         return
     if not session.can_see(owner):
         raise HTTPException(status_code=404, detail="File not found")
+
+
+ATTACHMENT_REFUSED = "This attachment isn't a file you can use here. Attach files with + or the sample."
+ATTACHMENT_NOT_FOUND = "Attachment not found."
+
+
+async def ensure_attachments_allowed(paths: Iterable[str | None], session: Session) -> None:
+    """403 or 404 unless ``session`` may use every attachment path in ``paths`` (empty ones are skipped).
+
+    The rule of :func:`resolve_served_path` and :func:`ensure_served_owner`, with messages that never
+    echo the path: 403 outside the roots, 404 missing, not a file, or another owner's file.
+    """
+    for attached in paths:
+        if not attached:
+            continue
+        try:
+            await ensure_served_owner(resolve_served_path(attached), session)
+        except HTTPException as e:
+            detail = ATTACHMENT_REFUSED if e.status_code == 403 else ATTACHMENT_NOT_FOUND
+            raise HTTPException(status_code=e.status_code, detail=detail) from None
