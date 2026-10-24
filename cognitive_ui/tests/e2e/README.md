@@ -8,7 +8,7 @@ npm run build          # the harness serves dist/; it refuses to run without it
 npm run e2e:smoke      # flows/smoke.e2e.mjs only
 npm run e2e            # every flows/*.e2e.mjs (guest, E2E_LLM=none; fake- and member-only flows skip)
 npm run e2e:workspace  # the Workspace screens: the four env groups below, one API run each
-npm run e2e:run2       # the run-2 screens: e2e:capabilities, e2e:landing, e2e:map, e2e:library and e2e:result, their groups below
+npm run e2e:run2       # Capabilities, landing, map mode, Library and Result detail: e2e:capabilities, e2e:landing, e2e:map, e2e:library and e2e:result, their groups below
 npm run e2e:signin     # GitHub sign-in: e2e:signin:fake (the fake GitHub) and e2e:signin:off (not configured)
 npm run e2e:settings   # operator Settings
 npm run e2e:responsive # phone 390×844 and tablet 834×1112 of the six screens (not part of e2e:run2)

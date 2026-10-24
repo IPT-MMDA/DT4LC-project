@@ -30,7 +30,7 @@ describe('toMapColour', () => {
   });
 });
 
-describe('map colours follow the theme tokens (QA D2)', () => {
+describe('map colours follow the theme tokens', () => {
   const sheet = document.createElement('style');
   sheet.textContent = `
     :root, [data-theme="light"] { --accent: #0000ff; --region: oklch(0 0 0); --canc: #ffaa00; --surface: #ffffff; }

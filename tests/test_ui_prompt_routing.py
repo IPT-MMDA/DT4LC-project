@@ -166,7 +166,7 @@ ROUTES: dict[str, dict[str, str]] = {
 }
 
 # Typed prompts that are not on a chip, held to the same routing: a date in the prompt picks that
-# file of the pair (the run-1 rule read the later one whatever the prompt said).
+# file of the pair (an earlier rule read the later one whatever the prompt said).
 TYPED: dict[str, dict[str, str]] = {
     "Calculate NDVI for 1 June": {
         "pair": "algorithms/ndvi@0601",

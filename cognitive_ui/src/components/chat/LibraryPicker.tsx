@@ -16,7 +16,7 @@ function fileAttachment(f: GeoTIFFFile): Attachment {
 
 /**
  * "From library": the caller's uploads (GET /v1/files) in a small popover; a click
- * attaches the file to the composer. The Library page itself is Phase 4.
+ * attaches the file to the composer. The full list is the Library page (/app/library).
  */
 export function LibraryPicker({ onClose, within }: { onClose: () => void; within: RefObject<HTMLElement> }) {
   const { data: files, isPending, isError } = useListFiles();

@@ -1,4 +1,4 @@
-"""Operator settings: ``GET/PUT /v1/settings`` and ``POST /v1/settings/assistant/test`` (v0.6.0 run 3).
+"""Operator settings: ``GET/PUT /v1/settings`` and ``POST /v1/settings/assistant/test``.
 
 Every test writes its overrides to its own ``DT4LC_SETTINGS_PATH`` and sets fake API keys,
 so the real ``.env`` keys never reach a response and no provider is called over the network.
@@ -378,7 +378,7 @@ def test_signed_in_operator_cannot_drop_their_own_operator_email(
 def test_signed_in_operator_cannot_reset_operator_emails_to_an_env_without_them(
     settings_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """BE77: ``null`` ("Reset to .env") applies the env list, so the caller must be in it."""
+    """``null`` ("Reset to .env") applies the env list, so the caller must be in it."""
     monkeypatch.delenv("DEV_ROLE")
     monkeypatch.setenv("OPERATOR_EMAILS", "other@example.org")
     overrides.write_overrides({"OPERATOR_EMAILS": "ops@example.org"})

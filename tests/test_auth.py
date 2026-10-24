@@ -1,4 +1,4 @@
-"""GitHub sign-in, roles from the allowlists, stable owners and adoption (v0.6.0 run 3, Phase 5).
+"""GitHub sign-in, roles from the allowlists, stable owners and adoption.
 
 GitHub is a tiny in-process HTTP server on 127.0.0.1 that ``GITHUB_OAUTH_BASE`` and
 ``GITHUB_API_BASE`` point at; nothing leaves the machine. It implements what a fake must:

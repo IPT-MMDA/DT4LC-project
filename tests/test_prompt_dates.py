@@ -1,4 +1,4 @@
-"""The dates a prompt names, and the attachments they pick (v0.6.0 run 2: "NDVI for 1 June")."""
+"""The dates a prompt names, and the attachments they pick ("NDVI for 1 June")."""
 
 import locale
 

@@ -1,4 +1,4 @@
-"""Readable download names (v0.6.0 run 3): ``download_name`` on artifact references and
+"""Readable download names: ``download_name`` on artifact references and
 ``GET /v1/download?path=…&name=…``.
 
 The stored files keep their names (``OUTPUTS_PATH/<job>/2_ChangeMap_change.tif``); ``name`` only

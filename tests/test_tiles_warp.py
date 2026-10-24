@@ -1,6 +1,6 @@
 """GET /v1/tiles over the UTM sample: tiles reprojected to Web Mercator, and the true-colour style.
 
-Before v0.6.0 run 2 a tile read the UTM envelope of its bounds linearly, so the edges of adjacent
+Before v0.6.0 a tile read the UTM envelope of its bounds linearly, so the edges of adjacent
 tiles did not meet (1-2 px steps at z12-14). The stitched tiles are compared here with an
 independent reprojection: each mosaic pixel centre transformed to UTM by PROJ and sampled there.
 """

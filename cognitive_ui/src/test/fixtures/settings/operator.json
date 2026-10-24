@@ -275,7 +275,7 @@
     "sample": {
       "name": "kakhovka_hls_l30",
       "bundled": true,
-      "path": "/home/roaffix/Workspace/DT4LC-project/resources/kahovka_data"
+      "path": "/app/resources/kahovka_data"
     },
     "editable": {
       "earth_engine": false,
@@ -284,7 +284,7 @@
     }
   },
   "server": {
-    "version": "0.5.1",
+    "version": "0.6.0",
     "deployment": "local",
     "paths": {
       "cache": "/tmp/dt4lc-e2e-state/cache",

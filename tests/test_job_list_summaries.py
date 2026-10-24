@@ -187,7 +187,7 @@ def test_list_200_jobs_with_1mb_results_under_200ms(tmp_path: Path, client: Test
 
 @pytest.mark.parametrize("kind", ["sqlite", "memory"])
 def test_total_counts_the_status_filter(kind: str, tmp_path: Path, client: TestClient) -> None:
-    """BE24: ``total`` is the number of rows the filter matches, not every job."""
+    """``total`` is the number of rows the filter matches, not every job."""
     store = _make_store(kind, tmp_path)
     for job in _jobs(3):  # completed, failed, cancelled
         store.save(job)

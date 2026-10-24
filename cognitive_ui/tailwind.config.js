@@ -77,7 +77,7 @@ module.exports = {
         // viewports as in the prototype.
         hero: ['min(84px, 9.3vh)', { lineHeight: '1', letterSpacing: '-0.03em', fontWeight: '600' }],
         'hero-sub': ['min(20px, 2.3vh)', { lineHeight: '1.4' }],
-        // The hero on a phone (goal-v0.6.0 run 3): four lines at 390 px instead of seven.
+        // The hero on a phone: four lines at 390 px instead of seven.
         'hero-phone': ['min(44px, 11vw)', { lineHeight: '1.05', letterSpacing: '-0.03em', fontWeight: '600' }],
       },
       spacing: {

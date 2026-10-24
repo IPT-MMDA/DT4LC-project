@@ -164,7 +164,7 @@ def test_tile_outside_the_raster_is_a_transparent_png_not_500(client: TestClient
 
 
 def test_tile_of_a_non_raster_file_is_415_without_the_path(client: TestClient, outputs: Path) -> None:
-    """BE26: a served file that rasterio can't open is a 415, and the body doesn't echo the server path."""
+    """A served file that rasterio can't open is a 415, and the body doesn't echo the server path."""
     result = outputs / "run-1" / "result.json"
     result.parent.mkdir()
     result.write_text('{"ok": true}')

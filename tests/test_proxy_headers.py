@@ -1,4 +1,4 @@
-"""Behind nginx the per-IP guest quota counts the forwarded client IP (v0.6.0 run 3, Phase 5).
+"""Behind nginx the per-IP guest quota counts the forwarded client IP.
 
 uvicorn runs with ``--proxy-headers --forwarded-allow-ips "$FORWARDED_ALLOW_IPS"``; its
 ``ProxyHeadersMiddleware`` rewrites the ASGI client from ``X-Forwarded-For`` when the socket
