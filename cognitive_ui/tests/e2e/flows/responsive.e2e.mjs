@@ -203,7 +203,7 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
       // The composer with an on-screen keyboard: the layout viewport shrinks (interactive-widget=resizes-content).
       await page.setViewportSize({ width: viewport.width, height: Math.round(viewport.height * 0.55) });
       await input.focus();
-      await input.fill('Classify the exposed bed');
+      await input.fill('Classify the flooded land');
       const composer = await box(input);
       assert.ok(composer.y >= 0 && composer.y + composer.height <= viewport.height * 0.55, 'the composer stays above the keyboard');
       await input.fill('');

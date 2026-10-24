@@ -181,7 +181,7 @@ function Demo({ demo }: { demo: ReturnType<typeof useDemo> }) {
               On the bundled crop, open water grew from 13.9 to 170 km² in eight days: 157 km² gained, 0.6 km² lost.
             </div>
             <div data-anim="follow" className="flex flex-wrap gap-[6px]">
-              {['Zoom to the largest change', 'Classify the exposed bed', 'Export GeoTIFF'].map((text) => (
+              {['Zoom to the largest change', 'Classify the flooded land', 'Export GeoTIFF'].map((text) => (
                 <span key={text} className="text-[12px] py-[5px] px-[10px] rounded-pill border border-border text-text2">
                   {text}
                 </span>
