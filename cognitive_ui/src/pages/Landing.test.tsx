@@ -81,7 +81,7 @@ describe('/ routing', () => {
     ['guest', GUEST_SESSION],
     ['member', MEMBER_SESSION],
     ['operator', OPERATOR_SESSION],
-  ])('shows the landing to a %s, keeping the URL', async (_, session) => {
+  ])('%s: the landing, keeping the URL', async (_, session) => {
     const get = mockSession(session);
     renderApp('/?utm=x');
     await waitFor(() => expect(get).toHaveBeenCalledWith('/v1/session'));
@@ -134,6 +134,43 @@ describe('/ routing', () => {
       expect(useChatStore.getState().draft).toBe('Map water change');
       expect(screen.queryByTestId('landing')).toBeNull();
     });
+  });
+});
+
+describe('the role line under "How it works"', () => {
+  const GUEST_LINE = 'No account. Conversations stay in this browser for 24 h. Up to 5 analyses per hour.';
+  const KEPT = 'Conversations stay in this browser and results on this server until you delete them. No analysis limit.';
+
+  it("shows the guest's retention and quota once the session answers", async () => {
+    mockSession({ ...GUEST_SESSION, kept_hours: 12, analyses: { ...GUEST_SESSION.analyses, limit: 3 } });
+    renderApp('/');
+    await screen.findByText('No account. Conversations stay in this browser for 12 h. Up to 3 analyses per hour.');
+  });
+
+  it('shows the guest line while the session loads', () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(() => new Promise(() => {}));
+    renderApp('/');
+    expect(screen.getByText(GUEST_LINE)).toBeTruthy();
+  });
+
+  it('shows the guest line when the session request fails', async () => {
+    mockSession(new Error('offline'));
+    renderApp('/');
+    await screen.findByTestId('landing');
+    await act(async () => {});
+    expect(screen.getByText(GUEST_LINE)).toBeTruthy();
+  });
+
+  it.each([
+    ['member', MEMBER_SESSION, 'Member'],
+    ['operator', OPERATOR_SESSION, 'Operator'],
+  ])('%s: their own line, with no guest quota', async (_, session, label) => {
+    mockSession(session);
+    renderApp('/');
+    expect(screen.getByText(GUEST_LINE)).toBeTruthy();
+    await screen.findByText(`${label}. ${KEPT}`);
+    const landing = screen.getByTestId('landing');
+    expect(landing.textContent).not.toMatch(/No account|analyses per hour/);
   });
 });
 
