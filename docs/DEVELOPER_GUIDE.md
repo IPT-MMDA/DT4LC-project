@@ -109,12 +109,13 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy dta server
 uv run pytest tests/ -m "not slow and not llm" -q
 cd cognitive_ui
 npm run lint                  # keep it at 0 errors and 0 warnings
-npm run build                 # tsc -b, the real type check, then vite build
+npm run typecheck             # tsc -b --noEmit
+npm run build                 # tsc -b, then vite build
 npm test                      # vitest
 npm run e2e:smoke             # Playwright, against dist/ and a real API
 ```
 
-`npx tsc --noEmit` checks nothing here (`tsconfig.json` has `files: []`); `npm run build` runs the project references. `src/stockColours.test.ts` (part of `npm test`) fails on any stock Tailwind palette class in `src/`, or a hex value from that palette: take colours from the design tokens in `src/index.css` and, for MapLibre paint, from `components/map/mapColours.ts`.
+The type check is `npm run typecheck`, and CI runs the same `npx tsc -b --noEmit`. A plain `npx tsc --noEmit` checks nothing here: `tsconfig.json` has `files: []` and only references the app and node projects, which `-b` follows. `src/stockColours.test.ts` (part of `npm test`) fails on any stock Tailwind palette class in `src/`, or a hex value from that palette: take colours from the design tokens in `src/index.css` and, for MapLibre paint, from `components/map/mapColours.ts`.
 
 The browser groups, each with its own API process (see [Browser E2E harness](#browser-e2e-harness)):
 
