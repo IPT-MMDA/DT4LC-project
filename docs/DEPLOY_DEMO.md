@@ -109,7 +109,7 @@ What each group does:
   - Set the keys you have and list those providers in `LLM_PROVIDER_ORDER`. The backend tries them in order and falls back on failure.
   - Anthropic, Mistral and OpenAI work the same way, with `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY` and `OPENAI_API_KEY`, once they are listed in the order.
   - The model variables (`GEMINI_MODELS`, `GROQ_MODEL`, …) are described in `.env.example`.
-  - Turn Ollama off. `.env.example` enables it, but the demo profile does not start it, and the `ollama` profile of `docker-compose.yml` would publish Ollama's port 11434 on every interface of the host.
+  - Turn Ollama off. `.env.example` enables it, but the demo profile does not start it. If you start it anyway, with `COMPOSE_PROFILES=demo,ollama`, `docker-compose.demo.yml` publishes none of its ports; the backend reaches it at `http://ollama:11434` on the compose network. (The `ollama` profile of the default stack, without the override, publishes port 11434 on every interface of the host.)
 - **`FRONTEND_PORT=127.0.0.1:8080`** publishes the frontend on the loopback interface only. The plain-HTTP port is then unreachable from outside, and every request comes through the TLS proxy. 8080 is an example: any free port works if the proxy uses the same one.
 - **`DEMO_SUBNET`:** leave it unset unless `172.30.60.0/24` clashes with a network on the host ([Troubleshooting](#11-troubleshooting)). The backend trusts `X-Forwarded-For` only from this subnet.
 - **Not needed:**
