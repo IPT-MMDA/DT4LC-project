@@ -96,7 +96,7 @@ function Header() {
       <div className="flex-1" />
       <div className="flex items-center gap-[6px] py-1 pr-1 pl-[14px] max-md:pl-1 rounded-pill bg-[rgba(10,12,16,.55)] border border-[rgba(255,255,255,.25)]">
         {!phone && <NavLinks className="flex gap-[18px] text-[13.5px] pr-[10px]" />}
-        <Link to="/app?sample=0" className="text-[13px] px-3 py-[7px] rounded-pill bg-[#fff] text-[#1a1d23] font-medium">
+        <Link to="/app" className="text-[13px] px-3 py-[7px] rounded-pill bg-[#fff] text-[#1a1d23] font-medium">
           Open workspace
         </Link>
         {phone && (

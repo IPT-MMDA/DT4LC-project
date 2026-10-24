@@ -82,6 +82,16 @@ describe('?sample=1', () => {
     expect(useChatStore.getState().pendingAttachments).toEqual([]);
   });
 
+  it.each(['/app', '/app?sample=0'])('%s keeps the open conversation', async (url) => {
+    useChatStore.setState({ activeConversationId: 'chat_old' });
+    const post = mockSample();
+    const location = renderAt(url);
+    await act(async () => {});
+    expect(post).not.toHaveBeenCalled();
+    expect(useChatStore.getState().activeConversationId).toBe('chat_old');
+    expect(location.current).toBe(url);
+  });
+
   it('leaves the composer empty when the server has no sample', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockSample(Promise.reject(new Error('Sample not bundled')));

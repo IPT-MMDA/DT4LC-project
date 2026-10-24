@@ -107,6 +107,20 @@ describe('/ routing', () => {
     await screen.findByTestId('landing');
   });
 
+  it('"Open workspace" opens /app on the conversation that was open', async () => {
+    mockSession(GUEST_SESSION);
+    useChatStore.getState().addMessage({ kind: 'user', text: 'Earlier chat' });
+    const active = useChatStore.getState().activeConversationId;
+    renderApp('/');
+    const link = screen.getByRole('link', { name: 'Open workspace' });
+    expect(link.getAttribute('href')).toBe('/app');
+    fireEvent.click(link);
+    expect(location.current).toBe('/app');
+    await act(async () => {});
+    expect(useChatStore.getState().activeConversationId).toBe(active);
+    expect(screen.getByRole('heading', { level: 1, name: 'Earlier chat' })).toBeTruthy();
+  });
+
   describe.each([
     ['guest', GUEST_SESSION],
     ['member', MEMBER_SESSION],
