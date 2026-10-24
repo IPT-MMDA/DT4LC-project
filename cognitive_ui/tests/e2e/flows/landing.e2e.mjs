@@ -1,8 +1,10 @@
 // The guest landing at 1440x900: design/screens/landing-hero.png and landing-below-fold.png.
-// A first-time guest sees it at /; a guest with a stored conversation goes to /app.
+// Every visitor sees it at /, a guest with a stored conversation too; only a Workspace
+// deep link (?sample=, ?prompt=) opens /app. The DT mark in the rail (1440) and in the
+// phone menu (390) leads to it, and Open workspace returns to the open conversation.
 // The hero buttons open the Workspace with and without the sample. Reduced motion stops
 // every animation and the demo; the step buttons scrub the demo either way.
-// Guest group (`npm run e2e:landing:guest`); the member redirect is landing-member.e2e.mjs.
+// Guest group (`npm run e2e:landing:guest`); the member's landing is landing-member.e2e.mjs.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';
@@ -18,18 +20,9 @@ after(async () => {
   await h?.browser.close();
 });
 
-// Records whether the landing ever rendered, so a redirect is checked for a flash too.
-function watchLanding() {
-  window.__landingSeen = false;
-  new MutationObserver(() => {
-    if (document.querySelector('[data-testid="landing"]')) window.__landingSeen = true;
-  }).observe(document, { childList: true, subtree: true });
-}
-
-async function open(url, { reducedMotion, init } = {}) {
-  const context = await h.browser.newContext({ viewport: { width: 1440, height: 900 } });
+async function open(url, { reducedMotion, init, viewport = { width: 1440, height: 900 } } = {}) {
+  const context = await h.browser.newContext({ viewport });
   if (init) await context.addInitScript(init.fn, init.arg);
-  await context.addInitScript(watchLanding);
   const page = await context.newPage();
   const errors = trackPageErrors(page);
   if (reducedMotion) await page.emulateMedia({ reducedMotion });
@@ -41,6 +34,53 @@ async function landingReady(page) {
   await page.getByTestId('landing').waitFor();
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => [...document.images].every((img) => img.complete));
+}
+
+const HERO_B = 'What changed on the ground? Ask in plain language.';
+
+// Two stored conversations; the open one is the older, so "the same conversation" is not
+// just the first in the list.
+function storedConversations() {
+  const now = Date.now();
+  const at = (minutesAgo) => new Date(now - minutesAgo * 60_000).toISOString();
+  const conversation = (id, title, minutesAgo) => ({
+    id,
+    title,
+    createdAt: at(minutesAgo),
+    updatedAt: at(minutesAgo),
+    messages: [{ id: `msg_${id}`, kind: 'user', text: title, createdAt: at(minutesAgo) }],
+  });
+  return JSON.stringify({
+    state: {
+      conversations: [conversation('conv_newer', 'Newer chat', 5), conversation('conv_e2e', 'Earlier chat', 60)],
+      activeConversationId: 'conv_e2e',
+      keptHours: 24,
+    },
+    version: 4,
+  });
+}
+const seeded = { fn: (value) => localStorage.setItem('dt4lc-chat-storage', value), arg: storedConversations() };
+
+const activeConversationId = (page) =>
+  page.evaluate(() => JSON.parse(localStorage.getItem('dt4lc-chat-storage')).state.activeConversationId);
+
+/** Hero B at /, and it stays: the landing no longer hands a known visitor on to /app. */
+async function heroB(page) {
+  await page.waitForURL((url) => url.pathname === '/');
+  await landingReady(page);
+  await page.getByRole('heading', { level: 1, name: HERO_B }).waitFor();
+  await page.waitForTimeout(500);
+  assert.equal(new URL(page.url()).pathname, '/');
+}
+
+/** Open workspace, then /app with no query on the stored open conversation. */
+async function backToConversation(page) {
+  const link = page.getByRole('link', { name: 'Open workspace' });
+  assert.equal(await link.getAttribute('href'), '/app');
+  await link.click();
+  await page.waitForURL((url) => url.pathname === '/app' && url.search === '');
+  await page.getByRole('heading', { level: 1, name: 'Earlier chat' }).waitFor();
+  assert.equal(await activeConversationId(page), 'conv_e2e');
 }
 
 // The demo's own animations: they finish once the 8-s timeline has played.
@@ -69,6 +109,7 @@ test('a first-time guest sees hero B at /', guest, async () => {
     assert.equal(new URL(page.url()).pathname, '/');
     await page.getByRole('heading', { level: 1, name: 'What changed on the ground? Ask in plain language.' }).waitFor();
     await page.getByText('Digital Twin for Land Cover · open-source research software').waitFor();
+    await page.getByText('No account. Conversations stay in this browser for 24 h. Up to 5 analyses per hour.').waitFor({ state: 'attached' });
     assert.match(
       await page.getByTestId('landing-caption').innerText(),
       /^Example · Lower Dnipro, 1 → 9 June 2023 · \+157 km² of water after the Kakhovka dam breach \(bundled crop\) · NASA HLS L30/,
@@ -153,33 +194,79 @@ test('"Describe your own analysis" opens the empty Workspace (?sample=0)', guest
   }
 });
 
-test('a guest with a stored conversation goes to /app, with no flash of the landing', guest, async () => {
-  const now = new Date().toISOString();
-  const stored = {
-    state: {
-      conversations: [
-        {
-          id: 'conv_e2e',
-          title: 'Earlier chat',
-          createdAt: now,
-          updatedAt: now,
-          messages: [{ id: 'msg_e2e', kind: 'user', text: 'Earlier chat', createdAt: now }],
-        },
-      ],
-      activeConversationId: 'conv_e2e',
-      keptHours: 24,
-    },
-    version: 4,
-  };
-  const seed = (value) => localStorage.setItem('dt4lc-chat-storage', value);
-  const { context, page, errors } = await open('/', { init: { fn: seed, arg: JSON.stringify(stored) } });
+test('a guest with a stored conversation still sees the landing, and Open workspace returns to the conversation', guest, async () => {
+  const { context, page, errors } = await open('/', { init: seeded });
   try {
-    await page.waitForURL((url) => url.pathname === '/app');
-    await page.getByRole('complementary', { name: 'Conversations' }).getByText('Earlier chat').first().waitFor();
-    assert.equal(await page.evaluate(() => window.__landingSeen), false);
+    await heroB(page);
+    await backToConversation(page);
+    const current = page.getByRole('complementary', { name: 'Conversations' }).locator('[aria-current="true"]');
+    assert.match(await current.innerText(), /^Earlier chat/);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
+  }
+});
+
+test('the DT mark leads to the landing and back: the rail at 1440, the phone menu at 390', guest, async () => {
+  {
+    const { context, page, errors } = await open('/app', { init: seeded });
+    try {
+      await page.getByRole('heading', { level: 1, name: 'Earlier chat' }).waitFor();
+      const mark = page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'DT, DT4LC home' });
+      await mark.click();
+      await heroB(page);
+      await page.screenshot({ path: outPath('landing-from-rail-1440.png') });
+      await backToConversation(page);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  }
+  {
+    const { context, page, errors } = await open('/app', { init: seeded, viewport: { width: 390, height: 844 } });
+    try {
+      await page.getByRole('heading', { level: 1, name: 'Earlier chat' }).waitFor();
+      await page.getByRole('button', { name: 'Open menu' }).click();
+      const menu = page.getByRole('dialog', { name: 'Menu' });
+      await menu.getByRole('complementary', { name: 'Conversations' }).getByText('Earlier chat').first().waitFor();
+      await page.screenshot({ path: outPath('landing-phone-menu-open-390.png') });
+      await menu.getByRole('link', { name: 'DT, DT4LC home' }).click();
+      await heroB(page);
+      await page.screenshot({ path: outPath('landing-from-phone-menu-390.png') });
+      await backToConversation(page);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+test('a Workspace deep link at / opens /app with its query: ?sample=1, ?prompt=', guest, async () => {
+  {
+    const { context, page, errors } = await open('/?sample=1');
+    try {
+      const chip = page.getByTestId('attachment-chip');
+      await chip.waitFor();
+      assert.match(await chip.innerText(), /kakhovka_hls_l30/);
+      await page.waitForURL((url) => url.pathname === '/app' && !url.searchParams.has('sample'));
+      assert.equal(await page.getByTestId('landing').count(), 0);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
+  }
+  {
+    const { context, page, errors } = await open(`/?${new URLSearchParams({ prompt: 'Map water change' })}`);
+    try {
+      await page.waitForURL((url) => url.pathname === '/app' && !url.searchParams.has('prompt'));
+      const input = page.getByLabel('Message', { exact: true });
+      await input.waitFor();
+      assert.equal(await input.inputValue(), 'Map water change');
+      assert.equal(await page.getByTestId('landing').count(), 0);
+      assert.deepEqual(errors, []);
+    } finally {
+      await context.close();
+    }
   }
 });
 

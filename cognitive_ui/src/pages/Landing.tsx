@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { roleLabel } from '../api/hooks/useSession';
 import { HowItWorks } from '../components/landing/HowItWorks';
 import '../components/landing/landing.css';
 import { PHONE_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import type { SessionInfo } from '../types';
 
-// The guest landing (design/DESIGN.md section 7, design/prototype/Landing v2.dc.html):
+// The landing (design/DESIGN.md section 7, design/prototype/Landing v2.dc.html):
 // hero B, "What it can do", "How it works" and the footer. The hero sits on imagery
 // in both themes, so its ink (and its focus ring) is literal white.
 
@@ -95,7 +96,7 @@ function Header() {
       <div className="flex-1" />
       <div className="flex items-center gap-[6px] py-1 pr-1 pl-[14px] max-md:pl-1 rounded-pill bg-[rgba(10,12,16,.55)] border border-[rgba(255,255,255,.25)]">
         {!phone && <NavLinks className="flex gap-[18px] text-[13.5px] pr-[10px]" />}
-        <Link to="/app?sample=0" className="text-[13px] px-3 py-[7px] rounded-pill bg-[#fff] text-[#1a1d23] font-medium">
+        <Link to="/app" className="text-[13px] px-3 py-[7px] rounded-pill bg-[#fff] text-[#1a1d23] font-medium">
           Open workspace
         </Link>
         {phone && (
@@ -114,7 +115,7 @@ function Header() {
       {menuOpen && (
         <NavLinks
           onPick={() => setOpen(false)}
-          className="absolute top-16 inset-x-4 p-2 flex flex-col rounded-card bg-[rgba(10,12,16,.88)] border border-[rgba(255,255,255,.25)] text-[15px] [&>a]:px-3 [&>a]:py-[10px]"
+          className="absolute top-16 inset-x-4 p-2 flex flex-col rounded-card bg-[#0a0c10] border border-[rgba(255,255,255,.25)] text-[15px] [&>a]:px-3 [&>a]:py-[10px]"
         />
       )}
     </header>
@@ -280,17 +281,28 @@ function Footer() {
   );
 }
 
-/** `/` for a first-time guest; routes.tsx decides who sees it. */
-export function Landing({ session }: { session?: SessionInfo }) {
+/**
+ * The line under "How it works" (DESIGN §6): a guest's retention and quota, also while
+ * the session loads or when it failed; a member's or operator's has no quota.
+ */
+function roleNote(session?: SessionInfo): string {
+  if (session && !session.guest) {
+    return `${roleLabel(session.role)}. Conversations stay in this browser and results on this server until you delete them. No analysis limit.`;
+  }
   const hours = session?.kept_hours ?? 24;
   const limit = session?.analyses.limit ?? 5;
+  return `No account. Conversations stay in this browser for ${hours} h. Up to ${limit} analyses per hour.`;
+}
+
+/** `/` for every visitor; routes.tsx sends only Workspace deep links on to `/app`. */
+export function Landing({ session }: { session?: SessionInfo }) {
   return (
     <div data-testid="landing" className="relative bg-bg text-text text-[14px] font-sans">
       <Header />
       <main>
         <Hero />
         <Tiers />
-        <HowItWorks note={`No account. Conversations stay in this browser for ${hours} h. Up to ${limit} analyses per hour.`} />
+        <HowItWorks note={roleNote(session)} />
       </main>
       <Footer />
     </div>

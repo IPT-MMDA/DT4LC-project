@@ -139,6 +139,7 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
         assert.equal(await menu.getAttribute('aria-expanded'), 'true');
         const nav = page.getByRole('navigation', { name: 'Landing' });
         assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Capabilities', 'How it works', 'About', 'GitHub ↗']);
+        assert.equal(await nav.evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(10, 12, 16)', 'the menu panel is opaque');
         await check(page, report, 'landing-menu', { ...ALLOW.landing, scope: 'header' });
         await page.screenshot({ path: outPath('responsive/landing-phone-menu.png') });
         await page.keyboard.press('Escape');
@@ -149,6 +150,21 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
       }
       const lines = await headline.evaluate((el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)));
       assert.ok(lines <= 4, `the headline takes ${lines} lines`);
+      // The demo's file chips keep "HLS L30 · 5 bands · 30 m" on one line, inside the demo.
+      const demo = await box(page.getByTestId('landing-demo'));
+      assert.equal(await page.getByTestId('landing-chip-meta').count(), 2);
+      for (const meta of await page.getByTestId('landing-chip-meta').all()) {
+        const metaLines = await meta.evaluate((el) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
+        });
+        assert.equal(metaLines, 1, 'the chip meta takes one line');
+        const chip = await box(meta.locator('xpath=../..'));
+        const line = await box(meta);
+        assert.ok(chip.x >= demo.x && chip.x + chip.width <= demo.x + demo.width, 'the chip fits in the demo');
+        assert.ok(line.x + line.width <= chip.x + chip.width, 'the chip meta ends inside its chip');
+      }
       await check(page, report, 'landing', ALLOW.landing);
       await shoot(page, `landing-${device}`);
 
