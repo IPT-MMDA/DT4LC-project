@@ -8,7 +8,7 @@ import { SessionBadge } from './SessionBadge';
 
 const iconButton = 'w-6 h-6 flex items-center justify-center rounded-[5px] text-muted hover:text-text hover:bg-surface';
 
-function ConversationItem({ conversation, active }: { conversation: Conversation; active: boolean }) {
+function ConversationItem({ conversation, active, onPick }: { conversation: Conversation; active: boolean; onPick?: () => void }) {
   const selectConversation = useChatStore((state) => state.selectConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
@@ -52,7 +52,10 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
       ) : (
         <button
           type="button"
-          onClick={() => selectConversation(conversation.id)}
+          onClick={() => {
+            selectConversation(conversation.id);
+            onPick?.();
+          }}
           aria-current={active ? 'true' : undefined}
           className="w-full text-left px-[10px] py-[9px] rounded-control max-md:pr-[62px] [@media(hover:none)]:pr-[62px]"
         >
@@ -99,10 +102,10 @@ function ConversationItem({ conversation, active }: { conversation: Conversation
 
 /**
  * The Workspace's left column: conversations (newest first), "+ New", and the session badge.
- * In the phone's menu it fills the drawer (`className`); on a tablet `onCollapse` adds a
- * button that hides it.
+ * In the phone's menu it fills the drawer (`className`) and `onPick` closes it, the current
+ * conversation too; on a tablet `onCollapse` adds a button that hides it.
  */
-export function ConversationList({ className, onCollapse }: { className?: string; onCollapse?: () => void }) {
+export function ConversationList({ className, onCollapse, onPick }: { className?: string; onCollapse?: () => void; onPick?: () => void }) {
   const conversations = useChatStore((state) => state.conversations);
   const activeId = useChatStore((state) => state.activeConversationId);
   const keptHours = useChatStore((state) => state.keptHours);
@@ -144,7 +147,7 @@ export function ConversationList({ className, onCollapse }: { className?: string
       ) : (
         <ul className="px-[10px] flex flex-col gap-[2px] overflow-y-auto min-h-0">
           {conversations.map((c) => (
-            <ConversationItem key={c.id} conversation={c} active={c.id === activeId} />
+            <ConversationItem key={c.id} conversation={c} active={c.id === activeId} onPick={onPick} />
           ))}
         </ul>
       )}

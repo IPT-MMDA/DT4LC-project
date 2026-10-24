@@ -49,8 +49,8 @@ export function PhoneBar({ open, onOpen, buttonRef }: { open: boolean; onOpen: (
 
 /**
  * The phone's menu: a drawer from the left with the four destinations, the conversations
- * (in the Workspace), the theme and the account menu. Escape, Close, a destination (the
- * current one too) and a tap beside it close it; so does another conversation (the Shell).
+ * (in the Workspace), the theme and the account menu. Escape, Close, a destination or a
+ * conversation (the current one too) and a tap beside it close it.
  */
 export function MenuDrawer({ onClose }: { onClose: () => void }) {
   const { pathname } = useLocation();
@@ -124,7 +124,7 @@ export function MenuDrawer({ onClose }: { onClose: () => void }) {
           })}
         </nav>
 
-        {workspace ? <ConversationList className="w-auto flex-1 border-r-0" /> : <div className="flex-1" />}
+        {workspace ? <ConversationList className="w-auto flex-1 border-r-0" onPick={onClose} /> : <div className="flex-1" />}
 
         <div className="flex-none border-t border-border px-3 py-2 flex items-center gap-2">
           <AccountMenu placement="up" />
