@@ -226,6 +226,19 @@ describe('the shell on a phone', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('the current conversation closes the drawer too, and focus returns to the menu button', () => {
+    stubWidth(390);
+    mockApi();
+    renderApp('/app');
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    const menu = screen.getByRole('dialog', { name: 'Menu' });
+
+    fireEvent.click(within(menu).getByRole('button', { name: 'Kakhovka reservoir — water loss' }));
+    expect(useChatStore.getState().activeConversationId).toBe('c1');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open menu' }));
+  });
+
   it("Escape in the drawer's account menu closes only the account menu", async () => {
     stubWidth(390);
     mockApi();

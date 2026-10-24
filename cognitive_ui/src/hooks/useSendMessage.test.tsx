@@ -204,6 +204,20 @@ describe('sendMessage', () => {
     expect(onQuotaChanged).toHaveBeenCalled();
   });
 
+  it("shows nginx's RATE_LIMITED refusal as it is, without a quota refetch", async () => {
+    const onQuotaChanged = vi.fn();
+    // The body deploy/nginx-demo.conf.template returns for a rate-limited request.
+    const body = '{"ok":false,"error":{"code":"RATE_LIMITED","message":"Too many requests from your address. Wait a few seconds and try again.","details":{}}}';
+    fetchMock.mockResolvedValueOnce(new Response(body, { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '10' } }));
+    await sendMessage('Map vegetation health', { onQuotaChanged });
+    expect(messages().at(-1)).toMatchObject({
+      kind: 'assistant',
+      text: 'Too many requests from your address. Wait a few seconds and try again.',
+      error: true,
+    });
+    expect(onQuotaChanged).not.toHaveBeenCalled();
+  });
+
   it('shows other errors as a short inline error', async () => {
     fetchMock
       .mockResolvedValueOnce(json(422, { detail: [{ msg: 'region start_date is after end_date' }] }))

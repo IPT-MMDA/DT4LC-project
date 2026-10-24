@@ -160,8 +160,11 @@ export async function sendMessage(text: string, options: SendOptions = {}): Prom
     );
   } catch (err) {
     const quota = err instanceof ChatError && err.code === 'GUEST_QUOTA';
+    // nginx's 429 on the demo (deploy/nginx-demo.conf.template): its message reads as is.
+    const limited = err instanceof ChatError && err.code === 'RATE_LIMITED';
     const reason = err instanceof Error ? err.message : String(err);
-    addMessage({ kind: 'assistant', text: quota ? reason : `Couldn't send the message: ${reason}`, error: true }, conversationId);
+    const text = quota || limited ? reason : `Couldn't send the message: ${reason}`;
+    addMessage({ kind: 'assistant', text, error: true }, conversationId);
     if (quota) options.onQuotaChanged?.();
   }
 }

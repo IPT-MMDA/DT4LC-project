@@ -240,7 +240,7 @@ describe('card selection by artifact kind', () => {
     if (c.kind !== 'classification') throw new Error();
     expect(c.classes).toEqual([
       { name: 'No Snow', colour: '#667f4c', value: '531 km²' },
-      { name: 'Snow', colour: '#ffcc66', value: '0.0 km²' },
+      { name: 'Snow', colour: '#ffcc66', value: '<0.1 km²' },
     ]);
     expect(c.views[0].bare?.url).toMatch(/snow_classification_bare\.png$/);
     expect(c.views[0].raster?.path).toMatch(/snow_mask\.tif$/);
@@ -355,6 +355,14 @@ describe('formatting', () => {
     expect(formatKm2(1230.4)).toBe('1 230 km²');
     expect(formatKm2(-4.2)).toBe('−4.2 km²');
     expect(formatKm2(null)).toBe('—');
+  });
+
+  it("shows a trace area as <0.1 km², not 0.0 km² (the sample's 15 snow pixels)", () => {
+    expect(formatKm2(0.013)).toBe('<0.1 km²');
+    expect(formatKm2(0.013, { sign: true })).toBe('<0.1 km²');
+    expect(formatKm2(-0.013)).toBe('<0.1 km²');
+    expect(formatKm2(0)).toBe('0.0 km²');
+    expect(formatKm2(0.06)).toBe('0.1 km²');
   });
 
   it('formats statistics and shares', () => {

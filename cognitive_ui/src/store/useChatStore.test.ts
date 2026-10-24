@@ -97,6 +97,23 @@ describe('conversations', () => {
     expect(store.getState().conversations).toEqual([]);
     expect(store.getState().activeConversationId).toBeNull();
   });
+
+  it('clearConversations drops every conversation and the composer attachments and region', async () => {
+    const store = await loadFreshStore();
+    store.getState().addMessage(user('first'));
+    store.getState().newConversation();
+    store.getState().addMessage(user('second'));
+    store.getState().addAttachment({ id: 'a1', filename: 'x.tif', path: '/app/uploads/x.tif' });
+    store.getState().setPendingRegion({ name: 'Area 1' } as never);
+
+    store.getState().clearConversations();
+    const state = store.getState();
+    expect(state.conversations).toEqual([]);
+    expect(state.activeConversationId).toBeNull();
+    expect(state.pendingAttachments).toEqual([]);
+    expect(state.pendingRegion).toBeNull();
+    expect(JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? '{}').state.conversations).toEqual([]);
+  });
 });
 
 describe('messages', () => {

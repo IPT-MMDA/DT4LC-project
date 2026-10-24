@@ -98,7 +98,7 @@ export function LayersSection() {
                 onClick={() => toggle(row)}
                 aria-label={`${row.visible ? 'Hide' : 'Show'} ${row.name}`}
                 aria-pressed={!row.visible}
-                className={cn('text-muted hover:text-text', row.visible && 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100')}
+                className={cn('text-muted hover:text-text', row.visible && 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 max-md:opacity-100 [@media(hover:none)]:opacity-100')}
               >
                 {row.visible ? <Eye aria-hidden className="w-[14px] h-[14px]" /> : <EyeOff aria-hidden className="w-[14px] h-[14px]" />}
               </button>
@@ -110,8 +110,9 @@ export function LayersSection() {
                 value={row.opacity}
                 aria-label={`Opacity of ${row.name}`}
                 onChange={(e) => setOpacity(row, Number(e.target.value))}
-                // The top row shows its slider (design/screens/map-mode-1280.png); the others on hover or focus.
-                className={cn('w-[50px] accent-accent', i > 0 && 'hidden group-hover:block group-focus-within:block')}
+                // The top row shows its slider (design/screens/map-mode-1280.png); the others on hover or
+                // focus, and always on a phone or a touch screen, which have no hover.
+                className={cn('w-[50px] accent-accent', i > 0 && 'hidden group-hover:block group-focus-within:block max-md:block [@media(hover:none)]:block')}
               />
               <span className="w-[22px] text-right font-mono text-[11px] text-muted">{row.opacity}</span>
             </li>

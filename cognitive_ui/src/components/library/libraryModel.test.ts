@@ -102,6 +102,11 @@ describe('Library rows: analyses and files merged', () => {
     expect(find('job-f5')).toMatchObject({ title: 'Map land cover', status: 'running', action: null });
   });
 
+  it('names a proposal job a proposal, not queued', () => {
+    const [row] = libraryRows([job('p1', { status: 'proposal', prompt: 'Map the flood', card: null })], [], []);
+    expect(row).toMatchObject({ kind: 'analysis', status: 'proposal', title: 'Map the flood' });
+  });
+
   it('names files by group or file name and line, and counts the conversations that attach them', () => {
     expect(find('sample-6774daf7')).toMatchObject({
       kind: 'file', fileKind: 'sample', title: 'kakhovka_hls_l30.tif', subtitle: group.line, type: 'File · sample',

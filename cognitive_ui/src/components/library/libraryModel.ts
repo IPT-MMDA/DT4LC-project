@@ -9,7 +9,7 @@ import type { AnalysedContext } from '../chat/result/resultModel';
 // `card`) and files (GET /v1/files) in one list, newest first, with filters and one
 // action per row. Pure: Library.tsx renders LibraryRow and nothing else.
 
-export type RowStatus = 'done' | 'failed' | 'cancelled' | 'running' | 'queued';
+export type RowStatus = 'done' | 'failed' | 'cancelled' | 'running' | 'queued' | 'proposal';
 /** The row's one button: Map, Chat, Retry, ↓ or CSV; null for none. */
 export type RowAction = 'map' | 'chat' | 'retry' | 'download' | 'csv' | null;
 
@@ -47,7 +47,7 @@ const STATUS: Record<JobSummary['status'], RowStatus> = {
   cancelled: 'cancelled',
   running: 'running',
   pending: 'queued',
-  proposal: 'queued',
+  proposal: 'proposal',
 };
 
 /** Card kinds whose result has a raster to put on the map. */

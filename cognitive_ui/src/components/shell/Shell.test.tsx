@@ -333,6 +333,27 @@ describe('account menu', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  it("Sign out: clears the member's conversations from this browser", async () => {
+    const { get } = mockApi(MEMBER_SESSION);
+    useChatStore.getState().addMessage({ kind: 'user', text: 'Map the flood' });
+    useChatStore.getState().addAttachment({ id: 'a1', filename: 'x.tif', path: '/app/uploads/x.tif' });
+    renderApp('/app');
+    expect((await screen.findAllByText('Map the flood')).length).toBeGreaterThan(0);
+    const menu = await openMenu('Account: Mira Member (Member)');
+    get.mockImplementation(async (url: string) => {
+      if (url === '/v1/session') return GUEST_SESSION as never;
+      if (url === '/v1/health') return HEALTH as never;
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Sign out' }));
+    await waitFor(() => expect(location.current).toBe('/'));
+    const chat = useChatStore.getState();
+    expect(chat.conversations).toEqual([]);
+    expect(chat.activeConversationId).toBeNull();
+    expect(chat.pendingAttachments).toEqual([]);
+  });
+
   it('a failed sign-out says so and keeps the user', async () => {
     const { post } = mockApi(MEMBER_SESSION);
     post.mockRejectedValue(new Error('offline'));

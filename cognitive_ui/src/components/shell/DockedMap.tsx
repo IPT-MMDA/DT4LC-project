@@ -51,8 +51,8 @@ export function DockedMap() {
           >
             Fit to result
           </button>
-          {/* Compare (a before/after swipe) is map mode, Phase 4. */}
-          <button type="button" disabled title="Arrives with map mode" className={control}>
+          {/* Compare (a before/after swipe) is in map mode (Open full map). */}
+          <button type="button" disabled title="Compare in map mode" className={control}>
             Compare
           </button>
         </div>

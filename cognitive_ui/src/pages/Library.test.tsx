@@ -70,6 +70,14 @@ describe('Library page', () => {
     expect(screen.getByText('Every analysis and file from your conversations.')).toBeTruthy();
   });
 
+  it('labels a proposal job "Proposal"', async () => {
+    mockApi(GUEST_SESSION, [{ id: 'p1', status: 'proposal', prompt: 'Map the flood', created_at: today(0, 3), card: null }], []);
+    renderLibrary();
+    const pill = await screen.findByTestId('status-pill');
+    expect(pill.textContent).toBe('Proposal');
+    expect(pill.dataset.status).toBe('proposal');
+  });
+
   it('lists analyses and files, and the filters narrow it', async () => {
     mockApi(GUEST_SESSION);
     renderLibrary();

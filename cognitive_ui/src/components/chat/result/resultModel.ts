@@ -127,11 +127,13 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 
 /**
  * An area: one decimal under 100 km², whole km² from 100, "—" when unknown (a CRS
- * that is not projected). `sign` puts "+" before a positive value.
+ * that is not projected), "<0.1 km²" for a trace that would round to 0.0. `sign` puts
+ * "+" before a positive value.
  */
 export function formatKm2(value: unknown, { sign = false } = {}): string {
   if (!isNum(value)) return '—';
   const abs = Math.abs(value);
+  if (abs > 0 && abs < 0.05) return '<0.1 km²';
   const digits = abs < 100 ? abs.toFixed(1) : grouped(abs);
   const prefix = value < 0 ? MINUS : sign && value > 0 ? '+' : '';
   return `${prefix}${digits} km²`;
