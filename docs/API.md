@@ -892,6 +892,8 @@ List the caller's job summaries, newest first, with optional filtering and pagin
 }
 ```
 
+`total` counts every job the query matches, not just this page: the caller's jobs (an operator's: all of them), and only those with `status` when it is given.
+
 #### Job cards
 
 Every job record and summary has `card`, the Library row and Result-detail header of the job. It is computed once, when the job completes, fails or is cancelled, and stored with the job, so `GET /v1/jobs` shows it without loading the result. It is `null` until then (pending, proposal, running), and on jobs from before v0.6.0: show the prompt instead.
