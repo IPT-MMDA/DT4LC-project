@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import tailwindColors from 'tailwindcss/colors';
 
-// Files allowed to keep stock colours. Empty since v0.6.0 Phase 2 deleted the old
+// Files allowed to keep stock colours. Empty since v0.6.0 deleted the old
 // pages and job cards; everything must use the design tokens.
 const LEGACY = new Set<string>([]);
 

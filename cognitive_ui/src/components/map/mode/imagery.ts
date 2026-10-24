@@ -99,7 +99,7 @@ export function formatCentroid(region: DrawnRegion): string {
   return `${Math.abs(lat).toFixed(2)} ${lat < 0 ? 'S' : 'N'} ${Math.abs(lon).toFixed(2)} ${lon < 0 ? 'W' : 'E'}`;
 }
 
-/** The region Send to chat puts in the composer (`setPendingRegion`), as run 1's From map does. */
+/** The region Send to chat puts in the composer (`setPendingRegion`), as the composer's From map does. */
 export function regionFromImagery(region: DrawnRegion, imagery: Imagery): ChatRegion {
   return {
     id: region.id,

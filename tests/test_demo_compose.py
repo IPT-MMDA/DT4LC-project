@@ -1,4 +1,4 @@
-"""The public-demo stack (docker-compose.demo.yml, deploy/): v0.6.0 run 3, Phase 5.
+"""The public-demo stack (docker-compose.demo.yml, deploy/).
 
 The override must keep nginx the only way in (no published backend port), trust X-Forwarded-For
 from the demo network only, pre-install the models before the backend starts, and leave the

@@ -79,7 +79,7 @@ def _llm_like_context(prompt: str) -> ContextUnderstanding:
         ("after", "the afternoon pass", False),
         ("field boundaries", "Detect field boundaries in this image", True),
         ("burn", "Map burn severity", True),
-        # -ed and -ing endings (F-1), a final e dropped before them; nothing longer.
+        # -ed and -ing endings, a final e dropped before them; nothing longer.
         ("flood", "Find the flooded areas", True),
         ("flood", "flooding after the breach", True),
         ("flood", "the floodplain", False),

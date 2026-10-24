@@ -132,7 +132,7 @@ def test_secure_flag_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_session_docs_describe_sign_in() -> None:
-    """BE59: /docs shows the route docstring, which predated sign-in."""
+    """/docs shows the route docstring, which must describe sign-in."""
     description = _client().get("/openapi.json").json()["paths"]["/v1/session"]["get"]["description"]
     assert "until sign-in exists" not in description
     assert "signing in" in description.lower() and "DEV_ROLE" in description

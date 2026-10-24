@@ -284,7 +284,7 @@ class SessionMiddleware:
             elif role != session.role:
                 session, issued = replace(session, role=role), True
         elif session.role != "guest":
-            # Only sign-in makes a member or operator (cookies issued under DEV_ROLE before v0.6.0 run 3 carry it).
+            # Only sign-in makes a member or operator (cookies issued under DEV_ROLE before sign-in existed carry it).
             session, issued = replace(session, role="guest"), True
         state = scope.setdefault("state", {})
         state["session"] = _effective(session, scope)

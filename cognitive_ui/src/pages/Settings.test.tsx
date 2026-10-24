@@ -111,7 +111,7 @@ describe('Settings: the five sections from GET /v1/settings', () => {
 
     tab('Server');
     const server = section('server');
-    expect(server.textContent).toContain('0.5.1');
+    expect(server.textContent).toContain('0.6.0');
     expect(server.textContent).toContain('Local server');
     expect(server.textContent).toContain('0 in total · 0 queued · 3 workers');
     expect(within(server).getAllByTestId('storage-row').map((r) => r.dataset.key)).toEqual(['cache', 'outputs', 'temp', 'uploads', 'models']);

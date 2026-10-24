@@ -86,7 +86,7 @@ def test_temp_and_outputs_overrides_win_over_cache(tmp_path: Path) -> None:
 
 
 def test_the_test_session_writes_outside_resources_cache() -> None:
-    """conftest points uploads, temp, outputs and the jobs DB at a temp dir (F-6); models stay installed."""
+    """conftest points uploads, temp, outputs and the jobs DB at a temp dir; models stay installed."""
     import dta.config as c
 
     cache = RESOURCES_PATH / ".cache"

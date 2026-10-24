@@ -334,7 +334,7 @@ class TestExecuteEndpoint:
         assert client.get("/v1/session").json()["analyses"]["used"] == 0
 
     def test_missing_input_is_422_and_not_counted(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A two-date plan without files: the executor's MissingInputError is a 422, not a counted 500 (BE80)."""
+        """A two-date plan without files: the executor's MissingInputError is a 422, not a counted 500."""
         from dta.dti.executor import ExecutionError, MissingInputError
 
         monkeypatch.setenv("DEV_ROLE", "guest")
@@ -354,7 +354,7 @@ class TestExecuteEndpoint:
 
 
 class TestNotAnAnalysis:
-    """A conversational prompt on POST /v1/plan or /v1/execute: a structured 422, not a 500 (run-1 carry-over)."""
+    """A conversational prompt on POST /v1/plan or /v1/execute: a structured 422, not a 500."""
 
     REFUSAL = {
         "ok": False,
