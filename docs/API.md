@@ -1248,7 +1248,7 @@ A partial document with only the fields to change; it returns the new `GET` docu
 - A field set to `null` drops its override, so the environment (or the default) applies again: after `{"access": {"guest_analyses_per_hour": 3}}` the field's `source` is `override`; after `{"access": {"guest_analyses_per_hour": null}}` it is `env` or `default` again.
 - `provider_order` lists known providers without duplicates; `groq`, `ollama` and `apertus` take exactly one model, the others up to ten. Emails are lower-cased, and domains may start with `@`.
 - Changing the assistant rebuilds the LLM router and drops the cached assistant status, so `GET /v1/health` and `GET /v1/capabilities` show the change at once.
-- A signed-in operator cannot drop their own address from `operator_emails`: the request is refused, as are an unknown or read-only key, a wrong type and a value out of `bounds`. Each is a 422 in FastAPI's `detail` format, e.g.
+- A signed-in operator cannot drop their own address from `operator_emails`: neither with a list without it, nor with `null` (which falls back to the environment's `OPERATOR_EMAILS`) when that list lacks it. Such a request is refused and changes nothing, as are an unknown or read-only key, a wrong type and a value out of `bounds`. Each is a 422 in FastAPI's `detail` format, e.g.
 
 ```json
 {"detail": [{"type": "less_than_equal", "loc": ["body", "access", "guest_analyses_per_hour"], "msg": "Input should be less than or equal to 1000", "input": 5000, "ctx": {"le": 1000}}]}
