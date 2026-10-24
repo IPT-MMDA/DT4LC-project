@@ -161,3 +161,19 @@ def test_tile_outside_the_raster_is_a_transparent_png_not_500(client: TestClient
     for far in (mercantile.Tile(0, 0, 10), mercantile.Tile(TILE.x + 1, TILE.y, TILE.z)):
         tile = _get_tile(client, tif, far)
         assert (tile[..., 3] == 0).all()
+
+
+def test_tile_of_a_non_raster_file_is_415_without_the_path(client: TestClient, outputs: Path) -> None:
+    """BE26: a served file that rasterio can't open is a 415, and the body doesn't echo the server path."""
+    result = outputs / "run-1" / "result.json"
+    result.parent.mkdir()
+    result.write_text('{"ok": true}')
+
+    resp = client.get(f"/v1/tiles/{TILE.z}/{TILE.x}/{TILE.y}", params={"path": str(result)})
+
+    assert resp.status_code == 415
+    assert resp.json() == {
+        "ok": False,
+        "error": {"code": "NOT_A_RASTER", "message": "This file isn't a raster the map can display.", "details": {}},
+    }
+    assert str(result.resolve()) not in resp.text and str(outputs) not in resp.text
