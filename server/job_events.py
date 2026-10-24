@@ -293,8 +293,8 @@ _UPLOAD_OWN = {"label": "Use my own image", "kind": "upload"}
 _RETRY = {"label": "Retry", "kind": "retry"}
 
 # (code, exception types in the cause chain, message pattern, stage, fixes): the first matching row wins.
-# ``stage`` limits a row to "planning" or "running" failures. Later stories add their codes here
-# (GUEST_QUOTA, ...).
+# ``stage`` limits a row to "planning" or "running" failures. Refusals before a job exists (429
+# GUEST_QUOTA, for one) are HTTP errors, not ``failed`` events, so they have no row here.
 FAILURE_TABLE: list[tuple[str, tuple[type[BaseException], ...], str | None, str | None, list[dict[str, Any]]]] = [
     (
         "INPUT_MISSING",

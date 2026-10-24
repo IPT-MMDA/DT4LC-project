@@ -16,7 +16,8 @@ router = APIRouter(prefix="/v1", tags=["session"])
 async def get_session(session: CurrentSession) -> SessionResponse:
     """Role, analyses used in the last hour (limited for guests), retention and the model-download flag.
 
-    The first request without a valid ``dt4lc_session`` cookie gets one; every request is a
-    guest until sign-in exists, unless the server sets ``DEV_ROLE``.
+    The first request without a valid ``dt4lc_session`` cookie gets one, as a guest. Signing in
+    makes the session a member or an operator (``ALLOWED_EMAILS``, ``ALLOWED_DOMAINS``,
+    ``OPERATOR_EMAILS``); a server that sets ``DEV_ROLE`` gives every request that role.
     """
     return SessionResponse.model_validate(session_info(session))  # type: ignore[no-any-return]

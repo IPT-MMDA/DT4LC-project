@@ -131,6 +131,13 @@ def test_secure_flag_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "; Secure" in _client().get("/v1/session").headers["set-cookie"]
 
 
+def test_session_docs_describe_sign_in() -> None:
+    """BE59: /docs shows the route docstring, which predated sign-in."""
+    description = _client().get("/openapi.json").json()["paths"]["/v1/session"]["get"]["description"]
+    assert "until sign-in exists" not in description
+    assert "signing in" in description.lower() and "DEV_ROLE" in description
+
+
 def test_tampered_cookie_gets_a_new_session(monkeypatch: pytest.MonkeyPatch, queue: JobQueue) -> None:
     _role(monkeypatch, None)
     client = _client()
