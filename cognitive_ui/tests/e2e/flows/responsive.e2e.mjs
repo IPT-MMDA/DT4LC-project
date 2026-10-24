@@ -97,6 +97,18 @@ async function navigate(page, name, url) {
 const box = (locator) => locator.boundingBox();
 const overlapping = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
+// No hover on a touch screen: every layer row shows its visibility button and opacity slider.
+async function assertLayerControlsShown(panel) {
+  const rows = panel.getByRole('region', { name: 'Map layers' }).getByTestId('map-layer-row');
+  const hidden = await rows.evaluateAll((els) =>
+    els.flatMap((row) => [...row.querySelectorAll('button, input[type="range"]')])
+      .filter((el) => getComputedStyle(el).display === 'none' || getComputedStyle(el).opacity !== '1')
+      .map((el) => el.getAttribute('aria-label')),
+  );
+  assert.ok((await rows.count()) > 1, 'more than one layer row');
+  assert.deepEqual(hidden, [], 'layer controls hidden on a touch screen');
+}
+
 for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
   test(`responsive ${device} ${viewport.width}×${viewport.height}: the six screens without overflow or overlapping text`, async () => {
     const context = await h.browser.newContext({ viewport, isMobile, hasTouch, reducedMotion: 'reduce' });
@@ -221,6 +233,7 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
         await sheet.click();
         assert.equal(await sheet.getAttribute('aria-expanded'), 'true');
         await panel.getByRole('region', { name: 'Map layers' }).getByTestId('map-layer-row').first().waitFor();
+        await assertLayerControlsShown(panel);
         const open = await box(mapPane);
         assert.ok(open.height >= viewport.height * 0.3, `the map keeps ${open.height} px with the sheet open`);
         for (const el of [panel.getByRole('heading', { name: 'Imagery' }), panel.getByRole('link', { name: 'Back to chat' })]) {
@@ -235,6 +248,7 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
         assert.ok(p.width <= 280, `the panel is ${p.width} px wide`);
         assert.ok((await box(mapPane)).width >= viewport.width - 60 - 280, 'the map takes the rest');
         await panel.getByRole('region', { name: 'Map layers' }).getByTestId('map-layer-row').first().waitFor();
+        await assertLayerControlsShown(panel);
         await check(page, report, 'map', ALLOW.map);
         await page.screenshot({ path: outPath(`responsive/map-${device}.png`) });
       }
