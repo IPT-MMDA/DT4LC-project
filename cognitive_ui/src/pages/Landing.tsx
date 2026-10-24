@@ -280,7 +280,7 @@ function Footer() {
   );
 }
 
-/** `/` for a first-time guest; routes.tsx decides who sees it. */
+/** `/` for every visitor; routes.tsx sends only Workspace deep links on to `/app`. */
 export function Landing({ session }: { session?: SessionInfo }) {
   const hours = session?.kept_hours ?? 24;
   const limit = session?.analyses.limit ?? 5;

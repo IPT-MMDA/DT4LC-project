@@ -11,7 +11,6 @@ import { NotFound } from './pages/NotFound';
 import { ResultDetail } from './pages/ResultDetail';
 import { Settings } from './pages/Settings';
 import { Workspace } from './pages/Workspace';
-import { useChatStore } from './store/useChatStore';
 
 /** Redirect that keeps the query string, e.g. `/?sample=1` to `/app?sample=1`. */
 function RedirectTo({ to }: { to: string }) {
@@ -26,23 +25,15 @@ function LegacyJobRedirect() {
 }
 
 /**
- * `/`: the landing for a first-time guest, the Workspace (query kept) for everyone
- * else. Renders nothing until GET /v1/session answers, unless the stored
- * conversations already decide it, so neither page flashes.
+ * `/`: the landing for every visitor, at once; only a Workspace deep link
+ * (`?sample=`, `?prompt=`) opens `/app` with its query. The session only fills in
+ * the landing's role line when it answers.
  */
 function LandingRoute() {
   const { search } = useLocation();
-  const { data: session, isPending } = useSession();
-  const hasConversations = useChatStore((state) => state.conversations.length > 0 || state.activeConversationId !== null);
-  const params = new URLSearchParams(search);
-  const decision = landingDecision({
-    role: session?.role,
-    sessionPending: isPending,
-    hasConversations,
-    deepLink: params.has('sample') || params.has('prompt'),
-  });
-  if (decision === 'app') return <Navigate to={{ pathname: '/app', search }} replace />;
-  return decision === 'landing' ? <Landing session={session} /> : null;
+  const { data: session } = useSession();
+  if (landingDecision(search) === 'app') return <Navigate to={{ pathname: '/app', search }} replace />;
+  return <Landing session={session} />;
 }
 
 /** `/app/settings` is for operators only: anyone else gets the not-found page, as from the API. */

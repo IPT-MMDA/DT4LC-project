@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient from '../api/client';
@@ -16,7 +16,7 @@ vi.mock('../components/map/MapContainer', () => ({ MapContainer: () => <div data
 const HEALTH = { ok: true, service: 'DT4LC', version: '0.6.0', assistant: { connected: false, offline: true, provider: null, model: null } };
 
 function mockSession(session: SessionInfo | Error) {
-  vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+  return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/v1/session') {
       if (session instanceof Error) throw session;
       return session as never;
@@ -69,36 +69,71 @@ afterEach(() => {
 });
 
 describe('/ routing', () => {
-  it('shows the landing to a first-time guest, and nothing before the session answers', async () => {
-    mockSession(GUEST_SESSION);
+  it('shows the landing at once, before the session answers', () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(() => new Promise(() => {}));
     renderApp('/');
-    expect(screen.queryByTestId('landing')).toBeNull();
+    expect(screen.getByTestId('landing')).toBeTruthy();
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
-    await screen.findByTestId('landing');
     expect(location.current).toBe('/');
   });
 
   it.each([
+    ['guest', GUEST_SESSION],
     ['member', MEMBER_SESSION],
     ['operator', OPERATOR_SESSION],
-  ])('sends a %s to /app, keeping the query', async (_, session) => {
-    mockSession(session);
+  ])('shows the landing to a %s, keeping the URL', async (_, session) => {
+    const get = mockSession(session);
     renderApp('/?utm=x');
-    await waitFor(() => expect(location.current).toBe('/app?utm=x'));
-    expect(screen.queryByTestId('landing')).toBeNull();
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/v1/session'));
+    await act(async () => {});
+    expect(screen.getByTestId('landing')).toBeTruthy();
+    expect(location.current).toBe('/?utm=x');
   });
 
-  it('sends a returning guest (stored conversations) to /app without waiting for the session', () => {
+  it('shows the landing to a returning guest (stored conversations), leaving the open one as it is', async () => {
     mockSession(GUEST_SESSION);
     useChatStore.getState().addMessage({ kind: 'user', text: 'Earlier chat' });
+    const active = useChatStore.getState().activeConversationId;
     renderApp('/');
-    expect(location.current).toBe('/app');
+    expect(screen.getByTestId('landing')).toBeTruthy();
+    await act(async () => {});
+    expect(location.current).toBe('/');
+    expect(useChatStore.getState().activeConversationId).toBe(active);
   });
 
   it('shows the landing when the session request fails', async () => {
     mockSession(new Error('offline'));
     renderApp('/');
     await screen.findByTestId('landing');
+  });
+
+  describe.each([
+    ['guest', GUEST_SESSION],
+    ['member', MEMBER_SESSION],
+  ])('a Workspace deep link, as a %s', (_, session) => {
+    it('/?sample=1 opens /app and asks for the sample', async () => {
+      mockSession(session);
+      const post = vi.spyOn(apiClient, 'post').mockImplementation(() => new Promise(() => {}));
+      renderApp('/?sample=1');
+      await waitFor(() => expect(post).toHaveBeenCalledWith('/v1/sample'));
+      expect(location.current).toBe('/app?sample=1');
+      expect(screen.queryByTestId('landing')).toBeNull();
+    });
+
+    it('/?sample=0 opens /app?sample=0', async () => {
+      mockSession(session);
+      renderApp('/?sample=0');
+      await waitFor(() => expect(location.current).toBe('/app?sample=0'));
+      expect(screen.queryByTestId('landing')).toBeNull();
+    });
+
+    it('/?prompt= opens /app with the prompt in the composer', async () => {
+      mockSession(session);
+      renderApp(`/?${new URLSearchParams({ prompt: 'Map water change' })}`);
+      await waitFor(() => expect(location.current).toBe('/app'));
+      expect(useChatStore.getState().draft).toBe('Map water change');
+      expect(screen.queryByTestId('landing')).toBeNull();
+    });
   });
 });
 
