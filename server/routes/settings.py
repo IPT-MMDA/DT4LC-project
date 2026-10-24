@@ -8,6 +8,7 @@ the answer is the same 404 as for an unknown path, whatever the method or body.
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from fastapi import APIRouter
@@ -50,15 +51,15 @@ async def put_settings(update: SettingsUpdate, session: CurrentSession) -> Setti
 
     Values are written to the overrides file (``DT4LC_SETTINGS_PATH``), never ``.env``, and
     take effect at once. 422 for an unknown or read-only key, a wrong type, a value out of
-    range, or an ``operator_emails`` that drops the signed-in caller's own address.
+    range, or an ``operator_emails`` that drops the signed-in caller's own address (``null``
+    included, when the env ``OPERATOR_EMAILS`` it falls back to lacks it).
     """
     access = update.access
-    if (
-        session.user is not None
-        and access is not None
-        and access.operator_emails is not None
-        and session.user.email.lower() not in access.operator_emails
-    ):
+    kept: list[str] | None = access.operator_emails if access is not None else None
+    if access is not None and kept is None and "operator_emails" in access.model_fields_set:
+        # null drops the override ("Reset to .env"), so the env list is the one that applies
+        kept = [e.strip().lower() for e in os.environ.get("OPERATOR_EMAILS", "").split(",") if e.strip()]
+    if session.user is not None and access is not None and kept is not None and session.user.email.lower() not in kept:
         raise RequestValidationError(
             [
                 {
