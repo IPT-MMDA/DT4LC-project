@@ -70,6 +70,16 @@ describe('fake Ollama', () => {
     expect(await chat(fake.url, [{ role: 'user', content: 'hello' }])).toBe('Hi from the fake');
   });
 
+  it('lists every chat request with the reply it got', async () => {
+    const messages = [
+      { role: 'system', content: 'The conversation so far: an NDWI change' },
+      { role: 'user', content: 'hello log' },
+    ];
+    await chat(fake.url, messages);
+    const seen = await (await fetch(`${fake.url}/__e2e/requests`)).json();
+    expect(seen.at(-1)).toEqual({ messages, reply: 'Hi from the fake' });
+  });
+
   it('holds a rule\'s reply back for its delay_ms; other rules answer at once', async () => {
     await fetch(`${fake.url}/__e2e/rules`, {
       method: 'PUT',
