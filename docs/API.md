@@ -4,13 +4,13 @@ Complete REST API documentation for the DT4LC backend.
 
 **Base URL:** `http://localhost:8000`
 
-This page describes the main routes. The generated reference covers every route, including those not described here (`GET /v1/files`, `GET /v1/tiles/{z}/{x}/{y}`, `/v1/gee/*` and `/v1/ml-models/*`): Swagger UI at `/docs`, ReDoc at `/redoc` and the OpenAPI schema at `/openapi.json` on the backend (<http://localhost:8000/docs>), or through nginx under Docker Compose (<http://localhost/docs>).
+This page describes the main routes. The generated reference covers every route, including those not described here (`/v1/gee/*` and most of `/v1/ml-models/*`): Swagger UI at `/docs`, ReDoc at `/redoc` and the OpenAPI schema at `/openapi.json` on the backend (<http://localhost:8000/docs>), or through nginx under Docker Compose (<http://localhost/docs>).
 
 ## Sessions
 
-There is no sign-in yet. The first request without a valid `dt4lc_session` cookie gets one: signed with `SESSION_SECRET` (a random secret per server start if it is unset), `HttpOnly`, `SameSite=Lax`, and `Secure` with `SESSION_COOKIE_SECURE=true`. It lasts `GUEST_SESSION_HOURS` (24). Every session is a guest, unless the server sets `DEV_ROLE=member` or `DEV_ROLE=operator` for development.
+The first request without a valid `dt4lc_session` cookie gets one: signed with `SESSION_SECRET` (a random secret per server start if it is unset), `HttpOnly`, `SameSite=Lax`, and `Secure` with `SESSION_COOKIE_SECURE=true`. It lasts `GUEST_SESSION_HOURS` (24). A session is a guest until it signs in with GitHub (see [Sign-in](#sign-in)); then the cookie also carries the user, and the role comes from the allowlists on every request. `DEV_ROLE=guest|member|operator` overrides the role of every request, signed in or not, for development.
 
-Jobs and uploads record the session id as `owner`. A session sees only its own: another session's job, its events, cancel and confirm, downloads and tiles answer 404, as for an unknown id. `GET /v1/jobs` lists only the caller's jobs, and `GET /v1/files` only the caller's uploads (Earth Engine exports are listed to everyone). Operators see everything, including jobs and uploads from before v0.6.0, which have no owner. Guest jobs, their outputs and guest uploads are removed by an hourly cleanup once they are older than `GUEST_SESSION_HOURS`.
+Jobs and uploads record an `owner`: the session id for a guest, and the stable user id `github:<numeric id>` once signed in, so a member sees the same items from any browser. A caller sees only its own: another owner's job, its events, cancel, confirm, delete and statistics, and another owner's downloads, tiles and files answer 404, as for an unknown id. `GET /v1/jobs` lists only the caller's jobs, and `GET /v1/files` only the caller's uploads (Earth Engine exports are listed to everyone). Operators see everything, including jobs and uploads from before v0.6.0, which have no owner. When a guest signs in, the guest session's jobs and uploads move to the user id (they are *adopted*). Guest jobs, their outputs and guest uploads are removed by a periodic cleanup (every `GUEST_CLEANUP_MINUTES`, default 60) once they are older than `GUEST_SESSION_HOURS`; members' and operators' items are kept.
 
 The cookie only works same-origin (see [CORS](#cors)). With `curl`, keep it in a cookie jar; otherwise each call is a new guest that cannot see the job the previous call submitted:
 
@@ -85,7 +85,7 @@ Health check endpoint.
 
 #### GET /v1/session
 
-The caller's role, analyses in the last hour, retention and model-download permission, for the UI badge. Issues the cookie if the request has none, like any route.
+The caller's role, signed-in user, analyses in the last hour, retention and model-download permission, for the UI badge and the account menu. Issues the cookie if the request has none, like any route.
 
 **Response (guest, after one analysis):**
 
@@ -93,6 +93,8 @@ The caller's role, analyses in the last hour, retention and model-download permi
 {
   "role": "guest",
   "guest": true,
+  "user": null,
+  "sign_in": {"configured": false},
   "analyses": {"limit": 5, "used": 1, "remaining": 4, "resets_at": "2026-10-23T06:58:27+00:00"},
   "kept_hours": 24,
   "expires_at": "2026-10-24T05:58:02+00:00",
@@ -100,12 +102,20 @@ The caller's role, analyses in the last hour, retention and model-download permi
 }
 ```
 
-**Response (`DEV_ROLE=member`):**
+**Response (signed in, on `ALLOWED_EMAILS`):**
 
 ```json
 {
   "role": "member",
   "guest": false,
+  "user": {
+    "id": "github:42",
+    "login": "user42",
+    "name": "User 42",
+    "email": "Ana@Example.org",
+    "avatar_url": "https://avatars.test/42"
+  },
+  "sign_in": {"configured": true},
   "analyses": {"limit": null, "used": 0, "remaining": null, "resets_at": null},
   "kept_hours": null,
   "expires_at": "2026-10-24T06:00:18+00:00",
@@ -113,14 +123,18 @@ The caller's role, analyses in the last hour, retention and model-download permi
 }
 ```
 
+With `DEV_ROLE=member` the response is the same with `"user": null`.
+
 | Field | Meaning |
 |-------|---------|
 | `role` | `guest`, `member` or `operator` |
+| `user` | The signed-in GitHub user `{id, login, name, email, avatar_url}`, or `null`. `id` (`github:<numeric id>`) is the `owner` of the user's jobs and uploads; `email` is the primary, verified GitHub address the role was decided from |
+| `sign_in.configured` | Whether GitHub sign-in is configured on this server (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `OAUTH_REDIRECT_BASE` all set) |
 | `analyses.limit` | `GUEST_ANALYSES_PER_HOUR` for guests; `null` (no limit) for members and operators |
 | `analyses.used` | Analyses started in the rolling last hour. For a guest, the larger of the session's count and the client IP's |
 | `analyses.resets_at` | When `used` next drops by one (UTC); `null` if nothing was used or there is no limit |
 | `kept_hours` | Hours a guest's jobs and uploads are kept (`GUEST_SESSION_HOURS`); `null` for members and operators |
-| `expires_at` | When the session cookie expires (UTC) |
+| `expires_at` | When the session cookie expires (UTC). A signed-in session lasts `GUEST_SESSION_HOURS` too; after that the browser is a guest until it signs in again |
 | `can_download_models` | Whether a job of this role may download missing model weights (`MODEL_DOWNLOAD_ON_DEMAND`: `members` by default, or `operators`, `all`, `none`) |
 
 #### GET /v1/capabilities
@@ -198,7 +212,7 @@ What this server can do for the caller, tier by tier: the document the Capabilit
       "note": "Guests: up to 5 analyses per hour, results kept 24 h in this browser, no account needed.", ...,
       "items": [
         {"id": "uploads", "title": "Uploads", "detail": "GeoTIFF, up to 200 MB per file · any projection", "status": "always", "status_label": "Always"},
-        {"id": "sample", "title": "Bundled sample", "detail": "kahovka_data · HLS L30 · 2023-06-01 → 06-09", "status": "always", "status_label": "Always"},
+        {"id": "sample", "title": "Bundled sample", "detail": "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09", "status": "always", "status_label": "Always"},
         {"id": "earth-engine", "title": "Earth Engine · Sentinel-2 / Landsat / MODIS", "detail": "Fetch by region, dates, bands and cloud filter from the Map", "status": "not_configured", "status_label": "Not configured"}
       ]
     },
@@ -284,6 +298,47 @@ Job queue statistics.
   }
 }
 ```
+
+### Sign-in
+
+Members and operators sign in with GitHub; there is no password and no login wall. Sign-in is configured when `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `OAUTH_REDIRECT_BASE` (the app's public origin, no trailing slash) are all set; how to create the OAuth app is in [DEPLOY_DEMO.md](DEPLOY_DEMO.md#5-github-sign-in-the-oauth-app). `GITHUB_OAUTH_BASE` (default `https://github.com`) and `GITHUB_API_BASE` (default `https://api.github.com`) point the flow at a fake GitHub in tests and E2E.
+
+The role comes from the primary GitHub email, if GitHub has verified it, compared case-insensitively with comma-separated allowlists: `OPERATOR_EMAILS` makes an operator; `ALLOWED_EMAILS`, or a domain in `ALLOWED_DOMAINS`, a member. Anyone else stays a guest. The lists are checked again on every request, so a changed role applies at once, and a user removed from every list gets a new guest session.
+
+#### GET /v1/auth/status
+
+```json
+{"configured": false, "user": null, "role": "guest"}
+```
+
+`configured` is `sign_in.configured` of `GET /v1/session`, `user` its `user` and `role` its `role`.
+
+#### GET /v1/auth/github/login
+
+The browser opens this URL (the account menu's "Sign in with GitHub" is a link to it). It answers 302 to GitHub's authorize page with `scope=read:user user:email`, `redirect_uri=<OAUTH_REDIRECT_BASE>/v1/auth/github/callback` and a fresh `state`. The `state` is also in a signed `dt4lc_oauth_state` cookie, sent only to `/v1/auth/github` and valid for 10 minutes.
+
+Without the three variables it answers 404:
+
+```json
+{"ok": false, "error": {"code": "SIGN_IN_NOT_CONFIGURED", "message": "Sign-in is not configured on this server", "details": {}}}
+```
+
+#### GET /v1/auth/github/callback
+
+GitHub redirects here with `code` and `state` (or `error`). The server checks the state cookie, exchanges the code for a token, reads `GET /user` and `GET /user/emails`, and decides the role. It always answers 302 to the app, and deletes the state cookie:
+
+| Outcome | Redirect |
+|---------|----------|
+| Allowed | `<OAUTH_REDIRECT_BASE>/app`, with a new session cookie (a new session id) that carries the user. If the caller was a guest, its jobs and uploads are adopted: their `owner` becomes `github:<id>` |
+| Not on an allowlist | `/app?signin=denied&reason=not_allowlisted&email=<primary email>` |
+| Primary email not verified | `/app?signin=denied&reason=email_unverified` |
+| A missing or wrong `state`, an `error` from GitHub (e.g. the user cancelled), or a failed exchange | `/app?signin=error` |
+
+A denied or failed sign-in leaves the caller's session as it was. Without the three variables the callback is 404 `SIGN_IN_NOT_CONFIGURED`, like the login.
+
+#### POST /v1/auth/logout
+
+Replaces the caller's session with a fresh guest session (a new cookie) and returns it as [GET /v1/session](#get-v1session) does. The signed-in user's jobs and uploads stay with the user id.
 
 ### Conversation
 
@@ -518,7 +573,7 @@ Run a job's proposal (status `proposal`) on the same job and event stream. The r
 
 | Status | When |
 |--------|------|
-| 404 | Unknown job, or another session's |
+| 404 | Unknown job, or another owner's |
 | 409 | The job is not a proposal (confirmed already, running, finished or cancelled), e.g. "Job d9252b95 is not a proposal waiting for confirmation (it is running)" |
 | 422 | The edited plan is invalid: `error.code` `validation_error`, with the validator's message, e.g. "Step algorithms/band-math-change: Formula not allowed: \`abs(B5)\`. …" |
 | 429 | `GUEST_QUOTA`: the confirmation counts against the guest quota |
@@ -534,7 +589,7 @@ The job's events as Server-Sent Events (`text/event-stream`): the log so far, th
 | `after` | Replay only events with a larger `seq`; wins over `Last-Event-ID` |
 | `Last-Event-ID` (header) | The same, as browsers send it when an `EventSource` reconnects |
 
-A finished job replays its whole log (or the part after `after`) and closes. An unknown job, or another session's, is 404.
+A finished job replays its whole log (or the part after `after`) and closes. An unknown job, or another owner's, is 404.
 
 **Stream (NDVI on the bundled sample, 2023-06-01):**
 
@@ -672,6 +727,7 @@ Get the full job record: status, plan, the event log (`events`, the list the eve
   "started_at": "2026-10-23T05:58:27.920396",
   "completed_at": "2026-10-23T05:58:28.574690",
   "owner": "8b5280fd5cdf0e24c6c6075dc45aff25",
+  "card": {"title": "NDVI · 2023-06-01", "analysis": {"id": "algorithms/ndvi", "label": "NDVI"}, "kind": "index", "thumbnail_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi_map_bare.png&name=ndvi_2023-06-01_map.png", "duration_s": 0.7, "error": null},
   "result": {
     "intent": "pipeline",
     "plan": {...},
@@ -687,8 +743,18 @@ Get the full job record: status, plan, the event log (`events`, the list the eve
             "ndvi_map": {
               "kind": "png",
               "path": "/app/resources/.cache/outputs/501f9478/1_NDVIMap_ndvi_map.png",
-              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi_map.png",
-              "stats": {}
+              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi_map.png&name=ndvi_2023-06-01.png",
+              "stats": {},
+              "size_bytes": 1495834,
+              "download_name": "ndvi_2023-06-01.png"
+            },
+            "ndvi_map_bare": {
+              "kind": "png",
+              "path": "/app/resources/.cache/outputs/501f9478/1_NDVIMap_ndvi_map_bare.png",
+              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi_map_bare.png&name=ndvi_2023-06-01_map.png",
+              "stats": {"width": 768, "height": 768, "style": {"kind": "index", "range": [-0.2, 0.8], "ramp": ["#994c1a", "#cc9933", "#ffff66", "#99cc33", "#339933", "#006600"]}},
+              "size_bytes": 1072560,
+              "download_name": "ndvi_2023-06-01_map.png"
             }
           },
           "path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230601.tif",
@@ -697,8 +763,10 @@ Get the full job record: status, plan, the event log (`events`, the list the eve
             "ndvi": {
               "kind": "geotiff",
               "path": "/app/resources/.cache/outputs/501f9478/1_NDVIMap_ndvi.tif",
-              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi.tif",
-              "stats": {"min": -1.0, "max": 1.0, "mean": 0.5451, "valid_pixels": 589824}
+              "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi.tif&name=ndvi_2023-06-01.tif",
+              "stats": {"min": -1.0, "max": 1.0, "mean": 0.5451, "valid_pixels": 589824},
+              "size_bytes": 2100449,
+              "download_name": "ndvi_2023-06-01.tif"
             }
           }
         },
@@ -718,11 +786,25 @@ Get the full job record: status, plan, the event log (`events`, the list the eve
 }
 ```
 
-The result holds no pixel data. Each raster is a `geotiff` reference in `rasters` and each image a `png` reference in `visualizations`, both `{kind, path, url, stats}`; fetch the file with a `GET` on its `url` (see [GET /v1/download](#get-v1download)). The reference fields, file names and the keys each algorithm returns are in [Job artifacts](ARCHITECTURE.md#job-artifacts); band math is described [below](#band-math). Jobs stored before v0.5.0 are returned as they were stored, with arrays (as nested lists) and base64 images in `result`.
+The result holds no pixel data. Each raster is a `geotiff` reference in `rasters` and each image a `png` reference in `visualizations`, both `{kind, path, url, stats, size_bytes, download_name}`; fetch the file with a `GET` on its `url` (see [GET /v1/download](#get-v1download)). `size_bytes` is the file's size. `download_name` is a readable file name built from the analysis and the input dates (`ndvi_2023-06-01.tif`, `water-change_ndwi_2023-06-01_2023-06-09.tif`), unique within the job, and `url` ends in `&name=<download_name>`; the stored file keeps its name. Jobs finished before v0.6.0 have neither field, so fall back to the base name of `path`. A `*_bare` image is the map alone, without axes or legend, for cards and thumbnails; its `stats` has `width`, `height` and the `style` that the legend and the [map tiles](#get-v1tileszxy) use: `{kind: "change" | "index", range, ramp}` or `{kind: "class", classes}`. The reference fields, file names and the keys each algorithm returns are in [Job artifacts](ARCHITECTURE.md#job-artifacts); band math is described [below](#band-math). Jobs stored before v0.5.0 are returned as they were stored, with arrays (as nested lists) and base64 images in `result`.
 
 `result.followups` repeats the `done` event's follow-up prompts. `proposal` is `{text, plan}` once planning has proposed a composed plan, and `region` is the region echo of a region job.
 
-Change results report areas in km² when the raster's CRS is projected; otherwise `areas_km2`, `water` and `vegetation` are `null`. `ChangeMap.statistics` (and `BandMathChangeMap.statistics`) has `areas_km2: {increase, decrease, stable}`. For NDWI, `ChangeMap.statistics.water` is `{before_km2, after_km2, gained_km2, lost_km2, threshold: 0.2}`; for NDVI, `vegetation` has the same fields with `threshold: 0.3`. NDWI change on the bundled sample gives water 13.881 km² before and 170.039 km² after, 156.761 km² gained and 0.603 km² lost.
+**Change results.** Change detection clips each date's index to its range ([-1, 1] for NDVI, NDWI, NDSI and EVI) before it takes the difference (after minus before), so the change lies in [-2, 2]. Areas are in km² when the raster's CRS is projected; otherwise `areas_km2`, `water`, `vegetation` and each class's `area_km2` are `null`. `ChangeMap.statistics` (and `BandMathChangeMap.statistics`) has `min_change`, `max_change`, `mean_change`, `std_change`, `median_change` and `areas_km2: {increase, decrease, stable}`. For NDWI, `ChangeMap.statistics.water` is `{before_km2, after_km2, gained_km2, lost_km2, threshold: 0.2}`: open water is NDWI > 0.2 on each date. For NDVI, `vegetation` has the same fields with `threshold: 0.3`.
+
+`class_statistics` is the class table that the Result detail and the CSV show, keyed by class name, each `{id, name, colour, pixels, percent, area_km2, mean_change}`, where `percent` is the share of valid pixels and `mean_change` the mean difference in the class. For NDWI the classes are Water gained (open water on the second date only), Water lost and No change; for NDVI Vegetation gained, Vegetation lost and No change; for band-math NDMI Wetter, Drier and No change; for other indices Increase, Decrease and Stable. NDWI change on the bundled crop:
+
+```json
+{
+  "Water gained": {"id": 1, "name": "Water gained", "colour": "#2d5f9e", "pixels": 174179, "percent": 29.53, "area_km2": 156.761, "mean_change": 0.806},
+  "Water lost": {"id": 2, "name": "Water lost", "colour": "#8c4a2f", "pixels": 670, "percent": 0.11, "area_km2": 0.603, "mean_change": -0.233},
+  "No change": {"id": 0, "name": "No change", "colour": "#c4cad6", "pixels": 414973, "percent": 70.36, "area_km2": 373.476, "mean_change": 0.1642}
+}
+```
+
+with `water` `{"before_km2": 13.881, "after_km2": 170.039, "gained_km2": 156.761, "lost_km2": 0.603, "threshold": 0.2}`: open water grows from 13.9 km² to 170.0 km². These are the crop's numbers, the ones the app computes on the sample. The full 2906 × 1479 px scene that the landing image shows differs (open water 32 → 256 km², 428 km² gained and 43 km² lost, measured with ΔNDWI > 0.3), and is not in the repository. Land-cover and snow results have a `class_statistics` of the same shape without `mean_change`.
+
+**Raster statistics.** `Statistics.bands` is keyed by the band code of each band's description (`B2` … `B6` on the sample, as upload metadata names them), else `band_<n>`. Each band has `min`, `max`, `mean`, `std`, `median`, `percentiles {p5, p25, p75, p95}`, `valid_pixels`, `total_pixels`, `nodata_pixels` and a `histogram`.
 
 **Response (conversation intent, trimmed):**
 
@@ -768,12 +850,12 @@ Cancel a pending, proposed or running job. The status becomes `cancelled` at onc
 
 #### GET /v1/jobs
 
-List the caller's job summaries with optional filtering and pagination. A summary is the `GET /v1/jobs/{job_id}` record without `result`, `events`, `proposal` and `region`; fetch a job by id for those. Operators see every job.
+List the caller's job summaries, newest first, with optional filtering and pagination. A summary is the `GET /v1/jobs/{job_id}` record without `result`, `events`, `proposal` and `region`, but with the job's [`card`](#job-cards), so a list such as the Library needs no result; fetch a job by id for the rest. Operators see every job.
 
 **Query Parameters:**
 
 - `status`: Filter by status (pending, proposal, running, completed, failed, cancelled)
-- `limit`: Max results (default: 20)
+- `limit`: Max results (default: 20, at most 100)
 - `offset`: Skip first N results (default: 0)
 
 **Example:** `GET /v1/jobs?status=completed&limit=10`
@@ -793,7 +875,15 @@ List the caller's job summaries with optional filtering and pagination. A summar
       "created_at": "2026-10-23T05:58:27.874641",
       "started_at": "2026-10-23T05:58:27.920396",
       "completed_at": "2026-10-23T05:58:28.574690",
-      "owner": "8b5280fd5cdf0e24c6c6075dc45aff25"
+      "owner": "8b5280fd5cdf0e24c6c6075dc45aff25",
+      "card": {
+        "title": "NDVI · 2023-06-01",
+        "analysis": {"id": "algorithms/ndvi", "label": "NDVI"},
+        "kind": "index",
+        "thumbnail_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi_map_bare.png&name=ndvi_2023-06-01_map.png",
+        "duration_s": 0.7,
+        "error": null
+      }
     }
   ],
   "total": 50,
@@ -801,6 +891,59 @@ List the caller's job summaries with optional filtering and pagination. A summar
   "offset": 0
 }
 ```
+
+#### Job cards
+
+Every job record and summary has `card`, the Library row and Result-detail header of the job. It is computed once, when the job completes, fails or is cancelled, and stored with the job, so `GET /v1/jobs` shows it without loading the result. It is `null` until then (pending, proposal, running), and on jobs from before v0.6.0: show the prompt instead.
+
+| Field | Meaning |
+|-------|---------|
+| `title` | From the plan's main analysis step (its last algorithm or model step): "Water change · NDWI difference", "Moisture change · NDMI difference", "NDVI · 2023-06-01", "Raster statistics · 2023-06-09". A job that never got a plan (it failed at planning) is titled with a short form of its prompt |
+| `analysis` | `{id, label}` of that step, e.g. `{"id": "algorithms/change-detection", "label": "Change detection"}`; for a job that failed at planning, the analysis its `intent` sentence announced; `null` if none |
+| `kind` | `change`, `index`, `classification`, `fields`, `statistics`, `image`, or `composed` for a composed plan; `null` without an analysis |
+| `thumbnail_url` | The main step's first `*_bare` map image, for completed jobs; else `null` |
+| `duration_s` | `completed_at − started_at` in seconds; `null` if the job never started |
+| `error` | `{code, message}` of the `failed` event, else `null` |
+
+A region job that failed without Earth Engine:
+
+```json
+{
+  "title": "Calculate NDVI",
+  "analysis": {"id": "algorithms/ndvi", "label": "NDVI"},
+  "kind": "index",
+  "thumbnail_url": null,
+  "duration_s": 0.0,
+  "error": {"code": "EE_NOT_CONFIGURED", "message": "Earth Engine isn't configured on this server, so I can't fetch imagery for this region."}
+}
+```
+
+#### DELETE /v1/jobs/{job_id}
+
+Delete a finished job (completed, failed or cancelled) or a proposal, with its output files.
+
+**Response:** `{"ok": true, "id": "cc76d13d"}`
+
+A deleted proposal's open event stream ends with `cancelled {reason: "deleted"}`. A pending or running job is 409 (cancel it first); an unknown job or another owner's is 404.
+
+#### GET /v1/jobs/{job_id}/statistics.csv
+
+The main analysis's statistics as a CSV attachment named after the card title, `<slug of the title>-statistics.csv` (`job-<id>-statistics.csv` without a title), with `Content-Type: text/csv; charset=utf-8`:
+
+- the class table, `class,area_km2,percent,pixels[,mean_change]`, for change detection, band-math change, land cover and snow;
+- one row per band, `band,min,max,mean,std,median,p5,p25,p75,p95,valid_pixels,nodata_pixels`, for raster statistics;
+- one row of index statistics, `index,min,max,mean,…`, for a single index.
+
+NDWI change on the sample (`water-change-ndwi-difference-statistics.csv`):
+
+```text
+class,area_km2,percent,pixels,mean_change
+Water gained,156.761,29.53,174179,0.806
+Water lost,0.603,0.11,670,-0.233
+No change,373.476,70.36,414973,0.1642
+```
+
+404 for an unknown job, another owner's, or a job without statistics (not completed, or an analysis that reports none).
 
 ### Band math
 
@@ -869,6 +1012,7 @@ curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
     "size_label": "4.0 MB",
     "crs": "EPSG:32636",
     "bounds_wgs84": [32.388779, 46.455331, 32.691118, 46.663879],
+    "footprint_wgs84": [[32.388779, 46.662667], [32.689939, 46.663879], [32.691118, 46.456535], [32.391103, 46.455331]],
     "line": "HLS L30 · B2–B6 · 30 m · 2023-06-01"
   },
   "owner": "8b5280fd5cdf0e24c6c6075dc45aff25"
@@ -877,7 +1021,7 @@ curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
 
 The grayscale preview is written next to the upload as `<id>_<file name stem>.png`; `preview_url` is its download URL. `preview_png_base64` holds the same PNG and is kept for compatibility: do not persist it or send it back in job submissions.
 
-`metadata` is a best guess, and any field may be missing: the sensor (`HLS L30`, `HLS S30`, `Sentinel-2`, `Landsat 8/9`), band codes from the band descriptions, data type, pixel size in metres, acquisition date (from the GeoTIFF tags or the file name), size, and the bounds in degrees. `line` is the chip text without the size; the chip appends ` · ` and `size_label`. A partial line such as `"3 bands · 11.1 m"` is possible, and `line` is `""` when nothing could be read. `GET /v1/files` returns the same `metadata` for each file.
+`metadata` is a best guess, and any field may be missing: the sensor (`HLS L30`, `HLS S30`, `Sentinel-2`, `Landsat 8/9`), band codes from the band descriptions, data type, pixel size in metres, acquisition date (from the GeoTIFF tags or the file name), size, the bounds in degrees, and `footprint_wgs84`: the raster's four corners in degrees, `[[lon, lat] × 4]` from the north-west corner clockwise (NW, NE, SE, SW). A raster in a projected CRS such as UTM is rotated against the degree grid, so draw the footprint polygon, not the `bounds_wgs84` box. `line` is the chip text without the size; the chip appends ` · ` and `size_label`. A partial line such as `"3 bands · 11.1 m"` is possible, and `line` is `""` when nothing could be read. [GET /v1/files](#get-v1files) returns the same `metadata` for each file.
 
 **Supported Formats:**
 
@@ -902,15 +1046,225 @@ Attach the bundled Kakhovka sample (`resources/kahovka_data/`, HLS L30, 2023-06-
 
 `attachments` are `POST /v1/upload` responses, oldest first, with an empty `preview_png_base64` (use `preview_url`). Show the pair as one chip with `name` and `line`, and send both attachments, with their `metadata` and `"mime_type": "image/tiff"`, on jobs and chat messages. A server without the sample answers 404 with `error.code` `SAMPLE_NOT_BUNDLED`.
 
-#### GET /v1/download
+#### GET /v1/files
 
-Download a job artifact, upload preview or other generated file by its server path. The `url` of an artifact reference and the `preview_url` of an upload already have this form: `/v1/download?path=` + the URL-encoded absolute path.
+List the caller's uploads (operators: every upload, including those from before v0.6.0 without an owner) and the Earth Engine exports on the server, newest first.
 
-```bash
-curl -b cookies.txt -o ndvi.tif "http://localhost:8000/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi.tif"
+**Response (after `POST /v1/sample`, trimmed to one of the two files; paths as under Docker Compose):**
+
+```json
+{
+  "ok": true,
+  "files": [
+    {
+      "id": "6774daf7_hlsl_20230609",
+      "upload_id": "6774daf7",
+      "filename": "6774daf7_hlsl_20230609.tif",
+      "path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+      "size": [768, 768],
+      "crs": "EPSG:32636",
+      "bounds": [453240.0, 5144820.0, 476280.0, 5167860.0],
+      "size_bytes": 3839983,
+      "source": "upload",
+      "modified": 1792633679.79,
+      "metadata": {"sensor": "HLS L30", "date": "2023-06-09", "footprint_wgs84": [...], "line": "HLS L30 · B2–B6 · 30 m · 2023-06-09", ...},
+      "owner": "8b5280fd5cdf0e24c6c6075dc45aff25",
+      "kind": "sample",
+      "group": {"name": "kakhovka_hls_l30.tif", "line": "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09 · EPSG:32636"},
+      "preview_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Fuploads%2F6774daf7_hlsl_20230609.png",
+      "created_at": "2026-10-24T00:29:32.973964"
+    }
+  ],
+  "count": 2
+}
 ```
 
-Only files under these directories are served: job outputs (`resources/.cache/outputs/`, or `DT4LC_OUTPUTS_PATH`), uploads (`resources/.cache/uploads/`, or `DT4LC_UPLOADS_PATH`), temporary and model outputs (`resources/.cache/tmp/`, or `DT4LC_TEMP_PATH`), Earth Engine exports (`resources/.cache/gee_exports/`) and `<system temp>/dt4lc_delineate`. The path is resolved first, so `..` cannot leave them. Any other path returns 403 (`error.code` `unauthorized`); a missing file returns 404. A job's outputs and an upload are served to their owner only (and to operators); for another session they are 404. The content type follows the extension: `.tif`/`.tiff` `image/tiff`, `.png` `image/png`, `.gpkg` `application/geopackage+sqlite3`, `.json` `application/json`, anything else `application/octet-stream`.
+| Field | Meaning |
+|-------|---------|
+| `id` | The stored file name without its extension |
+| `upload_id` | The `id` that `POST /v1/upload` or `POST /v1/sample` returned; both sample dates share one. `null` for exports |
+| `source` | `upload` or `export` |
+| `kind` | `upload`, `sample` (the caller's copy of the bundled sample) or `export` (an Earth Engine export) |
+| `group` | Set on both sample files, with the same value: show the pair as one row named `group.name`, with `group.line` |
+| `metadata` | As in the [upload response](#post-v1upload), including `footprint_wgs84` |
+| `preview_url` | The upload's PNG preview, or `null` if there is none (exports) |
+| `created_at` | ISO time of the upload, else of the file's last modification |
+
+#### DELETE /v1/files/{file_id}
+
+Delete an upload with its preview and owner record. `file_id` is an `upload_id` or a file's `id` from `GET /v1/files`. The sample's two dates share one `upload_id`, so deleting by it removes the pair; `POST /v1/sample` attaches a fresh copy. Only copies in the uploads directory are deleted, never the bundled sample.
+
+**Response:**
+
+```json
+{"ok": true, "deleted": ["6774daf7_hlsl_20230601.tif", "6774daf7_hlsl_20230609.tif"]}
+```
+
+404 for an unknown id, or another owner's upload (operators may delete any).
+
+#### GET /v1/download
+
+Download a job artifact, upload preview or other generated file by its server path. The `url` of an artifact reference and the `preview_url` of an upload already have this form: `/v1/download?path=` + the URL-encoded absolute path, and for an artifact of a finished job `&name=` + its `download_name`.
+
+```bash
+curl -b cookies.txt -OJ "http://localhost:8000/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F501f9478%2F1_NDVIMap_ndvi.tif&name=ndvi_2023-06-01.tif"
+# saved as ndvi_2023-06-01.tif
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `path` | The file on the server. It alone decides what is served |
+| `name` | Optional: the file name of the download. The response is always an attachment, `Content-Disposition: attachment; filename="…"; filename*=UTF-8''…`, with `name` sanitised: `/`, `\`, double quotes, `<`, `>`, `:`, `\|`, `?`, `*` and control characters become `-`, leading and trailing dots, dashes and spaces are dropped, it is cut to 200 characters, and it ends in the served file's extension (appended if it ends in another). Without `name`, or when nothing is left of it, the stored file name is used |
+
+The NDWI change GeoTIFF of the sample, for example, is stored as `2_ChangeMap_change.tif` and downloads as `water-change_ndwi_2023-06-01_2023-06-09.tif`.
+
+Only files under these directories are served: job outputs (`resources/.cache/outputs/`, or `DT4LC_OUTPUTS_PATH`), uploads (`resources/.cache/uploads/`, or `DT4LC_UPLOADS_PATH`), temporary and model outputs (`resources/.cache/tmp/`, or `DT4LC_TEMP_PATH`), Earth Engine exports (`resources/.cache/gee_exports/`) and `<system temp>/dt4lc_delineate`. The path is resolved first, so `..` cannot leave them. Any other path returns 403 (`error.code` `unauthorized`); a missing file returns 404. A job's outputs and an upload are served to their owner only (and to operators); for anyone else they are 404. The content type follows the extension: `.tif`/`.tiff` `image/tiff`, `.png` `image/png`, `.gpkg` `application/geopackage+sqlite3`, `.json` `application/json`, anything else `application/octet-stream`.
+
+### Map tiles
+
+#### GET /v1/tiles/{z}/{x}/{y}
+
+A 256 × 256 RGBA PNG of a GeoTIFF on the XYZ (Web Mercator) grid, for the map. `path` is the raster's server path, as for [GET /v1/download](#get-v1download), with the same directory and owner checks (403 outside the allowed directories, 404 for a missing file or another owner's).
+
+```text
+/v1/tiles/12/2416/1446?path=%2Fapp%2Fresources%2F.cache%2Fuploads%2F6774daf7_hlsl_20230601.tif
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `path` | Server path of the GeoTIFF |
+| `style` | Optional, only `truecolor`: the red, green and blue bands, each stretched to its 2nd–98th percentile over the raster. A raster without resolvable red, green and blue bands is 422 |
+
+The raster is reprojected onto the tile's grid (EPSG:3857) on the fly, so a UTM raster such as the sample has straight edges at every zoom. Pixels off the raster and nodata pixels are transparent, and a tile that does not meet the raster at all is a fully transparent 200. Without `style`:
+
+- a job artifact carries its style in GeoTIFF tags (see [Job artifacts](ARCHITECTURE.md#job-artifacts)) and is drawn in the same colours as its `*_bare` map image: change and index rasters on their ramp and range (bilinear), class rasters in their class colours (nearest neighbour, so classes never blend);
+- an untagged raster with three or more bands whose red, green and blue bands resolve (band descriptions, then band codes, then the band count; see "Expected Band Order" in the [README](../README.md#expected-band-order)) is drawn in true colour, as with `style=truecolor`. The stretch is computed once per file and cached. So the sample layer is just `/v1/tiles/{z}/{x}/{y}?path=<attachment path>`;
+- any other untagged raster keeps the earlier rendering: the first three bands, stretched to their 2nd–98th percentile unless they are 8-bit, when it has three or more bands; else its one band, coloured by its file name (the NDVI, NDWI or NDSI colour map) or stretched in viridis.
+
+`style=truecolor` on a single-band change raster:
+
+```json
+{"ok": false, "error": {"code": "validation_error", "message": "The raster has no red, green and blue bands", "details": {}}}
+```
+
+### Model downloads
+
+`/v1/ml-models` manages the model weights (the generated reference has every route). Listing and status are open to everyone. `POST /v1/ml-models/{model_id}/download` and `POST /v1/ml-models/{model_id}/cancel` need a role that `MODEL_DOWNLOAD_ON_DEMAND` lets download (members and operators by default), and `DELETE /v1/ml-models/{model_id}` needs an operator. Anyone else gets 403 `MODEL_GATED`, with the same sentence a job's refusal has:
+
+```json
+{"ok": false, "error": {"code": "MODEL_GATED", "message": "Prithvi EO v1 (100M) isn't installed on this server and isn't available for guests — ask an operator.", "details": {"model_id": "prithvi-eo-v1-100m"}}}
+```
+
+With `MODEL_DOWNLOAD_ON_DEMAND=none` the message says that the model isn't installed and asks for an operator, for every role; a delete by a non-operator says "Only an operator can delete … from this server."
+
+### Settings
+
+Operator-only server settings, which the Settings page (`/app/settings`) reads and writes. For guests and members the three routes do not exist: any method answers the plain 404 of an unknown path, `{"ok": false, "error": {"code": "not_found", "message": "Not Found", "details": {}}}`. An operator is a user signed in with an `OPERATOR_EMAILS` address, or any caller under `DEV_ROLE=operator`.
+
+What `PUT` changes is written to an overrides file, never to `.env`: `DT4LC_SETTINGS_PATH`, by default `<DT4LC_CACHE_PATH>/settings.json`. It is a flat JSON object from environment variable name to string. An override wins over the environment, which wins over the default, and it applies at once, without a restart. Only these variables can be overridden: `LLM_PROVIDER_ORDER`, `LLM_ENABLE_<PROVIDER>`, `GEMINI_MODELS`, `GROQ_MODEL`, `OLLAMA_MODEL`, `APERTUS_MODEL`, `ANTHROPIC_MODELS`, `MISTRAL_MODELS`, `OPENAI_MODELS`, `MODEL_DOWNLOAD_ON_DEMAND`, `ALLOWED_EMAILS`, `ALLOWED_DOMAINS`, `OPERATOR_EMAILS`, `GUEST_ANALYSES_PER_HOUR` and `GUEST_SESSION_HOURS`. None is a secret; API keys appear only as `key_present`. The file is read again whenever it changes, so a hand edit applies too; unknown names in it are ignored with a warning.
+
+#### GET /v1/settings
+
+Five sections. Every section object, and every provider in `assistant.providers`, has `editable: {field: bool}` (what `PUT` accepts) and, for its editable fields, `source: {field: "override" | "env" | "default"}` (where the value comes from).
+
+**Response (trimmed; assistant offline, no keys):**
+
+```json
+{
+  "assistant": {
+    "provider_order": ["ollama"],
+    "providers": {
+      "ollama": {
+        "enabled": false, "models": ["llama3.2"], "multiple_models": false,
+        "key_required": false, "key_present": false, "available": false,
+        "editable": {"enabled": true, "models": true, "multiple_models": false, "key_required": false, "key_present": false, "available": false},
+        "source": {"enabled": "env", "models": "env"}
+      },
+      "gemini": {"enabled": true, "models": ["gemini-3.5-flash-lite"], "multiple_models": true, "key_required": true, "key_present": false, "available": false, ...},
+      ...
+    },
+    "connected": false, "provider": null, "model": null,
+    "test_path": "/v1/settings/assistant/test",
+    "editable": {"provider_order": true, "providers": true, "connected": false, "provider": false, "model": false, "test_path": false},
+    "source": {"provider_order": "env"}
+  },
+  "models": {
+    "items": [{"id": "prithvi-eo-v1-100m", "display_name": "Prithvi EO v1 (100M)", "installed": false, "size_bytes": 471859200, "est_download_s": 75, "licence": "Apache-2.0", "licence_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-1.0-100M", "steps": ["models/prithvi-reconstruction"]}, ...],
+    "download_policy": "members",
+    "download_policy_options": ["all", "members", "operators", "none"],
+    "pre_download": {"method": "POST", "path": "/v1/ml-models/{id}/download"},
+    "editable": {"items": false, "download_policy": true, "download_policy_options": false, "pre_download": false},
+    "source": {"download_policy": "env"}
+  },
+  "access": {
+    "allowed_emails": [], "allowed_domains": [], "operator_emails": [],
+    "guest_analyses_per_hour": 5, "guest_session_hours": 24,
+    "bounds": {"guest_analyses_per_hour": {"min": 0, "max": 1000}, "guest_session_hours": {"min": 1, "max": 720}},
+    "sign_in": {"configured": false},
+    "editable": {"allowed_emails": true, "allowed_domains": true, "operator_emails": true, "guest_analyses_per_hour": true, "guest_session_hours": true, "bounds": false, "sign_in": false},
+    "source": {"allowed_emails": "env", "allowed_domains": "env", "operator_emails": "env", "guest_analyses_per_hour": "default", "guest_session_hours": "default"}
+  },
+  "data_sources": {
+    "earth_engine": {"configured": false, "project_id_present": false, "key_file_present": false},
+    "uploads": {"path": "/app/resources/.cache/uploads", "files": 0, "bytes": 0},
+    "sample": {"name": "kakhovka_hls_l30", "bundled": true, "path": "/app/resources/kahovka_data"},
+    "editable": {"earth_engine": false, "uploads": false, "sample": false}
+  },
+  "server": {
+    "version": "0.5.1",
+    "deployment": "local",
+    "paths": {"cache": "...", "outputs": "...", "temp": "...", "uploads": "...", "models": "..."},
+    "storage": {"outputs": {"bytes": 12645517, "files": 9, "truncated": false}, ...},
+    "jobs": {"total": 2, "by_status": {"pending": 0, "proposal": 0, "running": 0, "completed": 1, "failed": 1, "cancelled": 0}, "queue_size": 0, "workers": 3},
+    "editable": {"version": false, "deployment": false, "paths": false, "storage": false, "jobs": false}
+  }
+}
+```
+
+- `assistant.providers` lists every known provider, `provider_order` first. `available` means the provider is in the assistant's router (listed in the order, enabled, with its key if it needs one); it makes no network call. `connected`, `provider` and `model` are the `assistant` of `GET /v1/health`.
+- `models.items` are the installable models; `pre_download` is the route that installs one (replace `{id}`; see [Model downloads](#model-downloads)).
+- `server.storage` has `{bytes, files, truncated}` per path, reused for 10 s; `truncated` means the walk stopped at 100,000 entries and the numbers are lower bounds. With the default paths, `cache` contains the others.
+
+#### PUT /v1/settings
+
+A partial document with only the fields to change; it returns the new `GET` document. Writable fields:
+
+```json
+{
+  "assistant": {"provider_order": ["groq", "ollama"], "providers": {"mistral": {"enabled": true, "models": ["mistral-medium-latest"]}}},
+  "models": {"download_policy": "operators"},
+  "access": {"allowed_emails": ["ana@example.org"], "allowed_domains": ["unige.ch"], "operator_emails": ["ops@example.org"], "guest_analyses_per_hour": 3, "guest_session_hours": 24}
+}
+```
+
+- A field set to `null` drops its override, so the environment (or the default) applies again: after `{"access": {"guest_analyses_per_hour": 3}}` the field's `source` is `override`; after `{"access": {"guest_analyses_per_hour": null}}` it is `env` or `default` again.
+- `provider_order` lists known providers without duplicates; `groq`, `ollama` and `apertus` take exactly one model, the others up to ten. Emails are lower-cased, and domains may start with `@`.
+- Changing the assistant rebuilds the LLM router and drops the cached assistant status, so `GET /v1/health` and `GET /v1/capabilities` show the change at once.
+- A signed-in operator cannot drop their own address from `operator_emails`: the request is refused, as are an unknown or read-only key, a wrong type and a value out of `bounds`. Each is a 422 in FastAPI's `detail` format, e.g.
+
+```json
+{"detail": [{"type": "less_than_equal", "loc": ["body", "access", "guest_analyses_per_hour"], "msg": "Input should be less than or equal to 1000", "input": 5000, "ctx": {"le": 1000}}]}
+```
+
+and for `{"server": {"version": "x"}}`, `{"type": "extra_forbidden", "loc": ["body", "server"], "msg": "Extra inputs are not permitted", ...}`.
+
+#### POST /v1/settings/assistant/test
+
+Sends a one-word prompt to every provider of the assistant's router, concurrently, and reports each in router order. A provider that does not answer within 20 s fails. Errors have API keys redacted. From `tests/test_settings.py` (latencies vary):
+
+```json
+{
+  "connected": true,
+  "providers": [
+    {"name": "gemini", "model": "gemini-x", "ok": true, "latency_ms": 12, "error": null},
+    {"name": "groq", "model": "llama-y", "ok": false, "latency_ms": 3, "error": "RuntimeError: 401 for key *** (also ***)"},
+    {"name": "ollama", "model": "llama3.2", "ok": false, "latency_ms": 0, "error": "not available"}
+  ],
+  "error": null
+}
+```
+
+`connected` is true when at least one probe answered. With no provider in the router, `providers` is empty and `connected` false; `error` is set only when the router itself could not be built.
 
 ### Legacy/Sync Endpoints
 
@@ -945,6 +1299,19 @@ Generate execution plan without executing (sync).
 }
 ```
 
+Neither endpoint takes a file, so it suits requests that name their inputs in the prompt or need none. A prompt that the intent classifier reads as conversation is answered with 422 and no plan, and never counts against the guest quota:
+
+| `error.code` | When | `error.message` |
+|--------------|------|-----------------|
+| `NOT_AN_ANALYSIS` | A greeting, a question about methods, a capability question ("hello") | "This reads as a question, not an analysis — send it to POST /v1/chat." |
+| `missing_input` | An analysis that needs a raster ("Calculate NDVI") | "This analysis needs a raster, and this endpoint takes no file: send it to POST /v1/chat or POST /v1/jobs with the file attached." |
+
+Both carry `details: {"intent": "conversation"}`:
+
+```json
+{"ok": false, "error": {"code": "NOT_AN_ANALYSIS", "message": "This reads as a question, not an analysis — send it to POST /v1/chat.", "details": {"intent": "conversation"}}}
+```
+
 #### POST /v1/execute
 
 Generate plan and execute synchronously.
@@ -965,12 +1332,21 @@ Generate plan and execute synchronously.
 {
   "ok": true,
   "plan": {...},
-  "execution": {
+  "result": {
     "ok": true,
     "artifacts": {...}
-  }
+  },
+  "progress": [...]
 }
 ```
+
+**Errors**, besides the 422s of [POST /v1/plan](#post-v1plan), which come before the quota counts:
+
+| Status | `error.code` | When |
+|--------|--------------|------|
+| 429 | `GUEST_QUOTA` | A guest beyond `GUEST_ANALYSES_PER_HOUR`; counted as for [POST /v1/jobs](#post-v1jobs) |
+| 409 | `CONFIRMATION_REQUIRED` | Planning composed a plan (a proposal), which runs only after confirmation: "This request composes a new analysis, which runs only after you confirm it: submit it with POST /v1/jobs, then confirm with POST /v1/jobs/{job_id}/confirm." Not counted |
+| 400 | `planning_failed` | See [Error Responses](#error-responses) |
 
 ## Error Responses
 
@@ -992,12 +1368,13 @@ HTTP errors return an `ErrorResponse` body:
 | Status | `error.code` |
 |--------|--------------|
 | 400 | `bad_request` |
-| 403 | `unauthorized` |
-| 404 | `not_found`; `SAMPLE_NOT_BUNDLED` from `POST /v1/sample` |
+| 403 | `unauthorized`; `MODEL_GATED` from the [model routes](#model-downloads) |
+| 404 | `not_found`; `SAMPLE_NOT_BUNDLED` from `POST /v1/sample`; `SIGN_IN_NOT_CONFIGURED` from the [GitHub sign-in routes](#sign-in) |
+| 409 | `CONFIRMATION_REQUIRED` from `POST /v1/execute`; otherwise `bad_request` |
 | 413 | `file_too_large` |
-| 422 | `validation_error` (raised by a route, e.g. an invalid edited plan on confirm) |
-| 429 | `GUEST_QUOTA` for the guest limit, with `details: {limit, used, resets_at}` and `Retry-After`; `bad_request` when the job queue is full |
-| 405, 409 and other 4xx | `bad_request` |
+| 422 | `validation_error` (raised by a route, e.g. an invalid edited plan on confirm, or `style=truecolor` on a raster without RGB); `NOT_AN_ANALYSIS` and `missing_input` from [`POST /v1/plan` and `POST /v1/execute`](#post-v1plan) |
+| 429 | `GUEST_QUOTA` for the guest limit, with `details: {limit, used, resets_at}` and `Retry-After`; `bad_request` when the job queue is full; `RATE_LIMITED` from the demo's nginx (see [Rate Limits](#rate-limits)) |
+| 405 and other 4xx | `bad_request` |
 | 5xx | `internal_error` |
 
 When planning fails on `POST /v1/plan` or `POST /v1/execute`, the response is 400 with code `planning_failed`; the rejected plan, if any, is in `error.details.candidate`.
@@ -1041,7 +1418,13 @@ Job progress streams as Server-Sent Events from [GET /v1/jobs/{job_id}/events](#
 
 ## Rate Limits
 
-Guests may start `GUEST_ANALYSES_PER_HOUR` (default 5) analyses per rolling hour; the next one gets 429 `GUEST_QUOTA` (see [POST /v1/jobs](#post-v1jobs)). Conversation replies and proposals do not count. Members and operators are not limited. There are no other rate limits.
+Guests may start `GUEST_ANALYSES_PER_HOUR` (default 5) analyses per rolling hour, counted per session and per client IP; the next one gets 429 `GUEST_QUOTA` (see [POST /v1/jobs](#post-v1jobs)). Conversation replies and proposals do not count. Members and operators are not limited. Behind a reverse proxy, the client IP is the one in `X-Forwarded-For` when the proxy's address is in `FORWARDED_ALLOW_IPS` (uvicorn runs with `--proxy-headers` in the Docker image); otherwise it is the proxy's own address, and every guest behind it shares one count.
+
+The backend has no other limit. The public demo's nginx (`deploy/nginx-demo.conf.template`, see [DEPLOY_DEMO.md](DEPLOY_DEMO.md#7-rate-limits-and-quotas)) adds per-IP limits for every role: `POST` to `/v1/jobs`, `/v1/chat`, `/v1/upload`, `/v1/sample`, `/v1/plan` or `/v1/execute` 10 a minute with a burst of 5, and any `/v1/` request 20 a second with a burst of 200. A request over a limit gets 429 with `Retry-After: 10`:
+
+```json
+{"ok": false, "error": {"code": "RATE_LIMITED", "message": "Too many requests from your address. Wait a few seconds and try again.", "details": {}}}
+```
 
 ## CORS
 
