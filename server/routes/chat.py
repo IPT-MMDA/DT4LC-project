@@ -14,7 +14,7 @@ from dta.dti.coe.conversation import generate_reply, input_needs, is_resume_mess
 from dta.dti.coe.intent_classifier import IntentType, classify_intent
 from dta.dti.coe.orchestrator import orchestrate
 from dta.dti.coe.triggers import get_trigger_index
-from dta.dti.executor import PipelineExecutor
+from dta.dti.executor import MissingInputError, PipelineExecutor
 from dta.dti.schemas import ChatRequest as COEChatRequest
 from dta.dti.schemas import ExecutionPlan
 
@@ -119,7 +119,8 @@ async def execute_plan(req: ChatRequest, session: CurrentSession) -> ExecuteResp
     Counts against the guest quota like ``POST /v1/jobs`` (429 ``GUEST_QUOTA``). A composed plan
     (a proposal) is not run: 409 ``CONFIRMATION_REQUIRED``, uncounted; submit it as a job and confirm it.
     A prompt the classifier reads as conversation is 422 (``NOT_AN_ANALYSIS``, or ``missing_input``
-    when it asks for a file), classified before the quota counts it.
+    when it asks for a file), classified before the quota counts it. A plan that stops on a missing
+    input file is the same 422 ``missing_input``, released from the quota.
     """
     if not req.messages:
         raise HTTPException(status_code=400, detail="No messages provided")
@@ -160,6 +161,12 @@ async def execute_plan(req: ChatRequest, session: CurrentSession) -> ExecuteResp
             progress=progress_events,
         )
     except Exception as e:
+        cause: BaseException | None = e
+        while cause is not None and not isinstance(cause, MissingInputError):
+            cause = cause.__cause__
+        if cause is not None:  # the plan needs a file this endpoint doesn't take
+            release_analysis(session, counted_at)
+            return _not_an_analysis({"rule": "missing_input"})
         raise HTTPException(status_code=500, detail=f"Execution failed: {e}") from e
 
 
