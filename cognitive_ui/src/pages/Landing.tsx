@@ -115,7 +115,7 @@ function Header() {
       {menuOpen && (
         <NavLinks
           onPick={() => setOpen(false)}
-          className="absolute top-16 inset-x-4 p-2 flex flex-col rounded-card bg-[rgba(10,12,16,.88)] border border-[rgba(255,255,255,.25)] text-[15px] [&>a]:px-3 [&>a]:py-[10px]"
+          className="absolute top-16 inset-x-4 p-2 flex flex-col rounded-card bg-[#0a0c10] border border-[rgba(255,255,255,.25)] text-[15px] [&>a]:px-3 [&>a]:py-[10px]"
         />
       )}
     </header>

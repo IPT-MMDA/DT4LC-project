@@ -139,6 +139,7 @@ for (const { device, viewport, isMobile, hasTouch } of DEVICES) {
         assert.equal(await menu.getAttribute('aria-expanded'), 'true');
         const nav = page.getByRole('navigation', { name: 'Landing' });
         assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Capabilities', 'How it works', 'About', 'GitHub ↗']);
+        assert.equal(await nav.evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(10, 12, 16)', 'the menu panel is opaque');
         await check(page, report, 'landing-menu', { ...ALLOW.landing, scope: 'header' });
         await page.screenshot({ path: outPath('responsive/landing-phone-menu.png') });
         await page.keyboard.press('Escape');
