@@ -1,12 +1,13 @@
 import { cn } from '../../../utils/cn';
 
 // Status pills are always glyph + word + hue (DESIGN §2): Queued ○, Running ◌,
-// Done ✓, Failed !, Cancelled –; Planning shares the running hue.
+// Done ✓, Failed !, Cancelled –; Planning shares the running hue, Proposal the queued one.
 
-export type PillStatus = 'queued' | 'planning' | 'running' | 'done' | 'failed' | 'cancelled';
+export type PillStatus = 'queued' | 'proposal' | 'planning' | 'running' | 'done' | 'failed' | 'cancelled';
 
 const WORD: Record<PillStatus, string> = {
   queued: 'Queued',
+  proposal: 'Proposal',
   planning: 'Planning',
   running: 'Running',
   done: 'Done',
@@ -16,6 +17,7 @@ const WORD: Record<PillStatus, string> = {
 
 const HUE: Record<PillStatus, string> = {
   queued: 'bg-surface2 text-muted',
+  proposal: 'bg-surface2 text-muted',
   planning: 'bg-run-tint text-run-ink',
   running: 'bg-run-tint text-run-ink',
   done: 'bg-done-tint text-done-ink',
@@ -46,6 +48,7 @@ export function StatusGlyph({ status, size = 12 }: { status: PillStatus; size?: 
     case 'planning':
       return <span aria-hidden style={box} className="flex-none rounded-full border-[1.5px] border-dashed border-run animate-pulse motion-reduce:animate-none" />;
     case 'queued':
+    case 'proposal':
       return <span aria-hidden style={box} className="flex-none rounded-full border-[1.5px] border-dashed border-faint" />;
   }
 }
