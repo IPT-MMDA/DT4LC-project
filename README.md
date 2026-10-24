@@ -811,7 +811,7 @@ task --list  # Show all available commands
 task typecheck  # or: uv run mypy .
 
 # TypeScript
-cd cognitive_ui && npm run lint
+cd cognitive_ui && npm run typecheck  # tsc -b --noEmit
 ```
 
 ## License
