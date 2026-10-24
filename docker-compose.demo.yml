@@ -14,6 +14,7 @@
 #   only, runs as DT4LC_DEPLOYMENT=demo, and only operators may download models.
 # - frontend serves deploy/nginx-demo.conf.template: per-IP rate limits (429 RATE_LIMITED),
 #   the client IP forwarded, uploads up to 200 MB. HTTPS is left to a reverse proxy in front.
+# - ollama (profile ollama) publishes no port either; the backend reaches it on the demo network.
 # - the network has a fixed subnet (DEMO_SUBNET), which backend and nginx trust for the client IP.
 #   Run `docker compose down` once when switching between the default stack and the demo.
 # Sessions, guest limits and GitHub sign-in come from .env, as in the default stack.
@@ -38,6 +39,9 @@ services:
     healthcheck:
       disable: true  # a one-shot job; the image's check polls the API it never starts
     restart: "no"
+
+  ollama:
+    ports: !reset []
 
   backend:
     ports: !reset []
