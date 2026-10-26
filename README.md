@@ -893,6 +893,17 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
+## Contributors
+
+Besides the authors of the paper, these people contributed to DT4LC:
+
+- Roman Petrov (`pingmar`): the EVI algorithm ([#31](https://github.com/IPT-MMDA/DT4LC-project/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/DT4LC-project/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/DT4LC-project/pull/47)).
+- Kostia (`Kostia9`): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/DT4LC-project/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/DT4LC-project/pull/36)).
+- Yehor (`code1715`): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/DT4LC-project/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/DT4LC-project/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/DT4LC-project/pull/42)).
+- `NataliaGon`: Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/DT4LC-project/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/DT4LC-project/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/DT4LC-project/pull/35)), which the v0.6.0 result layers build on.
+- `nik4nd`: structured error responses ([#49](https://github.com/IPT-MMDA/DT4LC-project/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/DT4LC-project/pull/51)), which the v0.6.0 map mode builds on.
+- Hanna Yailymova (`annayailymova`): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/DT4LC-project/pull/66)) and the repository's first commit.
+
 ## Citation
 
 ```bibtex
