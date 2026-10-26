@@ -8,7 +8,6 @@ Documentation for the Digital Twin for Land Cover (DT4LC) project.
 - [Quick Start Guide](QUICKSTART.md) - Get up and running in 5 minutes
 - [API Reference](API.md) - Complete REST API documentation
 - [Architecture](ARCHITECTURE.md) - System design and components
-- [File Upload Flow](FILE_UPLOAD_FLOW.md) - How file uploads work
 - [Public Demo Deployment](DEPLOY_DEMO.md) - Runbook for the public demo: compose, GitHub sign-in, TLS proxy, limits
 
 ## Architecture Diagrams
