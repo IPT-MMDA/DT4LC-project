@@ -5,7 +5,8 @@
 // renamed; Fit to result and Compare move the view and the divider; Fetch to map is
 // disabled with its reason; Send to chat puts the region chip in the composer; at
 // 1280×800 no panel or control overlaps another, the presets row sits under the region
-// card and regions are amber; the presets and Upload GeoJSON add regions.
+// card and regions are amber; the presets and Upload GeoJSON add regions. The map's
+// attribution credits the oblast boundaries' source.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';
@@ -316,6 +317,28 @@ test('map mode: result and sample layers, draw and rename, Fit, Compare, Fetch d
     assert.equal(await panel.getByTestId('geojson-error').count(), 0);
     assert.equal(await page.getByTestId('region-label').innerText().then((t) => t.split(' · ')[0]), 'Bönigen shore');
 
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test('map mode: the attribution credits OCHA / HDX for the oblast boundaries', async () => {
+  const context = await h.browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const errors = trackPageErrors(page);
+  try {
+    await page.goto(`${h.baseURL}/app/map`);
+    await page.waitForFunction(() => window.__dt4lcMap?.getSource('oblast-boundaries'));
+    await settle(page);
+    // The control starts compact and collapsed; (i), its <summary>, opens it.
+    const attribution = page.locator('main[aria-label="Map"] .maplibregl-ctrl-attrib');
+    await attribution.getByLabel('Toggle attribution').click();
+    assert.match(await attribution.getAttribute('class'), /maplibregl-compact-show/);
+    const inner = attribution.locator('.maplibregl-ctrl-attrib-inner');
+    await inner.getByText('Oblast boundaries: OCHA / HDX, CC BY-IGO 3.0').waitFor();
+    assert.match(await inner.innerText(), /OCHA \/ HDX/);
+    await page.screenshot({ path: outPath('map-attribution.png') });
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
