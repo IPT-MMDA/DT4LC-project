@@ -603,6 +603,8 @@ EOF
 
 The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). `task download:prithvi` runs `scripts/download_prithvi.py`, which downloads Prithvi alone in the same way, reading `DT4LC_MODEL_CACHE` from the environment or `.env` like the server: it prints the target directory and skips the download if the model is already there. If the download fails, the script prints the error and exits 1, so the task fails. Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
+Prithvi needs the six HLS bands B2-B7 and the bundled sample has B2-B6, so a Prithvi job on the sample fails with an explanation, "Prithvi needs six HLS bands (B2–B7); this file has five (B2–B6, no B7).", before any weights are downloaded (where the weights are missing and the role may not download them, the job is refused for that reason first).
+
 ## Expected Band Order
 
 The spectral indices (NDVI, NDWI, NDSI, EVI) and change detection find the blue, green, red, NIR and SWIR1 bands as follows (`band_indices` in `dta/dti/raster.py`):
@@ -822,7 +824,7 @@ The pair shows the flooding after the breach. On this crop, as the app computes 
 
 The full 2906 × 1479 px scene, which the landing page's hero image shows, differs: measured with ΔNDWI > 0.3, open water grows from 32 km² to 256 km², with 428 km² gained and 43 km² lost. Those figures describe the full scene only, not the app's result on the bundled crop.
 
-The bundled crop has bands B2-B6 only, so NBR and Prithvi, which need B7, refuse it with an explanation. Attach the pair ("Try with the Kakhovka sample" on the landing page, "+ Attach the Kakhovka sample" in an empty Workspace, or `POST /v1/sample`), or upload both files, and ask, for example:
+Prithvi needs the six HLS bands B2-B7 and the bundled crop has B2-B6, so it refuses the sample with an explanation (see [Model weights](#model-weights)); NBR, which also needs B7, is refused with an explanation too. Attach the pair ("Try with the Kakhovka sample" on the landing page, "+ Attach the Kakhovka sample" in an empty Workspace, or `POST /v1/sample`), or upload both files, and ask, for example:
 
 ```text
 "Compare before and after images to detect changes"      (NDVI change, the default)
