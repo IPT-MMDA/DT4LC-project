@@ -325,8 +325,27 @@ Change detection, band-math change, land cover and snow results have `class_stat
   (`TEMP_PATH = resources/.cache/tmp`, `DT4LC_TEMP_PATH`), and the PNG of each output TIFF is
   written next to it. Delineate-Anything writes its GeoPackage and the
   `field_boundaries` PNG to `TEMP_PATH/delineate_outputs/` instead.
-- Upload previews: `<uploads directory>/<id>_<file name stem>.png`, next to the
-  upload.
+- Uploads: `UPLOADS_PATH/<id>_<original file name>`, with
+  `UPLOADS_PATH = resources/.cache/uploads` (`DT4LC_UPLOADS_PATH`; Docker
+  Compose sets `/app/resources/.cache/uploads`, inside the `./resources`
+  volume). `<id>` is the first 8 characters of a random UUID. Next to each
+  upload are its PNG preview, `<id>_<file name stem>.png`, served at the
+  upload's `preview_url`, and its owner sidecar
+  `<id>_<file name stem>.owner.json` ([Sessions, roles and owners](#sessions-roles-and-owners)).
+  Deleting an upload (`DELETE /v1/files/{file_id}`, or the guest cleanup)
+  removes all three.
+- Upload preview: the first band, stretched between its 2nd and 98th
+  percentiles to an 8-bit grayscale PNG. The copies of the bundled sample
+  (`POST /v1/sample`: linked, or copied across filesystems, into the uploads
+  directory under an id derived from the session) get a true-colour preview
+  from their red, green and blue bands instead.
+- Upload checks (`POST /v1/upload`), in this order: the file name ends in
+  `.tif` or `.tiff` (any case), else 400; the file is at most 200 MB
+  (`MAX_UPLOAD_SIZE` in `server/utils.py`, not configurable), else 413; it
+  is not empty, else 400; rasterio opens it and its first band has at least
+  one valid pixel, else 400 (the stored file, its preview and its sidecar
+  are then deleted). The metadata (`describe_raster`) is a best guess and
+  never fails an upload.
 - `GET /v1/download` and `GET /v1/tiles` serve only files under `OUTPUTS_PATH`,
   the uploads directory, all of `TEMP_PATH` (model outputs and
   `delineate_outputs/`), the Earth Engine exports (`<cache>/gee_exports`) and

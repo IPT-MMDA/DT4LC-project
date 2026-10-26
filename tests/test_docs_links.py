@@ -31,10 +31,7 @@ CHECKED_TOP_LEVEL = ("README.md", "CONTRIBUTING.md", "CHANGELOG.md")
 # Cases that fail on purpose until a documentation change lands. Keyed by (document, target), not by
 # line, so an edit above the line doesn't drop the mark. The marks are strict: remove one when its
 # case passes.
-PRE_EXISTING = "pre-existing, fixed in this run's docs stories"
-KNOWN_BROKEN: dict[tuple[str, str], str] = {
-    ("THIRD_PARTY_LICENSES.md", "Models page"): PRE_EXISTING,
-}
+KNOWN_BROKEN: dict[tuple[str, str], str] = {}
 
 OLD_PAGE_NAMES = ("Jobs page", "Data page", "Models page", "Dashboard page")
 
