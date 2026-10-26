@@ -324,4 +324,4 @@ A card kind maps an analysis output to what the Workspace, Result detail and the
 4. Open a PR to **`dev`** with description, test notes, and linked issue if any.
 5. Address review feedback; maintainers merge after CI passes.
 
-Releases merge `dev` into `master` and are tagged `vX.Y.Z`; see "Branches and Releases" in [CONTRIBUTING.md](../CONTRIBUTING.md) and the [pull request template](../.github/pull_request_template.md).
+Releases merge `dev` into `master` and are tagged `vX.Y.Z`; see "Branches and Releases" in [CONTRIBUTING.md](../CONTRIBUTING.md) and the [pull request template](../.github/pull_request_template.md). From v0.6.0 on, `release/vX.Y.Z` is merged into `dev`, and `dev` into `master`, with GitHub's "Create a merge commit", never squashed, so `master` keeps every commit with its author; the detailed history of v0.5.x, squashed on `master`, stays on the `release/v0.5.0` and `release/v0.5.1` branches, which are kept.

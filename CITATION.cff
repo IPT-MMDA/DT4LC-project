@@ -74,7 +74,7 @@ keywords:
   - NDVI
   - geospatial
   - foundation-models
-license: AGPL-3.0
+license: AGPL-3.0-or-later
 preferred-citation:
   type: article
   title: "DT4LC: A Cognitive Digital Twin Framework for Land Cover Change Detection"

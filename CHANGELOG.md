@@ -26,6 +26,7 @@ A conversation-first workspace replaces the job-centred interface: you describe 
 - **Public demo deployment:** `docker compose --profile demo` with `docker-compose.demo.yml`. It pre-installs the model weights, rate-limits each client IP in nginx, publishes no backend port and removes guest data on a schedule. The runbook is `docs/DEPLOY_DEMO.md`.
 - **Look and accessibility:** a new visual language with light and dark themes, self-hosted Inter and IBM Plex Mono fonts, phone (390 px) and tablet (834 px) layouts, and keyboard and screen-reader support.
 - **New endpoints:** `GET /v1/jobs/{id}/events`, `POST /v1/jobs/{id}/confirm`, `DELETE /v1/jobs/{id}`, `GET /v1/jobs/{id}/statistics.csv`, `POST /v1/sample`, `DELETE /v1/files/{id}`, `GET /v1/session`, `GET /v1/auth/status`, `GET /v1/auth/github/login`, `GET /v1/auth/github/callback`, `POST /v1/auth/logout`, `GET` and `PUT /v1/settings`, `POST /v1/settings/assistant/test` and `GET /v1/tiles/{z}/{x}/{y}`.
+- The University of Maryland seal in the landing page's footer, next to the MMDA and University of Geneva logos.
 
 ### Changed
 
@@ -37,6 +38,8 @@ A conversation-first workspace replaces the job-centred interface: you describe 
 - **Breaking:** result statistics are keyed by band code (`B2`, …) instead of `band_<n>`, each date's change index is clipped to [−1, 1], artifact references gain `size_bytes` and `download_name` (their `url` ends in `&name=`), and every finished job has a `card`. Older jobs are returned as stored.
 - Map tiles are warped to Web Mercator, and multi-band rasters render in true colour by default.
 - The v0.5 routes (`/chat`, `/dashboard`, `/map`, `/jobs`, `/jobs/:jobId`, `/data`, `/models`, `/settings`) redirect to the new screens under `/app`.
+- `CITATION.cff` and the README give the licence as `AGPL-3.0-or-later` (version 3 or any later version), as `pyproject.toml` does.
+- From this release on, `release/vX.Y.Z` is merged into `dev`, and `dev` into `master`, with merge commits, never squashed, so `master` keeps every commit with its author. The detailed v0.5.x history stays on the `release/v0.5.0` and `release/v0.5.1` branches.
 
 ### Removed
 
@@ -46,6 +49,7 @@ A conversation-first workspace replaces the job-centred interface: you describe 
 
 - Tiles of areas outside a raster are transparent.
 - The map panels no longer overlap (#67, bug 4).
+- The map credits the oblast boundaries in its attribution control ("Oblast boundaries: OCHA / HDX, CC BY-IGO 3.0"), as their licence requires, and `THIRD_PARTY_LICENSES.md` gives their source and licence.
 
 ### Security
 

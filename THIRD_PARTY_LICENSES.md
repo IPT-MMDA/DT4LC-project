@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-This document lists the third-party machine learning models and fonts used in DT4LC with their licenses, and the basemap and imagery credits the interface shows.
+This document lists the third-party machine learning models and fonts used in DT4LC with their licenses, the basemap and imagery credits the interface shows, and the source and license of the oblast boundaries on the map.
 
 ## Prithvi EO v1 (100M)
 
@@ -104,3 +104,17 @@ The bundled sample, `resources/kahovka_data/`, is two crops of NASA Harmonized L
 ### Copernicus Sentinel-2
 
 Results computed from Sentinel-2 files or a Sentinel-2 region carry "Copernicus Sentinel-2" in their source line, and the map mode imagery panel describes the dataset as "Copernicus Sentinel-2 L2A · 10 m · revisit 5 days". Sentinel-2 is also credited in the landing page's footer. The same source line names "USGS Landsat 8/9" and "NASA MODIS" for those datasets (`cognitive_ui/src/components/chat/result/resultModel.ts`).
+
+---
+
+## Oblast Boundaries
+
+The map draws the boundaries of Ukraine's oblasts from `cognitive_ui/public/ukraine_oblasts.json`. Sofiia Drozd, an author of the DT4LC paper, prepared the file from the subnational administrative boundaries of Ukraine published by OCHA on the Humanitarian Data Exchange (HDX).
+
+- **Source:** OCHA, subnational administrative boundaries of Ukraine, on HDX (dataset page to be added)
+- **License:** Creative Commons Attribution 3.0 IGO (CC BY-IGO 3.0), https://creativecommons.org/licenses/by/3.0/igo/. HDX's data licences: https://docs.humdata.org/about/data-licenses/
+- **Attribution:** wherever the map draws the boundaries, its attribution control, behind the (i) button, includes this line (`cognitive_ui/src/components/map/OblastBoundaries.tsx`):
+
+  ```text
+  Oblast boundaries: OCHA / HDX, CC BY-IGO 3.0
+  ```
