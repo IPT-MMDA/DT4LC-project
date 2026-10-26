@@ -18,7 +18,7 @@ describe('attachmentChips', () => {
   });
 });
 
-describe('attachment chip line (DESIGN §4)', () => {
+describe('attachment chip line', () => {
   it('puts the size before the date of a single file', () => {
     const [chip] = attachmentChips([
       {

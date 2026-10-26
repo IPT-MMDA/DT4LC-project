@@ -110,7 +110,7 @@ export function LayersSection() {
                 value={row.opacity}
                 aria-label={`Opacity of ${row.name}`}
                 onChange={(e) => setOpacity(row, Number(e.target.value))}
-                // The top row shows its slider (design/screens/map-mode-1280.png); the others on hover or
+                // The top row shows its slider; the others on hover or
                 // focus, and always on a phone or a touch screen, which have no hover.
                 className={cn('w-[50px] accent-accent', i > 0 && 'hidden group-hover:block group-focus-within:block max-md:block [@media(hover:none)]:block')}
               />

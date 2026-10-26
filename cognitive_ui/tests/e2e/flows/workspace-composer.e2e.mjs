@@ -1,6 +1,6 @@
 // The composer against the real API (guest + E2E_LLM=none, so the assistant is offline):
-// design/screens/workspace-assistant-offline.png (the offline line, sample attached) and
-// workspace-region-from-map.png (a drawn region attached with From map, as a chip); and
+// the offline line with the sample attached, and a drawn region attached with From map,
+// as a chip; and
 // the + upload and the drop zone, which vitest cannot reach.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

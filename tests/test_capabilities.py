@@ -1,4 +1,4 @@
-"""``GET /v1/capabilities`` reproduces the two server states in ``design/screens/capabilities-*.png``.
+"""``GET /v1/capabilities`` reproduces the two server states of the v0.6.0 design.
 
 (a) public demo: ``capabilities-demo-top.png``, ``capabilities-demo-models-data.png`` and
 ``capabilities-prithvi-gated.png`` (guest, Gemini connected, Delineate installed, Prithvi not).

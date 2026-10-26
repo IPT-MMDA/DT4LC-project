@@ -12,7 +12,7 @@ import { NAV_ITEMS, screenTitle } from './navigation';
 const MENU_ID = 'phone-menu';
 
 /**
- * The phone's top bar (design/screens/workspace-phone-390.png), in place of the rail:
+ * The phone's top bar, in place of the rail:
  * the menu button, the screen's title (the conversation's in the Workspace) and, in the
  * Workspace, Map ↗.
  */

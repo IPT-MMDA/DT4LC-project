@@ -158,7 +158,7 @@ def format_elapsed(seconds: float) -> str:
 
 
 def done_summary(skeleton: list[dict[str, Any]], elapsed_s: float) -> str:
-    """DESIGN §4.5 one-liner, e.g. ``"3 steps · 48 s · NDWI (×2) → Change Detection"``.
+    """The done one-liner, e.g. ``"3 steps · 48 s · NDWI (×2) → Change Detection"``.
 
     Counts every plan step; the chain lists the algorithm and model steps,
     with consecutive repeats collapsed to ``(×n)``.

@@ -242,7 +242,7 @@ describe('conversationMeta', () => {
   });
 });
 
-describe('retention (DESIGN §6): 24 h before any session is known', () => {
+describe('retention: 24 h before any session is known', () => {
   it('drops conversations not updated for 24 h when the page loads', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T08:00:00Z'));

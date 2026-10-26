@@ -7,7 +7,7 @@ import { useLayout } from '../hooks/useMediaQuery';
 import { useAppStore } from '../store/useAppStore';
 
 /**
- * /app/map, map mode (design/screens/map-mode.png): the imagery panel beside the
+ * /app/map, map mode: the imagery panel beside the
  * map, no panel over another (#67 bug 4). The sample shows under the results in
  * true colour, with its footprint. On a phone the panel is a sheet under the map,
  * collapsed to its header until opened; on a tablet it is narrower.

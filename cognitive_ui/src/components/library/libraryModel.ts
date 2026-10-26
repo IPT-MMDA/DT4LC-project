@@ -5,7 +5,7 @@ import { findConversationByJobId } from '../../store/useChatStore';
 import type { Conversation } from '../../types';
 import type { AnalysedContext } from '../chat/result/resultModel';
 
-// The Library (design/screens/library.png): analyses (GET /v1/jobs, their stored
+// The Library: analyses (GET /v1/jobs, their stored
 // `card`) and files (GET /v1/files) in one list, newest first, with filters and one
 // action per row. Pure: Library.tsx renders LibraryRow and nothing else.
 

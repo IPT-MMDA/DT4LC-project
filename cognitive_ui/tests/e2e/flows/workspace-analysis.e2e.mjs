@@ -1,6 +1,6 @@
 // The analysis message against the real API (guest + E2E_LLM=none, Earth Engine not
-// configured): design/screens/workspace-proposal.png, workspace-composed-done.png,
-// workspace-analysis-failed-and-retry.png and workspace-model-gated-for-guest.png.
+// configured): the proposal, a composed analysis done, a failed analysis with its retry,
+// and a model gated for a guest.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { outPath, setup, trackPageErrors } from '../harness.mjs';

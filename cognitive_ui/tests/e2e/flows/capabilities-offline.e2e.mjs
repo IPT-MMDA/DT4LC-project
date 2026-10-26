@@ -1,4 +1,4 @@
-// Capabilities on the offline laptop at 1440x900: design/screens/capabilities-offline-top.png.
+// Capabilities on the offline laptop at 1440x900: the top of the page with the offline banner.
 // A member, no assistant, no Earth Engine (`npm run e2e:capabilities:offline`:
 // E2E_DEV_ROLE=member, E2E_LLM=none). Also the prompt hand-off with the sample attached:
 // the prompt lands in the composer, the files stay, nothing is sent.

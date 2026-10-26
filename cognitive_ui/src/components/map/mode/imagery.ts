@@ -5,7 +5,7 @@ import type { DrawnRegion, Imagery } from '../../../store/useAppStore';
 import type { ChatRegion, RegionDataset } from '../../../types';
 import { REGION_DEFAULTS } from '../../chat/regionChip';
 
-// Map mode's imagery panel (design/screens/map-mode.png): dataset, dates, cloud and
+// Map mode's imagery panel: dataset, dates, cloud and
 // bands become the region of POST /v1/jobs and /v1/chat (docs/API.md "Regions"), or
 // an Earth Engine fetch through /v1/gee/bulk-fetch. Pure: the panel renders these.
 

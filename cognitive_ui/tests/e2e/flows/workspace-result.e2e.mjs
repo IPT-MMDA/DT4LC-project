@@ -1,5 +1,5 @@
 // The result card against the real API (guest + E2E_LLM=none):
-// design/screens/workspace-analysis-done-result-card.png. NDWI change on the sample,
+// the result card of a done analysis. NDWI change on the sample,
 // the Difference / Before / After toggle, the downloads, and On map into the docked map.
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
@@ -76,7 +76,7 @@ test('done with a result card: NDWI change, toggle, downloads, On map into the d
     await card.waitFor();
     assert.equal(await card.getAttribute('data-kind'), 'change');
 
-    // Legend, source line and the computed areas (statistics.water), not DESIGN §8's numbers.
+    // Legend, source line and the computed areas (statistics.water), not the full scene's numbers.
     assert.equal(await card.getByTestId('legend').innerText(), 'water gained\nwater lost\nno change');
     assert.equal(await card.getByTestId('source-line').innerText(), 'NASA HLS L30 (Landsat 8/9) · 30 m');
     const stats = (await card.getByTestId('stats').innerText()).replace(/\s+/g, ' ').trim();

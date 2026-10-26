@@ -1,5 +1,5 @@
 // A member's analysis that first downloads a model, caught mid-download:
-// design/screens/workspace-preparing-model-offline.png. Needs E2E_DEV_ROLE=member
+// the Preparing model row while the assistant is offline. Needs E2E_DEV_ROLE=member
 // (`npm run e2e:workspace:member`; assistant offline, E2E_LLM=none).
 //
 // Nothing comes from the internet: the runner points HF_ENDPOINT at fake-hf.mjs, which
@@ -95,7 +95,7 @@ test('preparing model: the Preparing model row downloads from the fake Hub, with
     const statuses = await message.getByTestId('step-row').evaluateAll((rows) => rows.map((r) => r.dataset.status));
     assert.deepEqual(statuses, ['done', 'running', 'queued', 'queued']);
     assert.equal(await page.getByTestId('assistant-offline').count(), 1);
-    // DESIGN §6, on a local server (DT4LC_DEPLOYMENT unset) with no assistant.
+    // On a local server (DT4LC_DEPLOYMENT unset) with no assistant.
     await page.getByTestId('session-badge').filter({ hasText: 'Local server' }).waitFor();
     assert.equal(await page.getByTestId('session-badge').innerText(), 'Member. Local server · no analysis limit · assistant offline.');
     assert.deepEqual(await fakeHFRequests(), [

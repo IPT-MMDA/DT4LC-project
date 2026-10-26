@@ -1,4 +1,4 @@
-// The proposal's Change and Explain buttons (DESIGN §4).
+// The proposal's Change and Explain buttons.
 
 /** What Explain sends: a conversation reply, even with files attached (routing fix). */
 export const EXPLAIN_PROPOSAL = 'Explain this proposal';

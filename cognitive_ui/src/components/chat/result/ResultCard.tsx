@@ -23,7 +23,7 @@ import {
   type Tone,
 } from './resultModel';
 
-// The result card of a finished analysis (design/DESIGN.md §4): one component per
+// The result card of a finished analysis: one component per
 // artifact kind, all on the job's artifact URLs (GET /v1/jobs/{id}), never base64.
 
 /** react-query key of GET /v1/jobs/{id}; a finished job doesn't change, so it is fetched once. */

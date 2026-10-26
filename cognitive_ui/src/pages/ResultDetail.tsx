@@ -37,7 +37,7 @@ import { useAttachFiles } from '../hooks/useAttachFiles';
 import { interpretationOf } from '../hooks/useJobEvents';
 import { useChatStore } from '../store/useChatStore';
 
-// /app/results/:id (design/screens/result-detail.png): one analysis from
+// /app/results/:id: one analysis from
 // GET /v1/jobs/{id}: the header with its actions, the maps and the statistics table,
 // and beside them what was asked, the plan, the interpretation and the downloads.
 // Classes join with clsx, as in the Library (utils/cn drops `text-control` before a

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// Every CSS custom property in design/DESIGN.md section 2.
+// Every CSS custom property of the design tokens.
 const DESIGN_TOKENS = [
   'bg', 'surface', 'surface2', 'bubble', 'border', 'border2',
   'text', 'text2', 'muted', 'faint',
@@ -50,7 +50,7 @@ describe('design tokens in index.css', () => {
     expect(dark.get('gained')).toMatch(/^oklch\(0\.7\d? /);
   });
 
-  it('uses the DESIGN values for accent and the inverted monogram ink', () => {
+  it('uses the design-token values for accent and the inverted monogram ink', () => {
     expect(light.get('accent')).toBe('oklch(0.5 0.16 265)');
     expect(dark.get('accent')).toBe('oklch(0.72 0.12 265)');
     expect(light.get('ink')).toBe(light.get('text'));

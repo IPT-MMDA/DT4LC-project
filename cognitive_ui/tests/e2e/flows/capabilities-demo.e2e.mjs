@@ -1,5 +1,5 @@
-// Capabilities on the public demo at 1440x900: design/screens/capabilities-demo-top.png,
-// capabilities-demo-models-data.png and capabilities-prithvi-gated.png (a guest on the demo).
+// Capabilities on the public demo at 1440x900: the top of the page, the models and data
+// tiers, and Prithvi gated for a guest on the demo.
 // `npm run e2e:capabilities:demo`: E2E_SERVER=demo stages what the backend computes from
 // env and files (DT4LC_DEPLOYMENT=demo, empty Delineate-Anything files in the model cache,
 // GEE_PROJECT_ID and a dummy key file), guest role, E2E_LLM=fake, E2E_GUEST_LIMIT=5.

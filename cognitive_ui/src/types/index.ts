@@ -1,5 +1,5 @@
 // Chat (one store: src/store/useChatStore.ts). One assistant message narrates
-// one analysis (design/DESIGN.md §4), so a job is a single `analysis` message
+// one analysis, so a job is a single `analysis` message
 // whose status and timeline are updated in place.
 
 /** A file reference kept on a sent user message: metadata and URLs, never image bytes. */

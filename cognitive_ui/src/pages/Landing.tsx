@@ -7,7 +7,7 @@ import '../components/landing/landing.css';
 import { PHONE_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import type { SessionInfo } from '../types';
 
-// The landing (design/DESIGN.md section 7, design/prototype/Landing v2.dc.html):
+// The landing:
 // hero B, "What it can do", "How it works" and the footer. The hero sits on imagery
 // in both themes, so its ink (and its focus ring) is literal white.
 
@@ -15,7 +15,7 @@ const GITHUB = 'https://github.com/IPT-MMDA/DT4LC-project';
 // The JOSS paper is in review and has no DOI yet: link its source in the repository.
 const PAPER = `${GITHUB}/blob/master/paper.md`;
 const HERO = '/landing/kakhovka_water_change_06-01_to_06-09';
-// The caption's figure is the bundled crop's; the hero shows the full scene (DESIGN §8).
+// The caption's figure is the bundled crop's; the hero shows the full scene.
 const FULL_SCENE =
   'Computed by the app on the bundled 768 × 768 px crop. The full scene in this image shows more: +428 km² of water gained and 43 km² lost (ΔNDWI > 0.3).';
 
@@ -125,7 +125,7 @@ function Header() {
 /** The sample's figure; under the buttons on a phone, at the bottom of the hero otherwise. */
 function Caption({ className }: { className: string }) {
   return (
-    // The bundled crop's NDWI change as the app computes it (+157 km², DESIGN §8); the full scene in the image differs.
+    // The bundled crop's NDWI change as the app computes it (+157 km²); the full scene in the image differs.
     <div data-testid="landing-caption" className={`${className} font-mono text-[12.5px] text-[rgba(255,255,255,.85)]`}>
       <span className="group relative">
         Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach{' '}
@@ -282,7 +282,7 @@ function Footer() {
 }
 
 /**
- * The line under "How it works" (DESIGN §6): a guest's retention and quota, also while
+ * The line under "How it works": a guest's retention and quota, also while
  * the session loads or when it failed; a member's or operator's has no quota.
  */
 function roleNote(session?: SessionInfo): string {

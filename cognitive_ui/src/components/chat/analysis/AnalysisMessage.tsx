@@ -17,7 +17,7 @@ import { ResultCard } from '../result/ResultCard';
 import type { AnalysedContext } from '../result/resultModel';
 import { StatusGlyph, StatusPill, type PillStatus } from './StatusPill';
 
-// One assistant message narrates one analysis (DESIGN §4): intent, proposal with
+// One assistant message narrates one analysis: intent, proposal with
 // Run · Change · Explain, the Planning skeleton, the running timeline with Cancel,
 // then the collapsed Done line with the result card, interpretation and follow-ups,
 // or the open Failed timeline with its fixes. A refusal about this server (a model

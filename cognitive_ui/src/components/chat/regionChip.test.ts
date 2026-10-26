@@ -29,7 +29,7 @@ const DRAWN: DrawnRegion = {
   createdAt: '2026-10-23T00:00:00Z',
 };
 
-describe('region chip line (DESIGN §4)', () => {
+describe('region chip line', () => {
   it('reads like the server line', () => {
     expect(regionLine(REGION)).toBe(
       'Region · Dnipro floodplain · Kherson · 412 km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud',
@@ -71,7 +71,7 @@ describe('regionFromMap', () => {
     expect(region.area_km2).toBeGreaterThan(80);
     expect(region.area_km2).toBeLessThan(90);
     expect(regionLine(region)).toMatch(/^Region · Dnipro floodplain · Kherson · 8\d km² · HLS L30 · 2026-09-23 → 10-23 · ≤20 % cloud$/);
-    // The name's own middle dot stays in the chip's title line (DESIGN §4).
+    // The name's own middle dot stays in the chip's title line.
     expect(regionChipLines(region).title).toBe('Region · Dnipro floodplain · Kherson');
     expect(regionChipLines(region).detail).toMatch(/^8\d km² · HLS L30 · 2026-09-23 → 10-23 · ≤20 % cloud$/);
   });

@@ -2,7 +2,7 @@ import type { JobRecord } from '../../../api/jobs';
 import type { Layer, LayerLegend, LegendClass, LngLatBounds } from '../../../store/useAppStore';
 import type { ChatRegion, MessageAttachment } from '../../../types';
 
-// What a finished analysis shows as its result card (design/DESIGN.md §4), read from
+// What a finished analysis shows as its result card, read from
 // GET /v1/jobs/{id} `result.execution.artifacts` (docs/ARCHITECTURE.md "Job
 // artifacts"). Pure: the card components render a ResultCardModel and nothing else.
 // Images and downloads are artifact `url`s only; a pre-v0.5.0 base64 string is no

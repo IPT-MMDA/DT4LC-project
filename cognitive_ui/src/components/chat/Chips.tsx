@@ -4,7 +4,7 @@ import { cn } from '../../utils/cn';
 import type { AttachmentChip } from './attachmentChips';
 import { regionChipLines } from './regionChip';
 
-// DESIGN §4 chips: a thumbnail, a mono name and a muted line. In the composer they
+// Chips: a thumbnail, a mono name and a muted line. In the composer they
 // have a remove ×; on sent messages they are read-only (no onRemove).
 
 type Size = 'md' | 'sm';

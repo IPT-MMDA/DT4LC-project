@@ -50,7 +50,7 @@ const sentence = (parts: string[]) => {
 };
 
 /**
- * The session badge (design/DESIGN.md section 6), as a bold label and a line:
+ * The session badge, as a bold label and a line:
  * "Guest." + "4 of 5 analyses left this hour · kept 24 h · no account."
  * "Member." + "Local server · no analysis limit · assistant offline."
  * An operator reads like a member. A guest's line is the design's whether or not

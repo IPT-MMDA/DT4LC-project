@@ -107,7 +107,7 @@ def match_named_index(prompt: str) -> NamedIndex | None:
 
 
 def display_formula(index: NamedIndex) -> str:
-    """``"(NIR − SWIR1)/(NIR + SWIR1)"``: the formula over role names, as DESIGN writes it."""
+    """``"(NIR − SWIR1)/(NIR + SWIR1)"``: the formula over role names, as the proposal text shows it."""
     return index.formula.format(**ROLE_LABELS).replace(" / ", "/").replace(" - ", " − ").replace(" * ", " × ")
 
 
@@ -209,7 +209,7 @@ def named_index_request(prompt: str, attachments: list[Attachment], reg: Registr
 
 
 def proposal_text_for(index: NamedIndex, band_codes: list[str], change: bool) -> str:
-    """DESIGN §4.2: "I don't have a moisture-change algorithm. I can compute NDMI = (NIR − SWIR1)/(NIR + SWIR1)
+    """The proposal text: "I don't have a moisture-change algorithm. I can compute NDMI = (NIR − SWIR1)/(NIR + SWIR1)
     from B5 and B6 for both dates and difference them — run that?"."""
     algorithm = index.change_algorithm if change else index.algorithm
     dates = " for both dates and difference them" if change else ""
@@ -226,7 +226,7 @@ def _label(item: RegistryItem) -> str:
 def proposal_text(plan: ExecutionPlan, reg: Registry) -> str:
     """The proposal sentence for a composed plan, built from the plan, never from LLM prose.
 
-    Band math with a named index's formula gets the DESIGN wording; other band math names its
+    Band math with a named index's formula gets the proposal wording; other band math names its
     formula and bands; any other combination lists its analysis steps.
     """
     from dta.dti.algorithms.band_math import validate_formula

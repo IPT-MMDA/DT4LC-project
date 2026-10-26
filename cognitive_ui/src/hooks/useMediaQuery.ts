@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-/** The docked map sits beside the chat from this width (design/DESIGN.md section 1). */
+/** The docked map sits beside the chat from this width. */
 export const DOCKED_MAP_QUERY = '(min-width: 1440px)';
 
 /**

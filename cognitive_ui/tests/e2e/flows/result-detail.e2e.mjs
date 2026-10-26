@@ -1,5 +1,5 @@
 // Result detail against the real API (guest + E2E_LLM=none, no Earth Engine):
-// design/screens/result-detail.png (1440×900). Seeded through the UI: the sample and
+// at 1440×900. Seeded through the UI: the sample and
 // NDWI change in one conversation, a region job failing with EE_NOT_CONFIGURED in a
 // second. The Library row opens /app/results/:id: the breadcrumb, the difference,
 // before and after images, the class statistics with the real areas, the plan steps

@@ -31,7 +31,7 @@ function attachContext(context: AnalysedContext) {
 }
 
 /**
- * Result detail's actions (design/screens/result-detail.png): Open in workspace,
+ * Result detail's actions: Open in workspace,
  * Re-run with changes, Open on map, and a failure's fixes as the Workspace runs them
  * (AnalysisMessage's onFix). Each returns an error sentence for the page, or null.
  * `openFilePicker` is the page's file input, for the `upload` fix.

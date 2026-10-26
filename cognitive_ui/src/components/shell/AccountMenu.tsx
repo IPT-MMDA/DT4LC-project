@@ -23,8 +23,8 @@ function Avatar({ user, fallback, size }: { user: SessionUser | null | undefined
 
 /**
  * The account button at the bottom of the rail and its menu: who is signed in and their role
- * badge, the theme toggle, Settings for operators, and GitHub sign-in or sign-out
- * (design/DESIGN.md §1, §6). Without GITHUB_CLIENT_ID and friends the server reports
+ * badge, the theme toggle, Settings for operators, and GitHub sign-in or sign-out.
+ * Without GITHUB_CLIENT_ID and friends the server reports
  * `sign_in.configured: false` and the menu says so instead of offering a button.
  * `placement`: beside the rail's button (`side`), or above it in the phone's menu (`up`).
  */

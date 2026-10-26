@@ -108,7 +108,7 @@ SAMPLE_AFTER = str(Path(__file__).resolve().parents[1] / "resources/kahovka_data
 def test_ndwi_on_the_sample_reports_water_and_class_areas() -> None:
     """The Kakhovka pair (30 m, EPSG:32636): open water is NDWI > 0.2, one pixel is 0.0009 km².
 
-    The numbers are what the code computes; DESIGN §8's 32 → 256 km², +428 / -43 are not reproduced.
+    The numbers are what the code computes; the full scene's 32 → 256 km², +428 / -43 are not reproduced.
     """
     with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
         result = run(RasterPathBefore=SAMPLE_BEFORE, RasterPathAfter=SAMPLE_AFTER, IndexType="ndwi")

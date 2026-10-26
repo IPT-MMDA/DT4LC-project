@@ -24,7 +24,7 @@ import { useLibraryActions } from '../components/library/useLibraryActions';
 import { PHONE_QUERY, useMediaQuery } from '../hooks/useMediaQuery';
 import { useChatStore } from '../store/useChatStore';
 
-// /app/library (design/screens/library.png): every analysis and file from this
+// /app/library: every analysis and file from this
 // session in one table, newest first, with filters and one action per row; on a phone a
 // list of cards, on a tablet the table without the conversation. Replaces v0.5's Jobs
 // and Data pages. Classes join with clsx: utils/cn's tailwind-merge

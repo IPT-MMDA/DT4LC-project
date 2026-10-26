@@ -83,7 +83,7 @@ def test_kakhovka_crop_line(client: TestClient, uploads: Path) -> None:
     assert meta["size_label"] == "4.0 MB"
     assert meta["crs"] == "EPSG:32636"
     west, south, east, north = meta["bounds_wgs84"]
-    # DESIGN §8: 32.39–32.69 E, 46.46–46.66 N
+    # The bundled crop: 32.39–32.69 E, 46.46–46.66 N
     assert (round(west, 2), round(east, 2), round(south, 2), round(north, 2)) == (32.39, 32.69, 46.46, 46.66)
 
 

@@ -14,7 +14,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('sessionBadge (DESIGN §6)', () => {
+describe('sessionBadge', () => {
   it('guest: analyses left, retention, no account; the same online and offline', () => {
     for (const server of [LOCAL_ONLINE, LOCAL_OFFLINE, {}]) {
       expect(sessionBadge(GUEST_SESSION, server)).toMatchObject({

@@ -1,4 +1,4 @@
-// The empty state's suggested prompts (design/screens/workspace-empty-*.png and the
+// The empty state's suggested prompts (from the v0.6.0 design: the
 // prototype's askWater/askFields/askClassify/askBurn/askPrithvi). Every prompt must be
 // in tests/test_ui_prompt_routing.py's table; suggestions.test.ts checks it.
 

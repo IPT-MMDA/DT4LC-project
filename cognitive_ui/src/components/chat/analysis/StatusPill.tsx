@@ -1,6 +1,6 @@
 import { cn } from '../../../utils/cn';
 
-// Status pills are always glyph + word + hue (DESIGN §2): Queued ○, Running ◌,
+// Status pills are always glyph + word + hue: Queued ○, Running ◌,
 // Done ✓, Failed !, Cancelled –; Planning shares the running hue, Proposal the queued one.
 
 export type PillStatus = 'queued' | 'proposal' | 'planning' | 'running' | 'done' | 'failed' | 'cancelled';

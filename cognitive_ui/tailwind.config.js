@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 
-// Design tokens live in src/index.css (design/DESIGN.md section 2). color-mix keeps
+// Design tokens live in src/index.css. color-mix keeps
 // opacity modifiers such as `bg-accent/20` working on top of the CSS variables.
 const token = (name) =>
   `color-mix(in oklch, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
@@ -73,7 +73,7 @@ module.exports = {
         label: ['10.5px', { lineHeight: '1.4', letterSpacing: '.06em', fontWeight: '600' }],
         // Pair with `font-mono`.
         stat: ['16px', { lineHeight: '1.3', fontWeight: '500' }],
-        // Landing hero (DESIGN section 2): 84/1/-0.03em and 20/1.4, smaller on short
+        // Landing hero: 84/1/-0.03em and 20/1.4, smaller on short
         // viewports as in the prototype.
         hero: ['min(84px, 9.3vh)', { lineHeight: '1', letterSpacing: '-0.03em', fontWeight: '600' }],
         'hero-sub': ['min(20px, 2.3vh)', { lineHeight: '1.4' }],

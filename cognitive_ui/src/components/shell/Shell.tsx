@@ -10,7 +10,7 @@ import { Rail } from './Rail';
 
 /**
  * The app frame under /app: the rail and the current destination. On a phone the rail
- * becomes a top bar whose menu button opens a drawer (design/screens/workspace-phone-390.png).
+ * becomes a top bar whose menu button opens a drawer.
  * The frame is the dynamic viewport's height, so the composer stays above a phone's
  * keyboard and browser bars.
  */

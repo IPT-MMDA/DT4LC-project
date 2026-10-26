@@ -177,7 +177,7 @@ function RegionSection({ sample }: { sample: MessageAttachment[] }) {
 }
 
 /**
- * Map mode's left column (design/screens/map-mode.png): Imagery with Back to chat;
+ * Map mode's left column: Imagery with Back to chat;
  * the region; dataset, dates, cloud and bands; Fetch to map and Send to chat; the layers.
  * `sheet`: on a phone, a sheet under the map that shows only its header until opened.
  */

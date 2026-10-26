@@ -22,7 +22,7 @@ const STEPS: { step: Exclude<DemoStep, 0>; title: string; text: string }[] = [
 ];
 
 // The bundled crop's own NDWI change result (src/test/fixtures/jobs/ndwi-change.json,
-// stats.water), in the result card's km² format: not the full scene's +428 km² (DESIGN §8).
+// stats.water), in the result card's km² format: not the full scene's +428 km².
 const WATER = { before: '13.9 km²', after: '170 km²', gained: '+157 km²' };
 
 const Monogram = ({ size }: { size: 20 | 22 }) => (

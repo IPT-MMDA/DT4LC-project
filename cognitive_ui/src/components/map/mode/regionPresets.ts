@@ -2,7 +2,7 @@ import { bbox as turfBbox } from '@turf/turf';
 import type { DrawnRegion } from '../../../store/useAppStore';
 import type { MessageAttachment } from '../../../types';
 
-// The presets under map mode's region card (design/screens/map-mode-1280.png):
+// The presets under map mode's region card:
 // Kakhovka dam, Brienz and Upload GeoJSON. Each becomes a drawn region in useAppStore.
 // Pure: ImageryPanel adds and selects what these return.
 

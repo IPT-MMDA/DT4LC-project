@@ -7,7 +7,7 @@ export interface NavItem {
   isActive: (pathname: string) => boolean;
 }
 
-// The four destinations of design/DESIGN.md section 1: the rail, and the phone's menu.
+// The four destinations: the rail, and the phone's menu.
 // Result detail is under the Library (its breadcrumb).
 export const NAV_ITEMS: NavItem[] = [
   { to: '/app', label: 'Chat', icon: MessageSquare, isActive: (p) => p === '/app' },
@@ -17,7 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 /**
- * The phone top bar's title (design/screens/workspace-phone-390.png): the open
+ * The phone top bar's title: the open
  * conversation's name in the Workspace, else the screen's name.
  */
 export function screenTitle(pathname: string, conversationTitle?: string): string {

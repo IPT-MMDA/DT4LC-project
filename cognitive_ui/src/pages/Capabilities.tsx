@@ -14,7 +14,7 @@ import {
 import { promptHref } from '../hooks/usePromptFromQuery';
 import { cn } from '../utils/cn';
 
-// Status hue per status word (glyph + word + hue, DESIGN §2), as in the capabilities-*.png
+// Status hue per status word (glyph + word + hue)
 // screens: done for connected / installed / available, canc for the assistant offline,
 // run (dashed) for a download on first use, muted for gated, not configured and coming.
 type Hue = 'done' | 'canc' | 'run' | 'muted';
@@ -310,7 +310,7 @@ const CHIPS = [
   ['data', 'Data'],
 ] as const;
 
-/** The six tiers of GET /v1/capabilities (DESIGN §5). Exported for tests. */
+/** The six tiers of GET /v1/capabilities. Exported for tests. */
 export function CapabilitiesView({ doc }: { doc: CapabilitiesDoc }) {
   const sections = useRef<Record<string, HTMLElement | null>>({});
   const refFor = (id: string) => (el: HTMLElement | null) => {

@@ -1,4 +1,4 @@
-// The "How it works" demo (design/prototype/Landing v2.dc.html): one 8-s CSS timeline
+// The "How it works" demo of the landing: one 8-s CSS timeline
 // that plays once when the demo scrolls into view. The three step buttons scrub it to
 // a fixed frame; reduced motion shows a poster frame and only the buttons move it.
 //

@@ -58,7 +58,7 @@ describe('surviving components use design tokens, not the stock Tailwind palette
       '#10B981',
       '#2563eb',
     ]);
-    // Legend colours and the monogram ink from design/DESIGN.md section 2.
+    // Legend colours and the monogram ink from the design tokens.
     expect(stockHex("'#2d5f9e' '#8c4a2f' '#c4cad6' '#f1efe8' '#1a1d23' '#fff' '#000'")).toEqual([]);
   });
 

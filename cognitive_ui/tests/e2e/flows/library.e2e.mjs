@@ -1,5 +1,5 @@
 // The Library against the real API (guest + E2E_LLM=none, no Earth Engine):
-// design/screens/library.png (1440×900). Seeded through the UI: the sample, NDWI
+// at 1440×900. Seeded through the UI: the sample, NDWI
 // change, statistics for every band, and a region job that fails with
 // EE_NOT_CONFIGURED. Then the rows, types, statuses and conversation names; each
 // filter narrows the list; CSV downloads; Map opens map mode with the layer; a row

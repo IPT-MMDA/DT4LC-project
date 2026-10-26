@@ -1,4 +1,4 @@
-// Workspace empty states at 1440x900 (design/screens/workspace-empty-*.png):
+// Workspace empty states at 1440x900:
 // the rail, the conversation list with the guest badge, the chat column and the
 // docked map, with the sample attached (?sample=1) and without (?sample=0).
 import assert from 'node:assert/strict';

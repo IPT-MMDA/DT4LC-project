@@ -1,4 +1,4 @@
-"""Region chip for ``POST /v1/jobs`` with ``region`` (DESIGN §4): area, bounds and the display line.
+"""Region chip for ``POST /v1/jobs`` with ``region``: area, bounds and the display line.
 
 The request model is :class:`server.schemas.JobRegion`: its validator calls :func:`region_shape` and
 :func:`area_km2`, its ``echo()`` :func:`region_line`. The area is geodesic on the WGS84 ellipsoid (pyproj,

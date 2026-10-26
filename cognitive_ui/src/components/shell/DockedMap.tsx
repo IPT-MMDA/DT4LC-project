@@ -23,7 +23,7 @@ function LegendRow({ legend }: { legend: LayerLegend }) {
 }
 
 /**
- * The map docked beside the chat at ≥1440 px (design/DESIGN.md §1): the map, the
+ * The map docked beside the chat at ≥1440 px: the map, the
  * Fit to result / Compare controls, "Open full map" and the Layers panel with the
  * result layers added from the chat's cards (useAppStore `mapLayers`).
  */

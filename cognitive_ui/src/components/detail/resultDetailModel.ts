@@ -8,7 +8,7 @@ import { formatDuration } from '../chat/analysis/format';
 import { asRef, downloadName, prettyFormula, type AnalysedContext, type ArtifactRef, type BandRow, type ResultCardModel, type Stat } from '../chat/result/resultModel';
 import { formatRunTime } from '../library/libraryModel';
 
-// Result detail (design/screens/result-detail.png) from GET /v1/jobs/{id}: the plan
+// Result detail from GET /v1/jobs/{id}: the plan
 // with each step's parameters and time, the statistics table, the downloads and the
 // map's meta line. Pure: pages/ResultDetail.tsx renders these and nothing else.
 

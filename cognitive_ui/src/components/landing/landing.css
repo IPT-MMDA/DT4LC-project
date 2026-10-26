@@ -1,5 +1,5 @@
-/* Landing motion, from design/prototype/Landing v2.dc.html. prefers-reduced-motion
-   stops all of it (DESIGN section 7); the demo then shows its poster frame. */
+/* Landing motion. prefers-reduced-motion stops all of it; the demo then shows its
+   poster frame. */
 
 /* Hero B: the image drifts for 20 s each way; the headline settles once. */
 @keyframes drift {

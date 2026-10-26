@@ -29,7 +29,7 @@ import rasterio
 
 from dta.config import OUTPUTS_PATH as OUTPUTS_PATH
 
-# Map legend colours (design/DESIGN.md §2): water lost / drier, no change, water gained / wetter.
+# Map legend colours: water lost / drier, no change, water gained / wetter.
 CHANGE_RAMP = ("#8c4a2f", "#c4cad6", "#2d5f9e")
 # Long side of a bare map PNG, in pixels.
 BARE_MAX_SIDE = 1024

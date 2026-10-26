@@ -1,7 +1,7 @@
 """Result rendering: styles in GeoTIFF tags, bare map PNGs and class legends.
 
 Tiles and bare PNGs share :func:`dta.dti.artifact_files.colourize`: a change raster
-goes lost -> no change -> gained in the map legend colours (design/DESIGN.md §2).
+goes lost -> no change -> gained in the map legend colours.
 """
 
 from pathlib import Path

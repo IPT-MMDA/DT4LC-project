@@ -4,7 +4,7 @@ import { formatArea } from '../../chat/regionChip';
 import { formatKm2 } from '../../chat/result/resultModel';
 import { regionAreaKm2 } from './imagery';
 
-// Map mode's LAYERS list and legend (design/screens/map-mode.png). Pure: the
+// Map mode's LAYERS list and legend. Pure: the
 // components render these from useAppStore `mapLayers` and the selected region.
 
 export const REGION_ROW_ID = 'region';

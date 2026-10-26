@@ -14,7 +14,7 @@ const LINE: Record<Hue, string> = {
   fail: 'text-fail-ink',
 };
 
-/** A status as glyph + word + hue (DESIGN §2), as on the Capabilities page. */
+/** A status as glyph + word + hue, as on the Capabilities page. */
 export function Status({ hue, children, testId }: { hue: Hue; children: ReactNode; testId?: string }) {
   return (
     <span data-testid={testId} data-hue={hue} className={cn('inline-flex items-center gap-[5px] font-medium', LINE[hue])}>

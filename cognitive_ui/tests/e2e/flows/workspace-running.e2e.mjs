@@ -1,5 +1,5 @@
-// The running timeline against the real API, caught mid-run: design/screens/
-// workspace-analysis-running.png. Needs E2E_LLM=fake (`npm run e2e:workspace:fake`): the
+// The running timeline against the real API, caught mid-run.
+// Needs E2E_LLM=fake (`npm run e2e:workspace:fake`): the
 // fake Ollama holds the Interpretation step's LLM call back for INTERPRETATION_MS, so
 // the Interpretation row is reliably running while the flow looks at it. A reload
 // at that point restores the conversation and resumes the event stream.

@@ -1,6 +1,6 @@
 import type { AnalysisEvent, AnalysisStatus } from '../../../types';
 
-// One analysis message is a pure function of its job's events (DESIGN §4): the
+// One analysis message is a pure function of its job's events: the
 // `{seq, type, data}` list that GET /v1/jobs/{id}/events streams and
 // GET /v1/jobs/{id} returns (docs/API.md "GET /v1/jobs/{job_id}/events").
 
@@ -269,7 +269,7 @@ export function statusOf(view: AnalysisView): AnalysisStatus {
 /**
  * Failures that are a refusal about this server, not a broken run: the message is
  * one assistant sentence with its fixes, without the Failed pill, timeline or code
- * (design/screens/workspace-model-gated-for-guest.png).
+ * (for example a model gated for guests).
  */
 export const REFUSAL_CODES: readonly string[] = ['MODEL_GATED', 'MODEL_NOT_INSTALLED'];
 

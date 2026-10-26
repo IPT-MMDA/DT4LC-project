@@ -224,7 +224,7 @@ describe('Landing', () => {
     expect(screen.getByTestId('landing-caption').textContent).toContain(
       'Example · Lower Dnipro, 1 → 9 June 2023 · +157 km² of water after the Kakhovka dam breach (bundled crop) · NASA HLS L30',
     );
-    // The full scene in the hero differs (DESIGN §8): a tooltip on "(bundled crop)", read out to screen readers.
+    // The full scene in the hero differs: a tooltip on "(bundled crop)", read out to screen readers.
     const crop = screen.getByTestId('landing-caption-crop');
     expect(crop.getAttribute('title')).toMatch(/^Computed by the app on the bundled 768 × 768 px crop\. The full scene in this image shows more: \+428 km²/);
     expect(screen.getByTestId('landing-caption').textContent).toContain(`NASA HLS L30. ${crop.getAttribute('title')}`);
@@ -263,7 +263,7 @@ describe('Landing', () => {
     expect(footer.getByText('Imagery: NASA HLS, Copernicus Sentinel-2')).toBeTruthy();
   });
 
-  it("the demo quotes the bundled crop's figures, as the app computes them (DESIGN §8)", async () => {
+  it("the demo quotes the bundled crop's figures, as the app computes them", async () => {
     await openLanding();
     const demo = within(screen.getByTestId('landing-demo'));
     expect(demo.getByText('13.9 km²')).toBeTruthy();

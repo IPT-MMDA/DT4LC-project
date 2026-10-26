@@ -1,4 +1,4 @@
-"""Follow-up prompts under a result (v0.6.0 Workspace, DESIGN §4.6): ``done.followups`` and ``result.followups``.
+"""Follow-up prompts under a result (v0.6.0 Workspace): ``done.followups`` and ``result.followups``.
 
 Each prompt in the registry's ``ui.followups`` must route where it says, with the files the
 Workspace re-sends (the analysis's own: one file, or the sample pair for a change analysis).

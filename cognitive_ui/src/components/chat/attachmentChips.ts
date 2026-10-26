@@ -8,7 +8,7 @@ export interface AttachmentChip<T extends MessageAttachment = MessageAttachment>
 }
 
 /**
- * "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01" (DESIGN §4): the metadata line with
+ * "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01": the metadata line with
  * the size before the date, which the server's line ends with.
  */
 function fileLine(a: MessageAttachment): string {

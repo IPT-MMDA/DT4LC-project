@@ -2,7 +2,7 @@
 
 The table holds every registry ``ui.prompt`` (the Capabilities examples), every ``ui.followups``
 entry (the chips under a result), every ``example_prompts`` entry of ``GET /v1/capabilities`` and
-the Workspace's empty-state suggestions (``design/screens/workspace-empty-*.png``) and the
+the Workspace's empty-state suggestions and the
 proposal's Explain questions. Each runs with
 the attachments the UI sends:
 
@@ -67,7 +67,7 @@ EMPTY_STATE = (
     "Map moisture change with NDMI between the two dates",
     "Fill the cloud gaps in the 9 June image",
 )
-# The proposal card's Explain button (DESIGN §4.2) and a typed question about the proposal: the
+# The proposal card's Explain button and a typed question about the proposal: the
 # Workspace sends them with the conversation's files, and they must stay conversation.
 PROPOSAL_QUESTIONS = ("Explain this proposal", "Explain why you chose NDMI")
 

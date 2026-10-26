@@ -1,5 +1,5 @@
 // Map mode against the real API (guest + E2E_LLM=none, no Earth Engine):
-// design/screens/map-mode.png (1440×900) and map-mode-1280.png (1280×800). The NDWI
+// at 1440×900 and 1280×800. The NDWI
 // change result goes On map from the chat; map mode shows it with its legend over the
 // sample in true colour and its footprint; a rectangle is drawn with the mouse and
 // renamed; Fit to result and Compare move the view and the divider; Fetch to map is

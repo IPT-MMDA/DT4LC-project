@@ -18,7 +18,7 @@ import type {
 
 export const CHAT_STORAGE_KEY = 'dt4lc-chat-storage';
 export const CHAT_STORAGE_VERSION = 4;
-// Retention (design/DESIGN.md §6). Guests: conversations are kept in this browser
+// Retention. Guests: conversations are kept in this browser
 // for the session's `kept_hours` after their last update, 24 h until the session is
 // known. Members and operators: no time limit. Everyone: at most MAX_CONVERSATIONS,
 // the least recently updated dropped first (localStorage holds about 5 MB).

@@ -2,7 +2,7 @@ import { area } from '@turf/turf';
 import type { DrawnRegion } from '../../store/useAppStore';
 import type { ChatRegion, MessageAttachment } from '../../types';
 
-// The region chip (DESIGN §4): "Region · Dnipro floodplain · Kherson · 412 km² ·
+// The region chip: "Region · Dnipro floodplain · Kherson · 412 km² ·
 // HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud". The same format as the server's
 // `region.line` (server/regions.py), which replaces this once the job exists.
 

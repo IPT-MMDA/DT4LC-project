@@ -1,7 +1,7 @@
 """GET /v1/tiles: RGBA tiles in the colours of the raster's style, transparent off the raster.
 
-A tagged change raster goes lost -> no change -> gained in the map legend colours
-(design/DESIGN.md §2), an index raster keeps its PNG's colormap, and an untagged
+A tagged change raster goes lost -> no change -> gained in the map legend colours,
+an index raster keeps its PNG's colormap, and an untagged
 file keeps the old file-name colours.
 """
 

@@ -51,7 +51,7 @@ describe('card selection by artifact kind', () => {
       { label: 'water lost', tone: 'lost', colour: '#8c4a2f' },
       { label: 'no change', tone: 'neutral', colour: '#c4cad6' },
     ]);
-    // statistics.water: 13.881 → 170.039 km², 156.761 gained, 0.603 lost (not DESIGN §8's numbers).
+    // statistics.water: 13.881 → 170.039 km², 156.761 gained, 0.603 lost (not the full scene's numbers).
     expect(c.stats).toEqual([
       { label: 'Open water before', value: '13.9 km²' },
       { label: 'Open water after', value: '170 km²' },
