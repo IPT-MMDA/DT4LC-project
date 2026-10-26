@@ -32,7 +32,7 @@ def test_fullflow_prithvi_example_persist_to_temp() -> None:
     # --- Pre-flight: Check if model is available via ModelManager ---------
     if not MODEL_MANAGER.is_model_available(PRITHVI_MODEL_ID):
         pytest.skip(
-            f"Prithvi model not installed. Use the Models page in UI or "
+            f"Prithvi model not installed. Use Settings → Models in the UI or "
             f'run: python -c "from dta.dti.models import get_model_manager; '
             f"get_model_manager().start_download('{PRITHVI_MODEL_ID}')\""
         )
