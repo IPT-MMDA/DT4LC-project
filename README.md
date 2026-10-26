@@ -253,49 +253,97 @@ open htmlcov/index.html
 
 ```text
 DT4LC-project/
-├── Taskfile.yml                # Task runner commands
-├── docker-compose.yml          # Docker orchestration
-├── Dockerfile                  # Backend container
-├── .env.example                # Environment template
+├── README.md                         # This file
+├── CHANGELOG.md                      # Release history
+├── CONTRIBUTING.md                   # How to contribute, branches and releases
+├── CODE_OF_CONDUCT.md                # Contributor Covenant
+├── LICENSE                           # AGPL-3.0
+├── THIRD_PARTY_LICENSES.md           # Model licences, fonts, map and imagery credits
+├── CITATION.cff                      # Citation metadata
+├── paper.md, paper.bib               # JOSS paper and its references
 │
-├── dta/                        # Digital Twin Application
-│   ├── dti/                    # Digital Twin Instance
-│   │   ├── coe/                # Context Orchestration Engine
-│   │   │   ├── llm/            # LLM providers (Gemini, Groq, Ollama)
-│   │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
-│   │   │   ├── context_agent.py
-│   │   │   ├── planner.py
-│   │   │   └── orchestrator.py
-│   │   ├── algorithms/         # NDVI, Statistics, Change Detection
-│   │   ├── models/             # Prithvi, Delineate-Anything
-│   │   └── executor.py         # Pipeline execution
-│   └── registry.yaml           # Component registry
+├── .github/                          # CI, image build and draft release, PR template
+├── .pre-commit-config.yaml           # ruff, mypy and file hygiene hooks
+├── .env.example                      # Every environment variable, commented
+├── Dockerfile                        # Backend image
+├── docker-compose.yml                # Frontend and backend; Ollama with --profile ollama
+├── docker-compose.demo.yml           # Public demo override (profile demo)
+├── deploy/                           # Files of the demo stack
+│   ├── models_init.py                # Pre-installs the model weights (models-init)
+│   └── nginx-demo.conf.template      # Demo nginx: client IP, per-IP rate limit
+├── pyproject.toml                    # Python package, extras, ruff, mypy, pytest
+├── uv.lock                           # Locked Python dependencies
+├── Taskfile.yml                      # Task runner commands
 │
-├── server/                     # FastAPI server
-│   ├── app.py                  # Main application
-│   └── schemas.py              # API schemas
+├── dta/                              # Digital Twin Application (Python package)
+│   ├── __init__.py                   # Package version
+│   ├── registry.yaml                 # Component registry: inputs, algorithms, models, triggers
+│   ├── config/                       # Paths; operator overrides of environment settings
+│   └── dti/                          # Digital Twin Instance
+│       ├── coe/                      # Context Orchestration Engine
+│       │   ├── llm/                  # LLM router and the seven providers
+│       │   ├── intent_classifier.py  # Pipeline request or conversation
+│       │   ├── conversation.py       # Conversation rules and replies
+│       │   ├── triggers.py           # Keywords and action phrases from the registry
+│       │   ├── prompt_dates.py       # Dates in the prompt pick the file
+│       │   ├── context_agent.py      # What the request needs
+│       │   ├── planner.py            # Template planner, or llm_planner.py when unsure
+│       │   ├── named_indices.py      # NDMI, NBR, SAVI, NDBI as band math
+│       │   ├── plan_validator.py     # Resource, input and entrypoint checks
+│       │   └── orchestrator.py       # Context, plan and validation for one request
+│       ├── algorithms/               # Indices, band math, change, classification, statistics
+│       ├── models/                   # Model downloads; Delineate-Anything inference
+│       ├── data_sources/             # Earth Engine collections; Planetary Computer
+│       ├── preprocessors/            # scale_to_hls for Prithvi
+│       ├── post_processing/          # Visualization, insights, analysis tools
+│       ├── executor.py               # Pipeline execution, band checks, model preparation
+│       ├── artifact_files.py         # GeoTIFF and PNG files that results reference
+│       ├── raster.py                 # Band roles from descriptions, codes or count
+│       └── registry.py, schemas.py   # Registry loader, request models; cache, metrics, …
 │
-├── cognitive_ui/               # React + TypeScript UI
-│   ├── Dockerfile              # Frontend container
-│   ├── nginx.conf              # Production nginx config
+├── server/                           # FastAPI server
+│   ├── app.py                        # App, session middleware, routers, periodic cleanup
+│   ├── routes/                       # auth, chat, files, gee, health, jobs, session, settings, tiles
+│   ├── model_routes.py               # Model list, download and delete
+│   ├── sessions.py                   # Session cookie, roles, owners, guest quota
+│   ├── github_oauth.py               # GitHub sign-in
+│   ├── jobs.py                       # Job queue and its SQLite store
+│   ├── job_events.py                 # Event names, SSE frames, failure codes and fixes
+│   ├── capabilities.py               # The capabilities document
+│   ├── library.py                    # Result cards, statistics CSV, download names
+│   ├── settings.py                   # Operator settings document and updates
+│   ├── uploads.py                    # Upload owners (sidecar files)
+│   ├── sample.py                     # The bundled sample as the caller's uploads
+│   ├── paths.py                      # Allowlist for file paths from clients
+│   ├── regions.py                    # Map regions for region jobs
+│   ├── layer_metadata_store.py       # Metadata of Earth Engine map layers
+│   ├── schemas.py                    # Request and response models
+│   ├── cli.py                        # The dt4lc-api command
+│   └── logging_config.py, utils.py   # Logging and shared helpers
+│
+├── cognitive_ui/                     # React + TypeScript UI
+│   ├── Dockerfile                    # Frontend image (nginx)
+│   ├── nginx.conf                    # Serves the UI; proxies /v1, /docs, /redoc
+│   ├── vite.config.ts                # Dev server on :3000, proxies /v1 to :8000
+│   ├── package.json                  # Scripts: dev, build, lint, typecheck, test, e2e:*
+│   ├── public/                       # Fonts, brand logos, landing images, oblast boundaries
 │   ├── src/
-│   │   ├── components/         # React components
-│   │   ├── api/                # API client
-│   │   └── store/              # Zustand state
-│   └── package.json
+│   │   ├── pages/                    # One per screen: Landing, Workspace, Library, …
+│   │   ├── components/               # shell, chat, map, library, detail, landing, settings
+│   │   ├── hooks/                    # Sending messages, job events, the sample, theme, layout
+│   │   ├── store/                    # Zustand stores: chat (conversations) and app (theme, map)
+│   │   ├── api/                      # API client, SSE reader, query hooks
+│   │   └── routes.tsx                # / and the /app routes
+│   └── tests/e2e/                    # Playwright flows on the built UI and a real API
 │
-├── tests/                      # Test suite (organized by component)
-│   ├── test_registry.py        # Component registry tests
-│   ├── test_executor.py        # Pipeline executor tests
-│   ├── test_algorithms.py      # Algorithm tests
-│   ├── test_llm_providers.py   # LLM provider tests
-│   ├── test_planner.py         # Planner tests
-│   ├── test_orchestrator.py    # Orchestration tests
-│   └── ...
-│
-├── resources/                  # Sample data (kahovka_data/)
-├── docs/                       # Development docs & architecture diagrams
-└── scripts/                    # Utility scripts
+├── docs/                             # API, architecture, developer guide, quick start, demo
+│   └── screenshots/                  # The README screenshots, from the E2E flows
+├── tests/                            # Backend tests (pytest), and the docs link check
+├── resources/kahovka_data/           # Bundled HLS L30 sample pair (Kakhovka, June 2023)
+├── scripts/
+│   ├── download_prithvi.py           # Prithvi weights into the model cache
+│   └── fetch_prithvi_v1_weights.py   # Prithvi into resources/prithvi_eo_v1_100m/
+└── examples/                         # A standalone Gemini chat call
 ```
 
 ## Configuration
