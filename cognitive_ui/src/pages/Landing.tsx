@@ -236,10 +236,13 @@ function Tiers() {
   );
 }
 
-/** A partner logo; UMD and SNSF have no file yet (public/brand/README.md), so their slot holds a text mark. */
-function Logo({ src, name, mark, height }: { src?: string; name: string; mark: string; height: 56 | 72 }) {
+/**
+ * A partner logo; SNSF has no file yet (public/brand/README.md), so its slot holds a text mark.
+ * `plate` puts the logo on a white disc in the dark theme, for black lettering.
+ */
+function Logo({ src, name, mark, height, plate }: { src?: string; name: string; mark: string; height: 56 | 72; plate?: boolean }) {
   const h = height === 72 ? 'h-[72px]' : 'h-[56px]';
-  if (src) return <img src={src} alt={name} className={`${h} w-auto`} />;
+  if (src) return <img src={src} alt={name} className={`${h} w-auto${plate ? ' rounded-full dark:bg-[#fff] dark:p-1' : ''}`} />;
   return (
     <span role="img" aria-label={name} title={name} data-testid="logo-text-mark" className={`${h} flex items-center text-[15px] font-semibold tracking-[-.01em] text-text2`}>
       {mark}
@@ -255,7 +258,7 @@ function Footer() {
           <div className="flex gap-7 max-md:gap-5 items-center max-lg:flex-wrap">
             <Logo src="/brand/logo_mmda.png" name='MMDA, Igor Sikorsky Kyiv Polytechnic Institute' mark="MMDA" height={72} />
             <Logo src="/brand/logo_unige.png" name="University of Geneva" mark="UNIGE" height={72} />
-            <Logo name="University of Maryland" mark="UMD" height={72} />
+            <Logo src="/brand/logo_umd.png" name="University of Maryland" mark="UMD" height={72} plate />
             <Logo name="Swiss National Science Foundation" mark="SNSF" height={56} />
           </div>
           <p className="col-span-2 max-lg:col-span-1 min-w-0 text-[12.5px] text-muted leading-[1.6]">
