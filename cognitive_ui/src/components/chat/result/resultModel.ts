@@ -96,7 +96,7 @@ export interface AnalysedContext {
 
 // --- Display tables ---------------------------------------------------------------
 
-const INDEX_ARTIFACTS = ['NDVIMap', 'EVIMap', 'NDWIMap', 'NDSIMap'];
+const INDEX_ARTIFACTS = ['NDVIMap', 'EVIMap', 'NDWIMap', 'NDSIMap', 'ChangeHazardMap'];
 
 /** Sensor (upload `metadata.sensor`, region `dataset`) → the source line's long name. */
 export const SENSOR_NAMES: Record<string, string> = {

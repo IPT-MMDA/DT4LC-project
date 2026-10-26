@@ -140,6 +140,7 @@ Executes plans step-by-step:
 
 - **Prithvi** (`prithvi.py`): NASA/IBM foundation model for geospatial features
 - **Delineate-Anything**: Field boundary detection
+- **LULC change hazard** (`lulc_hazard/`): ranks where Esri land cover is most likely to change. The input raster gives only the area; `features.py` builds the features (Esri neighbourhood shares, terrain, AlphaEarth) from Earth Engine on a 30 m grid, `inference.py` applies the one-file bundle `lulc_hazard.json` (format in its docstring). Listed as coming until the bundle is published
 
 #### Post-Processing (`post_processing/`)
 

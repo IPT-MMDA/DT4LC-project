@@ -111,6 +111,7 @@ class InputBandsError(ExecutionError):
 STEP_TO_MODEL_MAP = {
     "models/prithvi-reconstruction": "prithvi-eo-v1-100m",
     "models/delineate-anything": "delineate-anything-small",
+    "models/lulc-change-hazard": "lulc-change-hazard-esri",
 }
 
 # Bands a model step needs in its input raster: step id -> (short model name, HLS L30 band codes).

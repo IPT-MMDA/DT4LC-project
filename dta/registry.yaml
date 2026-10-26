@@ -6,6 +6,7 @@ types:
  - EVIMap
  - SnowClassification  # Multi-criteria snow classification
  - LULCMap  # Land use / land cover classification
+ - ChangeHazardMap  # Ranks of land-cover change probability (models/lulc-change-hazard)
  - Reconstruction  # Prithvi MAE reconstruction outputs
  - RasterPath
  - RasterPathBefore
@@ -785,6 +786,68 @@ instances:
       args_map:
         RasterPath: "${RasterPath}"
         delineate_model: "small"
+
+  # The input raster gives only the area: the features come from Earth Engine (dta.dti.models.lulc_hazard.features).
+  # Listed under "coming" until its trained bundle is published.
+  - id: models/lulc-change-hazard
+    kind: model
+    display_name: "Land-cover change hazard"
+    ui:
+      tier: coming
+      order: 5
+      title: Land-cover change hazard
+      description: >-
+        Where Esri land cover is most likely to change in the next years, ranked against the model's training
+        cells; one map for any change and one per main transition.
+      inputs: [Area (upload or map region)]
+      outputs: [Change rank, rank per transition, start class]
+      time: "~1 min"
+      prompt: Where is land cover most likely to change here?
+      model:
+        title: LULC change hazard (Ukraine)
+        short: LULC change hazard
+        description: Per-from-class boosted trees on Esri neighbourhoods, terrain and AlphaEarth embeddings.
+    description: |
+      Change-probability ranks for Esri land cover (8 classes) on a 30 m grid. The model is a boosted-tree
+      classifier per start class, trained on Ukrainian windows; its features (class shares of the Esri map in
+      3, 7 and 15 cell squares, elevation, slope, aspect and the 64 AlphaEarth embedding bands of the origin
+      year) are fetched from Earth Engine for the area of the input raster. The origin year is the latest
+      with both an Esri map and an AlphaEarth embedding of the area; the input's dates play no part.
+    interpretation: |
+      Values are percentiles (0-100) of the probability of change among the model's training cells, not
+      probabilities: 90 means more likely to change than 90 % of the training cells. The probability level
+      does not carry over to a new period; the ordering of cells does. Compare top_decile_percent with 10 %
+      to see whether the area is more change-prone than the training landscape. Not a forecast of how much
+      will change, and not a hazard in the disaster-risk sense.
+    keywords: [forecast, prediction, future, change, hazard, risk, transition, land-cover, lulc, esri, alphaearth,
+               deforestation, urbanisation, abandonment]
+    inputs: [RasterPath]
+    outputs: [ChangeHazardMap]
+    model_id: lulc-change-hazard-esri
+    triggers:
+      keywords: ["change hazard", "change risk", "land cover forecast", "land-cover forecast", "lulc forecast",
+                 "future land cover", "likely to change"]
+      action_phrases:
+        - "forecast land cover change"
+        - "predict land cover change"
+        - "where will land cover change"
+        - "where is land cover likely to change"
+        - "map land cover change hazard"
+    user_guide:
+      capability_response: |
+        Yes, I can rank where Esri land cover is most likely to change, from Earth Engine features of the area
+        (Ukraine only for now). Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
+      missing_file_response: |
+        Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll rank where land
+        cover is most likely to change.
+      summary_template: "Ranking land-cover change hazard"
+    runner:
+      type: python
+      entrypoint: "dta.dti.models.lulc_hazard.inference"
+      function: run
+      args_map:
+        RasterPath: "${RasterPath}"
+        model_dir: "${MODEL_PATH}"
 
   - id: post-processing/agent-analysis
     kind: postprocess
