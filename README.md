@@ -4,6 +4,8 @@ A cognitive digital twin framework for land cover change detection and vegetatio
 
 It is aimed at remote sensing researchers, environmental scientists and disaster response teams who need to perform land cover analysis without building custom processing pipelines.
 
+What changed in each release: [CHANGELOG.md](CHANGELOG.md).
+
 ## Features
 
 - **Ask in plain language** - In the Workspace, one assistant message narrates one analysis: what it will do, the plan steps as they run, and a result card with the map, its legend, km² statistics and follow-up suggestions. Questions get markdown answers and never start a job.
