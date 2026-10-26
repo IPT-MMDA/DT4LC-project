@@ -508,24 +508,27 @@ The classifier uses pattern matching for clear action requests and falls back to
 
 ### Multi-Turn Conversations
 
-The system supports follow-up requests that reference previously uploaded data:
+The server keeps no conversation state. The browser keeps each conversation (in `localStorage`) and sends what the server needs with every message to `POST /v1/chat`, so a follow-up can build on earlier files and results:
 
 ```text
-User: [uploads image.tif] "Detect agricultural parcels in this area"
-→ Runs field boundary detection
-
-User: "What can we do with this data?"
-→ Returns guidance about available analyses
-
 User: "Calculate NDVI"
-→ Uses the previously uploaded image.tif automatically
+→ Asks for a GeoTIFF; the reply carries a pending request
+User: [attaches image.tif] "here"
+→ Runs the pending NDVI analysis on image.tif
+User: "Why are some fields darker than others?"
+→ A markdown answer from the LLM, which sees the history (with no
+  provider, the catalog of analyses); no job
+User: "Calculate EVI"
+→ Runs EVI on image.tif, which the browser sends again
 ```
 
-Context is kept per conversation in the browser, which sends it with each message to `POST /v1/chat`:
+The request body (`ConversationRequest` in `server/schemas.py`) has, besides the `message`:
 
-- Previous file attachments with their server paths
-- Conversation history for context-aware responses
-- Job results for reference in follow-up questions
+- `history`: the earlier turns, oldest first, as `{role, text}`. A finished analysis is one assistant turn with its intent and outcome. When the LLM answers a question, it gets the last 10 turns, each cut to 2000 characters and at most 8000 in all.
+- `attachments` (or `region`): the files or map region of the latest message that had any. The server does not remember them, so the browser sends the conversation's attachments again with each message; attaching new files or a region replaces them.
+- `pending`: the waiting request of the previous reply. A reply that asks for a file returns `pending` (`{prompt, item_id, needs, asked_at}`), and the browser sends it back with the next message. A short message such as "here" with enough files (two for a two-date analysis) or a region then runs the waiting request. A reply without `pending` clears it, and a `pending` older than 30 minutes is ignored.
+
+Details and examples: [`POST /v1/chat` in docs/API.md](docs/API.md#post-v1chat).
 
 ### Adding New Algorithms
 
