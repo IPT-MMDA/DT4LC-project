@@ -52,36 +52,52 @@ From the browser end-to-end tests (`cognitive_ui/tests/e2e/`), on the bundled Ka
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
-│                    http://localhost (port 80)                    │
-└─────────────────────────────────────┬───────────────────────────┘
-                                      │ /v1/* (nginx proxy)
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Backend (FastAPI)                            │
-│                    http://localhost:8000                         │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Context Orchestration Engine (COE)                          ││
-│  │  • Intent Classifier (routes pipeline vs conversation)      ││
-│  │  • Context Agent (understands user intent)                  ││
-│  │  • Planner Agent (builds execution pipeline)                ││
-│  │  • Decision Agent (validates plan)                          ││
-│  └─────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Digital Twin Instance (DTI)                                 ││
-│  │  • Pipeline Executor                                        ││
-│  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
-│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────┬───────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   LLM Providers (fallback chain)                 │
-│  Gemini (fast) → Groq (ultra-fast) → Ollama (local)             │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ Frontend (React): Landing, Workspace, Map, Library,                │
+│ Result detail, Capabilities, Settings                              │
+│ http://localhost (nginx, Docker) · http://localhost:3000 (Vite)    │
+└─────────┬──────────────────────────────────────────────────────────┘
+          │ /v1/* with the session cookie
+          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Backend (FastAPI) · http://localhost:8000                          │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Sessions: a signed dt4lc_session cookie on every request       │ │
+│ │  • role: guest; member or operator after GitHub sign-in        │ │
+│ │  • an owner on each job and upload (operators see them all)    │ │
+│ │  • guest quota: 5 analyses per hour (GUEST_ANALYSES_PER_HOUR)  │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+│ POST /v1/chat ──► markdown reply (no job), or an analysis job      │
+│ POST /v1/jobs ──► job queue (SQLite) ──► COE plan ──► DTI run      │
+│ GET /v1/jobs/{id}/events ──► the job's event log as SSE            │
+│ GET /v1/capabilities ──► six tiers for this caller and server      │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Context Orchestration Engine (COE)                             │ │
+│ │  • Intent Classifier (pipeline vs conversation)                │ │
+│ │  • Context Agent (what the request needs)                      │ │
+│ │  • Planner (template; LLM planner when confidence < 0.7)       │ │
+│ │  • Plan Validator (resources, inputs, entrypoints)             │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Digital Twin Instance (DTI)                                    │ │
+│ │  • Pipeline Executor                                           │ │
+│ │  • Algorithms (indices, band math, change, classes, stats)     │ │
+│ │  • Models (Prithvi, Delineate-Anything)                        │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+└─────────┬──────────────────────────────────────────────────────────┘
+          │ LLM calls: intent, context, plan, interpretation, replies
+          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ LLM router (LLM_PROVIDER_ORDER, default strategy fallback)         │
+│ Gemini · Groq · OpenAI · Anthropic · Mistral · Ollama · Apertus    │
+│ unavailable or error ──► the next provider                         │
+│ no provider answers ──► deterministic fallbacks:                   │
+│   intent → pipeline request, context → registry triggers,          │
+│   plan → template planner, chat reply → the catalog                │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+The components, sessions, event stream and fallbacks are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick Start
 
