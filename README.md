@@ -133,7 +133,16 @@ The UI is at <http://localhost>, and nginx also serves the API reference there: 
 
 - Python 3.10+
 - [uv](https://github.com/astral-sh/uv) (recommended) or pip
-- [Task](https://taskfile.dev/) (optional but recommended)
+- [Task](https://taskfile.dev/) (optional but recommended): the runner behind the `task ...` commands below. Install it with one of:
+
+  ```bash
+  sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin   # Linux or macOS, into ~/.local/bin
+  brew install go-task                                                               # Homebrew
+  sudo snap install task --classic                                                   # Ubuntu
+  winget install Task.Task                                                           # Windows
+  ```
+
+  Other ways, including npm and pip packages: <https://taskfile.dev/installation/>. `task --list` shows every command.
 
 #### Backend
 
@@ -249,103 +258,6 @@ task coverage
 # Or manually:
 pytest tests/ --cov=dta --cov=server --cov-report=html
 open htmlcov/index.html
-```
-
-## Project Structure
-
-```text
-DT4LC-project/
-├── README.md                         # This file
-├── CHANGELOG.md                      # Release history
-├── CONTRIBUTING.md                   # How to contribute, branches and releases
-├── CODE_OF_CONDUCT.md                # Contributor Covenant
-├── LICENSE                           # AGPL-3.0
-├── THIRD_PARTY_LICENSES.md           # Model licences, fonts, map and imagery credits
-├── CITATION.cff                      # Citation metadata
-├── paper.md, paper.bib               # JOSS paper and its references
-│
-├── .github/                          # CI, image build and draft release, PR template
-├── .pre-commit-config.yaml           # ruff, mypy and file hygiene hooks
-├── .env.example                      # Every environment variable, commented
-├── Dockerfile                        # Backend image
-├── docker-compose.yml                # Frontend and backend; Ollama with --profile ollama
-├── docker-compose.demo.yml           # Public demo override (profile demo)
-├── deploy/                           # Files of the demo stack
-│   ├── models_init.py                # Pre-installs the model weights (models-init)
-│   └── nginx-demo.conf.template      # Demo nginx: client IP, per-IP rate limit
-├── pyproject.toml                    # Python package, extras, ruff, mypy, pytest
-├── uv.lock                           # Locked Python dependencies
-├── Taskfile.yml                      # Task runner commands
-│
-├── dta/                              # Digital Twin Application (Python package)
-│   ├── __init__.py                   # Package version
-│   ├── registry.yaml                 # Component registry: inputs, algorithms, models, triggers
-│   ├── config/                       # Paths; operator overrides of environment settings
-│   └── dti/                          # Digital Twin Instance
-│       ├── coe/                      # Context Orchestration Engine
-│       │   ├── llm/                  # LLM router and the seven providers
-│       │   ├── intent_classifier.py  # Pipeline request or conversation
-│       │   ├── conversation.py       # Conversation rules and replies
-│       │   ├── triggers.py           # Keywords and action phrases from the registry
-│       │   ├── prompt_dates.py       # Dates in the prompt pick the file
-│       │   ├── context_agent.py      # What the request needs
-│       │   ├── planner.py            # Template planner, or llm_planner.py when unsure
-│       │   ├── named_indices.py      # NDMI, NBR, SAVI, NDBI as band math
-│       │   ├── plan_validator.py     # Resource, input and entrypoint checks
-│       │   └── orchestrator.py       # Context, plan and validation for one request
-│       ├── algorithms/               # Indices, band math, change, classification, statistics
-│       ├── models/                   # Model downloads; Delineate-Anything inference
-│       ├── data_sources/             # Earth Engine collections; Planetary Computer
-│       ├── preprocessors/            # scale_to_hls for Prithvi
-│       ├── post_processing/          # Visualization, insights, analysis tools
-│       ├── executor.py               # Pipeline execution, band checks, model preparation
-│       ├── artifact_files.py         # GeoTIFF and PNG files that results reference
-│       ├── raster.py                 # Band roles from descriptions, codes or count
-│       └── registry.py, schemas.py   # Registry loader, request models; cache, metrics, …
-│
-├── server/                           # FastAPI server
-│   ├── app.py                        # App, session middleware, routers, periodic cleanup
-│   ├── routes/                       # auth, chat, files, gee, health, jobs, session, settings, tiles
-│   ├── model_routes.py               # Model list, download and delete
-│   ├── sessions.py                   # Session cookie, roles, owners, guest quota
-│   ├── github_oauth.py               # GitHub sign-in
-│   ├── jobs.py                       # Job queue and its SQLite store
-│   ├── job_events.py                 # Event names, SSE frames, failure codes and fixes
-│   ├── capabilities.py               # The capabilities document
-│   ├── library.py                    # Result cards, statistics CSV, download names
-│   ├── settings.py                   # Operator settings document and updates
-│   ├── uploads.py                    # Upload owners (sidecar files)
-│   ├── sample.py                     # The bundled sample as the caller's uploads
-│   ├── paths.py                      # Allowlist for file paths from clients
-│   ├── regions.py                    # Map regions for region jobs
-│   ├── layer_metadata_store.py       # Metadata of Earth Engine map layers
-│   ├── schemas.py                    # Request and response models
-│   ├── cli.py                        # The dt4lc-api command
-│   └── logging_config.py, utils.py   # Logging and shared helpers
-│
-├── cognitive_ui/                     # React + TypeScript UI
-│   ├── Dockerfile                    # Frontend image (nginx)
-│   ├── nginx.conf                    # Serves the UI; proxies /v1, /docs, /redoc
-│   ├── vite.config.ts                # Dev server on :3000, proxies /v1 to :8000
-│   ├── package.json                  # Scripts: dev, build, lint, typecheck, test, e2e:*
-│   ├── public/                       # Fonts, brand logos, landing images, oblast boundaries
-│   ├── src/
-│   │   ├── pages/                    # One per screen: Landing, Workspace, Library, …
-│   │   ├── components/               # shell, chat, map, library, detail, landing, settings
-│   │   ├── hooks/                    # Sending messages, job events, the sample, theme, layout
-│   │   ├── store/                    # Zustand stores: chat (conversations) and app (theme, map)
-│   │   ├── api/                      # API client, SSE reader, query hooks
-│   │   └── routes.tsx                # / and the /app routes
-│   └── tests/e2e/                    # Playwright flows on the built UI and a real API
-│
-├── docs/                             # API, architecture, developer guide, quick start, demo
-│   └── screenshots/                  # The README screenshots, from the E2E flows
-├── tests/                            # Backend tests (pytest), and the docs link check
-├── resources/kahovka_data/           # Bundled HLS L30 sample pair (Kakhovka, June 2023)
-├── scripts/
-│   ├── download_prithvi.py           # Prithvi weights into the model cache
-│   └── fetch_prithvi_v1_weights.py   # Prithvi into resources/prithvi_eo_v1_100m/
-└── examples/                         # A standalone Gemini chat call
 ```
 
 ## Configuration
@@ -899,20 +811,38 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 Besides the authors of the paper, these people contributed to DT4LC:
 
-- Roman Petrov (`pingmar`): the EVI algorithm ([#31](https://github.com/IPT-MMDA/DT4LC-project/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/DT4LC-project/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/DT4LC-project/pull/47)).
-- Kostia (`Kostia9`): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/DT4LC-project/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/DT4LC-project/pull/36)).
-- Yehor (`code1715`): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/DT4LC-project/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/DT4LC-project/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/DT4LC-project/pull/42)).
-- `NataliaGon`: Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/DT4LC-project/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/DT4LC-project/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/DT4LC-project/pull/35)), which the v0.6.0 result layers build on.
-- `nik4nd`: structured error responses ([#49](https://github.com/IPT-MMDA/DT4LC-project/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/DT4LC-project/pull/51)), which the v0.6.0 map mode builds on.
-- Hanna Yailymova (`annayailymova`): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/DT4LC-project/pull/66)) and the repository's first commit.
+- [Roman Petrov](https://github.com/pingmar): the EVI algorithm ([#31](https://github.com/IPT-MMDA/DT4LC-project/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/DT4LC-project/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/DT4LC-project/pull/47)).
+- [Kostia](https://github.com/Kostia9): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/DT4LC-project/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/DT4LC-project/pull/36)).
+- [Yehor](https://github.com/code1715): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/DT4LC-project/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/DT4LC-project/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/DT4LC-project/pull/42)).
+- [NataliaGon](https://github.com/NataliaGon): Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/DT4LC-project/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/DT4LC-project/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/DT4LC-project/pull/35)), which the v0.6.0 result layers build on.
+- [nik4nd](https://github.com/nik4nd): structured error responses ([#49](https://github.com/IPT-MMDA/DT4LC-project/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/DT4LC-project/pull/51)), which the v0.6.0 map mode builds on.
+- [Hanna Yailymova](https://github.com/annayailymova): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/DT4LC-project/pull/66)) and the repository's first commit.
 
 ## Citation
 
+The paper describing DT4LC is under review at the [Journal of Open Source Software](https://joss.theoj.org/) ([review thread](https://github.com/openjournals/joss-reviews/issues/11334)). Its volume, issue, pages and DOI are to be announced; until then, cite it as:
+
 ```bibtex
-@software{dt4lc,
-  author = {Anton Chernyatevich},
-  title = {DT4LC - Digital Twin for Land Cover},
-  year = {2025},
-  url = {https://github.com/IPT-MMDA/DT4LC-project}
+@article{chernyatevich2026dt4lc,
+  author  = {Chernyatevich, Anton and Malyniak, Volodymyr and Drozd, Sofiia and Kussul, Nataliia and Shelestov, Andrii and Salii, Yevhenii and Yavorskyi, Oleksandr and Kolotii, Andrii and Giuliani, Gregory and Poussin, Charlotte},
+  title   = {{DT4LC}: A Cognitive Digital Twin Framework for Land Cover Change Detection},
+  journal = {Journal of Open Source Software},
+  year    = {2026},
+  note    = {Under review; volume, issue, pages and DOI to be announced},
+  url     = {https://github.com/IPT-MMDA/DT4LC-project}
 }
 ```
+
+To cite the software itself, use [CITATION.cff](CITATION.cff) (GitHub's "Cite this repository" button), or:
+
+```bibtex
+@software{dt4lc_software,
+  author  = {Chernyatevich, Anton and Malyniak, Volodymyr and Drozd, Sofiia and Kussul, Nataliia and Shelestov, Andrii and Salii, Yevhenii and Yavorskyi, Oleksandr and Kolotii, Andrii and Giuliani, Gregory and Poussin, Charlotte},
+  title   = {{DT4LC}: Digital Twin for Land Cover},
+  version = {0.6.0},
+  year    = {2026},
+  url     = {https://github.com/IPT-MMDA/DT4LC-project}
+}
+```
+
+The conference and journal papers behind the framework are listed in [CITATION.cff](CITATION.cff) and cited in [paper.md](paper.md).
