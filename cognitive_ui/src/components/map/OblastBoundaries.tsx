@@ -26,7 +26,8 @@ export function OblastBoundaries() {
   }, [mapRef]);
 
   return (
-    <Source id="oblast-boundaries" type="geojson" data="/ukraine_oblasts.json">
+    // The boundaries derive from OCHA's dataset on HDX (CC BY-IGO 3.0), which requires this credit wherever they are shown.
+    <Source id="oblast-boundaries" type="geojson" data="/ukraine_oblasts.json" attribution="Oblast boundaries: OCHA / HDX, CC BY-IGO 3.0">
       <Layer
         id={LINE_ID}
         type="line"

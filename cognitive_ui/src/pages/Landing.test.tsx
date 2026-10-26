@@ -248,12 +248,13 @@ describe('Landing', () => {
     expect(screen.getByText('No account. Conversations stay in this browser for 24 h. Up to 5 analyses per hour.')).toBeTruthy();
   });
 
-  it('the footer: four logo slots (UMD and SNSF as text marks), funding, licence, GitHub, paper, imagery', async () => {
+  it('the footer: four logo slots (the UMD seal, SNSF as a text mark), funding, licence, GitHub, paper, imagery', async () => {
     await openLanding();
     const footer = within(screen.getByRole('contentinfo'));
     expect(footer.getByRole('img', { name: 'MMDA, Igor Sikorsky Kyiv Polytechnic Institute' }).getAttribute('src')).toBe('/brand/logo_mmda.png');
     expect(footer.getByRole('img', { name: 'University of Geneva' }).getAttribute('src')).toBe('/brand/logo_unige.png');
-    expect(footer.getAllByTestId('logo-text-mark').map((m) => m.textContent)).toEqual(['UMD', 'SNSF']);
+    expect(footer.getByRole('img', { name: 'University of Maryland' }).getAttribute('src')).toBe('/brand/logo_umd.png');
+    expect(footer.getAllByTestId('logo-text-mark').map((m) => m.textContent)).toEqual(['SNSF']);
     expect(footer.getByText(/Grant 2023\.01\/0040/).textContent).toContain('Ukrainian-Swiss Joint Research Programme');
     expect(footer.getByText(/AGPL-3\.0/)).toBeTruthy();
     expect(footer.getByRole('link', { name: 'GitHub ↗' }).getAttribute('href')).toBe('https://github.com/IPT-MMDA/DT4LC-project');

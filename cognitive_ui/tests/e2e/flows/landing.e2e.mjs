@@ -150,8 +150,9 @@ test('below the fold: tier cards, the self-running demo, the footer', guest, asy
 
     const footer = page.getByRole('contentinfo');
     await footer.scrollIntoViewIfNeeded();
-    assert.deepEqual(await footer.getByTestId('logo-text-mark').allInnerTexts(), ['UMD', 'SNSF']);
+    assert.deepEqual(await footer.getByTestId('logo-text-mark').allInnerTexts(), ['SNSF']);
     assert.equal(await footer.getByRole('img', { name: 'University of Geneva' }).evaluate((img) => img.naturalWidth > 0), true);
+    assert.equal(await footer.getByRole('img', { name: 'University of Maryland' }).evaluate((img) => img.naturalWidth > 0), true);
     await footer.getByText('Grant 2023.01/0040', { exact: false }).waitFor();
     await footer.getByText('Imagery: NASA HLS, Copernicus Sentinel-2').waitFor();
     await page.screenshot({ path: outPath('landing-footer.png') });
