@@ -185,10 +185,10 @@ references:
       - given-names: Charlotte
         family-names: Poussin
     collection-title: >-
-      IGARSS 2026 -- IEEE International Geoscience and Remote
+      IGARSS 2026 -- 2026 IEEE International Geoscience and Remote
       Sensing Symposium
     year: 2026
-    status: in-press
+    doi: "10.1109/IGARSS60577.2026.11730842"
   - type: conference-paper
     title: >-
       Hybrid-Deterministic Fallback for Dependable LLM Provider
