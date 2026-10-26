@@ -558,11 +558,13 @@ Details and examples: [`POST /v1/chat` in docs/API.md](docs/API.md#post-v1chat).
 
 ### Field Boundary Detection (Delineate-Anything)
 
-The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it:
+The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it. The binding must see numpy at build time, or it lacks `osgeo.gdal_array`, which Delineate-Anything needs to read rasters (`ReadAsArray`). So build it in the project environment, which already has numpy, with `--no-build-isolation`. Such a build takes `setuptools` and `wheel` from the environment too, and the project's uv environment does not include them, so install them first:
 
 ```bash
 sudo apt-get install libgdal-dev
-uv pip install "gdal==$(gdal-config --version)"   # or: pip install ...
+uv pip install setuptools wheel
+uv pip install --no-build-isolation "gdal==$(gdal-config --version)"   # or: pip install --no-build-isolation ...
+uv run python -c "from osgeo import gdal_array"   # fails if the binding was built without numpy
 ```
 
 The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself. In Docker the Delineate subprocess needs more shared memory than the default 64 MB `/dev/shm` and otherwise hangs until its 30-minute timeout, so `docker-compose.yml` gives the backend `shm_size: "2gb"`; pass `--shm-size=2g` when starting the image with `docker run`.
