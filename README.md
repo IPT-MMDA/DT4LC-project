@@ -4,6 +4,8 @@ A cognitive digital twin framework for land cover change detection and vegetatio
 
 It is aimed at remote sensing researchers, environmental scientists and disaster response teams who need to perform land cover analysis without building custom processing pipelines.
 
+What changed in each release: [CHANGELOG.md](CHANGELOG.md).
+
 ## Features
 
 - **Ask in plain language** - In the Workspace, one assistant message narrates one analysis: what it will do, the plan steps as they run, and a result card with the map, its legend, km² statistics and follow-up suggestions. Questions get markdown answers and never start a job.
@@ -52,36 +54,52 @@ From the browser end-to-end tests (`cognitive_ui/tests/e2e/`), on the bundled Ka
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
-│                    http://localhost (port 80)                    │
-└─────────────────────────────────────┬───────────────────────────┘
-                                      │ /v1/* (nginx proxy)
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Backend (FastAPI)                            │
-│                    http://localhost:8000                         │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Context Orchestration Engine (COE)                          ││
-│  │  • Intent Classifier (routes pipeline vs conversation)      ││
-│  │  • Context Agent (understands user intent)                  ││
-│  │  • Planner Agent (builds execution pipeline)                ││
-│  │  • Decision Agent (validates plan)                          ││
-│  └─────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Digital Twin Instance (DTI)                                 ││
-│  │  • Pipeline Executor                                        ││
-│  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
-│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────┬───────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   LLM Providers (fallback chain)                 │
-│  Gemini (fast) → Groq (ultra-fast) → Ollama (local)             │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ Frontend (React): Landing, Workspace, Map, Library,                │
+│ Result detail, Capabilities, Settings                              │
+│ http://localhost (nginx, Docker) · http://localhost:3000 (Vite)    │
+└─────────┬──────────────────────────────────────────────────────────┘
+          │ /v1/* with the session cookie
+          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Backend (FastAPI) · http://localhost:8000                          │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Sessions: a signed dt4lc_session cookie on every request       │ │
+│ │  • role: guest; member or operator after GitHub sign-in        │ │
+│ │  • an owner on each job and upload (operators see them all)    │ │
+│ │  • guest quota: 5 analyses per hour (GUEST_ANALYSES_PER_HOUR)  │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+│ POST /v1/chat ──► markdown reply (no job), or an analysis job      │
+│ POST /v1/jobs ──► job queue (SQLite) ──► COE plan ──► DTI run      │
+│ GET /v1/jobs/{id}/events ──► the job's event log as SSE            │
+│ GET /v1/capabilities ──► six tiers for this caller and server      │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Context Orchestration Engine (COE)                             │ │
+│ │  • Intent Classifier (pipeline vs conversation)                │ │
+│ │  • Context Agent (what the request needs)                      │ │
+│ │  • Planner (template; LLM planner when confidence < 0.7)       │ │
+│ │  • Plan Validator (resources, inputs, entrypoints)             │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Digital Twin Instance (DTI)                                    │ │
+│ │  • Pipeline Executor                                           │ │
+│ │  • Algorithms (indices, band math, change, classes, stats)     │ │
+│ │  • Models (Prithvi, Delineate-Anything)                        │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+└─────────┬──────────────────────────────────────────────────────────┘
+          │ LLM calls: intent, context, plan, interpretation, replies
+          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ LLM router (LLM_PROVIDER_ORDER, default strategy fallback)         │
+│ Gemini · Groq · OpenAI · Anthropic · Mistral · Ollama · Apertus    │
+│ unavailable or error ──► the next provider                         │
+│ no provider answers ──► deterministic fallbacks:                   │
+│   intent → pipeline request, context → registry triggers,          │
+│   plan → template planner, chat reply → the catalog                │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+The components, sessions, event stream and fallbacks are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick Start
 
@@ -237,49 +255,97 @@ open htmlcov/index.html
 
 ```text
 DT4LC-project/
-├── Taskfile.yml                # Task runner commands
-├── docker-compose.yml          # Docker orchestration
-├── Dockerfile                  # Backend container
-├── .env.example                # Environment template
+├── README.md                         # This file
+├── CHANGELOG.md                      # Release history
+├── CONTRIBUTING.md                   # How to contribute, branches and releases
+├── CODE_OF_CONDUCT.md                # Contributor Covenant
+├── LICENSE                           # AGPL-3.0
+├── THIRD_PARTY_LICENSES.md           # Model licences, fonts, map and imagery credits
+├── CITATION.cff                      # Citation metadata
+├── paper.md, paper.bib               # JOSS paper and its references
 │
-├── dta/                        # Digital Twin Application
-│   ├── dti/                    # Digital Twin Instance
-│   │   ├── coe/                # Context Orchestration Engine
-│   │   │   ├── llm/            # LLM providers (Gemini, Groq, Ollama)
-│   │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
-│   │   │   ├── context_agent.py
-│   │   │   ├── planner.py
-│   │   │   └── orchestrator.py
-│   │   ├── algorithms/         # NDVI, Statistics, Change Detection
-│   │   ├── models/             # Prithvi, Delineate-Anything
-│   │   └── executor.py         # Pipeline execution
-│   └── registry.yaml           # Component registry
+├── .github/                          # CI, image build and draft release, PR template
+├── .pre-commit-config.yaml           # ruff, mypy and file hygiene hooks
+├── .env.example                      # Every environment variable, commented
+├── Dockerfile                        # Backend image
+├── docker-compose.yml                # Frontend and backend; Ollama with --profile ollama
+├── docker-compose.demo.yml           # Public demo override (profile demo)
+├── deploy/                           # Files of the demo stack
+│   ├── models_init.py                # Pre-installs the model weights (models-init)
+│   └── nginx-demo.conf.template      # Demo nginx: client IP, per-IP rate limit
+├── pyproject.toml                    # Python package, extras, ruff, mypy, pytest
+├── uv.lock                           # Locked Python dependencies
+├── Taskfile.yml                      # Task runner commands
 │
-├── server/                     # FastAPI server
-│   ├── app.py                  # Main application
-│   └── schemas.py              # API schemas
+├── dta/                              # Digital Twin Application (Python package)
+│   ├── __init__.py                   # Package version
+│   ├── registry.yaml                 # Component registry: inputs, algorithms, models, triggers
+│   ├── config/                       # Paths; operator overrides of environment settings
+│   └── dti/                          # Digital Twin Instance
+│       ├── coe/                      # Context Orchestration Engine
+│       │   ├── llm/                  # LLM router and the seven providers
+│       │   ├── intent_classifier.py  # Pipeline request or conversation
+│       │   ├── conversation.py       # Conversation rules and replies
+│       │   ├── triggers.py           # Keywords and action phrases from the registry
+│       │   ├── prompt_dates.py       # Dates in the prompt pick the file
+│       │   ├── context_agent.py      # What the request needs
+│       │   ├── planner.py            # Template planner, or llm_planner.py when unsure
+│       │   ├── named_indices.py      # NDMI, NBR, SAVI, NDBI as band math
+│       │   ├── plan_validator.py     # Resource, input and entrypoint checks
+│       │   └── orchestrator.py       # Context, plan and validation for one request
+│       ├── algorithms/               # Indices, band math, change, classification, statistics
+│       ├── models/                   # Model downloads; Delineate-Anything inference
+│       ├── data_sources/             # Earth Engine collections; Planetary Computer
+│       ├── preprocessors/            # scale_to_hls for Prithvi
+│       ├── post_processing/          # Visualization, insights, analysis tools
+│       ├── executor.py               # Pipeline execution, band checks, model preparation
+│       ├── artifact_files.py         # GeoTIFF and PNG files that results reference
+│       ├── raster.py                 # Band roles from descriptions, codes or count
+│       └── registry.py, schemas.py   # Registry loader, request models; cache, metrics, …
 │
-├── cognitive_ui/               # React + TypeScript UI
-│   ├── Dockerfile              # Frontend container
-│   ├── nginx.conf              # Production nginx config
+├── server/                           # FastAPI server
+│   ├── app.py                        # App, session middleware, routers, periodic cleanup
+│   ├── routes/                       # auth, chat, files, gee, health, jobs, session, settings, tiles
+│   ├── model_routes.py               # Model list, download and delete
+│   ├── sessions.py                   # Session cookie, roles, owners, guest quota
+│   ├── github_oauth.py               # GitHub sign-in
+│   ├── jobs.py                       # Job queue and its SQLite store
+│   ├── job_events.py                 # Event names, SSE frames, failure codes and fixes
+│   ├── capabilities.py               # The capabilities document
+│   ├── library.py                    # Result cards, statistics CSV, download names
+│   ├── settings.py                   # Operator settings document and updates
+│   ├── uploads.py                    # Upload owners (sidecar files)
+│   ├── sample.py                     # The bundled sample as the caller's uploads
+│   ├── paths.py                      # Allowlist for file paths from clients
+│   ├── regions.py                    # Map regions for region jobs
+│   ├── layer_metadata_store.py       # Metadata of Earth Engine map layers
+│   ├── schemas.py                    # Request and response models
+│   ├── cli.py                        # The dt4lc-api command
+│   └── logging_config.py, utils.py   # Logging and shared helpers
+│
+├── cognitive_ui/                     # React + TypeScript UI
+│   ├── Dockerfile                    # Frontend image (nginx)
+│   ├── nginx.conf                    # Serves the UI; proxies /v1, /docs, /redoc
+│   ├── vite.config.ts                # Dev server on :3000, proxies /v1 to :8000
+│   ├── package.json                  # Scripts: dev, build, lint, typecheck, test, e2e:*
+│   ├── public/                       # Fonts, brand logos, landing images, oblast boundaries
 │   ├── src/
-│   │   ├── components/         # React components
-│   │   ├── api/                # API client
-│   │   └── store/              # Zustand state
-│   └── package.json
+│   │   ├── pages/                    # One per screen: Landing, Workspace, Library, …
+│   │   ├── components/               # shell, chat, map, library, detail, landing, settings
+│   │   ├── hooks/                    # Sending messages, job events, the sample, theme, layout
+│   │   ├── store/                    # Zustand stores: chat (conversations) and app (theme, map)
+│   │   ├── api/                      # API client, SSE reader, query hooks
+│   │   └── routes.tsx                # / and the /app routes
+│   └── tests/e2e/                    # Playwright flows on the built UI and a real API
 │
-├── tests/                      # Test suite (organized by component)
-│   ├── test_registry.py        # Component registry tests
-│   ├── test_executor.py        # Pipeline executor tests
-│   ├── test_algorithms.py      # Algorithm tests
-│   ├── test_llm_providers.py   # LLM provider tests
-│   ├── test_planner.py         # Planner tests
-│   ├── test_orchestrator.py    # Orchestration tests
-│   └── ...
-│
-├── resources/                  # Sample data (kahovka_data/)
-├── docs/                       # Development docs & architecture diagrams
-└── scripts/                    # Utility scripts
+├── docs/                             # API, architecture, developer guide, quick start, demo
+│   └── screenshots/                  # The README screenshots, from the E2E flows
+├── tests/                            # Backend tests (pytest), and the docs link check
+├── resources/kahovka_data/           # Bundled HLS L30 sample pair (Kakhovka, June 2023)
+├── scripts/
+│   ├── download_prithvi.py           # Prithvi weights into the model cache
+│   └── fetch_prithvi_v1_weights.py   # Prithvi into resources/prithvi_eo_v1_100m/
+└── examples/                         # A standalone Gemini chat call
 ```
 
 ## Configuration
@@ -444,24 +510,27 @@ The classifier uses pattern matching for clear action requests and falls back to
 
 ### Multi-Turn Conversations
 
-The system supports follow-up requests that reference previously uploaded data:
+The server keeps no conversation state. The browser keeps each conversation (in `localStorage`) and sends what the server needs with every message to `POST /v1/chat`, so a follow-up can build on earlier files and results:
 
 ```text
-User: [uploads image.tif] "Detect agricultural parcels in this area"
-→ Runs field boundary detection
-
-User: "What can we do with this data?"
-→ Returns guidance about available analyses
-
 User: "Calculate NDVI"
-→ Uses the previously uploaded image.tif automatically
+→ Asks for a GeoTIFF; the reply carries a pending request
+User: [attaches image.tif] "here"
+→ Runs the pending NDVI analysis on image.tif
+User: "Why are some fields darker than others?"
+→ A markdown answer from the LLM, which sees the history (with no
+  provider, the catalog of analyses); no job
+User: "Calculate EVI"
+→ Runs EVI on image.tif, which the browser sends again
 ```
 
-Context is kept per conversation in the browser, which sends it with each message to `POST /v1/chat`:
+The request body (`ConversationRequest` in `server/schemas.py`) has, besides the `message`:
 
-- Previous file attachments with their server paths
-- Conversation history for context-aware responses
-- Job results for reference in follow-up questions
+- `history`: the earlier turns, oldest first, as `{role, text}`. A finished analysis is one assistant turn with its intent and outcome. When the LLM answers a question, it gets the last 10 turns, each cut to 2000 characters and at most 8000 in all.
+- `attachments` (or `region`): the files or map region of the latest message that had any. The server does not remember them, so the browser sends the conversation's attachments again with each message; attaching new files or a region replaces them.
+- `pending`: the waiting request of the previous reply. A reply that asks for a file returns `pending` (`{prompt, item_id, needs, asked_at}`), and the browser sends it back with the next message. A short message such as "here" with enough files (two for a two-date analysis) or a region then runs the waiting request. A reply without `pending` clears it, and a `pending` older than 30 minutes is ignored.
+
+Details and examples: [`POST /v1/chat` in docs/API.md](docs/API.md#post-v1chat).
 
 ### Adding New Algorithms
 
@@ -491,11 +560,13 @@ Context is kept per conversation in the browser, which sends it with each messag
 
 ### Field Boundary Detection (Delineate-Anything)
 
-The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it:
+The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it. The binding must see numpy at build time, or it is built without its numpy support (`osgeo.gdal_array`). So build it in the project environment, which already has numpy, with `--no-build-isolation`. Such a build takes `setuptools` and `wheel` from the environment too, and the project's uv environment does not include them, so install them first:
 
 ```bash
 sudo apt-get install libgdal-dev
-uv pip install "gdal==$(gdal-config --version)"   # or: pip install ...
+uv pip install setuptools wheel
+uv pip install --no-build-isolation "gdal==$(gdal-config --version)"   # or: pip install --no-build-isolation ...
+uv run python -c "from osgeo import gdal_array"   # fails if the binding was built without numpy
 ```
 
 The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself. In Docker the Delineate subprocess needs more shared memory than the default 64 MB `/dev/shm` and otherwise hangs until its 30-minute timeout, so `docker-compose.yml` gives the backend `shm_size: "2gb"`; pass `--shm-size=2g` when starting the image with `docker run`.
@@ -533,6 +604,8 @@ EOF
 ```
 
 The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). `task download:prithvi` runs `scripts/download_prithvi.py`, which downloads Prithvi alone in the same way, reading `DT4LC_MODEL_CACHE` from the environment or `.env` like the server: it prints the target directory and skips the download if the model is already there. If the download fails, the script prints the error and exits 1, so the task fails. Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+Prithvi needs the six HLS bands B2-B7 and the bundled sample has B2-B6, so a Prithvi job on the sample fails with an explanation, "Prithvi needs six HLS bands (B2–B7); this file has five (B2–B6, no B7).", before any weights are downloaded (where the weights are missing and the role may not download them, the job is refused for that reason first).
 
 ## Expected Band Order
 
@@ -753,7 +826,7 @@ The pair shows the flooding after the breach. On this crop, as the app computes 
 
 The full 2906 × 1479 px scene, which the landing page's hero image shows, differs: measured with ΔNDWI > 0.3, open water grows from 32 km² to 256 km², with 428 km² gained and 43 km² lost. Those figures describe the full scene only, not the app's result on the bundled crop.
 
-The bundled crop has bands B2-B6 only, so NBR and Prithvi, which need B7, refuse it with an explanation. Attach the pair ("Try with the Kakhovka sample" on the landing page, "+ Attach the Kakhovka sample" in an empty Workspace, or `POST /v1/sample`), or upload both files, and ask, for example:
+Prithvi needs the six HLS bands B2-B7 and the bundled crop has B2-B6, so it refuses the sample with an explanation (see [Model weights](#model-weights)); NBR, which also needs B7, is refused with an explanation too. Attach the pair ("Try with the Kakhovka sample" on the landing page, "+ Attach the Kakhovka sample" in an empty Workspace, or `POST /v1/sample`), or upload both files, and ask, for example:
 
 ```text
 "Compare before and after images to detect changes"      (NDVI change, the default)
@@ -816,11 +889,22 @@ cd cognitive_ui && npm run typecheck  # tsc -b --noEmit
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details. Licences of the third-party models it downloads are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details. [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) lists the licences of the third-party models it downloads and of the self-hosted fonts, and the basemap and imagery credits the interface shows.
 
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## Contributors
+
+Besides the authors of the paper, these people contributed to DT4LC:
+
+- Roman Petrov (`pingmar`): the EVI algorithm ([#31](https://github.com/IPT-MMDA/DT4LC-project/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/DT4LC-project/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/DT4LC-project/pull/47)).
+- Kostia (`Kostia9`): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/DT4LC-project/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/DT4LC-project/pull/36)).
+- Yehor (`code1715`): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/DT4LC-project/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/DT4LC-project/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/DT4LC-project/pull/42)).
+- `NataliaGon`: Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/DT4LC-project/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/DT4LC-project/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/DT4LC-project/pull/35)), which the v0.6.0 result layers build on.
+- `nik4nd`: structured error responses ([#49](https://github.com/IPT-MMDA/DT4LC-project/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/DT4LC-project/pull/51)), which the v0.6.0 map mode builds on.
+- Hanna Yailymova (`annayailymova`): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/DT4LC-project/pull/66)) and the repository's first commit.
 
 ## Citation
 

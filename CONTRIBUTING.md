@@ -69,9 +69,15 @@ uv run mypy dta server
 ```bash
 cd cognitive_ui
 npm install
-npm run dev                 # starts on http://localhost:5173
-npm test                    # vitest
+npm run dev                 # starts on http://localhost:3000, with /v1 proxied to :8000
+npm run lint                # ESLint
+npm run typecheck           # TypeScript type check (tsc -b --noEmit)
+npm test                    # unit and component tests (vitest)
+npm run build               # production build into dist/, which the browser tests serve
+npm run e2e:smoke           # browser smoke test (Playwright) on dist/ and a real API
 ```
+
+The browser tests need the backend's Python environment (above) and a Chromium headless shell; see [cognitive_ui/tests/e2e/README.md](cognitive_ui/tests/e2e/README.md). On Linux, if the browser fails to start because shared libraries are missing (`libnss3`, `libnspr4`, `libasound2`), run `cognitive_ui/tests/e2e/setup-libs.sh`: it downloads them and extracts them into `cognitive_ui/tests/e2e/.libroot/` without root, and the test runner adds them to the browser's library path.
 
 ### Docker (full stack)
 
