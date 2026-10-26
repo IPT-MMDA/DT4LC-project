@@ -889,7 +889,7 @@ cd cognitive_ui && npm run typecheck  # tsc -b --noEmit
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details. Licences of the third-party models it downloads are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details. [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) lists the licences of the third-party models it downloads and of the self-hosted fonts, and the basemap and imagery credits the interface shows.
 
 ## Contributing
 
