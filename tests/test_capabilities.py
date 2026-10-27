@@ -357,6 +357,7 @@ def test_demo_coming_tier_is_collapsed_with_whole_descriptions(demo: dict[str, A
         "PINN-LINDA nowcasting",
         "VI forecasting DTI",
         "Runoff ensemble",
+        "Land-cover change hazard",
     ]
     assert coming["items"][3] == {
         "id": "models/runoff-ensemble",

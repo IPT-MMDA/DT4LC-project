@@ -392,3 +392,57 @@ def test_an_edited_plan_fetches_only_the_jobs_region(queue: JobQueue) -> None:
         ("input/earth-engine-before", {}, BEFORE),
         ("input/earth-engine-after", {}, AFTER),
     ]
+
+
+# --- Footprint only: a model that builds its own data from the area -----------------------------
+
+FOOTPRINT = {"name": "Area of Dnipro floodplain", "bbox": SAMPLE_BOUNDS}
+
+
+def test_a_footprint_only_plan_takes_the_regions_area_and_fetches_no_imagery(
+    ee_configured: list[dict[str, Any]],
+) -> None:
+    result = orchestrate(
+        ChatRequest(prompt="Map where land cover is most likely to change", metadata={"region": _echo()})
+    )
+    assert result["ok"], result
+    assert [(s["uses"], s["config"]) for s in result["plan"]["steps"][:2]] == [
+        ("input/region-footprint", FOOTPRINT),
+        ("models/lulc-change-hazard", {}),
+    ]
+    assert ee_configured == []
+
+
+def test_a_plan_with_an_imagery_analysis_keeps_the_fetch() -> None:
+    plan = ExecutionPlan(
+        steps=[
+            PlanStep(uses="input/file"),
+            PlanStep(uses="models/lulc-change-hazard"),
+            PlanStep(uses="algorithms/ndvi"),
+        ]
+    )
+    gee_region.inject_region_fetch(plan, _echo())
+    assert plan.steps[0].uses == "input/earth-engine"
+    # An edited footprint-only plan cannot keep a stale footprint step either: it is rewritten from the region.
+    edited = ExecutionPlan(
+        steps=[
+            PlanStep(uses="input/region-footprint", config={"name": "x", "bbox": [0.0, 0.0, 10.0, 10.0]}),
+            PlanStep(uses="models/lulc-change-hazard"),
+        ]
+    )
+    gee_region.inject_region_fetch(edited, _echo())
+    assert (edited.steps[0].uses, edited.steps[0].config) == ("input/region-footprint", FOOTPRINT)
+
+
+def test_the_footprint_is_a_tiny_raster_of_the_regions_bounds() -> None:
+    from dta.dti.data_sources import region_footprint
+
+    path = region_footprint.run(FOOTPRINT)
+    try:
+        with rasterio.open(path) as src:
+            assert src.crs.to_string() == "EPSG:4326" and (src.width, src.height) == (2, 2)
+            assert list(src.bounds) == pytest.approx(SAMPLE_BOUNDS)
+    finally:
+        os.remove(path)
+    with pytest.raises(ValueError, match="takes no dataset"):
+        region_footprint.check_config({**FOOTPRINT, "dataset": "HLS L30"})

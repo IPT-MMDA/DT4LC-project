@@ -92,6 +92,22 @@ instances:
       url: https://earthengine.google.com
       status: active
 
+  # The region's bounds only, for a plan whose analyses build their own data from the area
+  # (config region_input: footprint); swapped in by the same injection, step config {name, bbox}.
+  - id: input/region-footprint
+    kind: input
+    display_name: "Region area"
+    description: The region's bounding box as a tiny GeoTIFF; no imagery is fetched.
+    inputs: []
+    outputs: [RasterPath]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.region_footprint"
+    integration:
+      type: map-region
+      url: https://earthengine.google.com
+      status: active
+
   - id: algorithms/ndvi
     kind: algorithm
     display_name: "NDVI Calculation"
@@ -802,7 +818,7 @@ instances:
       inputs: [Area (upload or map region)]
       outputs: [Change rank, rank per transition, start class]
       time: "~1 min"
-      prompt: Where is land cover most likely to change here?
+      prompt: Map where land cover is most likely to change
       model:
         title: LULC change hazard (Ukraine)
         short: LULC change hazard
@@ -832,6 +848,9 @@ instances:
         - "predict land cover change"
         - "where will land cover change"
         - "where is land cover likely to change"
+        - "where is land cover most likely to change"
+        - "land cover most likely to change"
+        - "where land cover is most likely to change"
         - "map land cover change hazard"
     user_guide:
       capability_response: |
@@ -848,6 +867,8 @@ instances:
       args_map:
         RasterPath: "${RasterPath}"
         model_dir: "${MODEL_PATH}"
+    config:
+      region_input: footprint  # a map region needs no imagery fetch (dta.dti.data_sources.region_footprint)
 
   - id: post-processing/agent-analysis
     kind: postprocess

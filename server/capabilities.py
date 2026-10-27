@@ -192,11 +192,15 @@ def build_capabilities(
     display = (model_display_name(assistant.model) or assistant.provider) if connected else None
     builtin_items, coming_items = _ui_items()
 
-    # Models: status per model, ordered like the model-based built-in cards.
+    # Models: status per model, ordered like the model-based built-in cards. A model whose analyses are all
+    # still coming is listed with them, not here.
     step_ui = {i.model_id: _ui(i) for i in builtin_items if i.model_id}
     model_order = {i.model_id: n for n, i in enumerate(builtin_items) if i.model_id}
+    coming_only = {i.model_id for i in coming_items if i.model_id} - set(step_ui)
     models: list[dict[str, Any]] = []
     for state in sorted(states, key=lambda s: model_order.get(s["id"], len(model_order))):
+        if state["id"] in coming_only:
+            continue
         status, label = _model_status(state, role)
         ui_model = step_ui[state["id"]].model if state["id"] in step_ui else None
         models.append(

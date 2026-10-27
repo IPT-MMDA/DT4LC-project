@@ -13,6 +13,11 @@ N = :data:`CHANGE_WINDOW_DAYS` (8, one HLS L30 revisit), cut down so the windows
 apart: N = min(8, (days between the dates − 1) // 2). For 2023-06-01 → 2023-06-09 that
 is ±3 days: 2023-05-29 → 06-04 and 2023-06-06 → 06-12. Dates are inclusive.
 
+Footprint only. When every analysis step of a single-input plan builds its own data from the
+area (registry ``config: region_input: footprint``), the input becomes ``input/region-footprint``
+(:mod:`region_footprint`), which writes the region's bounds as a tiny raster and fetches nothing;
+the region's dates, dataset and bands play no part then.
+
 Datasets. The names the map offers map to the collections the existing fetchers use
 (:mod:`gee_landsat`, :mod:`gee_sentinel2`, :mod:`gee_modis`); see :data:`DATASETS`.
 The fetch covers the region's bounding box (a polygon's bounds).
@@ -39,6 +44,7 @@ CHANGE_WINDOW_DAYS = 8
 FETCH_SINGLE = "input/earth-engine"
 FETCH_BEFORE = "input/earth-engine-before"
 FETCH_AFTER = "input/earth-engine-after"
+FOOTPRINT = "input/region-footprint"
 # File input -> the fetch that replaces it for a region job.
 FETCH_FOR = {
     "input/file": FETCH_SINGLE,
@@ -47,6 +53,7 @@ FETCH_FOR = {
     FETCH_SINGLE: FETCH_SINGLE,
     FETCH_BEFORE: FETCH_BEFORE,
     FETCH_AFTER: FETCH_AFTER,
+    FOOTPRINT: FETCH_SINGLE,
 }
 CONFIG_KEYS = frozenset({"name", "dataset", "bbox", "start_date", "end_date", "bands", "cloud_max"})
 
@@ -126,23 +133,50 @@ def fetch_config(region: dict[str, Any], start: str, end: str) -> dict[str, Any]
     }
 
 
+def footprint_config(region: dict[str, Any]) -> dict[str, Any]:
+    """Step config of ``input/region-footprint``: the region's name and bounds."""
+    return {"name": f"Area of {region.get('name') or 'the region'}", "bbox": list(region["bounds"])}
+
+
+def footprint_only(plan: ExecutionPlan) -> bool:
+    """Whether every analysis (algorithm or model) step of ``plan`` takes only the area of its input."""
+    from dta.dti.registry import get_item, load_registry
+
+    reg = load_registry()
+    kinds = []
+    for step in plan.steps:
+        try:
+            item = get_item(reg, step.uses)
+        except KeyError:
+            return False
+        if item.kind in ("algorithm", "model"):
+            kinds.append(item.config.get("region_input") == "footprint")
+    return bool(kinds) and all(kinds)
+
+
 def inject_region_fetch(plan: ExecutionPlan, region: dict[str, Any]) -> ExecutionPlan:
     """Replace ``plan``'s file inputs with Earth Engine fetches of ``region`` (the job's region echo).
 
     A plan with before/after inputs gets two fetches (:func:`change_windows`); a plan with one
-    input gets one over the whole date range. Existing fetch steps get their config rewritten,
-    so an edited plan cannot fetch anything but the job's region.
+    input gets one over the whole date range, or the region's footprint when every analysis step
+    builds its own data from the area (:func:`footprint_only`). Existing fetch steps get their
+    config rewritten, so an edited plan cannot fetch anything but the job's region.
     """
     change = any(FETCH_FOR.get(s.uses) in (FETCH_BEFORE, FETCH_AFTER) for s in plan.steps)
+    footprint = not change and footprint_only(plan)
     start, end = region["start_date"], region["end_date"]
     before, after = change_windows(start, end) if change else ((start, end), (start, end))
     for step in plan.steps:
         fetch = FETCH_FOR.get(step.uses)
         if fetch is None:
             continue
+        step.binds = {}
+        if footprint:
+            step.uses = FOOTPRINT
+            step.config = footprint_config(region)
+            continue
         window = before if fetch == FETCH_BEFORE else after if fetch == FETCH_AFTER else (start, end)
         step.uses = fetch
-        step.binds = {}
         step.config = fetch_config(region, *window)
     return plan
 

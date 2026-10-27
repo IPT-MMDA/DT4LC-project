@@ -144,6 +144,11 @@ ROUTES: dict[str, dict[str, str]] = {
         "one": "models/delineate-anything@0609",
         "none": "ask:models/delineate-anything",
     },
+    "Map where land cover is most likely to change": {
+        "pair": "models/lulc-change-hazard@0609",
+        "one": "models/lulc-change-hazard@0609",
+        "none": "ask:models/lulc-change-hazard",
+    },
     # Two dates.
     "Compare water before and after the dam breach": {"pair": f"{CD}:ndwi", "none": f"ask:{CD}"},
     "Compare with NDVI change between the same dates": {"pair": f"{CD}:ndvi", "none": f"ask:{CD}"},
