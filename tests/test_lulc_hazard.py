@@ -85,9 +85,13 @@ def _booster_json(n_classes: int, n_cols: int, seed: int) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
     x = rng.normal(size=(300, n_cols)).astype(np.float32)
     y = (x[:, 0] > 0).astype(int) + (n_classes > 2) * (x[:, 1] > 0.5).astype(int)
-    m = xgb.XGBClassifier(n_estimators=5, max_depth=2, random_state=seed)
-    m.fit(x, y)
-    return json.loads(m.get_booster().save_raw("json").decode())
+    # Native API, as the runner loads it: no scikit-learn needed.
+    params = {"max_depth": 2, "seed": seed}
+    params |= (
+        {"objective": "multi:softprob", "num_class": n_classes} if n_classes > 2 else {"objective": "binary:logistic"}
+    )
+    booster = xgb.train(params, xgb.DMatrix(x, label=y), num_boost_round=5)
+    return json.loads(booster.save_raw("json").decode())
 
 
 def _bundle(columns: list[str]) -> dict[str, Any]:
