@@ -131,15 +131,16 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         github_tag="main",
     ),
     # One JSON bundle (dta/dti/models/lulc_hazard/inference.py); the repository is created when the model is exported.
-    "lulc-change-hazard-esri": ModelInfo(
-        id="lulc-change-hazard-esri",
-        name="LULC change hazard (Ukraine)",
-        description="Boosted-tree ranks of Esri land-cover change from Earth Engine features",
-        huggingface_repo="IPT-MMDA/lulc-change-hazard",
+    # Label source KPI-Ukraine (bundle target "kpi"); the runner still reads Esri bundles, none is listed.
+    "lulc-change-hazard-kpi": ModelInfo(
+        id="lulc-change-hazard-kpi",
+        name="LULC change hazard, KPI-Ukraine",
+        description="Boosted-tree ranks of KPI-Ukraine land-cover change from Earth Engine features",
+        huggingface_repo="IPT-MMDA/lulc-change-hazard-kpi",
         files=["lulc_hazard.json"],
-        size_mb=50,
+        size_mb=45,
         license="CC-BY-4.0",
-        license_url="https://huggingface.co/IPT-MMDA/lulc-change-hazard",
+        license_url="https://huggingface.co/IPT-MMDA/lulc-change-hazard-kpi",
         pip_dependencies=["xgboost>=2.0"],
     ),
 }

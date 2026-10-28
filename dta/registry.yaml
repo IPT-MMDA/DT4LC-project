@@ -815,8 +815,8 @@ instances:
       order: 5
       title: Land-cover change hazard
       description: >-
-        Where Esri land cover is most likely to change: any change, urban expansion, forest loss, cropland
-        abandonment, re-cultivation and overgrowth, each at the longest horizon it was checked for.
+        Where KPI-Ukraine land cover is most likely to change: any change, urban expansion, forest loss,
+        re-cultivation and overgrowth, each at the longest horizon it was checked for.
       inputs: [Area (upload or map region)]
       outputs: [Rank per hazard (national and within the area), start class]
       time: "~1 min"
@@ -824,13 +824,13 @@ instances:
       model:
         title: LULC change hazard (Ukraine)
         short: LULC change hazard
-        description: Per-from-class boosted trees on Esri neighbourhoods, terrain and AlphaEarth embeddings.
+        description: Per-from-class boosted trees on KPI-Ukraine neighbourhoods, terrain and AlphaEarth embeddings.
     description: |
-      Change-probability ranks for Esri land cover (8 classes) on a 30 m grid. The model is a boosted-tree
-      classifier per start class, trained on Ukrainian windows; its features (class shares of the Esri map in
-      3, 7 and 15 cell squares, elevation, slope, aspect and the 64 AlphaEarth embedding bands of the origin
-      year) are fetched from Earth Engine for the area of the input raster. The origin year is the latest
-      with both an Esri map and an AlphaEarth embedding of the area; the input's dates play no part.
+      Change-probability ranks for KPI-Ukraine land cover (C7x legend, 7 classes) on a 30 m grid. The model is
+      a boosted-tree classifier per start class, trained on Ukrainian windows; its features (class shares of
+      the KPI map in 3, 7 and 15 cell squares, elevation, slope, aspect and the 64 AlphaEarth embedding bands
+      of the origin year) are fetched from Earth Engine for the area of the input raster. The origin year is
+      the latest with both a KPI map and an AlphaEarth embedding of the area; the input's dates play no part.
     interpretation: |
       One layer per hazard in statistics.hazards, each for its own year (t0 + its horizon_years, the longest
       horizon at which the hazard beat the nulls in a backtest). Values are percentiles (0-100) of the hazard's
@@ -838,11 +838,11 @@ instances:
       than 90 % of them. The <key>_local layers rank the same score among this area's own cells (where first).
       Compare top_decile_percent with 10 % to see whether the area is more prone than the training landscape.
       Not a forecast of how much will change, and not a hazard in the disaster-risk sense.
-    keywords: [forecast, prediction, future, change, hazard, risk, transition, land-cover, lulc, esri, alphaearth,
+    keywords: [forecast, prediction, future, change, hazard, risk, transition, land-cover, lulc, kpi, alphaearth,
                deforestation, urbanisation, abandonment]
     inputs: [RasterPath]
     outputs: [ChangeHazardMap]
-    model_id: lulc-change-hazard-esri
+    model_id: lulc-change-hazard-kpi
     triggers:
       keywords: ["change hazard", "change risk", "likely to change", "urban expansion risk", "forest loss risk",
                  "abandonment risk", "cropland abandonment", "re-cultivation", "recultivation", "overgrowth risk"]
@@ -860,7 +860,7 @@ instances:
         - "where is forest loss likely"
     user_guide:
       capability_response: |
-        Yes, I can rank where Esri land cover is most likely to change, from Earth Engine features of the area
+        Yes, I can rank where KPI-Ukraine land cover is most likely to change, from Earth Engine features of the area
         (Ukraine only for now). Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
         Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll rank where land
@@ -885,8 +885,8 @@ instances:
       order: 6
       title: Land-cover forecast
       description: >-
-        The Esri land-cover map some years ahead, with the area of each class and the transition matrix: the
-        amounts follow the recent trend around the area, the model places them.
+        The KPI-Ukraine land-cover map some years ahead, with the area of each class and the transition matrix:
+        the amounts follow the recent trend around the area, the model places them.
       inputs: [Area (upload or map region)]
       outputs: [Forecast class map, class areas, transition matrix, summary]
       time: "~1 min"
@@ -896,20 +896,20 @@ instances:
         short: LULC forecast
         description: Markov trend amounts placed by the change-hazard model's probabilities.
     description: |
-      Esri land cover (8 classes, 30 m) at t0 + h, t0 the latest year with Esri and AlphaEarth data and h the
-      longest horizon at which the forecast maps passed their backtest. How much of each class changes into
-      each other class follows the latest h-year Esri pair in a 12 km square around the area (Markov trend);
-      where it changes follows the change-hazard model's probabilities, highest first.
+      KPI-Ukraine land cover (C7x legend, 7 classes, 30 m) at t0 + h, t0 the latest year with KPI and
+      AlphaEarth data and h the longest horizon at which the forecast maps passed their backtest. How much of
+      each class changes into each other class follows the latest h-year KPI pair ending by the bundle's
+      trend_last year, in a 12 km square around the area (Markov trend); where it changes follows the
+      change-hazard model's probabilities, highest first.
     interpretation: |
       statistics.summary holds sentences written from the numbers; repeat them, do not compute new ones.
       statistics.amounts is "expected" only where the backtest found the trend's amounts closer to the outcome
       than assuming no change; otherwise the amounts are a trend scenario ("if the trend continues"). The
-      placement was checked against random placement and a neighbourhood rule; amounts and placement both
-      carry Esri's year-to-year flicker.
-    keywords: [forecast, prediction, future, land-cover, lulc, esri, map, transition, matrix, scenario]
+      placement was checked against random placement and a neighbourhood rule.
+    keywords: [forecast, prediction, future, land-cover, lulc, kpi, map, transition, matrix, scenario]
     inputs: [RasterPath]
     outputs: [LandCoverForecast]
-    model_id: lulc-change-hazard-esri
+    model_id: lulc-change-hazard-kpi
     triggers:
       keywords: ["land cover forecast", "land-cover forecast", "lulc forecast", "lulc prediction",
                  "land cover prediction", "future land cover", "future land-cover"]
@@ -921,7 +921,7 @@ instances:
         - "forecast future land cover"
     user_guide:
       capability_response: |
-        Yes, I can forecast the Esri land-cover map a few years ahead for an area in Ukraine, with class areas
+        Yes, I can forecast the KPI-Ukraine land-cover map a few years ahead for an area in Ukraine, with class areas
         and a transition matrix. Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
         Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll forecast its land
@@ -945,21 +945,22 @@ instances:
       order: 7
       title: Land-cover history
       description: >-
-        How Esri land cover of an area changed since 2017: area of each class per year, the transition matrix
-        between the first and last three years, and the main changes in words.
+        How KPI-Ukraine land cover of an area changed since 2017: area of each class per year, the transition
+        matrix between the first and last three years, and the main changes in words.
       inputs: [Area (upload or map region)]
       outputs: [Class maps then and now, class areas per year, transition matrix, summary]
       time: "~30 s"
       prompt: Show how land cover changed since 2017
     description: |
-      Esri annual land cover (10 m, 3 x 3 majority to 30 m) of every year from 2017 for the area of the input
-      raster, from Earth Engine; any area Esri covers. The main comparison is between the majority class of
-      the first three years and of the last three, which damps Esri's year-to-year flicker.
+      KPI-Ukraine annual land cover (10 m, C7x legend, 3 x 3 majority to 30 m) of every year from 2017 for the
+      area of the input raster, from the Earth Engine collection kpi_ukraine_lc; Ukraine only. The main
+      comparison is between the majority class of the first three years and of the last three, which damps
+      year-to-year flicker.
     interpretation: |
       statistics.summary holds sentences written from the numbers; repeat them, do not compute new ones.
       changed_percent (between the periods) below changed_percent_single_years shows how much of a single-year
-      comparison is flicker. Observed Esri labels, not a forecast and not field-checked change.
-    keywords: [history, past, trend, land-cover, lulc, esri, transition, matrix, statistics, change]
+      comparison is flicker. Observed KPI labels, not a forecast and not field-checked change.
+    keywords: [history, past, trend, land-cover, lulc, kpi, transition, matrix, statistics, change]
     inputs: [RasterPath]
     outputs: [LandCoverHistory]
     triggers:
@@ -972,7 +973,7 @@ instances:
         - "show land cover history"
     user_guide:
       capability_response: |
-        Yes, I can show how Esri land cover of an area changed since 2017, with class areas per year and a
+        Yes, I can show how KPI-Ukraine land cover of an area changed since 2017, with class areas per year and a
         transition matrix. Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
         Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll show how its land
@@ -984,6 +985,7 @@ instances:
       function: run
       args_map:
         RasterPath: "${RasterPath}"
+        source: kpi
     config:
       region_input: footprint
 
