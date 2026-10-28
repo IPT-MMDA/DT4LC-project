@@ -109,7 +109,7 @@ function MapImage({ view, alt, contain = false }: { view: CardView; alt: string;
   return (
     <div className="relative h-[250px] bg-surface2 border-b border-border2">
       {view.base && shown && (
-        <img data-testid="result-image-base" src={resolveApiUrl(view.base.url)} alt="" aria-hidden className={cn('absolute inset-0 w-full h-full opacity-30', fit)} />
+        <img data-testid="result-image-base" src={resolveApiUrl(view.base.url)} alt="" aria-hidden className={cn('absolute inset-0 w-full h-full opacity-40 grayscale', fit)} />
       )}
       {shown ? (
         <img
@@ -379,7 +379,7 @@ export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: 
     return (
       <>
         <ClassLegend classes={view.items} />
-        {view.base && <span className="text-muted">faded: land cover now</span>}
+        {view.base && <span className="text-muted">grey: land cover now</span>}
       </>
     );
   }

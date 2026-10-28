@@ -142,7 +142,7 @@ function MapPanel({ title, meta, view, legend, height, actions }: { title: strin
       </header>
       <div className={cn('relative bg-surface2', height)}>
         {view.base && shown && (
-          <img src={resolveApiUrl(view.base.url)} alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-30" />
+          <img src={resolveApiUrl(view.base.url)} alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-40 grayscale" />
         )}
         {shown ? (
           <img data-testid="detail-image" src={resolveApiUrl(shown.url)} alt={title} className="absolute inset-0 w-full h-full object-contain" />
