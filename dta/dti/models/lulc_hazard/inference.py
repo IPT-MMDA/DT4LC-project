@@ -1,9 +1,9 @@
-"""Runners of ``models/lulc-change-hazard`` and ``models/lulc-forecast``: where and how Esri land cover may change.
+"""Runners of ``models/lulc-change-hazard`` and ``models/lulc-forecast``: where and how land cover may change.
 
 The steps take the input raster only for its footprint (an upload, or the Earth Engine composite of a region drawn
 on the map; its dates play no part), build the model's features for that footprint from Earth Engine
-(:mod:`.features`) at the origin year ``t0`` = the latest year with both an Esri map and an AlphaEarth embedding of
-the area, and apply a trained bundle.
+(:mod:`.features`) at the origin year ``t0`` = the latest year with both a label map of the bundle's ``target``
+(Esri or KPI-Ukraine, :data:`.features.SOURCES`) and an AlphaEarth embedding of the area, and apply a trained bundle.
 
 :func:`run` (hazards) writes, on a 30 m grid, per hazard group of the bundle at that group's longest checked horizon
 ``h`` (change between ``t0`` and ``t0 + h``):
@@ -11,19 +11,22 @@ the area, and apply a trained bundle.
 - ``change_rank`` (the ``any_change`` group) and ``rank_<group>``: percentile (0-100) of the group's probability
   among the training cells that could make that change (national rank);
 - ``<key>_local``: the same score ranked among the area's own cells (where in this area first);
-- ``start_class``: the Esri class at ``t0`` (1-8, :data:`.features.ESRI_CLASSES`).
+- ``start_class``: the class at ``t0`` (raster value i = the bundle's ``legend[i - 1]``).
 
-:func:`run_forecast` writes the Esri map at ``t0 + h``: the amount of each change follows the trend of the latest
+:func:`run_forecast` writes the map at ``t0 + h``: the amount of each change follows the trend of the latest
 ``h``-year pair in a 12 km square around the area (Markov), and the model places it, highest probability first
-(:mod:`.stats`). The bundle states up to which horizon this placement and these amounts were checked.
+(:mod:`.stats`). The pair ends at ``t0``, or at the bundle's ``trend_last`` year if that is earlier (a start map the
+model may read but whose change from the year before is not a trend). The bundle states up to which horizon this
+placement and these amounts were checked. Results carry the legend in ``metadata.legend``.
 
 The values are ranks, not probabilities: the probability level of this model does not carry over to a new period,
 only its ordering of cells does. A percentile of 90 means "more likely to change than 90 % of the training cells".
 
 Bundle format 2 (``<model dir>/lulc_hazard.json``)::
 
-    {"format": "dt4lc-lulc-hazard/2", "model_id", "version", "target": "esri", "legend", "columns", "t0_min",
-     "dem", "grid", "domain",                               # as in format 1, below
+    {"format": "dt4lc-lulc-hazard/2", "model_id", "version", "target": "esri" | "kpi", "legend", "columns",
+     "t0_min", "dem", "grid", "domain",                     # as in format 1, below
+     "trend_last": int,                                     # optional: the forecast's trend pair ends by this year
      "groups": {"<group>": {"title": str, "from": [classes], "to": [classes] | null}},   # null: any other class
      "horizons": {"<h>": {"pair": [y0, y1], "from_classes": {...as format 1...},
                           "reference_quantiles": {"<group>": [sorted floats]}}},
@@ -79,16 +82,7 @@ INDEX_TYPE = "change_rank"
 ANY = "any_change"
 TREND_CELLS = 400  # side of the square whose latest pair sets the forecast's amounts: 12 km, as the backtest windows
 RANK_RAMP = ("#f2efe6", "#e9c46a", "#d1773a", "#a3322a", "#5c1a1b")  # low -> high rank
-ESRI_COLOURS = {  # Esri/IO legend colours
-    "Water": "#419bdf",
-    "Trees": "#397d49",
-    "FloodedVeg": "#7a87c6",
-    "Crops": "#e49635",
-    "Built": "#c4281b",
-    "Bare": "#a59b8f",
-    "Snow": "#a8ebff",
-    "Rangeland": "#e3e2c3",
-}
+ESRI_COLOURS = features.ESRI.colours
 # One hue per hazard; its risk levels are shades of it (:func:`level_colours`).
 GROUP_COLOURS = {
     ANY: "#6a3d9a",
@@ -144,23 +138,32 @@ def _load_bundle(path: str, mtime_ns: int) -> dict[str, Any]:
     return as_format_2(bundle)
 
 
+def source_of(bundle: dict[str, Any]) -> features.LabelSource:
+    """The label source of the bundle's ``target``."""
+    source = features.SOURCES.get(bundle.get("target", ""))
+    if source is None:
+        raise BundleError(f"Bundle target must be one of {', '.join(features.SOURCES)}, not {bundle.get('target')!r}.")
+    return source
+
+
 def _check_common(bundle: dict[str, Any], keys: tuple[str, ...]) -> None:
     missing = [k for k in keys if k not in bundle]
     if missing:
         raise BundleError(f"Bundle lacks {', '.join(missing)}.")
-    if bundle.get("target") != "esri" or list(bundle.get("legend", [])) != list(features.ESRI_CLASSES):
-        raise BundleError("Bundle target must be the Esri own legend " + ", ".join(features.ESRI_CLASSES) + ".")
+    source = source_of(bundle)
+    if list(bundle.get("legend", [])) != list(source.classes):
+        raise BundleError(f"Bundle legend must be the {source.key} legend " + ", ".join(source.classes) + ".")
     try:
-        features.check_columns(bundle["columns"])
+        features.check_columns(bundle["columns"], source)
         features.check_dem(bundle.get("dem", LEGACY_DEM))
     except ValueError as e:
         raise BundleError(str(e)) from e
 
 
-def _check_from_classes(from_classes: dict[str, Any], where: str = "") -> None:
+def _check_from_classes(from_classes: dict[str, Any], names: tuple[str, ...], where: str = "") -> None:
     for name, spec in from_classes.items():
-        if name not in features.ESRI_CLASSES or any(t not in features.ESRI_CLASSES for t in spec.get("to", [])):
-            raise BundleError(f"{where}from_classes[{name!r}] names a class outside the Esri legend.")
+        if name not in names or any(t not in names for t in spec.get("to", [])):
+            raise BundleError(f"{where}from_classes[{name!r}] names a class outside the bundle's legend.")
         if len(spec.get("prior_correction", [])) != len(spec["to"]):
             raise BundleError(f"{where}from_classes[{name!r}]: prior_correction needs one value per 'to' class.")
         if spec.get("booster") is None and len(spec["to"]) != 1:
@@ -189,7 +192,7 @@ def check_bundle(bundle: dict[str, Any]) -> None:
                 "reference_quantiles",
             ),
         )
-        _check_from_classes(bundle["from_classes"])
+        _check_from_classes(bundle["from_classes"], source_of(bundle).classes)
         for k in [ANY] + [f"{a}->{b}" for a, b in bundle["transitions"]]:
             _check_quantiles(bundle["reference_quantiles"].get(k), k)
         for a, b in bundle["transitions"]:
@@ -199,13 +202,14 @@ def check_bundle(bundle: dict[str, Any]) -> None:
     if fmt != FORMAT_2:
         raise BundleError(f"Bundle format {fmt!r}; this runner reads {FORMAT!r} and {FORMAT_2!r}.")
     _check_common(bundle, ("model_id", "columns", "grid", "domain", "groups", "horizons", "served"))
+    names = source_of(bundle).classes
     for g, spec in bundle["groups"].items():
         classes = list(spec.get("from", [])) + list(spec.get("to") or [])
-        if not spec.get("from") or any(c not in features.ESRI_CLASSES for c in classes):
-            raise BundleError(f"groups[{g!r}] needs 'from' classes of the Esri legend.")
+        if not spec.get("from") or any(c not in names for c in classes):
+            raise BundleError(f"groups[{g!r}] needs 'from' classes of the bundle's legend.")
     served = bundle["served"]
     for h, hz in bundle["horizons"].items():
-        _check_from_classes(hz["from_classes"], f"horizons[{h}].")
+        _check_from_classes(hz["from_classes"], names, f"horizons[{h}].")
         for g, gh in served.get("hazards", {}).items():
             if gh and int(h) <= gh:
                 if g not in bundle["groups"]:
@@ -258,15 +262,16 @@ def _booster(model_id: str, version: str, key: str, text: str) -> Any:
 def probabilities(
     bundle: dict[str, Any], from_classes: dict[str, Any], x: np.ndarray, start: np.ndarray, key: str = ""
 ) -> np.ndarray:
-    """``(cells, 8)`` probability of each Esri class at the end of the interval; NaN rows where no model applies.
+    """``(cells, classes)`` probability of each legend class at the interval's end; NaN rows where no model applies.
 
     ``x`` is ``(cells, columns)`` in the bundle's column order, ``start`` the cells' class index (0 = no data).
     Per from-class, as in training: the booster's probabilities times ``prior_correction``, renormalised; a zero row
     means "stays".
     """
-    out = np.full((start.size, len(features.ESRI_CLASSES)), np.nan, np.float32)
+    names = source_of(bundle).classes
+    out = np.full((start.size, len(names)), np.nan, np.float32)
     for name, spec in from_classes.items():
-        idx = np.flatnonzero(start == features.ESRI_CLASSES.index(name) + 1)
+        idx = np.flatnonzero(start == names.index(name) + 1)
         if idx.size == 0:
             continue
         to = list(spec["to"])
@@ -285,9 +290,9 @@ def probabilities(
         p = p * np.asarray(spec["prior_correction"], dtype=np.float64)[None, :]
         s = p.sum(1, keepdims=True)
         p = np.where(s > 0, p / np.where(s > 0, s, 1.0), 0.0)
-        full = np.zeros((idx.size, len(features.ESRI_CLASSES)))
-        full[:, [features.ESRI_CLASSES.index(t) for t in to]] = p
-        stay = features.ESRI_CLASSES.index(name)
+        full = np.zeros((idx.size, len(names)))
+        full[:, [names.index(t) for t in to]] = p
+        stay = names.index(name)
         full[s[:, 0] == 0, stay] = 1.0
         out[idx] = full
     return out
@@ -296,14 +301,16 @@ def probabilities(
 def predict(bundle: dict[str, Any], x: np.ndarray, start: np.ndarray) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     """Format 1: per cell ``P(change)`` and ``P(from -> to)`` per bundle transition; NaN where no model applies."""
     p = probabilities(bundle, bundle["from_classes"], x, start)
-    p_change = group_score(p, start, {"from": list(bundle["from_classes"]), "to": None})
-    p_trans = {f"{a}->{b}": group_score(p, start, {"from": [a], "to": [b]}) for a, b in bundle["transitions"]}
+    names = source_of(bundle).classes
+    p_change = group_score(p, start, {"from": list(bundle["from_classes"]), "to": None}, names)
+    p_trans = {f"{a}->{b}": group_score(p, start, {"from": [a], "to": [b]}, names) for a, b in bundle["transitions"]}
     return p_change, p_trans
 
 
-def group_score(p: np.ndarray, start: np.ndarray, group: dict[str, Any]) -> np.ndarray:
+def group_score(
+    p: np.ndarray, start: np.ndarray, group: dict[str, Any], names: tuple[str, ...] = features.ESRI_CLASSES
+) -> np.ndarray:
     """Probability of the group's change per cell (NaN outside its from-classes or without a model)."""
-    names = features.ESRI_CLASSES
     out = np.full(start.shape, np.nan, np.float32)
     eligible = np.isin(start, [names.index(c) + 1 for c in group["from"]])
     rows = np.arange(start.size)
@@ -394,11 +401,12 @@ def _cube(ee: Any, bundle: dict[str, Any], grid: features.Grid, t0: int | None) 
     _check_t0(bundle, t0)
     t0_min = int(bundle.get("t0_min", features.T0_FIRST))
     need_ae = any(c in features.AE_COLUMNS for c in bundle["columns"])
+    source = source_of(bundle)
     latest = t0 is None
     if latest:
-        t0 = features.latest_t0(ee, grid, first=t0_min, need_ae=need_ae)
+        t0 = features.latest_t0(ee, grid, first=t0_min, need_ae=need_ae, source=source)
     return features.build_features(
-        grid, t0, bundle["columns"], ee=ee, check_years=not latest, dem=bundle.get("dem", LEGACY_DEM)
+        grid, t0, bundle["columns"], ee=ee, check_years=not latest, dem=bundle.get("dem", LEGACY_DEM), source=source
     )
 
 
@@ -436,6 +444,8 @@ def _skill(bundle: dict[str, Any], h: int, group: str) -> dict[str, Any] | None:
 def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[float]) -> dict[str, Any]:
     """Predict hazards on ``cube`` and save their rasters as job artifacts; returns the step result."""
     bundle = as_format_2(bundle)
+    source = source_of(bundle)
+    names = source.classes
     grid = cube.grid
     shape = (grid.ny, grid.nx)
     start = cube.start_class.ravel()
@@ -453,7 +463,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         hz = bundle["horizons"][str(h)]
         if h not in probs:
             probs[h] = probabilities(bundle, hz["from_classes"], x, start, key=str(h))
-        score = group_score(probs[h], start, bundle["groups"][g])
+        score = group_score(probs[h], start, bundle["groups"][g], names)
         key = INDEX_TYPE if g == ANY else f"rank_{g}"
         national = percentile(score, hz["reference_quantiles"][g]).reshape(shape)
         local = local_percentile(score).reshape(shape)
@@ -494,16 +504,14 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
     if not hazards:
         raise BundleError("The bundle serves no hazard.")
     rasters["start_class"] = np.where(cube.start_class > 0, cube.start_class, np.nan).astype(np.float32)
-    styles["start_class"] = artifact_files.class_style(
-        {i + 1: ESRI_COLOURS[n] for i, n in enumerate(features.ESRI_CLASSES)}
-    )
+    styles["start_class"] = artifact_files.class_style({i + 1: source.colours[n] for i, n in enumerate(names)})
 
     main = rasters[hazards[0]["raster"]]
     ranked = np.isfinite(main)
     valid = cube.start_class > 0
     shares = {
         n: round(100.0 * float((cube.start_class == i + 1).sum()) / max(int(valid.sum()), 1), 2)
-        for i, n in enumerate(features.ESRI_CLASSES)
+        for i, n in enumerate(names)
     }
     statistics = {
         "mean": float(np.nanmean(main)) if ranked.any() else None,
@@ -514,9 +522,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "cells_without_model": int((valid & ~ranked).sum()),
         "top_decile_percent": round(100.0 * float((main[ranked] >= 90).mean()), 2) if ranked.any() else None,
         "start_class_percent": shares,
-        "start_class_km2": {
-            n: stats.km2((cube.start_class == i + 1).sum()) for i, n in enumerate(features.ESRI_CLASSES)
-        },
+        "start_class_km2": {n: stats.km2((cube.start_class == i + 1).sum()) for i, n in enumerate(names)},
         "hazards": hazards,
         "summary": [
             f"{h['title']} by {h['year']}: {h['top_decile_percent']:.0f} % of the {stats.km2_text(h['eligible_km2'])} "
@@ -533,6 +539,8 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
             "model_id": bundle["model_id"],
             "version": bundle.get("version"),
             "t0": cube.t0,
+            "source": source.title,
+            "legend": list(names),
             "interval_years": h0,
             "forecast_to": cube.t0 + h0,
             "dem": bundle.get("dem", LEGACY_DEM),
@@ -561,7 +569,7 @@ def trend_grid(grid: features.Grid, cells: int = TREND_CELLS) -> features.Grid:
 
 
 def run_forecast(RasterPath: str, model_dir: str, horizon: int | None = None) -> dict[str, Any]:  # noqa: N803
-    """The Esri map ``horizon`` years after the latest year with data, for the footprint of ``RasterPath``."""
+    """The land-cover map ``horizon`` years after the latest year with data, for the footprint of ``RasterPath``."""
     bundle = load_bundle(model_dir)
     longest = int(bundle["served"].get("map") or 0)
     if longest == 0:
@@ -573,8 +581,10 @@ def run_forecast(RasterPath: str, model_dir: str, horizon: int | None = None) ->
     ee = _ee()
     cube = _cube(ee, bundle, grid, None)
     tg = trend_grid(grid)
-    pair = (cube.t0 - h, cube.t0)
-    trend = [features.build_features(tg, y, [], ee=ee, check_years=False).start_class for y in pair]
+    last = min(cube.t0, int(bundle.get("trend_last", cube.t0)))
+    pair = (last - h, last)
+    source = source_of(bundle)
+    trend = [features.build_features(tg, y, [], ee=ee, check_years=False, source=source).start_class for y in pair]
     return write_forecast(bundle, cube, h, trend, pair, tg, bbox)
 
 
@@ -588,16 +598,18 @@ def write_forecast(
     bbox: list[float],
 ) -> dict[str, Any]:
     """Allocate the trend's amounts by the model's probabilities and save the forecast map and its statistics."""
+    source = source_of(bundle)
+    names, k = source.classes, len(source.classes)
     grid = cube.grid
     shape = (grid.ny, grid.nx)
     start = cube.start_class.ravel()
     p = probabilities(
         bundle, bundle["horizons"][str(h)]["from_classes"], cube.matrix(bundle["columns"]), start, str(h)
     )
-    rate = stats.rates(stats.matrix(trend[0], trend[1]))
-    quota = stats.demand(start, rate)
+    trend_m = stats.matrix(trend[0], trend[1], k)
+    quota = stats.demand(start, stats.rates(trend_m))
     end = stats.allocate(start, quota, p, seed=cube.t0 * 100 + h).reshape(shape)
-    m = stats.matrix(cube.start_class, end)
+    m = stats.matrix(cube.start_class, end, k)
     year = cube.t0 + h
     expected = bool(bundle["served"].get("amounts_expected", {}).get(str(h)))
     longest = int(bundle["served"].get("map") or 0)
@@ -610,7 +622,7 @@ def write_forecast(
             f"Where change lands was checked in a backtest up to {longest} years ahead; how much changes is a "
             f"scenario: the {pair[0]}–{pair[1]} trend did worse than assuming no change in that backtest."
         )
-    style = artifact_files.class_style({i + 1: ESRI_COLOURS[n] for i, n in enumerate(features.ESRI_CLASSES)})
+    style = artifact_files.class_style({i + 1: source.colours[n] for i, n in enumerate(names)})
     rasters = {
         "class_start": np.where(cube.start_class > 0, cube.start_class, np.nan).astype(np.float32),
         "class_forecast": np.where(end > 0, end, np.nan).astype(np.float32),
@@ -620,19 +632,19 @@ def write_forecast(
         "t0": cube.t0,
         "year": year,
         "horizon_years": h,
-        "classes": stats.class_table(m.sum(1), m.sum(0)),
-        "matrix": stats.matrix_table(m),
+        "classes": stats.class_table(m.sum(1), m.sum(0), names),
+        "matrix": stats.matrix_table(m, names),
         "changed_percent": round(100.0 * float(m.sum() - np.trace(m)) / max(int(m.sum()), 1), 1),
         "summary_lead": lead,
-        "summary": stats.sentences(m, verb),
-        "transitions": stats.top_transitions(m),
+        "summary": stats.sentences(m, verb, names),
+        "transitions": stats.top_transitions(m, names=names),
         "changed_km2": stats.changed_km2(m),
         "checked": checked,
         "amounts": "expected" if expected else "trend scenario",
         "trend": {
             "pair": list(pair),
             "area_km2": round(trend_area.area_km2, 1),
-            "matrix": stats.matrix_table(stats.matrix(trend[0], trend[1])),
+            "matrix": stats.matrix_table(trend_m, names),
         },
     }
     result: dict[str, Any] = {
@@ -644,6 +656,8 @@ def write_forecast(
             "t0": cube.t0,
             "forecast_to": year,
             "horizon_years": h,
+            "source": source.title,
+            "legend": list(names),
             "dem": bundle.get("dem", LEGACY_DEM),
             "method": "amounts: Markov trend of the latest pair of the same length in a 12 km square around the area; "
             "placement: the model's probabilities, highest first",

@@ -4,10 +4,12 @@ Builds, for a bounding box and an origin year ``t0``, the per-cell features the 
 grid, with the recipes of the training data (the ``ukr-lulc`` dataset: v1.0 chips and the ext1 30 m layers), so
 that a model trained on that data sees the same numbers here:
 
-- ``start_class`` (not a feature: it selects the per-from-class model): Esri/IO annual LULC of ``t0`` at 10 m in
-  its own legend (:data:`ESRI_CLASSES`, clouds = no data), 3 x 3 block mode to 30 m, no data ignored, ties to the
-  centre pixel's class, else the lowest class index.
-- ``esri_nbr{3,7,15}_<class>``: share of each class among the valid 30 m cells of the r x r square around a cell.
+- ``start_class`` (not a feature: it selects the per-from-class model): the label map of ``t0`` at 10 m in the label
+  source's legend, 3 x 3 block mode to 30 m, no data ignored, ties to the centre pixel's class, else the lowest class
+  index. Two label sources (:data:`SOURCES`): Esri/IO annual LULC in its own legend (:data:`ESRI_CLASSES`, clouds = no
+  data), and the KPI-Ukraine national maps (:data:`KPI_ASSET`, raw codes) in the C7x legend (:data:`KPI_CLASSES`).
+- ``<source>_nbr{3,7,15}_<class>`` (``esri_nbr*``, ``kpi_nbr*``): share of each class among the valid 30 m cells of the
+  r x r square around a cell.
 - ``elevation_m``, ``slope_deg``: Copernicus GLO-30 bilinear to 10 m (slope: ``ee.Terrain.slope`` on the 30 m grid,
   then bilinear to 10 m), 3 x 3 block mean. ``aspect_sin_east``, ``aspect_cos_north``: the downslope direction from
   the gradient of the 30 m elevation. The DEM release is chosen by key (:data:`DEM_ASSETS`): ``glo30_2024_1`` by
@@ -22,13 +24,13 @@ the caller does (``dta.dti.data_sources.gee_common.initialize_gee``, or ``ee.Ini
 
     python -m dta.dti.models.lulc_hazard.features --bbox 30.40 50.35 30.55 50.45 --out cube.npz [--t0 2024]
 
-Without ``--t0`` the CLI, like the runner, uses the latest year with both an Esri map and an AlphaEarth embedding
+Without ``--t0`` the CLI, like the runner, uses the latest year with both a label map and an AlphaEarth embedding
 (:func:`latest_t0`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 import io
@@ -43,7 +45,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 RES = 30.0  # model grid, metres
-FINE = 10.0  # grid of the 10 m inputs (Esri, DEM): 3 x 3 cells per model cell
+FINE = 10.0  # grid of the 10 m inputs (label maps, DEM): 3 x 3 cells per model cell
 HALO = 20  # cells around the core; >= the largest neighbourhood radius (7) and the training chips' halo
 RADII = (3, 7, 15)  # neighbourhood square side, in 30 m cells
 NODATA = -9999.0
@@ -55,22 +57,112 @@ ESRI_LUT = np.zeros(256, np.uint8)  # Esri code -> class index; 0 (no data) for 
 for _code, _name in _ESRI_CODES.items():
     ESRI_LUT[_code] = ESRI_CLASSES.index(_name) + 1
 
+# KPI-Ukraine national maps 2016-2025, one image per year (property ``year``), band ``b1`` = raw codes; lulc-minimal
+# ``analyses/2026-10-28_kpi-ee-asset``. C7x legend: class 20 (Not cultivated) and Grape are Crop; forest, gardens /
+# low trees, damaged forest and nut trees are Tree. Codes 24-30 exist only in 2025 (the 2025 SummerMap's own list).
+KPI_ASSET = "projects/poetic-centaur-266514/assets/kpi_ukraine_lc"
+KPI_CLASSES = ("Crop", "Grass", "Tree", "Built", "Water", "Wetland", "Bare")  # index 1..7
+_KPI_CODES = {
+    **dict.fromkeys((2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 19, 20, 21, 22, 24, 27, 30), "Crop"),
+    11: "Grass",
+    **dict.fromkeys((10, 18, 23, 25, 26), "Tree"),
+    1: "Built",
+    13: "Water",
+    14: "Wetland",
+    12: "Bare",
+}
+KPI_LUT = np.zeros(256, np.uint8)  # KPI code -> class index; 0 (no data) for code 0 and anything unlisted
+for _code, _name in _KPI_CODES.items():
+    KPI_LUT[_code] = KPI_CLASSES.index(_name) + 1
+
 DEM_ASSETS = {
     "glo30_2024_1": "COPERNICUS/DEM/GLO30_2024_1",
     "glo30": "COPERNICUS/DEM/GLO30",  # deprecated in Earth Engine; dataset v1.0 (and its cube) used it
 }
 DEM_DEFAULT = "glo30_2024_1"
-T0_FIRST = 2017  # first year with both Esri and AlphaEarth
+T0_FIRST = 2017  # first year with both a label map and AlphaEarth
 AE_ASSET = "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
 AE_BANDS = tuple(f"A{i:02d}" for i in range(64))
 
-NBR_COLUMNS = tuple(f"esri_nbr{r}_{c}" for r in RADII for c in ESRI_CLASSES)
 TERRAIN_COLUMNS = ("elevation_m", "slope_deg", "aspect_sin_east", "aspect_cos_north")
 AE_COLUMNS = tuple(f"ae_{b}" for b in AE_BANDS)
-COLUMNS = NBR_COLUMNS + TERRAIN_COLUMNS + AE_COLUMNS
 
 THREADS = 4  # concurrent computePixels requests
-TILE = {"esri": 1024, "dem": 1024, "ae": 256}  # tile side in pixels: each response stays well under 48 MB
+TILE = {"labels": 1024, "dem": 1024, "ae": 256}  # tile side in pixels: each response stays well under 48 MB
+
+
+@dataclass(frozen=True)
+class LabelSource:
+    """A land-cover product the model reads its start class and neighbourhood shares from."""
+
+    key: str  # the bundle's ``target``; prefix of the neighbourhood columns
+    title: str
+    classes: tuple[str, ...]  # raster value i = classes[i - 1]; 0 = no data
+    lut: np.ndarray  # raw code -> class index
+    colours: dict[str, str]
+    collection: Callable[[Any, int], Any]  # (ee, year) -> the source's images of that year
+
+    @property
+    def nbr_columns(self) -> tuple[str, ...]:
+        return tuple(f"{self.key}_nbr{r}_{c}" for r in RADII for c in self.classes)
+
+    @property
+    def columns(self) -> tuple[str, ...]:
+        return self.nbr_columns + TERRAIN_COLUMNS + AE_COLUMNS
+
+
+def esri_collection(ee: Any, year: int) -> Any:
+    """Esri/IO tiles of ``year`` (2017-2024 assets end in ``_<year>``; 2025 assets are ``<tile>_<year>0101-...``)."""
+    return ee.ImageCollection(ESRI_ASSET).filter(
+        ee.Filter.Or(
+            ee.Filter.stringEndsWith("system:index", f"_{year}"),
+            ee.Filter.stringContains("system:index", f"_{year}0101-"),
+        )
+    )
+
+
+def kpi_collection(ee: Any, year: int) -> Any:
+    return ee.ImageCollection(KPI_ASSET).filter(ee.Filter.eq("year", year))
+
+
+ESRI = LabelSource(
+    "esri",
+    "Esri/Impact Observatory annual land cover (10 m)",
+    ESRI_CLASSES,
+    ESRI_LUT,
+    {  # Esri/IO legend colours
+        "Water": "#419bdf",
+        "Trees": "#397d49",
+        "FloodedVeg": "#7a87c6",
+        "Crops": "#e49635",
+        "Built": "#c4281b",
+        "Bare": "#a59b8f",
+        "Snow": "#a8ebff",
+        "Rangeland": "#e3e2c3",
+    },
+    esri_collection,
+)
+KPI = LabelSource(
+    "kpi",
+    "KPI-Ukraine national land cover (10 m), C7x legend",
+    KPI_CLASSES,
+    KPI_LUT,
+    {  # the Esri colours of the same kinds of cover, so both models read alike
+        "Crop": "#e49635",
+        "Grass": "#e3e2c3",
+        "Tree": "#397d49",
+        "Built": "#c4281b",
+        "Water": "#419bdf",
+        "Wetland": "#7a87c6",
+        "Bare": "#a59b8f",
+    },
+    kpi_collection,
+)
+SOURCES = {s.key: s for s in (ESRI, KPI)}
+LABEL_NAMES = {"esri": "Esri", "kpi": "KPI-Ukraine"}  # short names for messages
+
+NBR_COLUMNS = ESRI.nbr_columns
+COLUMNS = ESRI.columns
 
 
 class FeatureUnavailableError(RuntimeError):
@@ -297,23 +389,14 @@ def _rect(ee: Any, grid: Grid) -> Any:
     )
 
 
-def esri_collection(ee: Any, year: int) -> Any:
-    """Esri/IO tiles of ``year`` (2017-2024 assets end in ``_<year>``; 2025 assets are ``<tile>_<year>0101-...``)."""
-    return ee.ImageCollection(ESRI_ASSET).filter(
-        ee.Filter.Or(
-            ee.Filter.stringEndsWith("system:index", f"_{year}"),
-            ee.Filter.stringContains("system:index", f"_{year}0101-"),
-        )
-    )
-
-
 def ae_collection(ee: Any, year: int) -> Any:
     return ee.ImageCollection(AE_ASSET).filterDate(f"{year}-01-01", f"{year + 1}-01-01")
 
 
-def esri_image(ee: Any, grid: Grid, year: int) -> Any:
+def label_image(ee: Any, grid: Grid, year: int, source: LabelSource = ESRI) -> Any:
     fine = ee.Projection(grid.crs, [FINE, 0, grid.x0, 0, -FINE, grid.y0])
-    return esri_collection(ee, year).filterBounds(_rect(ee, grid)).mosaic().setDefaultProjection(fine).select(["b1"])
+    images = source.collection(ee, year).filterBounds(_rect(ee, grid))
+    return images.mosaic().setDefaultProjection(fine).select(["b1"])
 
 
 def check_dem(dem: str) -> str:
@@ -342,29 +425,36 @@ def ae_image(ee: Any, grid: Grid, year: int) -> Any:
     return img10.reduceResolution(reducer=ee.Reducer.mean(), maxPixels=64)
 
 
-def available_years(ee: Any, grid: Grid, years: Iterable[int]) -> dict[str, list[int]]:
-    """Years of ``years`` with Esri tiles and with AlphaEarth images over ``grid`` (one Earth Engine call)."""
+def available_years(ee: Any, grid: Grid, years: Iterable[int], source: LabelSource = ESRI) -> dict[str, list[int]]:
+    """Years of ``years`` with label maps (``labels``) and AlphaEarth images over ``grid`` (one Earth Engine call)."""
     rect = _rect(ee, grid)
     years = list(years)
     sizes = ee.Dictionary(
         {
-            **{f"esri_{y}": esri_collection(ee, y).filterBounds(rect).size() for y in years},
+            **{f"labels_{y}": source.collection(ee, y).filterBounds(rect).size() for y in years},
             **{f"ae_{y}": ae_collection(ee, y).filterBounds(rect).size() for y in years},
         }
     ).getInfo()
-    return {p: [y for y in years if sizes[f"{p}_{y}"] > 0] for p in ("esri", "ae")}
+    return {p: [y for y in years if sizes[f"{p}_{y}"] > 0] for p in ("labels", "ae")}
 
 
-def latest_t0(ee: Any, grid: Grid, first: int = T0_FIRST, last: int | None = None, need_ae: bool = True) -> int:
-    """The latest year in ``first`` .. ``last`` (default: this year) with an Esri map (and an AlphaEarth embedding)."""
+def latest_t0(
+    ee: Any,
+    grid: Grid,
+    first: int = T0_FIRST,
+    last: int | None = None,
+    need_ae: bool = True,
+    source: LabelSource = ESRI,
+) -> int:
+    """The latest year in ``first`` .. ``last`` (default: this year) with a label map (and an AlphaEarth embedding)."""
     import datetime
 
     last = last or datetime.date.today().year
-    have = available_years(ee, grid, range(first, last + 1))
-    years = set(have["esri"]) & set(have["ae"]) if need_ae else set(have["esri"])
+    have = available_years(ee, grid, range(first, last + 1), source)
+    years = set(have["labels"]) & set(have["ae"]) if need_ae else set(have["labels"])
     if not years:
         raise FeatureUnavailableError(
-            f"Earth Engine has no Esri map{' with an AlphaEarth embedding' if need_ae else ''} "
+            f"Earth Engine has no {LABEL_NAMES[source.key]} map{' with an AlphaEarth embedding' if need_ae else ''} "
             f"of this area for {first}-{last}."
         )
     return max(years)
@@ -379,23 +469,24 @@ class FeatureCube:
 
     grid: Grid
     t0: int
-    start_class: np.ndarray  # (ny, nx) uint8: 0 = no data, i = ESRI_CLASSES[i - 1]
+    start_class: np.ndarray  # (ny, nx) uint8: 0 = no data, i = source.classes[i - 1]
     features: dict[str, np.ndarray] = field(default_factory=dict)  # name -> (ny, nx) float32
     seconds: dict[str, float] = field(default_factory=dict)  # wall time per input
+    source: LabelSource = ESRI
 
     def matrix(self, columns: Sequence[str]) -> np.ndarray:
         """``(ny * nx, len(columns))`` float32, row-major cells, NaN where an input is missing."""
         return np.stack([self.features[c].ravel() for c in columns], axis=1).astype(np.float32, copy=False)
 
 
-def check_columns(columns: Iterable[str]) -> list[str]:
-    """``columns`` as a list; ValueError naming any this builder does not make."""
+def check_columns(columns: Iterable[str], source: LabelSource = ESRI) -> list[str]:
+    """``columns`` as a list; ValueError naming any this builder does not make from ``source``."""
     columns = list(columns)
-    unknown = [c for c in columns if c not in COLUMNS]
+    unknown = [c for c in columns if c not in source.columns]
     if unknown:
         raise ValueError(
-            f"The feature builder makes no {', '.join(unknown)}; it makes {len(COLUMNS)} columns "
-            f"(esri_nbr*, terrain, ae_A00..ae_A63)."
+            f"The feature builder makes no {', '.join(unknown)}; from {source.key} it makes {len(source.columns)} "
+            f"columns ({source.key}_nbr*, terrain, ae_A00..ae_A63)."
         )
     return columns
 
@@ -407,36 +498,37 @@ def build_features(
     ee: Any = None,
     check_years: bool = True,
     dem: str = DEM_DEFAULT,
+    source: LabelSource = ESRI,
 ) -> FeatureCube:
-    """Features of ``columns`` at ``t0`` on ``grid`` (Earth Engine must be initialised)."""
+    """Features of ``columns`` at ``t0`` on ``grid`` from the ``source`` map (Earth Engine must be initialised)."""
     if ee is None:
         import ee as ee_module
 
         ee = ee_module
-    columns = check_columns(columns)
+    columns = check_columns(columns, source)
     check_dem(dem)
     need_ae = any(c in AE_COLUMNS for c in columns)
     need_dem = any(c in TERRAIN_COLUMNS for c in columns)
     if check_years:
-        have = available_years(ee, grid, [t0])
-        if t0 not in have["esri"]:
-            raise FeatureUnavailableError(f"Esri land cover has no {t0} map of this area.")
+        have = available_years(ee, grid, [t0], source)
+        if t0 not in have["labels"]:
+            raise FeatureUnavailableError(f"{source.title} has no {t0} map of this area.")
         if need_ae and t0 not in have["ae"]:
             raise FeatureUnavailableError(f"AlphaEarth has no {t0} embedding of this area.")
 
-    cube = FeatureCube(grid, t0, np.zeros((grid.ny, grid.nx), np.uint8))
+    cube = FeatureCube(grid, t0, np.zeros((grid.ny, grid.nx), np.uint8), source=source)
     core = grid.core
 
     t = time.time()
-    codes = pull(ee, esri_image(ee, grid, t0), ["b1"], grid, FINE, TILE["esri"], nodata=0)[0]
+    codes = pull(ee, label_image(ee, grid, t0, source), ["b1"], grid, FINE, TILE["labels"], nodata=0)[0]
     codes = np.nan_to_num(codes, nan=0).astype(np.uint8)
-    cls = mode3(ESRI_LUT[codes], len(ESRI_CLASSES))
+    cls = mode3(source.lut[codes], len(source.classes))
     cube.start_class = cls[core].copy()
-    if any(c in NBR_COLUMNS for c in columns):
-        for r, shares in neighbourhood_shares(cls).items():
-            for i, name in enumerate(ESRI_CLASSES):
-                cube.features[f"esri_nbr{r}_{name}"] = shares[i][core]
-    cube.seconds["esri"] = round(time.time() - t, 1)
+    if any(c in source.nbr_columns for c in columns):
+        for r, shares in neighbourhood_shares(cls, k=len(source.classes)).items():
+            for i, name in enumerate(source.classes):
+                cube.features[f"{source.key}_nbr{r}_{name}"] = shares[i][core]
+    cube.seconds[source.key] = round(time.time() - t, 1)
 
     if need_dem:
         t = time.time()
@@ -479,7 +571,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--bbox", nargs=4, type=float, required=True, metavar=("W", "S", "E", "N"))
-    ap.add_argument("--t0", type=int, help="origin year (default: the latest with Esri and AlphaEarth)")
+    ap.add_argument("--t0", type=int, help="origin year (default: the latest with a label map and AlphaEarth)")
+    ap.add_argument("--source", choices=list(SOURCES), default="esri")
     ap.add_argument("--crs", default="auto")
     ap.add_argument("--origin", nargs=2, type=float, default=(0.0, 0.0))
     ap.add_argument("--dem", choices=list(DEM_ASSETS), default=DEM_DEFAULT)
@@ -490,8 +583,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ee.Initialize(project=a.project)
     grid = grid_for_bbox(a.bbox, a.crs, a.origin)
-    t0 = a.t0 or latest_t0(ee, grid)
-    cube = build_features(grid, t0, ee=ee, check_years=a.t0 is not None, dem=a.dem)
+    source = SOURCES[a.source]
+    t0 = a.t0 or latest_t0(ee, grid, source=source)
+    cube = build_features(grid, t0, source.columns, ee=ee, check_years=a.t0 is not None, dem=a.dem, source=source)
     save_npz(cube, a.out)
     print(f"{a.out}: t0 {t0}, {grid.nx} x {grid.ny} cells, {len(cube.features)} columns, {cube.seconds}")
     return 0

@@ -1,19 +1,22 @@
 """Class amounts, transition matrices, Markov demand, allocation and the sentences that describe them.
 
-Pure functions on Esri class-index rasters (0 = no data, i = ``features.ESRI_CLASSES[i - 1]``). The allocation is the
+Pure functions on class-index rasters (0 = no data, i = ``names[i - 1]``; ``names`` defaults to the Esri legend,
+:data:`.features.ESRI_CLASSES`). The allocation is the
 one of the DT4LC horizon backtest (lulc-minimal ``analyses/2026-10-28_dt-forecast-horizons``, ``f2_evaluate.py``):
 per from-class, (cell, target) pairs by score, descending, while the target's quota is open.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 
 from . import features
 
-K = len(features.ESRI_CLASSES)
+ESRI = features.ESRI_CLASSES
+K = len(ESRI)
 CELL_KM2 = features.RES * features.RES / 1e6  # km² per 30 m cell (0.0009)
 MIN_SHARE = 0.01  # a class below 1 % of the area gets no sentence
 MIN_NET_AREA = 0.01  # a net change below 1 % of the area ...
@@ -21,21 +24,21 @@ MIN_NET_CLASS = 0.05  # ... and below 5 % of the class is not worth a sentence
 MAX_SENTENCES = 4
 
 
-def counts(cls: np.ndarray) -> np.ndarray:
-    """``(K,)`` cells per class (no data ignored)."""
-    return np.bincount(cls[cls > 0].ravel(), minlength=K + 1)[1:]
+def counts(cls: np.ndarray, k: int = K) -> np.ndarray:
+    """``(k,)`` cells per class (no data ignored)."""
+    return np.bincount(cls[cls > 0].ravel(), minlength=k + 1)[1 : k + 1]
 
 
-def matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """``(K, K)`` cells per (class at the first date, class at the second), cells with data at both dates."""
+def matrix(a: np.ndarray, b: np.ndarray, k: int = K) -> np.ndarray:
+    """``(k, k)`` cells per (class at the first date, class at the second), cells with data at both dates."""
     ok = (a > 0) & (b > 0)
-    m = np.bincount((a[ok].astype(np.int64) - 1) * K + (b[ok] - 1), minlength=K * K)
-    return m.reshape(K, K)
+    m = np.bincount((a[ok].astype(np.int64) - 1) * k + (b[ok] - 1), minlength=k * k)
+    return m.reshape(k, k)
 
 
-def majority(stack: np.ndarray) -> np.ndarray:
+def majority(stack: np.ndarray, k: int = K) -> np.ndarray:
     """Per cell, the most frequent class of ``stack`` (years, ...); ties go to the latest year's class."""
-    cnt = np.stack([(stack == c).sum(0) for c in range(1, K + 1)])
+    cnt = np.stack([(stack == c).sum(0) for c in range(1, k + 1)])
     best = cnt.max(0)
     out = np.zeros(stack.shape[1:], np.uint8)
     for y in range(stack.shape[0]):  # later years overwrite: ties go to the latest
@@ -60,13 +63,14 @@ def largest_remainder(x: np.ndarray, total: int) -> np.ndarray:
 
 
 def demand(start: np.ndarray, rate: np.ndarray) -> np.ndarray:
-    """``(K, K)`` cells moving a -> b: each class's cells in ``start`` split by its row of ``rate``.
+    """``(k, k)`` cells moving a -> b: each class's cells in ``start`` split by its row of ``rate`` (k x k).
 
     A class whose row is empty (absent from the trend pair) keeps all its cells.
     """
-    n = counts(start)
-    q = np.zeros((K, K), int)
-    for a in range(K):
+    k = rate.shape[0]
+    n = counts(start, k)
+    q = np.zeros((k, k), int)
+    for a in range(k):
         if n[a] == 0:
             continue
         if rate[a].sum() > 0:
@@ -77,20 +81,21 @@ def demand(start: np.ndarray, rate: np.ndarray) -> np.ndarray:
 
 
 def allocate(start: np.ndarray, quota: np.ndarray, score: np.ndarray, seed: int = 0) -> np.ndarray:
-    """The class map after the change ``quota`` (K x K cells) placed by ``score`` (cells, K): highest first.
+    """The class map after the change ``quota`` (k x k cells) placed by ``score`` (cells, k): highest first.
 
     ``start`` is a flat class-index array (0 = no data, left as is). Ties in score are broken by a seeded draw.
     """
+    k = quota.shape[0]
     rng = np.random.default_rng(seed)
     out = start.copy()
-    for a in range(1, K + 1):
+    for a in range(1, k + 1):
         idx = np.flatnonzero(start == a)
         q = quota[a - 1].copy()
         q[a - 1] = 0
         if idx.size == 0 or q.sum() == 0:
             continue
-        b = np.tile(np.arange(1, K + 1), idx.size)
-        cell = np.repeat(idx, K)
+        b = np.tile(np.arange(1, k + 1), idx.size)
+        cell = np.repeat(idx, k)
         sc = np.nan_to_num(score[idx].ravel().astype(np.float64), nan=-1.0)
         keep = b != a
         b, cell, sc = b[keep], cell[keep], sc[keep]
@@ -105,10 +110,10 @@ def allocate(start: np.ndarray, quota: np.ndarray, score: np.ndarray, seed: int 
     return out
 
 
-def matrix_table(m: np.ndarray) -> dict[str, Any]:
+def matrix_table(m: np.ndarray, names: Sequence[str] = ESRI) -> dict[str, Any]:
     """A transition matrix for the result: class names, km², and each row's shares in %."""
-    names = list(features.ESRI_CLASSES)
-    keep = [i for i in range(K) if m[i].sum() or m[:, i].sum()]
+    names = list(names)
+    keep = [i for i in range(len(names)) if m[i].sum() or m[:, i].sum()]
     rows = m[np.ix_(keep, keep)]
     return {
         "classes": [names[i] for i in keep],
@@ -117,10 +122,10 @@ def matrix_table(m: np.ndarray) -> dict[str, Any]:
     }
 
 
-def class_table(before: np.ndarray, after: np.ndarray) -> list[dict[str, Any]]:
+def class_table(before: np.ndarray, after: np.ndarray, names: Sequence[str] = ESRI) -> list[dict[str, Any]]:
     """Per class present at either date: km² before and after, change in km² and in %."""
     out = []
-    for i, name in enumerate(features.ESRI_CLASSES):
+    for i, name in enumerate(names):
         if before[i] == 0 and after[i] == 0:
             continue
         d = int(after[i]) - int(before[i])
@@ -155,7 +160,7 @@ def km2_text(value: float) -> str:
     return f"{text} km²"
 
 
-def sentences(m: np.ndarray, verb: str) -> list[str]:
+def sentences(m: np.ndarray, verb: str, names: Sequence[str] = ESRI) -> list[str]:
     """Plain sentences for the class changes of transition matrix ``m`` (cells) worth reading.
 
     ``verb`` is "decreased" style past or "would decrease" style future; the caller states the period or the
@@ -175,14 +180,14 @@ def sentences(m: np.ndarray, verb: str) -> list[str]:
             continue
         if abs(net[i]) < MIN_NET_AREA * total and abs(net[i]) < MIN_NET_CLASS * max(before[i], 1):
             continue
-        name = features.ESRI_CLASSES[i]
+        name = names[i]
         down = net[i] < 0
         flows = m[i].copy() if down else m[:, i].copy()
         flows[i] = 0
         j = int(np.argmax(flows))
         word = verb.format(dir="decrease" if down else "increase", past="decreased" if down else "increased")
         flow = "loss is to" if down else "gain is from"
-        main = f"; its largest {flow} {features.ESRI_CLASSES[j]} ({_area(flows[j])})" if flows[j] > 0 else ""
+        main = f"; its largest {flow} {names[j]} ({_area(flows[j])})" if flows[j] > 0 else ""
         if before[i]:
             pct = 100.0 * abs(net[i]) / before[i]
             out.append(f"{name} {word} by {pct:.0f} % (net {_area(abs(net[i]))}){main}.")
@@ -194,19 +199,19 @@ def sentences(m: np.ndarray, verb: str) -> list[str]:
     return out
 
 
-def top_transitions(m: np.ndarray, n: int = 5) -> list[dict[str, Any]]:
+def top_transitions(m: np.ndarray, n: int = 5, names: Sequence[str] = ESRI) -> list[dict[str, Any]]:
     """The ``n`` largest class-to-class flows of ``m`` (cells): from, to, km² and the share of the from-class."""
     off = m.astype(float).copy()
     np.fill_diagonal(off, 0)
     out = []
     for k in np.argsort(-off, axis=None, kind="stable")[:n]:
-        a, b = divmod(int(k), K)
+        a, b = divmod(int(k), len(names))
         if off[a, b] <= 0:
             break
         out.append(
             {
-                "from": features.ESRI_CLASSES[a],
-                "to": features.ESRI_CLASSES[b],
+                "from": names[a],
+                "to": names[b],
                 "km2": km2(off[a, b]),
                 "percent_of_from": round(100.0 * off[a, b] / max(int(m[a].sum()), 1), 1),
             }

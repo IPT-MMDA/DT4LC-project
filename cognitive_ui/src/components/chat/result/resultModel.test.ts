@@ -496,6 +496,28 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.tables[1].rows[1].cells[0]).toBe('·');
   });
 
+  it('forecast from the KPI model: class names and colours follow metadata.legend, the source names KPI', () => {
+    const kpi = { kind: 'class', classes: { '1': '#e49635', '2': '#e3e2c3', '3': '#397d49', '4': '#c4281b' } };
+    const c = card(jobOf('LandCoverForecast', {
+      statistics: {
+        t0: 2025, year: 2028, horizon_years: 3, changed_percent: 2, changed_km2: 1, amounts: 'trend scenario',
+        transitions: [{ from: 'Grass', to: 'Tree', km2: 0.5, percent_of_from: 4 }],
+        classes: [{ class: 'Tree', before_km2: 3, after_km2: 3.5, change_km2: 0.5, change_percent: 16.7 }],
+        matrix: { classes: ['Grass', 'Tree'], km2: [[2, 0.5], [0, 3]], row_percent: [[80, 20], [0, 100]] },
+        trend: { pair: [2021, 2024], area_km2: 144, matrix: { classes: ['Grass'], km2: [[10]], row_percent: [[100]] } },
+      },
+      metadata: { legend: ['Crop', 'Grass', 'Tree', 'Built', 'Water', 'Wetland', 'Bare'], source: 'KPI-Ukraine national land cover (10 m), C7x legend' },
+      visualizations: { class_forecast_map_bare: ref('f', kpi), changed_map_bare: ref('c', kpi), class_start_map_bare: ref('s', kpi) },
+      rasters: { class_forecast: tif('f'), changed: tif('c'), class_start: tif('s') },
+    }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.source).toBe('KPI-Ukraine land cover, AlphaEarth and terrain from Earth Engine');
+    expect(c.transitions[0]).toMatchObject({ from: 'Grass', to: 'Tree', fromColour: '#e3e2c3', toColour: '#397d49' });
+    expect(c.classes).toEqual([{ name: 'Tree', colour: '#397d49', value: '3.50 km²' }]);
+    expect(c.views[2].legend?.kind === 'change' && c.views[2].legend.classes.map((x) => x.label)).toEqual(['Crop', 'Grass', 'Tree', 'Built']);
+    expect(c.tables[2].rows[0].label).toBe('Grass');
+  });
+
   it('history: periods in the title, area per year in km², an older job in hectares too', () => {
     const base = {
       years: [2017, 2018], periods: { start: [2017, 2019], end: [2023, 2025] },

@@ -258,12 +258,12 @@ def test_bundle_dem_defaults_to_the_v1_release_and_unknown_ones_are_refused() ->
 
 
 def test_latest_t0_is_the_newest_year_with_both_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
-    have = {"esri": [2017, 2024, 2025], "ae": [2017, 2024]}
-    monkeypatch.setattr(features, "available_years", lambda ee, grid, years: have)
+    have = {"labels": [2017, 2024, 2025], "ae": [2017, 2024]}
+    monkeypatch.setattr(features, "available_years", lambda ee, grid, years, source=features.ESRI: have)
     grid = features.Grid("EPSG:32636", 0, 0, 1, 1)
     assert features.latest_t0(None, grid, last=2026) == 2024
     assert features.latest_t0(None, grid, last=2026, need_ae=False) == 2025
-    have = {"esri": [2025], "ae": [2024]}
+    have = {"labels": [2025], "ae": [2024]}
     with pytest.raises(features.FeatureUnavailableError, match="AlphaEarth"):
         features.latest_t0(None, grid, last=2026)
 
@@ -514,3 +514,117 @@ def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path)
         assert src.tags()["DT4LC_KIND"] == "class"
     n = np.isfinite(level).sum()
     assert sum(lv["km2"] for lv in forest["levels"]) == pytest.approx(n * stats.CELL_KM2)
+
+
+# ----------------------------------------------------------------- label sources
+
+
+def test_kpi_codes_map_to_the_c7x_legend() -> None:
+    lut, names = features.KPI_LUT, features.KPI_CLASSES
+    cls = {c: names[lut[c] - 1] if lut[c] else None for c in range(31)}
+    assert cls[0] is None and cls[28] is None and features.KPI_LUT[255] == 0  # code 0, unlisted codes: no data
+    assert {cls[c] for c in (2, 5, 7, 19, 20, 24, 27, 30)} == {"Crop"}  # crops, Grape, Not cultivated, 2025 crops
+    assert {cls[c] for c in (10, 18, 23, 25, 26)} == {"Tree"}  # forest, gardens / low trees, damaged forest, nuts
+    assert (cls[1], cls[11], cls[12], cls[13], cls[14]) == ("Built", "Grass", "Bare", "Water", "Wetland")
+    assert features.KPI.nbr_columns[0] == "kpi_nbr3_Crop" and len(features.KPI.columns) == 21 + 4 + 64
+    assert set(features.KPI.colours) == set(names)
+
+
+def kpi_bundle() -> dict:
+    """A format-2 KPI bundle with one constant model per from-class (Crop -> Built or stays, Grass -> Tree)."""
+    cols = list(features.KPI.nbr_columns)[:2]
+    refs = list(np.linspace(0, 1, 11))
+    return {
+        "format": inference.FORMAT_2,
+        "model_id": "kpi-test",
+        "version": "t",
+        "target": "kpi",
+        "legend": list(features.KPI_CLASSES),
+        "columns": cols,
+        "t0_min": 2017,
+        "dem": "glo30_2024_1",
+        "grid": {"crs": "EPSG:32636", "origin": [-303030.0, 5803330.0]},
+        "domain": {"bbox": [22, 44, 40.5, 52.5]},
+        "trend_last": 2024,
+        "groups": {
+            "any_change": {"title": "Any", "from": ["Crop", "Grass"], "to": None},
+            "urban_expansion": {"title": "Urban", "from": ["Crop", "Grass"], "to": ["Built"]},
+        },
+        "horizons": {
+            "1": {
+                "pair": [2023, 2024],
+                "reference_quantiles": {"any_change": refs, "urban_expansion": refs},
+                "from_classes": {
+                    "Crop": {"to": ["Crop"], "prior_correction": [1.0], "booster": None},
+                    "Grass": {"to": ["Tree"], "prior_correction": [1.0], "booster": None},
+                },
+            }
+        },
+        "served": {"hazards": {"any_change": 1, "urban_expansion": 1}, "map": 1, "amounts_expected": {"1": False}},
+    }
+
+
+def test_kpi_bundle_is_checked_against_the_kpi_legend() -> None:
+    b = kpi_bundle()
+    inference.check_bundle(b)
+    assert inference.source_of(b) is features.KPI
+    with pytest.raises(inference.BundleError, match="kpi legend"):
+        inference.check_bundle({**b, "legend": list(features.ESRI_CLASSES)})
+    with pytest.raises(inference.BundleError, match="makes no esri_nbr3_Water"):
+        inference.check_bundle({**b, "columns": ["esri_nbr3_Water"]})
+    with pytest.raises(inference.BundleError, match="target must be one of"):
+        inference.check_bundle({**b, "target": "glc"})
+    p = inference.probabilities(
+        b, b["horizons"]["1"]["from_classes"], np.zeros((3, 2), np.float32), np.array([1, 2, 4], np.uint8)
+    )
+    assert p.shape == (3, 7) and p[0, 0] == 1 and p[1, 2] == 1 and np.isnan(p[2]).all()
+
+
+def test_kpi_forecast_takes_its_trend_from_pairs_up_to_trend_last(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import json
+
+    b = kpi_bundle()
+    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(b))
+    grid = features.Grid("EPSG:32636", 0, 0, 4, 4, halo=0)
+    start = np.array([[1, 1, 2, 2]] * 4, np.uint8)
+    cube = features.FeatureCube(
+        grid, 2025, start, {c: np.zeros((4, 4), np.float32) for c in b["columns"]}, source=features.KPI
+    )
+    asked = []
+
+    def fake_build(g, y, columns, ee=None, check_years=True, dem=None, source=features.ESRI):
+        asked.append((y, source.key))
+        return features.FeatureCube(g, y, np.full((g.ny, g.nx), 2 if y == 2023 else 3, np.uint8), source=source)
+
+    monkeypatch.setattr(inference, "_area", lambda path, bundle: ([30, 50, 30.1, 50.1], grid))
+    monkeypatch.setattr(inference, "_ee", lambda: None)
+    monkeypatch.setattr(inference, "_cube", lambda ee, bundle, g, t0: cube)
+    monkeypatch.setattr(features, "build_features", fake_build)
+    captured = {}
+    monkeypatch.setattr(inference, "write_forecast", lambda *a: captured.setdefault("args", a))
+    inference.run_forecast("unused.tif", str(tmp_path), 1)
+    assert asked == [(2023, "kpi"), (2024, "kpi")]  # 2024 -> 2025 is never the trend
+    bundle, cube_, h, trend, pair = captured["args"][:5]
+    assert pair == (2023, 2024)
+
+
+def test_kpi_forecast_statistics_use_kpi_class_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    b = kpi_bundle()
+    grid = features.Grid("EPSG:32636", 0, 0, 4, 4, halo=0)
+    start = np.array([[1, 1, 2, 2]] * 4, np.uint8)
+    cube = features.FeatureCube(
+        grid, 2025, start, {c: np.zeros((4, 4), np.float32) for c in b["columns"]}, source=features.KPI
+    )
+    trend = [np.full((4, 4), 2, np.uint8), np.where(np.arange(16).reshape(4, 4) < 8, 3, 2).astype(np.uint8)]
+    captured = {}
+    monkeypatch.setattr(inference.artifact_files, "save", lambda result, *a, **k: captured.setdefault("r", result))
+    r = inference.write_forecast(b, cube, 1, trend, (2023, 2024), grid, [30, 50, 30.1, 50.1])
+    st = r["statistics"]
+    assert r["metadata"]["legend"] == list(features.KPI_CLASSES)
+    assert {c["class"] for c in st["classes"]} <= set(features.KPI_CLASSES)
+    assert st["transitions"] and st["transitions"][0] == {
+        "from": "Grass",
+        "to": "Tree",
+        "km2": stats.km2(4),
+        "percent_of_from": 50.0,
+    }
