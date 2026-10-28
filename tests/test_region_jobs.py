@@ -160,6 +160,8 @@ async def test_region_job_without_earth_engine_fails_at_planning_without_network
     monkeypatch.setattr(socket.socket, "connect", no_network)
     monkeypatch.setattr(socket.socket, "connect_ex", no_network)
     monkeypatch.setattr(ee, "Initialize", no_initialize)
+    # A developer's .env may opt in to default credentials; server.app reloads .env, so set the opt-in, not delete it.
+    monkeypatch.setenv("GEE_USE_DEFAULT_CREDENTIALS", "false")
     with patch.object(jobs_mod, "orchestrate", side_effect=AssertionError("planned a region job without EE")) as plan:
         async with _client() as client:
             r = await client.post("/v1/jobs", json={"prompt": CHANGE_PROMPT, "region": REGION})
@@ -411,6 +413,25 @@ def test_a_footprint_only_plan_takes_the_regions_area_and_fetches_no_imagery(
         ("models/lulc-change-hazard", {}),
     ]
     assert ee_configured == []
+
+
+@pytest.mark.parametrize(
+    ("prompt", "step"),
+    [
+        ("Map where land cover is most likely to change", "models/lulc-change-hazard"),
+        ("Forecast the land cover map for the coming years", "models/lulc-forecast"),
+        ("Show how land cover changed since 2017", "algorithms/lulc-history"),
+    ],
+)
+def test_footprint_items_are_planned_from_the_prompt_not_the_assistants_rewrite(
+    prompt: str, step: str, monkeypatch: pytest.MonkeyPatch, ee_configured: list[dict[str, Any]]
+) -> None:
+    from dta.dti.coe import orchestrator as orch
+
+    monkeypatch.setattr(orch, "analyze", lambda *a, **k: pytest.fail("the assistant was asked to rewrite the goal"))
+    result = orchestrate(ChatRequest(prompt=prompt, metadata={"region": _echo()}))
+    assert result["ok"], result
+    assert [s["uses"] for s in result["plan"]["steps"][:2]] == ["input/region-footprint", step]
 
 
 def test_a_plan_with_an_imagery_analysis_keeps_the_fetch() -> None:
