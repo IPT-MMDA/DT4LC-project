@@ -196,6 +196,7 @@ class LLMRouter:
         from .mistral import MistralProvider
         from .ollama import OllamaProvider
         from .openai import OpenAIProvider
+        from .openrouter import OpenRouterProvider
 
         provider_map: dict[str, type[BaseLLMProvider]] = {
             "gemini": GeminiProvider,
@@ -205,6 +206,7 @@ class LLMRouter:
             "anthropic": AnthropicProvider,
             "mistral": MistralProvider,
             "openai": OpenAIProvider,
+            "openrouter": OpenRouterProvider,
         }
 
         providers = []
