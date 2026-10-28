@@ -149,7 +149,8 @@ def sentences(m: np.ndarray, lead: str, verb: str) -> list[str]:
     """Plain sentences for the largest net class changes of transition matrix ``m`` (cells).
 
     ``lead`` opens each sentence ("Between 2021 and 2025,"), ``verb`` is "decreased" style past or "is expected to
-    decrease" style future: the sentence reads "<lead> <Class> <verb> by M % (A ha), mainly to <Y> (B ha)."
+    decrease" style future: the sentence reads "<lead> <Class> <verb> by M % (net A ha); its largest loss is to
+    <Y> (B ha)." B is a gross flow, so it can exceed the net change A when the class also gains elsewhere.
     """
     before, after = m.sum(1), m.sum(0)
     total = max(int(before.sum()), 1)
@@ -166,10 +167,11 @@ def sentences(m: np.ndarray, lead: str, verb: str) -> list[str]:
         flows[i] = 0
         j = int(np.argmax(flows))
         word = verb.format(dir="decrease" if down else "increase", past="decreased" if down else "increased")
-        where = "to" if down else "from"
-        main = f", mainly {where} {features.ESRI_CLASSES[j]} ({_ha(flows[j])})" if flows[j] > 0 else ""
+        flow = "loss is to" if down else "gain is from"
+        main = f"; its largest {flow} {features.ESRI_CLASSES[j]} ({_ha(flows[j])})" if flows[j] > 0 else ""
         if before[i]:
-            out.append(f"{lead} {name} {word} by {100.0 * abs(net[i]) / before[i]:.0f} % ({_ha(abs(net[i]))}){main}.")
+            pct = 100.0 * abs(net[i]) / before[i]
+            out.append(f"{lead} {name} {word} by {pct:.0f} % (net {_ha(abs(net[i]))}){main}.")
         else:
             out.append(f"{lead} {name} {word} from none to {_ha(net[i])}{main}.")
     return out

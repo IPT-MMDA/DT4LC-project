@@ -453,7 +453,9 @@ def test_sentences_name_the_largest_net_change_and_its_main_destination() -> Non
     m = np.zeros((8, 8), int)
     m[3, 3], m[3, 7], m[7, 7] = 60, 40, 100  # Crops: 100 -> 60, 40 to Rangeland
     out = stats.sentences(m, "Between 2021 and 2025,", "{past}")
-    assert out[0] == "Between 2021 and 2025, Crops decreased by 40 % (4 ha), mainly to Rangeland (4 ha)."
+    assert out[0] == (
+        "Between 2021 and 2025, Crops decreased by 40 % (net 4 ha); its largest loss is to Rangeland (4 ha)."
+    )
     assert out[1].startswith("Between 2021 and 2025, Rangeland increased by 40 %")
 
 
