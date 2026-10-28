@@ -73,6 +73,9 @@ services:
       # Job storage backend (memory or sqlite)
       - JOB_STORAGE=${JOB_STORAGE:-sqlite}
       - DT4LC_JOBS_DB=/app/resources/.cache/jobs.db
+      # Trust X-Forwarded-For from the frontend's nginx, which reaches the backend from Docker's
+      # private networks; the per-IP guest quota then counts the real client IP.
+      - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-172.16.0.0/12,192.168.0.0/16}
     volumes:
       # Mount resources with read-write for cache subdirectory
       - ./resources:/app/resources

@@ -1,0 +1,518 @@
+{
+  "summary": {
+    "deployment": "local",
+    "parts": {
+      "deployment": "local server",
+      "role": "member account",
+      "assistant": "assistant offline",
+      "models": "models download on first use",
+      "earth_engine": "no Earth Engine"
+    },
+    "line": "member account · assistant offline · models download on first use · no Earth Engine"
+  },
+  "assistant": {
+    "connected": false,
+    "provider": null,
+    "model": null,
+    "display": null
+  },
+  "offline": true,
+  "banner": "The assistant is offline on this server, so tiers 1 and 2 are unavailable. Built-in analyses run as usual; answers are limited to the catalog.",
+  "tiers": [
+    {
+      "id": "ask",
+      "number": 1,
+      "title": "Ask",
+      "subtitle": "Questions, clarifications, explanations of methods and results, follow-ups.",
+      "status": "offline",
+      "status_label": "Assistant offline — limited answers",
+      "needs_assistant": true,
+      "badge": null,
+      "collapsed": false,
+      "groups": null,
+      "note": null,
+      "items": [
+        {
+          "id": "ndwi-vs-ndvi",
+          "prompt": "Why is NDWI better than NDVI for water?"
+        },
+        {
+          "id": "explain-last",
+          "prompt": "Explain the last result in two sentences"
+        },
+        {
+          "id": "landsat",
+          "prompt": "What would you do differently with Landsat?"
+        }
+      ]
+    },
+    {
+      "id": "composed",
+      "number": 2,
+      "title": "Composed analyses",
+      "subtitle": "The assistant combines the built-in steps into new pipelines.",
+      "status": "offline",
+      "status_label": "Needs the assistant",
+      "needs_assistant": true,
+      "badge": "Composed",
+      "collapsed": false,
+      "groups": null,
+      "note": null,
+      "items": [
+        {
+          "id": "any-index",
+          "title": "Any spectral index",
+          "description": "Band math for indices not in the catalog, from the bands the image has.",
+          "recipe": "NDMI = (B5 − B6)/(B5 + B6) · NBR · SAVI · NDBI · custom",
+          "prompt": "Map moisture change with NDMI between the two dates",
+          "badge": "Composed",
+          "needs_assistant": true,
+          "needs_label": "Needs the assistant"
+        },
+        {
+          "id": "masked-classification",
+          "title": "Masked classification",
+          "description": "Mask → classify → statistics, so classes are reported only where they matter.",
+          "recipe": "ndwi_change → mask → lulc → stats",
+          "prompt": "Classify land cover on the flooded fields",
+          "badge": "Composed",
+          "needs_assistant": true,
+          "needs_label": "Needs the assistant"
+        },
+        {
+          "id": "multi-date",
+          "title": "Multi-date comparison",
+          "description": "The same index on three or more dates, as a time series and a difference stack.",
+          "recipe": "index(t₁…tₙ) → Δ per step → table",
+          "prompt": "Track water weekly through June",
+          "badge": "Composed",
+          "needs_assistant": true,
+          "needs_label": "Needs the assistant"
+        },
+        {
+          "id": "parameter-changes",
+          "title": "Parameter changes",
+          "description": "Re-run a step with a different threshold, band set or cloud limit.",
+          "recipe": "threshold 0.2 → 0.1 · cloud ≤10 → ≤25 %",
+          "prompt": "Redo the water map with a 0.1 threshold",
+          "badge": "Composed",
+          "needs_assistant": true,
+          "needs_label": "Needs the assistant"
+        }
+      ]
+    },
+    {
+      "id": "builtin",
+      "number": 3,
+      "title": "Built-in analyses",
+      "subtitle": "Run without the assistant — the catalog every installation has.",
+      "status": "available",
+      "status_label": "Runs without the assistant",
+      "needs_assistant": false,
+      "badge": null,
+      "collapsed": false,
+      "groups": [
+        {
+          "id": "spectral",
+          "title": "Spectral indices"
+        },
+        {
+          "id": "change",
+          "title": "Change, classification, statistics"
+        },
+        {
+          "id": "models",
+          "title": "Model-based"
+        }
+      ],
+      "note": null,
+      "items": [
+        {
+          "id": "algorithms/ndvi",
+          "group": "spectral",
+          "title": "NDVI",
+          "formula": "(NIR−Red)/(NIR+Red)",
+          "description": "Vegetation density and health.",
+          "inputs": [
+            "Red",
+            "NIR"
+          ],
+          "outputs": [
+            "Index map",
+            "legend",
+            "stats"
+          ],
+          "time_estimate": "~10 s",
+          "runs_without_assistant": true,
+          "prompt": "Map vegetation health across the region",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/evi",
+          "group": "spectral",
+          "title": "EVI",
+          "formula": "2.5·(NIR−Red)/(NIR+6·Red−7.5·Blue+1)",
+          "description": "Vegetation in dense canopy where NDVI saturates.",
+          "inputs": [
+            "Blue",
+            "Red",
+            "NIR"
+          ],
+          "outputs": [
+            "Index map",
+            "legend",
+            "stats"
+          ],
+          "time_estimate": "~10 s",
+          "runs_without_assistant": true,
+          "prompt": "Use EVI instead of NDVI for the forest",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/ndwi",
+          "group": "spectral",
+          "title": "NDWI",
+          "formula": "(Green−NIR)/(Green+NIR)",
+          "description": "Open water and surface moisture.",
+          "inputs": [
+            "Green",
+            "NIR"
+          ],
+          "outputs": [
+            "Index map",
+            "water mask",
+            "stats"
+          ],
+          "time_estimate": "~10 s",
+          "runs_without_assistant": true,
+          "prompt": "Where is open water on 9 June?",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/ndsi",
+          "group": "spectral",
+          "title": "NDSI",
+          "formula": "(Green−SWIR)/(Green+SWIR)",
+          "description": "Snow and ice; values above 0.42 usually mean snow.",
+          "inputs": [
+            "Green",
+            "SWIR1"
+          ],
+          "outputs": [
+            "Index map",
+            "snow mask",
+            "stats"
+          ],
+          "time_estimate": "~10 s",
+          "runs_without_assistant": true,
+          "prompt": "Map snow cover with NDSI",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/change-detection",
+          "group": "change",
+          "title": "Change detection",
+          "formula": null,
+          "description": "Difference of NDVI, NDWI or NDSI between two dates, with lost / gained / unchanged classes and areas.",
+          "inputs": [
+            "Two dates",
+            "same bands"
+          ],
+          "outputs": [
+            "Difference map",
+            "3 classes",
+            "areas"
+          ],
+          "time_estimate": "~50 s",
+          "runs_without_assistant": true,
+          "prompt": "Compare water before and after the dam breach",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/lulc-classifier",
+          "group": "change",
+          "title": "Land-cover classification",
+          "formula": null,
+          "description": "Six classes: water, snow/ice, bare soil, sparse vegetation, cropland/grassland, dense vegetation. Legend and per-class area.",
+          "inputs": [
+            "Blue",
+            "Green",
+            "Red",
+            "NIR (+SWIR)"
+          ],
+          "outputs": [
+            "Class map",
+            "legend",
+            "per-class area"
+          ],
+          "time_estimate": "~90 s",
+          "runs_without_assistant": true,
+          "prompt": "Classify land cover on the flooded fields",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/snow-classifier",
+          "group": "change",
+          "title": "Snow classifier",
+          "formula": null,
+          "description": "Multi-criteria: NDSI ≥ 0.4, NDVI below 0.1 and brightness above 0.3.",
+          "inputs": [
+            "Green",
+            "Red",
+            "NIR",
+            "SWIR1"
+          ],
+          "outputs": [
+            "Snow / ice / other map",
+            "areas"
+          ],
+          "time_estimate": "~20 s",
+          "runs_without_assistant": true,
+          "prompt": "Classify snow and ice robustly",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "algorithms/statistics",
+          "group": "change",
+          "title": "Raster statistics",
+          "formula": null,
+          "description": "Min, max, mean, standard deviation, percentiles and histogram per band.",
+          "inputs": [
+            "Any raster"
+          ],
+          "outputs": [
+            "Table",
+            "histogram",
+            "CSV"
+          ],
+          "time_estimate": "~5 s",
+          "runs_without_assistant": true,
+          "prompt": "Give me statistics for every band",
+          "model": null,
+          "status": "available",
+          "status_label": "Runs without the assistant"
+        },
+        {
+          "id": "models/delineate-anything",
+          "group": "models",
+          "title": "Field boundaries",
+          "formula": null,
+          "description": "Agricultural parcels as polygons, with an area histogram.",
+          "inputs": [
+            "Red",
+            "Green",
+            "Blue (10–30 m)"
+          ],
+          "outputs": [
+            "GeoPackage",
+            "count",
+            "area histogram"
+          ],
+          "time_estimate": "~2 min",
+          "runs_without_assistant": true,
+          "prompt": "Detect field boundaries east of the river",
+          "model": {
+            "id": "delineate-anything-small",
+            "title": "Delineate-Anything",
+            "short": "Delineate-Anything"
+          },
+          "status": "downloads_on_first_use",
+          "status_label": "Downloads on first use · 85 MB · ~14 s · AGPL-3.0"
+        },
+        {
+          "id": "models/prithvi-reconstruction",
+          "group": "models",
+          "title": "Prithvi reconstruction",
+          "formula": null,
+          "description": "Fills masked or cloudy pixels from the surrounding dates.",
+          "inputs": [
+            "6 HLS bands",
+            "cloud mask"
+          ],
+          "outputs": [
+            "Reconstructed GeoTIFF",
+            "mask band"
+          ],
+          "time_estimate": "~3 min",
+          "runs_without_assistant": true,
+          "prompt": "Fill the cloud gaps in the 9 June image",
+          "model": {
+            "id": "prithvi-eo-v1-100m",
+            "title": "Prithvi EO v1 (100M)",
+            "short": "Prithvi EO v1"
+          },
+          "status": "downloads_on_first_use",
+          "status_label": "Downloads on first use · 450 MB · ~75 s · Apache-2.0"
+        }
+      ]
+    },
+    {
+      "id": "models",
+      "number": 4,
+      "title": "Models",
+      "subtitle": "Downloaded weights that some built-in analyses need.",
+      "status": "available",
+      "status_label": null,
+      "needs_assistant": false,
+      "badge": null,
+      "collapsed": false,
+      "groups": null,
+      "note": null,
+      "items": [
+        {
+          "id": "delineate-anything-small",
+          "title": "Delineate-Anything",
+          "description": "Field-boundary detection for agricultural parcels.",
+          "size_bytes": 89128960,
+          "size_label": "85 MB",
+          "download_time": "~14 s",
+          "licence": "AGPL-3.0",
+          "licence_url": "https://github.com/Lavreniuk/Delineate-Anything",
+          "used_by": [
+            "models/delineate-anything"
+          ],
+          "status": "downloads_on_first_use",
+          "status_label": "Downloads on first use · 85 MB · ~14 s · AGPL-3.0"
+        },
+        {
+          "id": "prithvi-eo-v1-100m",
+          "title": "Prithvi EO v1 (100M)",
+          "description": "NASA/IBM foundation model; reconstructs masked or cloudy pixels.",
+          "size_bytes": 471859200,
+          "size_label": "450 MB",
+          "download_time": "~75 s",
+          "licence": "Apache-2.0",
+          "licence_url": "https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-1.0-100M",
+          "used_by": [
+            "models/prithvi-reconstruction"
+          ],
+          "status": "downloads_on_first_use",
+          "status_label": "Downloads on first use · 450 MB · ~75 s · Apache-2.0"
+        }
+      ]
+    },
+    {
+      "id": "data",
+      "number": 5,
+      "title": "Data sources",
+      "subtitle": "Where imagery can come from on this server.",
+      "status": "available",
+      "status_label": null,
+      "needs_assistant": false,
+      "badge": null,
+      "collapsed": false,
+      "groups": null,
+      "note": "Member on a local server: no analysis limit; results are kept until you delete them.",
+      "items": [
+        {
+          "id": "uploads",
+          "title": "Uploads",
+          "detail": "GeoTIFF, up to 200 MB per file · any projection",
+          "status": "always",
+          "status_label": "Always"
+        },
+        {
+          "id": "sample",
+          "title": "Bundled sample",
+          "detail": "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09",
+          "status": "always",
+          "status_label": "Always"
+        },
+        {
+          "id": "earth-engine",
+          "title": "Earth Engine · Sentinel-2 / Landsat / MODIS",
+          "detail": "Fetch by region, dates, bands and cloud filter from the Map",
+          "status": "not_configured",
+          "status_label": "Not configured"
+        }
+      ]
+    },
+    {
+      "id": "coming",
+      "number": 6,
+      "title": "Coming",
+      "subtitle": null,
+      "status": "coming",
+      "status_label": null,
+      "needs_assistant": false,
+      "badge": null,
+      "collapsed": true,
+      "groups": null,
+      "note": null,
+      "items": [
+        {
+          "id": "models/ndvi-convlstm",
+          "title": "ConvLSTM NDVI forecast",
+          "description": "ConvLSTM NDVI Forecasting Model - Predicts vegetation health in Ukrainian agricultural regions. Uses 6 weeks of input data to forecast 4 future weeks of NDVI values. Trained on Cherkasy, Vinnytsia, and Mykolaiv oblasts (2018-2021)."
+        },
+        {
+          "id": "models/pinn-linda",
+          "title": "PINN-LINDA nowcasting",
+          "description": "PINN-LINDA Weather Nowcasting - Physics-Informed Neural Network implementing LINDA (Lagrangian Integro-Difference equation with Nowcasting and Data Assimilation) for short-term precipitation forecasting. Compares traditional LINDA with PINN-enhanced approaches using radar precipitation sequences."
+        },
+        {
+          "id": "models/vi-forecasting-dti",
+          "title": "VI forecasting DTI",
+          "description": "Vegetation Index Forecasting DTI - Time-series forecasting model for vegetation indices using Google Earth Engine integration."
+        },
+        {
+          "id": "models/runoff-ensemble",
+          "title": "Runoff ensemble",
+          "description": "Ensemble runoff estimates from precipitation and land-cover inputs."
+        }
+      ]
+    }
+  ],
+  "guest_limits": {
+    "analyses_per_hour": 1000,
+    "kept_hours": 24
+  },
+  "session": {
+    "role": "member",
+    "guest": false,
+    "user": null,
+    "sign_in": {
+      "configured": false
+    },
+    "analyses": {
+      "limit": null,
+      "used": 0,
+      "remaining": null,
+      "resets_at": null
+    },
+    "kept_hours": null,
+    "expires_at": "2026-10-24T22:02:08+00:00",
+    "can_download_models": true
+  },
+  "example_prompts": [
+    {
+      "tier": "ask",
+      "id": "ndwi-vs-ndvi",
+      "prompt": "Why is NDWI better than NDVI for water?"
+    },
+    {
+      "tier": "ask",
+      "id": "explain-last",
+      "prompt": "Explain the last result in two sentences"
+    },
+    {
+      "tier": "ask",
+      "id": "landsat",
+      "prompt": "What would you do differently with Landsat?"
+    }
+  ]
+}

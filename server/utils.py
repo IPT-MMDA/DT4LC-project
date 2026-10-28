@@ -1,8 +1,5 @@
 """Shared utility functions for the server package."""
 
-import json
-from typing import Any
-
 import numpy as np
 
 from dta.config import UPLOADS_PATH
@@ -12,18 +9,6 @@ UPLOAD_DIR = UPLOADS_PATH
 
 # Maximum file upload size (200 MB)
 MAX_UPLOAD_SIZE = 200 * 1024 * 1024
-
-
-def sse_frame(payload: dict[str, Any]) -> bytes:
-    """Format payload as Server-Sent Event frame.
-
-    Args:
-        payload: Data to encode as JSON
-
-    Returns:
-        Bytes with SSE format: "data: <json>\\n\\n"
-    """
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode()
 
 
 def apply_colormap(data: np.ndarray, colormap_name: str) -> np.ndarray:

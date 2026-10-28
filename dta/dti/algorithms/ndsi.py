@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 from dta.dti import artifact_files
-from dta.dti.algorithms.spectral_index import calculate_index
+from dta.dti.algorithms.spectral_index import calculate_index, display_style
 from dta.dti.registry import get_item, load_registry
 
 # Standard snow threshold; NDSI ≥ 0.42 typically indicates snow/ice.
@@ -32,7 +32,8 @@ def calculate_ndsi(raster_path: str) -> dict[str, Any]:
     ``non_snow_pixels``, ``snow_coverage_percent``), ``visualizations``, and
     ``path``.
     """
-    result, arr, (crs, transform) = calculate_index(raster_path, _config())
+    config = _config()
+    result, arr, (crs, transform) = calculate_index(raster_path, config)
     finite = np.isfinite(arr)
     snow_mask = (finite & (arr >= SNOW_THRESHOLD)).astype(np.uint8)
     valid = arr[finite]
@@ -47,7 +48,15 @@ def calculate_ndsi(raster_path: str) -> dict[str, Any]:
             }
         )
     rasters = {"ndsi": arr, "snow_mask": np.where(finite, snow_mask, np.nan)}
-    return artifact_files.save(result, rasters, result["visualizations"], crs=crs, transform=transform)
+    return artifact_files.save(
+        result,
+        rasters,
+        result["visualizations"],
+        crs=crs,
+        transform=transform,
+        styles={"ndsi": display_style(config)},
+        bare={"ndsi_map": "ndsi"},
+    )
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

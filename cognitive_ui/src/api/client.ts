@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
-export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? '';
 
 /** Resolve a server-relative URL (e.g. an artifact `url`) against the API base URL. */
 export function resolveApiUrl(url: string): string {
@@ -15,6 +15,24 @@ export function resolveApiUrl(url: string): string {
 export function artifactUrl(ref: unknown): string | undefined {
   const url = (ref as { url?: unknown } | null | undefined)?.url;
   return typeof url === 'string' && url ? url : undefined;
+}
+
+/** An error response: `{ok: false, error: {message}}`, FastAPI's `{detail}`, or a legacy `{error: "..."}`. */
+interface ErrorBody {
+  error?: { message?: string } | string;
+  detail?: string | { msg?: string }[];
+}
+
+/** A rejected request: the message as before, plus the HTTP status and the body (e.g. a 422's `detail[]`). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly body?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
 }
 
 const axiosInstance = axios.create({
@@ -50,11 +68,11 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem('token');
     }
 
-    const data = error.response?.data as any;
+    const data = error.response?.data as ErrorBody | undefined;
     let errorMessage = 'An error occurred';
 
     if (data) {
-      if (data.error && data.error.message) {
+      if (data.error && typeof data.error === 'object' && data.error.message) {
         // New standardized format: {"ok": false, "error": {"message": "..."}}
         errorMessage = data.error.message;
       } else if (data.detail) {
@@ -70,7 +88,7 @@ axiosInstance.interceptors.response.use(
       errorMessage = error.message;
     }
 
-    return Promise.reject(new Error(errorMessage));
+    return Promise.reject(new ApiError(errorMessage, error.response?.status, error.response?.data));
   }
 );
 

@@ -1,13 +1,29 @@
+import atexit
 from collections.abc import Callable, Iterator
 import functools
 import itertools
+import os
 from pathlib import Path
+import shutil
+import tempfile
 
 from dotenv import load_dotenv
 import numpy as np
 import pytest
 import rasterio
 from rasterio.transform import from_origin
+
+# Uploads, temp model outputs, job artifacts and the jobs DB go to a temp dir, not resources/.cache.
+# Set before dta.config reads them. The cache and model paths stay: the GPU tests read the installed weights.
+_PYTEST_DATA = Path(tempfile.mkdtemp(prefix="dt4lc-pytest-"))
+atexit.register(shutil.rmtree, _PYTEST_DATA, ignore_errors=True)
+for _var, _name in (
+    ("DT4LC_UPLOADS_PATH", "uploads"),
+    ("DT4LC_TEMP_PATH", "tmp"),
+    ("DT4LC_OUTPUTS_PATH", "outputs"),
+    ("DT4LC_JOBS_DB", "jobs.db"),
+):
+    os.environ.setdefault(_var, str(_PYTEST_DATA / _name))
 
 # Resolve repo root via your config helper if available; else fall back.
 try:
@@ -47,6 +63,60 @@ def _outputs_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
         mp.setattr(dta.dti.artifact_files, "OUTPUTS_PATH", outputs)
         mp.setattr(server.paths, "OUTPUTS_PATH", outputs)
         yield outputs
+
+
+@pytest.fixture(scope="session")
+def _no_settings_file(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A ``DT4LC_SETTINGS_PATH`` that does not exist (tests that write settings use their own)."""
+    return tmp_path_factory.mktemp("settings") / "absent.json"
+
+
+@pytest.fixture(autouse=True)
+def _dev_role_operator(monkeypatch: pytest.MonkeyPatch, _no_settings_file: Path) -> Iterator[None]:
+    """Run every request as an operator: no guest quota, and ownerless rows (as most tests store
+    them) stay visible. Session tests opt into ``guest`` or ``member`` with ``monkeypatch.setenv``.
+    GitHub sign-in is not configured and the allowlists are empty, whatever ``.env`` says (the
+    auth tests set them), and no operator settings override applies. The in-memory analysis
+    counter starts empty for each test."""
+    from server.sessions import analysis_counter
+
+    monkeypatch.setenv("DEV_ROLE", "operator")
+    monkeypatch.setenv("DT4LC_SETTINGS_PATH", str(_no_settings_file))
+    for name in (
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "OAUTH_REDIRECT_BASE",
+        "GITHUB_OAUTH_BASE",
+        "GITHUB_API_BASE",
+        "ALLOWED_EMAILS",
+        "ALLOWED_DOMAINS",
+        "OPERATOR_EMAILS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    analysis_counter.clear()
+    yield
+    analysis_counter.clear()
+
+
+@pytest.fixture(scope="module")
+def sample_uploads() -> Iterator[None]:
+    """The two Kakhovka dates linked into the upload dir as ``UPLOAD_DIR/hlsl_2023060{1,9}.tif``, files
+    with no owner that an operator (the default role here) may attach; a raw ``resources/`` path is refused."""
+    from server.utils import UPLOAD_DIR
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    linked = []
+    for name in ("hlsl_20230601.tif", "hlsl_20230609.tif"):
+        src, dst = ROOT / "resources" / "kahovka_data" / name, UPLOAD_DIR / name
+        if not dst.exists():
+            try:
+                os.link(src, dst)
+            except OSError:
+                shutil.copyfile(src, dst)
+            linked.append(dst)
+    yield
+    for dst in linked:
+        dst.unlink(missing_ok=True)
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:

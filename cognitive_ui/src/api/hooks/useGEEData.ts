@@ -1,122 +1,6 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import apiClient from '../client';
-
-interface FetchSentinel2Request {
-  bbox: [number, number, number, number];
-  start_date: string;
-  end_date: string;
-  data_type: 'rgb' | 'ndvi' | 'ndwi' | 'ndsi';
-  cloud_cover_max?: number;
-}
-
-interface Sentinel2Response {
-  ok: boolean;
-  tile_url?: string;
-  image_count?: number;
-  bbox?: [number, number, number, number];
-  start_date?: string;
-  end_date?: string;
-  cloud_cover_max?: number;
-  data_type?: string;
-  index_type?: string;
-  vis_params?: Record<string, any>;
-  error?: string;
-}
-
-interface AvailableDatesRequest {
-  bbox: [number, number, number, number];
-  start_date: string;
-  end_date: string;
-  cloud_cover_max?: number;
-}
-
-interface AvailableDatesResponse {
-  ok: boolean;
-  dates?: string[];
-  count?: number;
-  bbox?: [number, number, number, number];
-  start_date?: string;
-  end_date?: string;
-  error?: string;
-}
-
-export function useFetchSentinel2() {
-  return useMutation<Sentinel2Response, Error, FetchSentinel2Request>({
-    mutationFn: async (data) => {
-      const params = new URLSearchParams({
-        start_date: data.start_date,
-        end_date: data.end_date,
-        data_type: data.data_type,
-        cloud_cover_max: (data.cloud_cover_max ?? 20).toString(),
-      });
-
-      return apiClient.post<[number, number, number, number], Sentinel2Response>(
-        `/v1/gee/sentinel2?${params}`,
-        data.bbox
-      );
-    },
-  });
-}
-
-export function useAvailableDates(params: AvailableDatesRequest | null) {
-  return useQuery<AvailableDatesResponse, Error>({
-    queryKey: ['gee', 'dates', params],
-    queryFn: async () => {
-      if (!params) throw new Error('No parameters provided');
-
-      const queryParams = new URLSearchParams({
-        bbox: JSON.stringify(params.bbox),
-        start_date: params.start_date,
-        end_date: params.end_date,
-        cloud_cover_max: (params.cloud_cover_max ?? 20).toString(),
-      });
-
-      return apiClient.get<AvailableDatesResponse>(
-        `/v1/gee/dates?${queryParams}`
-      );
-    },
-    enabled: !!params,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-}
-
-// MODIS dataset hooks
-export function useFetchMODIS() {
-  return useMutation<Sentinel2Response, Error, FetchSentinel2Request>({
-    mutationFn: async (data) => {
-      const params = new URLSearchParams({
-        start_date: data.start_date,
-        end_date: data.end_date,
-        data_type: data.data_type,
-        cloud_cover_max: (data.cloud_cover_max ?? 20).toString(),
-      });
-
-      return apiClient.post<[number, number, number, number], Sentinel2Response>(
-        `/v1/gee/modis?${params}`,
-        data.bbox
-      );
-    },
-  });
-}
-
-// Landsat dataset hooks
-export function useFetchLandsat() {
-  return useMutation<Sentinel2Response, Error, FetchSentinel2Request>({
-    mutationFn: async (data) => {
-      const params = new URLSearchParams({
-        start_date: data.start_date,
-        end_date: data.end_date,
-        data_type: data.data_type,
-        cloud_cover_max: (data.cloud_cover_max ?? 20).toString(),
-      });
-
-      return apiClient.post<[number, number, number, number], Sentinel2Response>(
-        `/v1/gee/landsat?${params}`,
-        data.bbox
-      );
-    },
-  });
-}
+import type { UploadMetadata } from '../../types';
 
 // Bulk fetch types and hooks
 export interface BulkFetchRequest {
@@ -141,7 +25,7 @@ export interface LayerMetadata {
   bands?: string[];
   index_type?: string;
   image_count?: number;
-  vis_params?: Record<string, any>;
+  vis_params?: Record<string, unknown>;
 }
 
 export interface BulkFetchResponse {
@@ -205,7 +89,7 @@ export interface ExportLayerResponse {
     mime_type: string;
     size_bytes: number;
     source: string;
-    metadata: Record<string, any>;
+    metadata: UploadMetadata;
   };
   size_mb: number;
   source?: string;

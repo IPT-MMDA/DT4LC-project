@@ -58,9 +58,12 @@ def _jobs(n: int) -> list[Job]:
 
 
 def _summary(job: Job) -> dict[str, Any]:
-    """The v0.5.0 list item: ``to_dict()`` of the full job minus ``result``."""
+    """The v0.5.0 list item: ``to_dict()`` minus ``result`` (and the v0.6.0 ``events``, ``proposal``, ``region``)."""
     d = job.to_dict()
     del d["result"]
+    del d["events"]
+    del d["proposal"]
+    del d["region"]
     return d
 
 
@@ -180,3 +183,17 @@ def test_list_200_jobs_with_1mb_results_under_200ms(tmp_path: Path, client: Test
         assert len(r.json()["jobs"]) == 20
 
     assert statistics.median(times) < 200, f"GET /v1/jobs?limit=20 took {times} ms"
+
+
+@pytest.mark.parametrize("kind", ["sqlite", "memory"])
+def test_total_counts_the_status_filter(kind: str, tmp_path: Path, client: TestClient) -> None:
+    """``total`` is the number of rows the filter matches, not every job."""
+    store = _make_store(kind, tmp_path)
+    for job in _jobs(3):  # completed, failed, cancelled
+        store.save(job)
+    jobs_mod._job_queue = JobQueue(max_workers=1, store=store)
+
+    failed = client.get("/v1/jobs", params={"status": "failed"}).json()
+    assert [j["id"] for j in failed["jobs"]] == ["job001"]
+    assert failed["total"] == 1
+    assert client.get("/v1/jobs").json()["total"] == 3

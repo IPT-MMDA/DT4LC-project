@@ -1,6 +1,6 @@
 """Job artifact contract (docs/ARCHITECTURE.md "Job artifacts"; #65, #67 bug 2).
 
-Results carry ``{kind, path, url, stats}`` references to GeoTIFF/PNG files,
+Results carry ``{kind, path, url, stats, size_bytes}`` references to GeoTIFF/PNG files,
 never pixel arrays or base64 images, so job records, list responses and
 SQLite rows stay small.
 """
@@ -56,12 +56,15 @@ def _pixel_data(obj: Any, path: str = "") -> list[str]:
 def _assert_ref(ref: dict[str, Any], kind: str) -> None:
     from urllib.parse import quote
 
-    assert set(ref) == {"kind", "path", "url", "stats"}, ref
+    assert set(ref) == {"kind", "path", "url", "stats", "size_bytes"}, ref
     assert ref["kind"] == kind
     assert Path(ref["path"]).is_absolute() and Path(ref["path"]).exists()
+    assert ref["size_bytes"] == Path(ref["path"]).stat().st_size > 0
     assert ref["url"] == "/v1/download?path=" + quote(ref["path"], safe="")
     if kind == "geotiff":
         assert set(ref["stats"]) == {"min", "max", "mean", "valid_pixels"}
+    elif Path(ref["path"]).stem.endswith("_bare"):
+        assert set(ref["stats"]) == {"width", "height", "style"}
     else:
         assert ref["stats"] == {}
 
@@ -72,12 +75,20 @@ def _assert_ref(ref: dict[str, Any], kind: str) -> None:
 @pytest.mark.parametrize(
     ("module", "raster_keys", "viz_keys"),
     [
-        ("ndvi", {"ndvi"}, {"ndvi_map"}),
-        ("ndwi", {"ndwi"}, {"ndwi_map"}),
-        ("ndsi", {"ndsi", "snow_mask"}, {"ndsi_map"}),
-        ("evi", {"evi"}, {"evi_map"}),
-        ("snow_classifier", {"snow_mask", "ndsi", "ndvi", "brightness"}, {"snow_classification", "criteria_analysis"}),
-        ("lulc_classifier", {"classification"}, {"classification_map", "distribution_chart"}),
+        ("ndvi", {"ndvi"}, {"ndvi_map", "ndvi_map_bare"}),
+        ("ndwi", {"ndwi"}, {"ndwi_map", "ndwi_map_bare"}),
+        ("ndsi", {"ndsi", "snow_mask"}, {"ndsi_map", "ndsi_map_bare"}),
+        ("evi", {"evi"}, {"evi_map", "evi_map_bare"}),
+        (
+            "snow_classifier",
+            {"snow_mask", "ndsi", "ndvi", "brightness"},
+            {"snow_classification", "criteria_analysis", "snow_classification_bare"},
+        ),
+        (
+            "lulc_classifier",
+            {"classification"},
+            {"classification_map", "distribution_chart", "classification_map_bare"},
+        ),
     ],
 )
 def test_single_raster_algorithm_results_hold_refs(
@@ -104,7 +115,14 @@ def test_change_detection_result_holds_refs(synthetic_raster_pair: tuple[str, st
 
     assert _pixel_data(result) == []
     assert set(result["rasters"]) == {"change", "index_before", "index_after"}
-    assert set(result["visualizations"]) == {"change_map", "ndvi_before", "ndvi_after"}
+    assert set(result["visualizations"]) == {
+        "change_map",
+        "ndvi_before",
+        "ndvi_after",
+        "change_map_bare",
+        "ndvi_before_bare",
+        "ndvi_after_bare",
+    }
     with rasterio.open(result["rasters"]["change"]["path"]) as src, rasterio.open(after) as ref:
         assert src.crs == ref.crs and src.transform == ref.transform
         assert src.dtypes[0] == "float32" and np.isnan(src.nodata)
@@ -301,7 +319,9 @@ def test_ndvi_job_record_list_and_row_are_small(
     import server.jobs as jobs_mod
 
     client, db = api
-    att = {"id": "a1", "filename": "u16_1000.tif", "path": raster_1000, "mime_type": "image/tiff"}
+    with open(raster_1000, "rb") as fh:
+        up = client.post("/v1/upload", files={"file": ("u16_1000.tif", fh, "image/tiff")}).json()
+    att = {"id": up["id"], "filename": up["filename"], "path": up["path"], "mime_type": "image/tiff"}
     job_id = client.post("/v1/jobs", json={"prompt": "calculate ndvi", "attachments": [att]}).json()["id"]
     for _ in range(240):
         if client.get(f"/v1/jobs/{job_id}").json()["status"] in ("completed", "failed", "cancelled"):
