@@ -118,6 +118,9 @@ export interface HazardItem {
   levels: { label: string; range: string; colour?: string; area: string; percent: number }[];
   high: string;  // "1.91 km² · 10 %"
   skill?: string;  // "AUC 0.98 vs 0.87 (best null)"
+  sentence: string;  // "High risk: 0.06 km² of the 0.07 km² that could change this way"
+  sparse: boolean;  // under 1 % of the area analysed could make this change
+  highKm2: number;
 }
 
 /** One class-to-class flow of a land-cover card: "Trees → Crops · 0.79 km² · 4 % of Trees". */
@@ -727,6 +730,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
   const views: CardView[] = [];
   const local: Record<string, CardView> = {};
   const hazards: HazardItem[] = [];
+  const hazardEligible: number[] = [];
   for (const h of sorted) {
     const rank = str(h.raster);
     const title = str(h.title);
@@ -750,6 +754,8 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'within this area')), base: start.bare };
     const s = obj(h.skill);
     const high = levels[0] ?? { area: formatArea(km2Of(h, 'top_decile')), percent: highShare(h) };
+    const eligible = km2Of(h, 'eligible');
+    const highKm2 = isNum(obj(arr(h.levels)[0]).km2) ? (obj(arr(h.levels)[0]).km2 as number) : isNum(km2Of(h, 'top_decile')) ? (km2Of(h, 'top_decile') as number) : 0;
     hazards.push({
       key: main.key,
       title,
@@ -758,14 +764,25 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
       levels,
       high: `${high.area} · ${formatPercent(high.percent)}`,
       skill: isNum(s.auc) ? `AUC ${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : undefined,
+      sentence: `High risk: ${high.area} of the ${formatArea(eligible)} that could change this way`,
+      sparse: false,
+      highKm2,
     });
+    hazardEligible.push(isNum(eligible) ? eligible : 0);
   }
   views.push(start);
   const years = [...new Set(hazards.map((h) => h.year))];
   const longest = years.length ? String(Math.max(...years.map(Number))) : '—';
   const shorter = hazards.filter((h) => h.year !== longest).map((h) => `${h.title} ${h.year}`);
-  const top = hazards.find((h) => !h.title.startsWith('Any'));
   const analysed_ = Object.values(startAreas).reduce<number>((a, v) => a + (isNum(v) ? v : 0), 0);
+  hazards.forEach((h, i) => {
+    if (hazardEligible[i] < 0.01 * analysed_) {
+      h.sparse = true;
+      h.sentence = `Little here could change this way (${formatArea(hazardEligible[i])})`;
+    }
+  });
+  const named = hazards.filter((h) => !h.title.startsWith('Any') && !h.sparse);
+  const top = named.length ? named.reduce((a, b) => (b.highKm2 > a.highKm2 ? b : a)) : undefined;
   return {
     kind: 'landcover',
     title: titled('Land-cover hazards', t0 && `from ${t0}`),
@@ -777,7 +794,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     classes: landClasses(start, startAreas, legend.names),
     stats: [
       { label: 'Area analysed', value: formatArea(analysed_) },
-      { label: 'Most at risk', value: top ? `${top.title} · ${formatPercent(top.levels[0]?.percent ?? 0)} high` : '—' },
+      { label: 'Most at risk', value: top ? `${top.title} · ${top.levels[0]?.area ?? top.high} high` : '—' },
       { label: 'Horizon', value: shorter.length ? `${longest} (${shorter.join(', ')})` : longest },
     ],
     summary: [],

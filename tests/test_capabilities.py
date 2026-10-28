@@ -255,6 +255,22 @@ def test_demo_builtin_change_classification_statistics(demo: dict[str, Any]) -> 
             "Give me statistics for every band",
             runs,
         ),
+        (
+            "Land-cover history",
+            ["Area (upload or map region)"],
+            ["Class maps then and now", "class areas per year", "transition matrix", "summary"],
+            "~30 s",
+            "Show how land cover changed since 2017",
+            runs,
+        ),
+        (
+            "Land cover since the pre-war state",
+            ["Area (upload or map region)"],
+            ["Class maps 2021 and 2024", "class areas per year", "transition matrix", "summary"],
+            "~40 s",
+            "Compare land cover with the pre-war state",
+            runs,
+        ),
     ]
     snow = _item(demo, "builtin", "algorithms/snow-classifier")
     assert snow["description"] == "Multi-criteria: NDSI ≥ 0.4, NDVI below 0.1 and brightness above 0.3."
@@ -287,8 +303,19 @@ def test_demo_models_and_their_analyses(demo: dict[str, Any]) -> None:
             "not_available_for_guests",
             "Not available for guests — ask an operator",
         ),
+        (
+            "lulc-change-hazard-kpi",
+            "LULC change model (KPI-Ukraine)",
+            "Boosted trees per start class on KPI-Ukraine neighbourhoods, terrain and AlphaEarth; ranks hazards and "
+            "places forecast change.",
+            "45 MB",
+            "CC-BY-4.0",
+            "not_available_for_guests",
+            "Not available for guests — ask an operator",
+        ),
     ]
     assert models["items"][0]["used_by"] == ["models/delineate-anything"]
+    assert models["items"][2]["used_by"] == ["models/lulc-change-hazard", "models/lulc-forecast"]
 
     fields = _item(demo, "builtin", "models/delineate-anything")
     assert (
@@ -335,6 +362,13 @@ def test_demo_data_sources_and_guest_limits(demo: dict[str, Any]) -> None:
             "configured",
             "Configured",
         ),
+        (
+            "Land-cover maps · KPI-Ukraine / Esri",
+            "Read through Earth Engine by the land-cover analyses: KPI-Ukraine 2016–2025 (10 m, Ukraine) and "
+            "Esri/Impact Observatory 2017–2025 (10 m, global)",
+            "configured",
+            "Configured",
+        ),
     ]
     assert data["note"] == "Guests: up to 5 analyses per hour, results kept 24 h in this browser, no account needed."
     assert demo["guest_limits"] == {"analyses_per_hour": 5, "kept_hours": 24}
@@ -357,10 +391,6 @@ def test_demo_coming_tier_is_collapsed_with_whole_descriptions(demo: dict[str, A
         "PINN-LINDA nowcasting",
         "VI forecasting DTI",
         "Runoff ensemble",
-        "Land-cover change hazard",
-        "Land-cover forecast",
-        "Land-cover history",
-        "Land cover since the pre-war state",
     ]
     assert coming["items"][3] == {
         "id": "models/runoff-ensemble",
@@ -378,7 +408,7 @@ def test_demo_example_prompts_are_full_prompts(demo: dict[str, Any]) -> None:
     assert prompts[("ask", "ndwi-vs-ndvi")] == "Why is NDWI better than NDVI for water?"
     assert prompts[("composed", "any-index")] == "Map moisture change with NDMI between the two dates"
     assert prompts[("builtin", "algorithms/ndvi")] == "Map vegetation health across the region"
-    assert len(prompts) == 3 + 4 + 10
+    assert len(prompts) == 3 + 4 + 14
 
 
 # --- (b) offline laptop ----------------------------------------------------------
@@ -414,6 +444,7 @@ def test_offline_models_download_on_first_use(offline: dict[str, Any]) -> None:
     assert [(m["id"], m["status"], m["status_label"]) for m in _tier(offline, "models")["items"]] == [
         (DELINEATE, "downloads_on_first_use", "Downloads on first use · 85 MB · ~14 s · AGPL-3.0"),
         (PRITHVI, "downloads_on_first_use", prithvi_label),
+        ("lulc-change-hazard-kpi", "downloads_on_first_use", "Downloads on first use · 45 MB · ~7 s · CC-BY-4.0"),
     ]
     prithvi = _item(offline, "builtin", "models/prithvi-reconstruction")
     assert (prithvi["status"], prithvi["status_label"]) == ("downloads_on_first_use", prithvi_label)
@@ -450,8 +481,13 @@ def test_guest_without_models_is_gated_on_the_model_and_its_analysis(monkeypatch
     monkeypatch.setenv("DEV_ROLE", "guest")
     doc = _capabilities(providers=[], installed=set(), ee=False)
     gated = ("not_available_for_guests", "Not available for guests — ask an operator")
-    assert [(m["status"], m["status_label"]) for m in _tier(doc, "models")["items"]] == [gated, gated]
-    for step in ("models/delineate-anything", "models/prithvi-reconstruction"):
+    assert [(m["status"], m["status_label"]) for m in _tier(doc, "models")["items"]] == [gated, gated, gated]
+    for step in (
+        "models/delineate-anything",
+        "models/prithvi-reconstruction",
+        "models/lulc-change-hazard",
+        "models/lulc-forecast",
+    ):
         item = _item(doc, "builtin", step)
         assert (item["status"], item["status_label"]) == gated
     assert doc["summary"]["parts"]["models"] == "no models installed"

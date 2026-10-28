@@ -111,6 +111,11 @@ SAMPLE_DIR = RESOURCES_PATH / "kahovka_data"  # the folder keeps its name; the p
 SAMPLE_DETAIL = "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09"
 EE_TITLE = "Earth Engine · Sentinel-2 / Landsat / MODIS"
 EE_DETAIL = "Fetch by region, dates, bands and cloud filter from the Map"
+LAND_COVER_TITLE = "Land-cover maps · KPI-Ukraine / Esri"
+LAND_COVER_DETAIL = (
+    "Read through Earth Engine by the land-cover analyses: KPI-Ukraine 2016–2025 (10 m, Ukraine) and "
+    "Esri/Impact Observatory 2017–2025 (10 m, global)"
+)
 
 
 def deployment() -> Literal["demo", "local"]:
@@ -346,6 +351,13 @@ def build_capabilities(
                     "id": "earth-engine",
                     "title": EE_TITLE,
                     "detail": EE_DETAIL,
+                    "status": "configured" if ee_configured else "not_configured",
+                    "status_label": "Configured" if ee_configured else "Not configured",
+                },
+                {
+                    "id": "land-cover",
+                    "title": LAND_COVER_TITLE,
+                    "detail": LAND_COVER_DETAIL,
                     "status": "configured" if ee_configured else "not_configured",
                     "status_label": "Configured" if ee_configured else "Not configured",
                 },

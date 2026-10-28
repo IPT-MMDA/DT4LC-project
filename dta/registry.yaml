@@ -806,13 +806,13 @@ instances:
         delineate_model: "small"
 
   # The input raster gives only the area: the features come from Earth Engine (dta.dti.models.lulc_hazard.features).
-  # Listed under "coming" until its trained bundle is published.
   - id: models/lulc-change-hazard
     kind: model
     display_name: "Land-cover change hazard"
     ui:
-      tier: coming
-      order: 5
+      tier: builtin
+      group: models
+      order: 3
       title: Land-cover change hazard
       description: >-
         Where KPI-Ukraine land cover is most likely to change: any change, urban expansion, forest loss,
@@ -822,9 +822,9 @@ instances:
       time: "~1 min"
       prompt: Map where land cover is most likely to change
       model:
-        title: LULC change hazard (Ukraine)
-        short: LULC change hazard
-        description: Per-from-class boosted trees on KPI-Ukraine neighbourhoods, terrain and AlphaEarth embeddings.
+        title: LULC change model (KPI-Ukraine)
+        short: LULC change model
+        description: Boosted trees per start class on KPI-Ukraine neighbourhoods, terrain and AlphaEarth; ranks hazards and places forecast change.
     description: |
       Change-probability ranks for KPI-Ukraine land cover (C7x legend, 7 classes) on a 30 m grid. The model is
       a boosted-tree classifier per start class, trained on Ukrainian windows; its features (class shares of
@@ -881,8 +881,9 @@ instances:
     kind: model
     display_name: "Land-cover forecast"
     ui:
-      tier: coming
-      order: 6
+      tier: builtin
+      group: models
+      order: 4
       title: Land-cover forecast
       description: >-
         The KPI-Ukraine land-cover map some years ahead, with the area of each class and the transition matrix:
@@ -892,9 +893,9 @@ instances:
       time: "~1 min"
       prompt: Forecast the land cover map for the coming years
       model:
-        title: LULC forecast (Ukraine)
-        short: LULC forecast
-        description: Markov trend amounts placed by the change-hazard model's probabilities.
+        title: LULC change model (KPI-Ukraine)
+        short: LULC change model
+        description: Boosted trees per start class on KPI-Ukraine neighbourhoods, terrain and AlphaEarth; ranks hazards and places forecast change.
     description: |
       KPI-Ukraine land cover (C7x legend, 7 classes, 30 m) at t0 + h, t0 the latest year with KPI and
       AlphaEarth data and h the longest horizon at which the forecast maps passed their backtest. How much of
@@ -941,8 +942,9 @@ instances:
     kind: algorithm
     display_name: "Land-cover history"
     ui:
-      tier: coming
-      order: 7
+      tier: builtin
+      group: change
+      order: 5
       title: Land-cover history
       description: >-
         How KPI-Ukraine land cover of an area changed since 2017: area of each class per year, the transition
@@ -994,8 +996,9 @@ instances:
     kind: algorithm
     display_name: "Land cover since the pre-war state"
     ui:
-      tier: coming
-      order: 8
+      tier: builtin
+      group: change
+      order: 6
       title: Land cover since the pre-war state
       description: >-
         How KPI-Ukraine land cover of an area differs between 2021, the last pre-war year, and 2024: class areas,

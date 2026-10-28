@@ -507,41 +507,55 @@ export function useLandCoverView(model: LandCoverModel) {
   return { base, view: local && twin ? twin : base, hasLocal: Boolean(twin), local, setLocal, setActive };
 }
 
-/** The hazards as selectable rows: hue, name and year, a bar of the risk levels, the high-risk area, the backtest. */
+/** The hazards as selectable rows: hue, name, the high-risk area out of the area that could change, and a bar of the
+ *  risk levels over that area; a legend of the levels below. Rows where little could change are dimmed. */
 export function HazardList({ hazards, active, onChange }: { hazards: HazardItem[]; active: string; onChange: (key: string) => void }) {
+  const legend = (hazards.find((h) => h.key === active) ?? hazards[0])?.levels ?? [];
   return (
-    <div role="radiogroup" aria-label="Hazard" data-testid="hazard-list" className="flex flex-col">
-      {hazards.map((h) => {
-        const on = h.key === active;
-        return (
-          <button
-            key={h.key}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(h.key)}
-            className={cn(
-              'grid grid-cols-[4px_minmax(0,1fr)_minmax(90px,1.2fr)_auto] items-center gap-x-3 px-3 py-[7px] text-left border-b border-border2 last:border-b-0',
-              on ? 'bg-surface2' : 'hover:bg-surface2/60',
-            )}
-          >
-            <span aria-hidden className="h-full min-h-[28px] rounded-[2px]" style={{ background: h.colour }} />
-            <span className="min-w-0">
-              <span className={cn('block text-[12.5px] truncate', on && 'font-semibold')}>{h.title}</span>
-              <span className="block font-mono text-[10.5px] text-muted">by {h.year}{h.skill ? ` · ${h.skill}` : ''}</span>
+    <div className="flex flex-col border-b border-border2">
+      <div role="radiogroup" aria-label="Hazard" data-testid="hazard-list" className="flex flex-col">
+        {hazards.map((h) => {
+          const on = h.key === active;
+          return (
+            <button
+              key={h.key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(h.key)}
+              className={cn(
+                'grid grid-cols-[4px_minmax(0,1.6fr)_minmax(80px,1fr)] items-center gap-x-3 px-3 py-[7px] text-left border-b border-border2 last:border-b-0',
+                on ? 'bg-surface2' : 'hover:bg-surface2/60',
+                h.sparse && 'opacity-50',
+              )}
+            >
+              <span aria-hidden className="h-full min-h-[28px] rounded-[2px]" style={{ background: h.colour }} />
+              <span className="min-w-0">
+                <span className={cn('block text-[12.5px]', on && 'font-semibold')}>
+                  {h.title} <span className="font-mono text-[10.5px] text-muted font-normal">by {h.year}</span>
+                </span>
+                <span className="block text-[11.5px] text-muted">{h.sentence}</span>
+              </span>
+              <span aria-hidden className="flex h-[8px] w-full rounded-[2px] overflow-hidden bg-surface2 border border-border2">
+                {h.levels.map((l) => (
+                  <span key={l.label} style={{ width: `${Math.min(100, l.percent)}%`, background: l.colour }} />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {legend.length > 0 && (
+        <div data-testid="hazard-legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-[6px] text-[10.5px] text-muted">
+          <span>Bar: the area that could change this way, by risk level vs Ukraine —</span>
+          {legend.map((l) => (
+            <span key={l.label} className="inline-flex items-center gap-1">
+              <span aria-hidden className="inline-block h-[8px] w-[12px] rounded-[2px]" style={{ background: l.colour }} />
+              {l.label} ({l.range})
             </span>
-            <span aria-hidden className="flex h-[8px] w-full rounded-[2px] overflow-hidden bg-surface2 border border-border2">
-              {h.levels.map((l) => (
-                <span key={l.label} style={{ width: `${Math.min(100, l.percent)}%`, background: l.colour }} />
-              ))}
-            </span>
-            <span className="font-mono text-[11.5px] text-right whitespace-nowrap">
-              <span className="text-muted">high </span>
-              {h.high}
-            </span>
-          </button>
-        );
-      })}
+          ))}
+        </div>
+      )}
     </div>
   );
 }
