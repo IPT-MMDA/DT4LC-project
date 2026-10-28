@@ -673,3 +673,15 @@ def test_prewar_prompts_route_to_the_prewar_comparison() -> None:
     ):
         assert idx.find_matching_item(p).id == "algorithms/lulc-since-prewar", p
     assert idx.find_matching_item("Show how land cover changed since 2017").id == "algorithms/lulc-history"
+
+
+def test_hazard_land_is_named_in_words() -> None:
+    kpi = features.KPI_CLASSES
+    assert inference.land_text(["Crop", "Grass"], kpi) == "cropland and grassland"
+    assert inference.land_text(["Tree"], kpi) == "tree cover"
+    assert inference.land_text(list(kpi), kpi) == "land"
+    assert (
+        inference.land_text(["Crops", "Rangeland", "Trees"], features.ESRI_CLASSES)
+        == "cropland, rangeland and tree cover"
+    )
+    assert [r[3] for r in inference.RISK_LEVELS] == ["10 % most likely in Ukraine", "next 15 %", "next 25 %"]

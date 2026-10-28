@@ -96,10 +96,35 @@ OTHER_COLOUR = "#4d4d4d"  # a group of a format-1 bundle (a single transition)
 # Risk levels on the national rank, highest first: (raster value, name, lowest percentile, wording).
 # Cells below the last level are left uncoloured, so the start map drawn under them shows through.
 RISK_LEVELS = (
-    (3, "High", 90.0, "national top 10 %"),
-    (2, "Elevated", 75.0, "top 10–25 %"),
-    (1, "Moderate", 50.0, "top 25–50 %"),
+    (3, "High", 90.0, "10 % most likely in Ukraine"),
+    (2, "Elevated", 75.0, "next 15 %"),
+    (1, "Moderate", 50.0, "next 25 %"),
 )
+# What each class is called in sentences ("21.4 km² of 169 km² of cropland and grassland").
+LAND_WORDS = {
+    "Crop": "cropland",
+    "Crops": "cropland",
+    "Grass": "grassland",
+    "Rangeland": "rangeland",
+    "Tree": "tree cover",
+    "Trees": "tree cover",
+    "Built": "built-up land",
+    "Water": "water",
+    "Wetland": "wetland",
+    "FloodedVeg": "flooded vegetation",
+    "Bare": "bare land",
+    "Snow": "snow and ice",
+}
+
+
+def land_text(classes: list[str], legend: tuple[str, ...]) -> str:
+    """The land a group starts from, in words: "cropland and grassland"; "land" for every class."""
+    if set(classes) >= set(legend):
+        return "land"
+    words = [LAND_WORDS.get(c, c.lower()) for c in classes]
+    return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
+
+
 LEVEL_TINT = {3: 1.0, 2: 0.6, 1: 0.3}  # share of the hazard's hue mixed with white
 
 GROUP_TITLES = {
@@ -495,6 +520,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                 "horizon_years": h,
                 "year": cube.t0 + h,
                 "eligible_km2": stats.km2(ok.sum()),
+                "land": land_text(list(bundle["groups"][g]["from"]), names),
                 "top_decile_km2": stats.km2((national[ok] >= 90).sum()),
                 "top_decile_percent": round(100.0 * float((national[ok] >= 90).mean()), 1) if ok.any() else None,
                 "mean_rank": round(float(np.nanmean(national)), 1) if ok.any() else None,
@@ -525,8 +551,9 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "start_class_km2": {n: stats.km2((cube.start_class == i + 1).sum()) for i, n in enumerate(names)},
         "hazards": hazards,
         "summary": [
-            f"{h['title']} by {h['year']}: {h['top_decile_percent']:.0f} % of the {stats.km2_text(h['eligible_km2'])} "
-            f"that could make this change ranks in the national top 10 % ({stats.km2_text(h['top_decile_km2'])})."
+            f"{h['title']} by {h['year']}: {stats.km2_text(h['top_decile_km2'])} of the "
+            f"{stats.km2_text(h['eligible_km2'])} of {h['land']} is at high risk (among the 10 % most likely in "
+            "Ukraine)."
             for h in hazards
             if h["top_decile_percent"] is not None
         ],

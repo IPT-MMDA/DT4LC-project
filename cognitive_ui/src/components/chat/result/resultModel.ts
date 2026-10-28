@@ -118,7 +118,7 @@ export interface HazardItem {
   levels: { label: string; range: string; colour?: string; area: string; percent: number }[];
   high: string;  // "1.91 km² · 10 %"
   skill?: string;  // "AUC 0.98 vs 0.87 (best null)"
-  sentence: string;  // "High risk: 0.06 km² of the 0.07 km² that could change this way"
+  sentence: string;  // "High risk: 21.4 km² of 169 km² of cropland and grassland"
   sparse: boolean;  // under 1 % of the area analysed could make this change
   highKm2: number;
 }
@@ -764,7 +764,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
       levels,
       high: `${high.area} · ${formatPercent(high.percent)}`,
       skill: isNum(s.auc) ? `AUC ${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : undefined,
-      sentence: `High risk: ${high.area} of the ${formatArea(eligible)} that could change this way`,
+      sentence: `High risk: ${high.area} of ${formatArea(eligible)} of ${str(h.land) || 'the land this applies to'}`,
       sparse: false,
       highKm2,
     });
@@ -778,7 +778,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
   hazards.forEach((h, i) => {
     if (hazardEligible[i] < 0.01 * analysed_) {
       h.sparse = true;
-      h.sentence = `Little here could change this way (${formatArea(hazardEligible[i])})`;
+      h.sentence = `Little ${str(sorted[i].land) || 'land this applies to'} here (${formatArea(hazardEligible[i])})`;
     }
   });
   const named = hazards.filter((h) => !h.title.startsWith('Any') && !h.sparse);
@@ -800,7 +800,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     summary: [],
     transitions: [],
     hazards,
-    checked: 'Each hazard is shown for the furthest year at which it beat the nulls in a 2021 backtest. High = national top 10 % of cells that could make this change.',
+    checked: 'Each hazard is shown for the furthest year at which it beat simple rules in a 2021 backtest. High = among the 10 % most likely in Ukraine, compared with the same land.',
     tables: hazards.length
       ? [{
           title: 'Hazards',
@@ -810,7 +810,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
             colour: h.colour,
             cells: [h.year, ...[0, 1, 2].map((i) => (h.levels[i] ? `${h.levels[i].area} (${formatPercent(h.levels[i].percent)})` : '—')), h.skill ?? '—'],
           })),
-          note: 'Levels rank each cell among the training cells that could make the same change: high = national top 10 %, elevated = 10–25 %, moderate = 25–50 %. Ranks compare cells; they are not chances of change.',
+          note: 'Each cell is compared with the same land across Ukraine: high = among the 10 % most likely to make this change, elevated = the next 15 %, moderate = the next 25 %. These are ranks, not chances of change.',
         }]
       : [],
   };

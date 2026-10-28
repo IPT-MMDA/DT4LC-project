@@ -427,14 +427,15 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       rasters[`${k}_local`] = tif(`${k}_local`);
     }
     const levels = (high: number) => [
-      { level: 'High', range: 'national top 10 %', colour: '#b2182b', km2: high / 10, percent: high },
-      { level: 'Elevated', range: 'top 10–25 %', colour: '#d17480', km2: 0.2, percent: 15 },
-      { level: 'Moderate', range: 'top 25–50 %', colour: '#e8babf', km2: 0.3, percent: 25 },
+      { level: 'High', range: '10 % most likely in Ukraine', colour: '#b2182b', km2: high / 10, percent: high },
+      { level: 'Elevated', range: 'next 15 %', colour: '#d17480', km2: 0.2, percent: 15 },
+      { level: 'Moderate', range: 'next 25 %', colour: '#e8babf', km2: 0.3, percent: 25 },
     ];
     const hz = (group: string, title: string, year: number, high: number, skill?: unknown) => ({
       group, title, year, colour: '#b2182b', raster: group === 'any_change' ? 'change_rank' : `rank_${group}`,
       level_raster: `${group === 'any_change' ? 'change_rank' : `rank_${group}`}_level`, levels: levels(high), skill,
       eligible_km2: group === 'forest_loss' ? 0.2 : 10,
+      land: group === 'forest_loss' ? 'tree cover' : 'cropland and grassland',
     });
     const c = card(jobOf('ChangeHazardMap', {
       index_type: 'change_rank',
@@ -453,11 +454,11 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       ['Any land-cover change', '2029', '3.00 km² · 30.0 %'],
     ]);
     expect(c.hazards[0].skill).toBe('AUC 0.98 vs 0.87');
-    expect(c.hazards[0].sentence).toBe('High risk: 1.00 km² of the 10.0 km² that could change this way');
-    expect([c.hazards[1].sparse, c.hazards[1].sentence]).toEqual([true, 'Little here could change this way (0.20 km²)']);
+    expect(c.hazards[0].sentence).toBe('High risk: 1.00 km² of 10.0 km² of cropland and grassland');
+    expect([c.hazards[1].sparse, c.hazards[1].sentence]).toEqual([true, 'Little tree cover here (0.20 km²)']);
     expect(c.views.map((v) => v.key)).toEqual(['rank_urban_expansion_level', 'rank_forest_loss_level', 'change_rank_level', 'start_class']);
     expect(c.views[0].base?.path).toBe('/o/start_bare.png');
-    expect(c.views[0].items?.[0]).toEqual({ name: 'High · national top 10 %', colour: '#b2182b', value: '1.00 km²' });
+    expect(c.views[0].items?.[0]).toEqual({ name: 'High · 10 % most likely in Ukraine', colour: '#b2182b', value: '1.00 km²' });
     expect(c.local.rank_urban_expansion_level.raster?.path).toBe('/o/rank_urban_expansion_local.tif');
     expect(c.stats.map((x) => [x.label, x.value])).toEqual([
       ['Area analysed', '39.5 km²'],

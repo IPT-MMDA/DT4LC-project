@@ -547,11 +547,11 @@ export function HazardList({ hazards, active, onChange }: { hazards: HazardItem[
       </div>
       {legend.length > 0 && (
         <div data-testid="hazard-legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-[6px] text-[10.5px] text-muted">
-          <span>Bar: the area that could change this way, by risk level vs Ukraine —</span>
+          <span>Compared with the same land across Ukraine:</span>
           {legend.map((l) => (
             <span key={l.label} className="inline-flex items-center gap-1">
               <span aria-hidden className="inline-block h-[8px] w-[12px] rounded-[2px]" style={{ background: l.colour }} />
-              {l.label} ({l.range})
+              {l.label}: {l.range}
             </span>
           ))}
         </div>
@@ -574,7 +574,7 @@ function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel 
       )}
       {model.hazards.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-y border-border2">
-          {hasLocal && <ScopeToggle local={local} onChange={setLocal} labels={['Risk vs Ukraine', 'Rank in this area']} />}
+          {hasLocal && <ScopeToggle local={local} onChange={setLocal} labels={['Compared with Ukraine', 'Within this area']} />}
           <button
             type="button"
             aria-pressed={base.key === 'start_class'}

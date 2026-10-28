@@ -244,7 +244,7 @@ function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string 
       )}
       {hasLocal && (
         <div className="flex flex-wrap items-center gap-2">
-          <ScopeToggle local={local} onChange={setLocal} labels={['Risk vs Ukraine', 'Rank in this area']} />
+          <ScopeToggle local={local} onChange={setLocal} labels={['Compared with Ukraine', 'Within this area']} />
         </div>
       )}
       <MapPanel title={view.layerName} meta={view.overlay || meta} view={view} legend={<LandCoverLegend model={model} view={view} />} height="h-[360px]" actions />
