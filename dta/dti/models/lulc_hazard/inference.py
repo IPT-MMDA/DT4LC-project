@@ -89,6 +89,25 @@ ESRI_COLOURS = {  # Esri/IO legend colours
     "Snow": "#a8ebff",
     "Rangeland": "#e3e2c3",
 }
+# One hue per hazard; its risk levels are shades of it (:func:`level_colours`).
+GROUP_COLOURS = {
+    ANY: "#6a3d9a",
+    "urban_expansion": "#b2182b",
+    "forest_loss": "#8c510a",
+    "cropland_abandonment": "#d95f02",
+    "recultivation": "#2166ac",
+    "overgrowth": "#1b7837",
+}
+OTHER_COLOUR = "#4d4d4d"  # a group of a format-1 bundle (a single transition)
+# Risk levels on the national rank, highest first: (raster value, name, lowest percentile, wording).
+# Cells below the last level are left uncoloured, so the start map drawn under them shows through.
+RISK_LEVELS = (
+    (3, "High", 90.0, "national top 10 %"),
+    (2, "Elevated", 75.0, "top 10–25 %"),
+    (1, "Moderate", 50.0, "top 25–50 %"),
+)
+LEVEL_TINT = {3: 1.0, 2: 0.6, 1: 0.3}  # share of the hazard's hue mixed with white
+
 GROUP_TITLES = {
     ANY: "Any land-cover change",
     "urban_expansion": "Urban expansion",
@@ -395,6 +414,20 @@ def run(RasterPath: str, model_dir: str, t0: int | None = None) -> dict[str, Any
     return write_result(bundle, cube, bbox)
 
 
+def level_colours(hue: str) -> dict[int, str]:
+    """Raster value -> colour of each risk level: the hazard's hue, lighter for lower levels."""
+    rgb = np.array([int(hue[i : i + 2], 16) for i in (1, 3, 5)], float)
+    return {v: "#" + "".join(f"{int(round(c)):02x}" for c in t * rgb + (1 - t) * 255) for v, t in LEVEL_TINT.items()}
+
+
+def risk_levels(rank: np.ndarray) -> np.ndarray:
+    """Risk level per cell (3 high, 2 elevated, 1 moderate; NaN lower or unranked) of a national rank."""
+    out = np.full(rank.shape, np.nan, np.float32)
+    for value, _, low, _ in sorted(RISK_LEVELS):
+        out[np.isfinite(rank) & (rank >= low)] = value
+    return out
+
+
 def _skill(bundle: dict[str, Any], h: int, group: str) -> dict[str, Any] | None:
     s = bundle.get("skill", {}).get(str(h), {})
     return s.get("hazards", {}).get(group) if isinstance(s.get("hazards"), dict) else None
@@ -424,14 +457,31 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         key = INDEX_TYPE if g == ANY else f"rank_{g}"
         national = percentile(score, hz["reference_quantiles"][g]).reshape(shape)
         local = local_percentile(score).reshape(shape)
-        rasters[key], rasters[f"{key}_local"] = national, local
+        level = risk_levels(national)
+        colour = GROUP_COLOURS.get(g, OTHER_COLOUR)
+        shades = level_colours(colour)
+        rasters[key], rasters[f"{key}_local"], rasters[f"{key}_level"] = national, local, level
         styles[key] = styles[f"{key}_local"] = style
+        styles[f"{key}_level"] = artifact_files.class_style(shades)
         ok = np.isfinite(national)
+        n_ok = max(int(ok.sum()), 1)
         hazards.append(
             {
                 "group": g,
                 "title": bundle["groups"][g].get("title") or GROUP_TITLES.get(g, g),
+                "colour": colour,
                 "raster": key,
+                "level_raster": f"{key}_level",
+                "levels": [
+                    {
+                        "level": name,
+                        "range": wording,
+                        "colour": shades[value],
+                        "km2": stats.km2((level == value).sum()),
+                        "percent": round(100.0 * float((level == value).sum()) / n_ok, 1),
+                    }
+                    for value, name, _, wording in RISK_LEVELS
+                ],
                 "horizon_years": h,
                 "year": cube.t0 + h,
                 "eligible_km2": stats.km2(ok.sum()),

@@ -15,7 +15,7 @@ import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/ana
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
 import { downloadName, resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
-import { LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, TransitionList, useLandCoverView, ViewToggle } from '../components/chat/result/ResultCard';
+import { HazardList, LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, TransitionList, useLandCoverView, ViewToggle } from '../components/chat/result/ResultCard';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -233,12 +233,22 @@ function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string 
   if (!base || !view) return null;
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
-        <ViewToggle views={model.views} active={base.key} onChange={setActive} />
-        {hasLocal && <ScopeToggle local={local} onChange={setLocal} />}
-      </div>
+      {model.hazards.length > 0 ? (
+        <section aria-label="Hazards" className={panel}>
+          <HazardList hazards={model.hazards} active={base.key} onChange={setActive} />
+        </section>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewToggle views={model.views} active={base.key} onChange={setActive} />
+        </div>
+      )}
+      {hasLocal && (
+        <div className="flex flex-wrap items-center gap-2">
+          <ScopeToggle local={local} onChange={setLocal} labels={['Risk vs Ukraine', 'Rank in this area']} />
+        </div>
+      )}
       <MapPanel title={view.layerName} meta={view.overlay || meta} view={view} legend={<LandCoverLegend model={model} view={view} />} height="h-[360px]" actions />
-      {model.summary.length > 0 && (
+      {(model.summary.length > 0 || model.checked) && (
         <section aria-label="Summary" className={panel}>
           <header className="px-[14px] py-[10px] border-b border-border2">
             <h2 className="text-[13px] font-semibold">Summary</h2>

@@ -190,7 +190,7 @@ def test_write_result_saves_styled_rasters_and_no_arrays(tmp_path: Path) -> None
 
     assert result["index_type"] == "change_rank"
     ranks = {"change_rank", "rank_trees_to_crops", "rank_crops_to_built"}
-    assert set(result["rasters"]) == ranks | {f"{k}_local" for k in ranks} | {"start_class"}
+    assert set(result["rasters"]) == ranks | {f"{k}_{v}" for k in ranks for v in ("local", "level")} | {"start_class"}
     assert "change_rank_map_bare" in result["visualizations"]
     json.dumps(result)  # references and numbers only
     with rasterio.open(result["rasters"]["change_rank"]["path"]) as src:
@@ -495,3 +495,22 @@ def test_km2_text_keeps_two_decimals_for_small_areas() -> None:
         "48.3 km²",
         "1 204 km²",
     ]
+
+
+def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path) -> None:
+    pytest.importorskip("xgboost")
+    assert inference.risk_levels(np.array([10.0, 55, 80, 95, np.nan])).tolist()[1:4] == [1.0, 2.0, 3.0]
+    assert inference.level_colours("#b2182b") == {3: "#b2182b", 2: "#d17480", 1: "#e8babf"}
+    with artifact_files.step_outputs(tmp_path, "1_ChangeHazardMap"):
+        result = inference.write_result(_bundle_2(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
+    forest = next(h for h in result["statistics"]["hazards"] if h["group"] == "forest_loss")
+    assert (
+        forest["colour"] == inference.GROUP_COLOURS["forest_loss"]
+        and forest["level_raster"] == "rank_forest_loss_level"
+    )
+    assert [lv["level"] for lv in forest["levels"]] == ["High", "Elevated", "Moderate"]
+    with rasterio.open(result["rasters"]["rank_forest_loss_level"]["path"]) as src:
+        level = src.read(1)
+        assert src.tags()["DT4LC_KIND"] == "class"
+    n = np.isfinite(level).sum()
+    assert sum(lv["km2"] for lv in forest["levels"]) == pytest.approx(n * stats.CELL_KM2)

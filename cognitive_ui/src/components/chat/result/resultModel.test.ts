@@ -416,38 +416,51 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(formatArea(-1.45, { sign: true })).toBe('−1.45 km²');
   });
 
-  it('hazards: one view per hazard with its year, a local twin, the start map, and the hazards table', () => {
-    const vis: Record<string, unknown> = {};
-    const rasters: Record<string, unknown> = {};
-    for (const k of ['change_rank', 'change_rank_local', 'rank_forest_loss', 'rank_forest_loss_local']) {
-      vis[`${k}_map`] = ref(k);
-      vis[`${k}_map_bare`] = ref(`${k}_bare`, ramp);
-      rasters[k] = tif(k);
+  it('hazards: rows sorted by high-risk share (any change last), level views over the faded start map', () => {
+    const vis: Record<string, unknown> = { start_class_map_bare: ref('start_bare', classes) };
+    const rasters: Record<string, unknown> = { start_class: tif('start_class') };
+    const shades = { kind: 'class', classes: { '3': '#b2182b', '2': '#d17480', '1': '#e8babf' } };
+    for (const k of ['change_rank', 'rank_forest_loss', 'rank_urban_expansion']) {
+      vis[`${k}_level_map_bare`] = ref(`${k}_level`, shades);
+      vis[`${k}_local_map_bare`] = ref(`${k}_local`, ramp);
+      rasters[`${k}_level`] = tif(`${k}_level`);
+      rasters[`${k}_local`] = tif(`${k}_local`);
     }
-    vis.start_class_map_bare = ref('start_bare', classes);
-    rasters.start_class = tif('start_class');
+    const levels = (high: number) => [
+      { level: 'High', range: 'national top 10 %', colour: '#b2182b', km2: high / 10, percent: high },
+      { level: 'Elevated', range: 'top 10–25 %', colour: '#d17480', km2: 0.2, percent: 15 },
+      { level: 'Moderate', range: 'top 25–50 %', colour: '#e8babf', km2: 0.3, percent: 25 },
+    ];
+    const hz = (group: string, title: string, year: number, high: number, skill?: unknown) => ({
+      group, title, year, colour: '#b2182b', raster: group === 'any_change' ? 'change_rank' : `rank_${group}`,
+      level_raster: `${group === 'any_change' ? 'change_rank' : `rank_${group}`}_level`, levels: levels(high), skill,
+    });
     const c = card(jobOf('ChangeHazardMap', {
       index_type: 'change_rank',
       statistics: {
-        valid_pixels: 1200,
-        start_class_km2: { Trees: 0.5, Crops: 0.58 },
-        hazards: [
-          { group: 'any_change', title: 'Any land-cover change', raster: 'change_rank', year: 2028, eligible_km2: 1.08, top_decile_km2: 0.108, top_decile_percent: 10, skill: { auc: 0.8, best_null_auc: 0.73 } },
-          { group: 'forest_loss', title: 'Forest loss', raster: 'rank_forest_loss', year: 2027, eligible_km2: 0.5, top_decile_km2: 0.02, top_decile_percent: 4, skill: null },
-        ],
-        summary: ['Forest loss by 2027: 4 % ...'],
+        start_class_km2: { Trees: 18.5, Crops: 21 },
+        hazards: [hz('any_change', 'Any land-cover change', 2029, 30), hz('forest_loss', 'Forest loss', 2027, 2), hz('urban_expansion', 'Urban expansion', 2029, 10, { auc: 0.983, best_null_auc: 0.869 })],
       },
       metadata: { t0: 2025 },
       visualizations: vis,
       rasters,
     }));
     if (c.kind !== 'landcover') throw new Error(c.kind);
-    expect(c.title).toBe('Land-cover hazards · from 2025');
-    expect(c.views.map((v) => [v.key, v.label])).toEqual([['change_rank', 'Any change'], ['rank_forest_loss', 'Forest loss'], ['start_class', 'Now']]);
-    expect(c.views[1].overlay).toBe('rank by 2027 · vs Ukraine');
-    expect(c.local.rank_forest_loss.raster?.path).toBe('/o/rank_forest_loss_local.tif');
-    expect(c.classes.map((x) => [x.name, x.value, x.colour])).toEqual([['Trees', '0.50 km²', '#397d49'], ['Crops', '0.58 km²', '#e49635']]);
-    expect(c.tables[0].rows[0].cells).toEqual(['2028', '1.08 km²', '0.11 km² (10.0 %)', '0.80 vs 0.73']);
+    expect(c.hazards.map((h) => [h.title, h.year, h.high])).toEqual([
+      ['Urban expansion', '2029', '1.00 km² · 10.0 %'],
+      ['Forest loss', '2027', '0.20 km² · 2.0 %'],
+      ['Any land-cover change', '2029', '3.00 km² · 30.0 %'],
+    ]);
+    expect(c.hazards[0].skill).toBe('AUC 0.98 vs 0.87');
+    expect(c.views.map((v) => v.key)).toEqual(['rank_urban_expansion_level', 'rank_forest_loss_level', 'change_rank_level', 'start_class']);
+    expect(c.views[0].base?.path).toBe('/o/start_bare.png');
+    expect(c.views[0].items?.[0]).toEqual({ name: 'High · national top 10 %', colour: '#b2182b', value: '1.00 km²' });
+    expect(c.local.rank_urban_expansion_level.raster?.path).toBe('/o/rank_urban_expansion_local.tif');
+    expect(c.stats.map((x) => [x.label, x.value])).toEqual([
+      ['Area analysed', '39.5 km²'],
+      ['Most at risk', 'Urban expansion · 10.0 % high'],
+      ['Horizon', '2029 (Forest loss 2027)'],
+    ]);
   });
 
   it('an old hazard job without a hazards list stays an index card', () => {

@@ -54,6 +54,8 @@ export interface CardView {
   legend?: LayerLegend;
   /** A map drawn faded under `bare` (the start map under the changed cells). */
   base?: ArtifactRef;
+  /** The view's own legend items (risk levels with their areas), when not the card's classes. */
+  items?: ClassItem[];
 }
 
 export interface ClassItem {
@@ -99,11 +101,24 @@ export type ResultCardModel =
       lead?: string;
       summary: string[];
       transitions: TransitionItem[];
+      /** Hazards, most prominent first; each selects its view (`key`). Empty for other land-cover cards. */
+      hazards: HazardItem[];
       /** How far the result was checked, in one sentence. */
       checked?: string;
       tables: TableModel[];
     })
   | (CardBase & { kind: 'image'; views: [CardView] });
+
+/** One hazard of a hazard card: its risk levels in this area, for the selector row. */
+export interface HazardItem {
+  key: string;  // the view it selects
+  title: string;
+  year: string;
+  colour?: string;
+  levels: { label: string; range: string; colour?: string; area: string; percent: number }[];
+  high: string;  // "1.91 km² · 10 %"
+  skill?: string;  // "AUC 0.98 vs 0.87 (best null)"
+}
 
 /** One class-to-class flow of a land-cover card: "Trees → Crops · 0.79 km² · 4 % of Trees". */
 export interface TransitionItem {
@@ -688,52 +703,86 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
   const meta = obj(artifact.metadata);
   const vis = obj(artifact.visualizations);
   const rasters = obj(artifact.rasters);
-  const hazards = arr(stats.hazards).map(obj);
   const t0 = str(meta.t0);
-  const views: CardView[] = [];
-  const local: Record<string, CardView> = {};
-  for (const h of hazards) {
-    const key = str(h.raster);
-    const title = str(h.title);
-    const year = str(h.year);
-    views.push(rankView(vis, rasters, key, title.split(' ')[0] === 'Any' ? 'Any change' : title, `${title} · ${year}`, titled(`rank by ${year}`, 'vs Ukraine')));
-    local[key] = rankView(vis, rasters, `${key}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'within this area'));
-  }
-  const start = classView(vis, rasters, 'start_class', 'Now', titled('Land cover', t0), titled('Esri land cover', t0));
-  views.push(start);
+  const start = classView(vis, rasters, 'start_class', `Land cover ${t0}`, titled('Land cover', t0), titled('Esri land cover', t0));
   // km² per class; an older job has hectares.
   const startAreas = stats.start_class_km2
     ? obj(stats.start_class_km2)
     : Object.fromEntries(Object.entries(obj(stats.start_class_ha)).map(([k, v]) => [k, isNum(v) ? v / 100 : v]));
-  const skill = (h: Obj) => {
+  const highShare = (h: Obj) => (isNum(obj(arr(h.levels)[0]).percent) ? (obj(arr(h.levels)[0]).percent as number) : isNum(h.top_decile_percent) ? h.top_decile_percent : 0);
+  // Named hazards by their share at high risk, then "any change" as the overview.
+  const all = arr(stats.hazards).map(obj);
+  const sorted = [...all.filter((h) => h.group !== 'any_change').sort((a, b) => highShare(b) - highShare(a)), ...all.filter((h) => h.group === 'any_change')];
+  const views: CardView[] = [];
+  const local: Record<string, CardView> = {};
+  const hazards: HazardItem[] = [];
+  for (const h of sorted) {
+    const rank = str(h.raster);
+    const title = str(h.title);
+    const year = str(h.year);
+    const levels = arr(h.levels).map(obj).map((l) => ({
+      label: str(l.level),
+      range: str(l.range),
+      colour: isHex(l.colour) ? l.colour : undefined,
+      area: formatArea(l.km2),
+      percent: isNum(l.percent) ? l.percent : 0,
+    }));
+    const levelKey = str(h.level_raster);
+    const main: CardView = levelKey
+      ? {
+          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, titled(`risk by ${year}`, 'vs Ukraine')),
+          items: levels.map((l) => ({ name: `${l.label} · ${l.range}`, colour: l.colour, value: l.area })),
+        }
+      : rankView(vis, rasters, rank, title, `${title} · ${year}`, titled(`rank by ${year}`, 'vs Ukraine'));
+    main.base = start.bare;
+    views.push(main);
+    local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'within this area')), base: start.bare };
     const s = obj(h.skill);
-    return isNum(s.auc) ? `${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : '—';
-  };
+    const high = levels[0] ?? { area: formatArea(km2Of(h, 'top_decile')), percent: highShare(h) };
+    hazards.push({
+      key: main.key,
+      title,
+      year,
+      colour: isHex(h.colour) ? h.colour : undefined,
+      levels,
+      high: `${high.area} · ${formatPercent(high.percent)}`,
+      skill: isNum(s.auc) ? `AUC ${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : undefined,
+    });
+  }
+  views.push(start);
+  const years = [...new Set(hazards.map((h) => h.year))];
+  const longest = years.length ? String(Math.max(...years.map(Number))) : '—';
+  const shorter = hazards.filter((h) => h.year !== longest).map((h) => `${h.title} ${h.year}`);
+  const top = hazards.find((h) => !h.title.startsWith('Any'));
+  const analysed_ = Object.values(startAreas).reduce<number>((a, v) => a + (isNum(v) ? v : 0), 0);
   return {
     kind: 'landcover',
     title: titled('Land-cover hazards', t0 && `from ${t0}`),
-    note: 'ranks, not probabilities',
+    note: 'risk levels are national ranks, not probabilities',
     source: 'Esri land cover, AlphaEarth and terrain from Earth Engine',
     bounds: boundsOf(files),
     views,
     local,
     classes: landClasses(start, startAreas),
     stats: [
-      { label: 'Origin year', value: t0 || '—' },
-      { label: 'Hazards', value: String(hazards.length) },
-      { label: 'Cells ranked', value: formatValue(stats.valid_pixels) },
+      { label: 'Area analysed', value: formatArea(analysed_) },
+      { label: 'Most at risk', value: top ? `${top.title} · ${formatPercent(top.levels[0]?.percent ?? 0)} high` : '—' },
+      { label: 'Horizon', value: shorter.length ? `${longest} (${shorter.join(', ')})` : longest },
     ],
-    summary: arr(stats.summary).map(str).filter(Boolean),
+    summary: [],
     transitions: [],
+    hazards,
+    checked: 'Each hazard is shown for the furthest year at which it beat the nulls in a 2021 backtest. High = national top 10 % of cells that could make this change.',
     tables: hazards.length
       ? [{
           title: 'Hazards',
-          columns: ['Hazard', 'By', 'Could change', 'In national top 10 %', 'Backtest AUC vs null'],
+          columns: ['Hazard', 'By', 'High', 'Elevated', 'Moderate', 'Backtest'],
           rows: hazards.map((h) => ({
-            label: str(h.title),
-            cells: [str(h.year), formatArea(km2Of(h, 'eligible')), `${formatArea(km2Of(h, 'top_decile'))} (${formatPercent(h.top_decile_percent)})`, skill(h)],
+            label: h.title,
+            colour: h.colour,
+            cells: [h.year, ...[0, 1, 2].map((i) => (h.levels[i] ? `${h.levels[i].area} (${formatPercent(h.levels[i].percent)})` : '—')), h.skill ?? '—'],
           })),
-          note: 'Each hazard is shown for the furthest year at which it beat the nulls in a backtest. Ranks compare cells; they are not chances of change.',
+          note: 'Levels rank each cell among the training cells that could make the same change: high = national top 10 %, elevated = 10–25 %, moderate = 25–50 %. Ranks compare cells; they are not chances of change.',
         }]
       : [],
   };
@@ -774,6 +823,7 @@ function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): 
     lead: str(stats.summary_lead) || undefined,
     summary: arr(stats.summary).map(str).filter(Boolean),
     transitions,
+    hazards: [],
     checked: str(stats.checked) || undefined,
     tables: [
       classesTable(rows, 'Class areas', t0, year, style),
@@ -822,6 +872,7 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
     lead: str(stats.summary_lead) || undefined,
     summary: arr(stats.summary).map(str).filter(Boolean),
     transitions,
+    hazards: [],
     checked: 'Observed Esri labels; comparing 3-year majorities damps their year-to-year flicker.',
     tables: [
       classesTable(rows, 'Class areas', first, last, style),

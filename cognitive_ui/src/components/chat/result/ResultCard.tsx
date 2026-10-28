@@ -21,6 +21,7 @@ import {
   type ResultCardModel,
   type Stat,
   type TableModel,
+  type HazardItem,
   type TransitionItem,
   type Tone,
 } from './resultModel';
@@ -374,6 +375,14 @@ type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
 
 /** A class view's legend (its classes with the card's areas), else the view's ramp. */
 export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: CardView }) {
+  if (view.items) {
+    return (
+      <>
+        <ClassLegend classes={view.items} />
+        {view.base && <span className="text-muted">faded: land cover now</span>}
+      </>
+    );
+  }
   if (view.legend?.kind === 'ramp') {
     return (
       <span className="flex items-center gap-2">
@@ -471,7 +480,7 @@ export function LandCoverTable({ table }: { table: TableModel }) {
 }
 
 /** National / within-area toggle of a hazard view; nothing for a view without a local twin. */
-export function ScopeToggle({ local, onChange }: { local: boolean; onChange: (local: boolean) => void }) {
+export function ScopeToggle({ local, onChange, labels = ['Ukraine', 'This area'] }: { local: boolean; onChange: (local: boolean) => void; labels?: [string, string] }) {
   return (
     <div role="group" aria-label="Rank against" className="flex-none flex border border-border rounded-control overflow-hidden text-[11.5px]">
       {[false, true].map((on) => (
@@ -482,7 +491,7 @@ export function ScopeToggle({ local, onChange }: { local: boolean; onChange: (lo
           onClick={() => onChange(on)}
           className={cn('px-[9px] py-1', on && 'border-l border-border', local === on ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
         >
-          {on ? 'This area' : 'Ukraine'}
+          {on ? labels[1] : labels[0]}
         </button>
       ))}
     </div>
@@ -498,15 +507,70 @@ export function useLandCoverView(model: LandCoverModel) {
   return { base, view: local && twin ? twin : base, hasLocal: Boolean(twin), local, setLocal, setActive };
 }
 
+/** The hazards as selectable rows: hue, name and year, a bar of the risk levels, the high-risk area, the backtest. */
+export function HazardList({ hazards, active, onChange }: { hazards: HazardItem[]; active: string; onChange: (key: string) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Hazard" data-testid="hazard-list" className="flex flex-col">
+      {hazards.map((h) => {
+        const on = h.key === active;
+        return (
+          <button
+            key={h.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(h.key)}
+            className={cn(
+              'grid grid-cols-[4px_minmax(0,1fr)_minmax(90px,1.2fr)_auto] items-center gap-x-3 px-3 py-[7px] text-left border-b border-border2 last:border-b-0',
+              on ? 'bg-surface2' : 'hover:bg-surface2/60',
+            )}
+          >
+            <span aria-hidden className="h-full min-h-[28px] rounded-[2px]" style={{ background: h.colour }} />
+            <span className="min-w-0">
+              <span className={cn('block text-[12.5px] truncate', on && 'font-semibold')}>{h.title}</span>
+              <span className="block font-mono text-[10.5px] text-muted">by {h.year}{h.skill ? ` · ${h.skill}` : ''}</span>
+            </span>
+            <span aria-hidden className="flex h-[8px] w-full rounded-[2px] overflow-hidden bg-surface2 border border-border2">
+              {h.levels.map((l) => (
+                <span key={l.label} style={{ width: `${Math.min(100, l.percent)}%`, background: l.colour }} />
+              ))}
+            </span>
+            <span className="font-mono text-[11.5px] text-right whitespace-nowrap">
+              <span className="text-muted">high </span>
+              {h.high}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel }) {
   const { base, view, hasLocal, local, setLocal, setActive } = useLandCoverView(model);
   if (!base || !view) return null;
   return (
     <CardShell model={model}>
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border2">
-        <ViewToggle views={model.views} active={base.key} onChange={setActive} />
-        {hasLocal && <ScopeToggle local={local} onChange={setLocal} />}
-      </div>
+      {model.hazards.length > 0 ? (
+        <HazardList hazards={model.hazards} active={base.key} onChange={setActive} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border2">
+          <ViewToggle views={model.views} active={base.key} onChange={setActive} />
+        </div>
+      )}
+      {model.hazards.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-y border-border2">
+          {hasLocal && <ScopeToggle local={local} onChange={setLocal} labels={['Risk vs Ukraine', 'Rank in this area']} />}
+          <button
+            type="button"
+            aria-pressed={base.key === 'start_class'}
+            onClick={() => setActive(base.key === 'start_class' ? model.hazards[0].key : 'start_class')}
+            className={cn('px-[9px] py-1 rounded-control border border-border text-[11.5px]', base.key === 'start_class' ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
+          >
+            Land cover now
+          </button>
+        </div>
+      )}
       <MapImage view={view} alt={`${model.title}, ${view.overlay}`} contain />
       <LegendBlock source={model.source}>
         <LandCoverLegend model={model} view={view} />
