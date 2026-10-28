@@ -87,19 +87,32 @@ python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
 # Server available at http://localhost:8000
 ```
 
+## Use the App
+
+1. **Open it.** Under Docker, open <http://localhost>. Locally, also start the UI (`cd cognitive_ui && npm install && npm run dev`) and open <http://localhost:3000>; the dev server passes `/v1` requests to the API on port 8000.
+2. **The landing page** at `/` shows what DT4LC does. **Try with the Kakhovka sample** opens the Workspace with a new conversation and the bundled before and after images in the composer; **Describe your own analysis** opens it without them, and **Open workspace** returns to your last conversation.
+3. **The Workspace** (`/app`) is a chat. Describe an analysis in your own words, or pick a suggestion such as "Compare water before and after the dam breach". Each analysis is one assistant message: what it will do, the plan steps as they run (with **Cancel**), then a result card with the map, its legend, the areas in km² and follow-up suggestions. Questions get markdown answers and start no analysis.
+4. **Results and downloads.** The result card has **On map**, **GeoTIFF**, **PNG** and **GeoPackage** (each when the result has that file) and **Details ›**, which opens Result detail. **Library** (in the rail, or the menu on a phone) lists every analysis and file; an analysis opens its Result detail, and a file opens a new conversation with it attached. Result detail shows the maps, the statistics (with a CSV), the plan steps and their parameters, the interpretation and the downloads, and has **Open in workspace**, **Re-run with changes** and **Open on map**.
+
+Without signing in you are a guest: by default 5 analyses an hour, kept for 24 hours (see [Sessions](API.md#sessions)).
+
 ## Test Endpoints
 
 ### Health Check
 
 ```bash
 curl http://localhost:8000/v1/health
-# {"ok":true,"service":"DT4LC","version":"0.5.0","llm_providers":null,"gee":null,"models":null,"disk":null}
+# {"ok":true,"service":"DT4LC","version":"0.6.0","assistant":{"connected":false,"offline":true,"provider":null,"model":null},"llm_providers":null,"gee":null,"models":null,"disk":null}
 ```
+
+`assistant` names the LLM provider that answers, or shows `"offline": true` when none is available (see [API.md](API.md#get-v1health)).
 
 ### Submit Job
 
+Jobs belong to the session cookie, so keep it in a jar (`-c`/`-b`); otherwise the next call is a new guest session and gets 404 for the job (see [API.md](API.md#sessions)).
+
 ```bash
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{"prompt": "calculate ndvi"}'
 ```
@@ -107,18 +120,18 @@ curl -X POST http://localhost:8000/v1/jobs \
 ### Check Job Status
 
 ```bash
-curl http://localhost:8000/v1/jobs/{job_id}
+curl -b cookies.txt http://localhost:8000/v1/jobs/{job_id}
 ```
 
 ### Upload File and Analyze
 
 ```bash
 # 1. Upload GeoTIFF
-curl -X POST http://localhost:8000/v1/upload \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
   -F "file=@/path/to/data.tif"
 
 # 2. Submit job with attachment
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "calculate ndvi",
@@ -154,7 +167,7 @@ pytest tests/test_orchestrator.py -v
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
 | `/v1/jobs` | GET | List jobs (paginated) |
 | `/v1/upload` | POST | Upload GeoTIFF file |
-| `/v1/capabilities` | GET | List available algorithms |
+| `/v1/capabilities` | GET | What this server can do for the caller, in six tiers (see [API.md](API.md#get-v1capabilities)) |
 | `/v1/models` | GET | List available models |
 | `/v1/metrics` | GET | System metrics |
 | `/v1/queue/stats` | GET | Queue statistics |

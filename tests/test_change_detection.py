@@ -97,3 +97,105 @@ def test_evi_scaled_by_source_dtype(write_scaled_scene, dtype: str, scale: int, 
     assert round(float(np.min(index_before)), 6) == round(float(np.max(index_before)), 6) == expected
     if dtype != "uint8":
         assert round(result["statistics"]["mean_change"], 6) == 0.0
+
+
+# --- Areas for the result card (v0.6.0 Workspace) ----------------------------------
+
+SAMPLE_BEFORE = str(Path(__file__).resolve().parents[1] / "resources/kahovka_data/hlsl_20230601.tif")
+SAMPLE_AFTER = str(Path(__file__).resolve().parents[1] / "resources/kahovka_data/hlsl_20230609.tif")
+
+
+def test_ndwi_on_the_sample_reports_water_and_class_areas() -> None:
+    """The Kakhovka pair (30 m, EPSG:32636): open water is NDWI > 0.2, one pixel is 0.0009 km².
+
+    The numbers are what the code computes; the full scene's 32 → 256 km², +428 / -43 are not reproduced.
+    """
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        result = run(RasterPathBefore=SAMPLE_BEFORE, RasterPathAfter=SAMPLE_AFTER, IndexType="ndwi")
+    stats = result["statistics"]
+
+    # Clipping each date to [-1, 1] moved 58 pixels to stable (51 from decrease, 7 from increase).
+    assert stats["areas_km2"] == {"increase": 325.22, "decrease": 9.902, "stable": 195.718}
+    assert stats["water"] == {
+        "before_km2": 13.881,
+        "after_km2": 170.039,
+        "gained_km2": 156.761,
+        "lost_km2": 0.603,
+        "threshold": 0.2,
+    }
+    water = stats["water"]
+    assert water["before_km2"] + water["gained_km2"] - water["lost_km2"] == pytest.approx(water["after_km2"], abs=1e-3)
+    classes = result["classification"]
+    increase = classes["moderate_water_gain"]["pixels"] + classes["strong_water_gain"]["pixels"]
+    assert stats["areas_km2"]["increase"] == pytest.approx(increase * 0.0009, abs=1e-3)
+    assert "vegetation" not in stats
+
+
+def test_ndvi_on_the_sample_reports_vegetation() -> None:
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        stats = run(RasterPathBefore=SAMPLE_BEFORE, RasterPathAfter=SAMPLE_AFTER, IndexType="ndvi")["statistics"]
+
+    assert stats["vegetation"] == {
+        "before_km2": 437.651,
+        "after_km2": 241.527,
+        "gained_km2": 2.011,
+        "lost_km2": 198.136,
+        "threshold": 0.3,
+    }
+    assert "water" not in stats
+
+
+def test_sample_indices_are_clipped_before_differencing() -> None:
+    """Negative stored reflectance gave the sample's NDWI change -223 .. +318; each date is now in [-1, 1]."""
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        result = run(RasterPathBefore=SAMPLE_BEFORE, RasterPathAfter=SAMPLE_AFTER, IndexType="ndwi")
+    stats, index_stats = result["statistics"], result["index_statistics"]
+
+    assert -2 <= stats["min_change"] < stats["max_change"] <= 2
+    assert (round(stats["min_change"], 4), round(stats["max_change"], 4)) == (-1.6024, 2.0)
+    assert round(stats["mean_change"], 4) == 0.3533
+    for when in ("before", "after"):
+        assert -1 <= index_stats[when]["min"] < index_stats[when]["max"] <= 1
+    means = {name: c["mean_change"] for name, c in result["class_statistics"].items()}
+    assert means == {"Water gained": 0.806, "Water lost": -0.233, "No change": 0.1642}
+    assert result["rasters"]["change"]["stats"]["max"] <= 2
+
+
+def test_index_beyond_its_range_is_clipped_and_zero_denominator_is_nan(tmp_path: Path) -> None:
+    """NDVI of red -3, NIR 4 is 7 (clipped to 1); red -2, NIR 2 has no NDVI (NaN), as band math."""
+    transform = from_origin(0, 0, 10, 10)
+    paths = []
+    for name, red, nir in (("before", [[-3.0, -2.0, 1.0]], [[4.0, 2.0, 3.0]]), ("after", [[1.0] * 3], [[1.0] * 3])):
+        path = tmp_path / f"{name}.tif"
+        with rasterio.open(
+            path,
+            "w",
+            driver="GTiff",
+            height=1,
+            width=3,
+            count=2,
+            dtype="float32",
+            crs="EPSG:32636",
+            transform=transform,
+        ) as dst:
+            dst.write(np.array([red, nir], dtype=np.float32))
+        paths.append(str(path))
+
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        result = run(RasterPathBefore=paths[0], RasterPathAfter=paths[1], IndexType="ndvi")
+    with rasterio.open(result["rasters"]["index_before"]["path"]) as src:
+        before = src.read(1, masked=True).filled(np.nan)
+    with rasterio.open(result["rasters"]["change"]["path"]) as src:
+        change = src.read(1, masked=True).filled(np.nan)
+
+    np.testing.assert_allclose(before[0], [1.0, np.nan, 0.5])
+    np.testing.assert_allclose(change[0], [-1.0, np.nan, -0.5])
+
+
+def test_areas_are_null_for_a_geographic_crs(dummy_tifs) -> None:
+    """Degrees have no fixed area: no km² for EPSG:4326."""
+    with patch("dta.dti.algorithms.change_detection.HAS_MATPLOTLIB", False):
+        stats = run(RasterPathBefore=dummy_tifs[0], RasterPathAfter=dummy_tifs[1], IndexType="ndvi")["statistics"]
+
+    assert stats["areas_km2"] is None
+    assert stats["vegetation"] is None

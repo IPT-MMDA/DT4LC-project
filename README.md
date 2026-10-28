@@ -4,50 +4,102 @@ A cognitive digital twin framework for land cover change detection and vegetatio
 
 It is aimed at remote sensing researchers, environmental scientists and disaster response teams who need to perform land cover analysis without building custom processing pipelines.
 
+What changed in each release: [CHANGELOG.md](CHANGELOG.md).
+
 ## Features
 
-- **NDVI Analysis** - Calculate vegetation health indices from satellite imagery
-- **Change Detection** - Compare before/after images to detect land cover changes
-- **Field Boundary Detection** - Delineate-Anything model for agricultural field segmentation
-- **LLM-Powered Planning** - Natural language interface with automatic pipeline generation
-- **Intent Classification** - Smart routing between pipeline execution and conversational responses
-- **Multi-Turn Conversations** - Follow-up requests using previous context and attachments
-- **Multi-Provider LLM Support** - Gemini, Groq, OpenAI, Anthropic, Mistral, and local Ollama or Apertus with automatic fallback
-- **Prithvi Model Integration** - NASA/IBM foundation model for geospatial features
+- **Ask in plain language** - In the Workspace, one assistant message narrates one analysis: what it will do, the plan steps as they run, and a result card with the map, its legend, km² statistics and follow-up suggestions. Questions get markdown answers and never start a job.
+- **Built-in analyses** - NDVI, EVI, NDWI and NDSI; change detection between two dates; land-cover and snow classification; raster statistics; field boundaries with Delineate-Anything; Prithvi reconstruction. They run without an LLM.
+- **Composed analyses** - Band math for indices that are not in the catalog (NDMI, NBR, SAVI, NDBI or your own formula), offered as a plan that runs only after you confirm it.
+- **Map mode** - Draw or pick a region and send it to the chat, show results as map layers with their legends and class areas, and compare two layers with a swipe. The bundled sample is shown in true colour with its footprint. Fetching imagery by region needs an Earth Engine key.
+- **Library and Result detail** - Every analysis and file in one filtered list. Each result has a page with its maps, the class statistics (with CSV), the plan steps and their parameters, the interpretation, and downloads with readable names such as `water-change_ndwi_2023-06-01_2023-06-09.tif`.
+- **Capabilities** - A live page of what this server can do for you, in six tiers, computed from its state: the assistant, the installed models, Earth Engine and your role.
+- **Guests, members and operators** - No login wall. Guests get a few analyses per hour, kept for 24 h. Members sign in with GitHub, if their email is on an allowlist, and have no limit. Operators also get Settings: LLM providers and models, model downloads, allowlists and guest limits, applied without a restart.
+- **Multi-provider LLM with deterministic fallback** - Gemini, Groq, OpenAI, Anthropic, Mistral, and local Ollama or Apertus, tried in order; every stage has a deterministic fallback, so built-in analyses run with no provider at all.
+- **Public demo deployment** - A Docker Compose override with pre-installed models, per-IP rate limits and the client address forwarded through a TLS proxy ([docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md)).
+- **Phone, tablet and dark theme** - Layouts for phones and tablets (tested at 390 and 834 px wide) and a dark theme on every screen; the seven main screens pass axe with no serious or critical violation in either theme.
+
+## Screenshots
+
+From the browser end-to-end tests (`cognitive_ui/tests/e2e/`), on the bundled Kakhovka sample, with no LLM provider and no Earth Engine key.
+
+![The landing page: "What changed on the ground? Ask in plain language." over the flood map of the lower Dnipro](docs/screenshots/landing.jpg)
+
+*The landing page. The image is the full scene; the caption quotes the bundled crop's +157 km² of water.*
+
+![The Workspace: an NDWI change result card with the difference map, open water 13.9 → 170 km², +157 km² gained and 0.6 km² lost, and the map docked beside the chat](docs/screenshots/workspace-result.jpg)
+
+*The Workspace after "Compare water before and after the dam breach": one message, the result card and its follow-up, and the result on the docked map.*
+
+![Map mode: the imagery panel with a region, dataset, dates and bands, the NDWI change layer over the true-colour sample, and its legend with class areas](docs/screenshots/map-mode.jpg)
+
+*Map mode: a drawn region ready for Send to chat, the result and sample layers, and the legend with the class areas.*
+
+![Result detail: the difference map, the before and after NDWI maps, the plan's four steps and the downloads with readable names](docs/screenshots/result-detail.jpg)
+
+*Result detail: maps, plan steps with their parameters, statistics and downloads.*
+
+![The Library: analyses and files in one list with status, type, conversation and actions](docs/screenshots/library.png)
+
+*The Library: analyses (done and failed) and the sample file in one list.*
+
+![Capabilities: six tiers, here with the assistant offline, so the Ask and Composed tiers are greyed](docs/screenshots/capabilities.png)
+
+*Capabilities on a local server with the assistant offline.*
+
+<img src="docs/screenshots/workspace-phone.png" alt="The Workspace on a 390 px phone: the result card under the message, the composer at the bottom" width="260">
+
+*The Workspace on a phone.*
 
 ## Architecture
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
-│                    http://localhost (port 80)                    │
-└─────────────────────────────────────┬───────────────────────────┘
-                                      │ /v1/* (nginx proxy)
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Backend (FastAPI)                            │
-│                    http://localhost:8000                         │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Context Orchestration Engine (COE)                          ││
-│  │  • Intent Classifier (routes pipeline vs conversation)      ││
-│  │  • Context Agent (understands user intent)                  ││
-│  │  • Planner Agent (builds execution pipeline)                ││
-│  │  • Decision Agent (validates plan)                          ││
-│  └─────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Digital Twin Instance (DTI)                                 ││
-│  │  • Pipeline Executor                                        ││
-│  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
-│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────┬───────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   LLM Providers (fallback chain)                 │
-│  Gemini (fast) → Groq (ultra-fast) → Ollama (local)             │
-└─────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ Frontend (React): Landing, Workspace, Map, Library,                │
+│ Result detail, Capabilities, Settings                              │
+│ http://localhost (nginx, Docker) · http://localhost:3000 (Vite)    │
+└─────────┬──────────────────────────────────────────────────────────┘
+          │ /v1/* with the session cookie
+          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Backend (FastAPI) · http://localhost:8000                          │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Sessions: a signed dt4lc_session cookie on every request       │ │
+│ │  • role: guest; member or operator after GitHub sign-in        │ │
+│ │  • an owner on each job and upload (operators see them all)    │ │
+│ │  • guest quota: 5 analyses per hour (GUEST_ANALYSES_PER_HOUR)  │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+│ POST /v1/chat ──► markdown reply (no job), or an analysis job      │
+│ POST /v1/jobs ──► job queue (SQLite) ──► COE plan ──► DTI run      │
+│ GET /v1/jobs/{id}/events ──► the job's event log as SSE            │
+│ GET /v1/capabilities ──► six tiers for this caller and server      │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Context Orchestration Engine (COE)                             │ │
+│ │  • Intent Classifier (pipeline vs conversation)                │ │
+│ │  • Context Agent (what the request needs)                      │ │
+│ │  • Planner (template; LLM planner when confidence < 0.7)       │ │
+│ │  • Plan Validator (resources, inputs, entrypoints)             │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+│ ┌────────────────────────────────────────────────────────────────┐ │
+│ │ Digital Twin Instance (DTI)                                    │ │
+│ │  • Pipeline Executor                                           │ │
+│ │  • Algorithms (indices, band math, change, classes, stats)     │ │
+│ │  • Models (Prithvi, Delineate-Anything)                        │ │
+│ └────────────────────────────────────────────────────────────────┘ │
+└─────────┬──────────────────────────────────────────────────────────┘
+          │ LLM calls: intent, context, plan, interpretation, replies
+          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ LLM router (LLM_PROVIDER_ORDER, default strategy fallback)         │
+│ Gemini · Groq · OpenAI · Anthropic · Mistral · Ollama · Apertus    │
+│ unavailable or error ──► the next provider                         │
+│ no provider answers ──► deterministic fallbacks:                   │
+│   intent → pipeline request, context → registry triggers,          │
+│   plan → template planner, chat reply → the catalog                │
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+The components, sessions, event stream and fallbacks are described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick Start
 
@@ -81,7 +133,16 @@ The UI is at <http://localhost>, and nginx also serves the API reference there: 
 
 - Python 3.10+
 - [uv](https://github.com/astral-sh/uv) (recommended) or pip
-- [Task](https://taskfile.dev/) (optional but recommended)
+- [Task](https://taskfile.dev/) (optional but recommended): the runner behind the `task ...` commands below. Install it with one of:
+
+  ```bash
+  sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin   # Linux or macOS, into ~/.local/bin
+  brew install go-task                                                               # Homebrew
+  sudo snap install task --classic                                                   # Ubuntu
+  winget install Task.Task                                                           # Windows
+  ```
+
+  Other ways, including npm and pip packages: <https://taskfile.dev/installation/>. `task --list` shows every command.
 
 #### Backend
 
@@ -144,6 +205,14 @@ Frontend tests (vitest):
 cd cognitive_ui && npm test
 ```
 
+Browser end-to-end flows (Playwright, against the built UI and a real API with its state in a temp directory, no LLM keys and no Earth Engine):
+
+```bash
+cd cognitive_ui && npm run build && npm run e2e:smoke
+```
+
+They need the Python environment (`uv sync --extra dev --extra server`) and a Chromium headless shell in `~/.cache/ms-playwright`. `npm run e2e` runs every flow. The modes, environment variables and the Linux library workaround are in [cognitive_ui/tests/e2e/README.md](cognitive_ui/tests/e2e/README.md).
+
 ### Using Task
 
 ```bash
@@ -189,55 +258,6 @@ task coverage
 # Or manually:
 pytest tests/ --cov=dta --cov=server --cov-report=html
 open htmlcov/index.html
-```
-
-## Project Structure
-
-```text
-DT4LC-project/
-├── Taskfile.yml                # Task runner commands
-├── docker-compose.yml          # Docker orchestration
-├── Dockerfile                  # Backend container
-├── .env.example                # Environment template
-│
-├── dta/                        # Digital Twin Application
-│   ├── dti/                    # Digital Twin Instance
-│   │   ├── coe/                # Context Orchestration Engine
-│   │   │   ├── llm/            # LLM providers (Gemini, Groq, Ollama)
-│   │   │   ├── intent_classifier.py  # Routes pipeline vs conversation
-│   │   │   ├── context_agent.py
-│   │   │   ├── planner.py
-│   │   │   └── orchestrator.py
-│   │   ├── algorithms/         # NDVI, Statistics, Change Detection
-│   │   ├── models/             # Prithvi, Delineate-Anything
-│   │   └── executor.py         # Pipeline execution
-│   └── registry.yaml           # Component registry
-│
-├── server/                     # FastAPI server
-│   ├── app.py                  # Main application
-│   └── schemas.py              # API schemas
-│
-├── cognitive_ui/               # React + TypeScript UI
-│   ├── Dockerfile              # Frontend container
-│   ├── nginx.conf              # Production nginx config
-│   ├── src/
-│   │   ├── components/         # React components
-│   │   ├── api/                # API client
-│   │   └── store/              # Zustand state
-│   └── package.json
-│
-├── tests/                      # Test suite (organized by component)
-│   ├── test_registry.py        # Component registry tests
-│   ├── test_executor.py        # Pipeline executor tests
-│   ├── test_algorithms.py      # Algorithm tests
-│   ├── test_llm_providers.py   # LLM provider tests
-│   ├── test_planner.py         # Planner tests
-│   ├── test_orchestrator.py    # Orchestration tests
-│   └── ...
-│
-├── resources/                  # Sample data (kahovka_data/)
-├── docs/                       # Development docs & architecture diagrams
-└── scripts/                    # Utility scripts
 ```
 
 ## Configuration
@@ -361,6 +381,27 @@ LLM_PROVIDER_ORDER=groq,ollama
 LLM_PROVIDER_ORDER=gemini,anthropic,mistral
 ```
 
+### Sessions, Roles and Storage Paths
+
+Every browser gets a signed session cookie. Visitors are guests; people on the allowlists sign in with GitHub and become members or operators. Jobs and uploads belong to the guest session that made them, or to the signed-in user (`github:<id>`), who keeps a guest session's items on sign-in. These variables are described in `.env.example` ("Sessions, roles and guest limits"; `DT4LC_DEPLOYMENT` under "Server Configuration"):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `SESSION_SECRET` | random per start | Signs the cookie; when unset, sessions reset at every server restart |
+| `SESSION_COOKIE_SECURE` | `false` | Send the cookie over HTTPS only |
+| `DEV_ROLE` | unset | Treat every request as `guest`, `member` or `operator` (for development) |
+| `GUEST_ANALYSES_PER_HOUR` | `5` | Analyses a guest may start per rolling hour, per session and per IP |
+| `GUEST_SESSION_HOURS` | `24` | Session length; guest jobs, outputs and uploads older than this are removed |
+| `MODEL_DOWNLOAD_ON_DEMAND` | `members` | Who may download missing model weights during a job: `members` (members and operators), `operators`, `all` or `none` |
+| `GUEST_CLEANUP_MINUTES` | `60` | Minutes between runs of the guest cleanup |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE` | unset | GitHub sign-in, configured only when all three are set; otherwise the account menu says "Sign-in not configured on this server". How to create the OAuth app: [docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md#5-github-sign-in-the-oauth-app) |
+| `ALLOWED_EMAILS`, `ALLOWED_DOMAINS`, `OPERATOR_EMAILS` | empty | Sign-in allowlists, comma-separated, matched against the primary verified GitHub email: operators, then members by address or domain. Anyone else stays a guest |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxies whose `X-Forwarded-For` gives the client IP for the per-IP guest quota (`docker-compose.yml` trusts Docker's private networks) |
+| `DT4LC_SETTINGS_PATH` | `<cache>/settings.json` | Where operator Settings are saved, as overrides of some of these variables; `.env` is never written |
+| `DT4LC_DEPLOYMENT` | `local` | `demo` adds "public demo" to the Capabilities summary line |
+
+The cache lives in `resources/.cache/`. `DT4LC_CACHE_PATH` moves the cache root; `DT4LC_TEMP_PATH` (default `<cache>/tmp`) and `DT4LC_OUTPUTS_PATH` (job outputs, default `<cache>/outputs`) move single directories, like `DT4LC_UPLOADS_PATH`, `DT4LC_MODEL_CACHE` and `DT4LC_JOBS_DB`. These path variables are read in `dta/config/__init__.py`. The API behaviour of sessions, sign-in and quotas is in [docs/API.md](docs/API.md#sessions), and operator Settings in [docs/API.md](docs/API.md#settings).
+
 ### Intent Classification
 
 The system automatically classifies user requests into two categories:
@@ -381,24 +422,27 @@ The classifier uses pattern matching for clear action requests and falls back to
 
 ### Multi-Turn Conversations
 
-The system supports follow-up requests that reference previously uploaded data:
+The server keeps no conversation state. The browser keeps each conversation (in `localStorage`) and sends what the server needs with every message to `POST /v1/chat`, so a follow-up can build on earlier files and results:
 
 ```text
-User: [uploads image.tif] "Detect agricultural parcels in this area"
-→ Runs field boundary detection
-
-User: "What can we do with this data?"
-→ Returns guidance about available analyses
-
 User: "Calculate NDVI"
-→ Uses the previously uploaded image.tif automatically
+→ Asks for a GeoTIFF; the reply carries a pending request
+User: [attaches image.tif] "here"
+→ Runs the pending NDVI analysis on image.tif
+User: "Why are some fields darker than others?"
+→ A markdown answer from the LLM, which sees the history (with no
+  provider, the catalog of analyses); no job
+User: "Calculate EVI"
+→ Runs EVI on image.tif, which the browser sends again
 ```
 
-Context is maintained per chat session, including:
+The request body (`ConversationRequest` in `server/schemas.py`) has, besides the `message`:
 
-- Previous file attachments with their server paths
-- Conversation history for context-aware responses
-- Job results for reference in follow-up questions
+- `history`: the earlier turns, oldest first, as `{role, text}`. A finished analysis is one assistant turn with its intent and outcome. When the LLM answers a question, it gets the last 10 turns, each cut to 2000 characters and at most 8000 in all.
+- `attachments` (or `region`): the files or map region of the latest message that had any. The server does not remember them, so the browser sends the conversation's attachments again with each message; attaching new files or a region replaces them.
+- `pending`: the waiting request of the previous reply. A reply that asks for a file returns `pending` (`{prompt, item_id, needs, asked_at}`), and the browser sends it back with the next message. A short message such as "here" with enough files (two for a two-date analysis) or a region then runs the waiting request. A reply without `pending` clears it, and a `pending` older than 30 minutes is ignored.
+
+Details and examples: [`POST /v1/chat` in docs/API.md](docs/API.md#post-v1chat).
 
 ### Adding New Algorithms
 
@@ -428,11 +472,13 @@ Context is maintained per chat session, including:
 
 ### Field Boundary Detection (Delineate-Anything)
 
-The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it:
+The Delineate-Anything model ([arXiv:2504.02534](https://arxiv.org/abs/2504.02534)) detects agricultural field boundaries from satellite imagery. Its Python dependencies (`ultralytics`, `scipy`, `psutil`) are in the `server` extra. Its upstream code also imports the GDAL Python bindings (`osgeo.gdal`), which build against the system GDAL library, so install that first (Debian/Ubuntu: `libgdal-dev`, which provides `gdal-config`) and then the binding that matches it. The binding must see numpy at build time, or it is built without its numpy support (`osgeo.gdal_array`). So build it in the project environment, which already has numpy, with `--no-build-isolation`. Such a build takes `setuptools` and `wheel` from the environment too, and the project's uv environment does not include them, so install them first:
 
 ```bash
 sudo apt-get install libgdal-dev
-uv pip install "gdal==$(gdal-config --version)"   # or: pip install ...
+uv pip install setuptools wheel
+uv pip install --no-build-isolation "gdal==$(gdal-config --version)"   # or: pip install --no-build-isolation ...
+uv run python -c "from osgeo import gdal_array"   # fails if the binding was built without numpy
 ```
 
 The `delineate` extra declares the same dependency: `pip install -e ".[delineate]"` builds the newest `gdal` release, and `uv sync --extra delineate` builds the `gdal` 3.13.3 source distribution pinned in `uv.lock`; each works only where the system libgdal has that version. A later plain `uv sync` removes a `gdal` installed by hand; use `uv sync --inexact` to keep it. The Docker image installs `libgdal-dev` and the matching `gdal` itself. In Docker the Delineate subprocess needs more shared memory than the default 64 MB `/dev/shm` and otherwise hangs until its 30-minute timeout, so `docker-compose.yml` gives the backend `shm_size: "2gb"`; pass `--shm-size=2g` when starting the image with `docker run`.
@@ -452,7 +498,7 @@ The model outputs GeoPackage files with polygon geometries representing detected
 
 ### Model weights
 
-The Prithvi (`prithvi-eo-v1-100m`) and Delineate-Anything (`delineate-anything-small`) weights are not in the repository. Download them from the **Models** page of the UI, with `POST /v1/ml-models/{model_id}/download`, or from Python:
+The Prithvi (`prithvi-eo-v1-100m`) and Delineate-Anything (`delineate-anything-small`) weights are not in the repository. An operator downloads them with **Pre-download** in Settings → Models of the UI, or with `POST /v1/ml-models/{model_id}/download`; a job downloads a missing model on first use when `MODEL_DOWNLOAD_ON_DEMAND` allows the role (members and operators by default). From Python:
 
 ```bash
 uv run python - <<'EOF'
@@ -470,6 +516,8 @@ EOF
 ```
 
 The weights come from Hugging Face; Delineate-Anything also fetches its upstream code from GitHub (`Lavreniuk/Delineate-Anything`). Files go to `resources/.cache/models/<model_id>/`; set `DT4LC_MODEL_CACHE` to use another directory (the Docker backend uses `/app/resources/.cache/models`, inside the mounted `./resources`). `task download:prithvi` runs `scripts/download_prithvi.py`, which downloads Prithvi alone in the same way, reading `DT4LC_MODEL_CACHE` from the environment or `.env` like the server: it prints the target directory and skips the download if the model is already there. If the download fails, the script prints the error and exits 1, so the task fails. Licences: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+Prithvi needs the six HLS bands B2-B7 and the bundled sample has B2-B6, so a Prithvi job on the sample fails with an explanation, "Prithvi needs six HLS bands (B2–B7); this file has five (B2–B6, no B7).", before any weights are downloaded (where the weights are missing and the role may not download them, the job is refused for that reason first).
 
 ## Expected Band Order
 
@@ -494,27 +542,45 @@ The spectral-index algorithms (`dta/dti/algorithms/spectral_index.py`) also norm
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/v1/health` | GET | Health check |
-| `/v1/upload` | POST | Upload a GeoTIFF |
-| `/v1/jobs` | POST | Submit an analysis job (prompt and attachments) |
-| `/v1/jobs` | GET | List job summaries (without `result`) |
-| `/v1/jobs/{id}` | GET | Get job status and result |
+| `/v1/health` | GET | Health check, with the assistant (LLM provider) status |
+| `/v1/session` | GET | The caller's role, guest quota and retention (session cookie) |
+| `/v1/capabilities` | GET | What this server can do for the caller, in six tiers |
+| `/v1/upload` | POST | Upload a GeoTIFF; the response includes its metadata line |
+| `/v1/sample` | POST | Attach the bundled Kakhovka sample as the caller's uploads |
+| `/v1/chat` | POST | Send a Workspace message: a markdown reply, or an analysis job (JSON or Server-Sent Events) |
+| `/v1/jobs` | POST | Submit an analysis job (prompt with attachments or a map region) |
+| `/v1/jobs` | GET | List the caller's job summaries (without `result`) |
+| `/v1/jobs/{id}` | GET | Get job status, result and event log |
+| `/v1/jobs/{id}/events` | GET | Stream the job's events (Server-Sent Events) |
+| `/v1/jobs/{id}/confirm` | POST | Run a proposed (composed) plan |
 | `/v1/jobs/{id}/cancel` | POST | Cancel job |
-| `/v1/download` | GET | Download a job output file or upload preview by its `url` |
-| `/v1/chat` | POST | Legacy: plan and run the last of `messages` as a Server-Sent Events stream (no attachments) |
+| `/v1/jobs/{id}` | DELETE | Delete a finished job or a proposal, with its files |
+| `/v1/jobs/{id}/statistics.csv` | GET | The result's statistics as CSV |
+| `/v1/files` | GET | List the caller's uploads (the sample pair as one group) and Earth Engine exports |
+| `/v1/files/{id}` | DELETE | Delete an upload (both sample dates by their shared id) |
+| `/v1/download` | GET | Download a job output file or upload preview by its `url` (with `&name=` for a readable file name) |
+| `/v1/tiles/{z}/{x}/{y}` | GET | Map tiles of a GeoTIFF, reprojected to Web Mercator; true colour or the result's style |
+| `/v1/auth/status` | GET | Whether GitHub sign-in is configured, and the signed-in user |
+| `/v1/auth/github/login`, `/v1/auth/github/callback` | GET | GitHub sign-in |
+| `/v1/auth/logout` | POST | Sign out to a fresh guest session |
+| `/v1/settings` | GET, PUT | Operator settings (404 for everyone else) |
+| `/v1/settings/assistant/test` | POST | Probe the configured LLM providers (operators) |
 
-All routes, including file listing and download, map tiles, Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). See also [docs/API.md](docs/API.md).
+All routes, including Earth Engine data and model management, are in the generated API reference: Swagger UI at <http://localhost:8000/docs> and ReDoc at <http://localhost:8000/redoc> (under Docker: <http://localhost/docs>, <http://localhost/redoc>). Requests, responses, event types and error codes for the routes above are in [docs/API.md](docs/API.md).
 
 ### Example Request
 
 ```bash
+# Jobs and uploads belong to the session cookie: keep it in a jar (-c/-b),
+# or each call starts a new guest session, which cannot see the job of the previous one.
+
 # 1. Upload a GeoTIFF; the response contains its server-side "path"
-curl -X POST http://localhost:8000/v1/upload \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/upload \
   -F "file=@image.tif"
 # {"id": "1a2b3c4d", "filename": "image.tif", "path": "/.../resources/.cache/uploads/1a2b3c4d_image.tif", ...}
 
 # 2. Submit an analysis job with the uploaded file attached (202 Accepted)
-curl -X POST http://localhost:8000/v1/jobs \
+curl -c cookies.txt -b cookies.txt -X POST http://localhost:8000/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Calculate NDVI for vegetation analysis",
@@ -523,18 +589,21 @@ curl -X POST http://localhost:8000/v1/jobs \
 # {"id": "<job id>", "status": "pending", ...}
 
 # 3. Poll the job until "status" is "completed", "failed" or "cancelled"
-curl http://localhost:8000/v1/jobs/<job id>
+#    (or follow its events: curl -N -b cookies.txt http://localhost:8000/v1/jobs/<job id>/events)
+curl -b cookies.txt http://localhost:8000/v1/jobs/<job id>
 
 # 4. The result references output files instead of embedding pixels. For NDVI,
 #    result.execution.artifacts.NDVIMap.rasters.ndvi is the GeoTIFF and
 #    result.execution.artifacts.NDVIMap.visualizations.ndvi_map the PNG;
 #    download each with its "url"
-curl -o ndvi.tif "http://localhost:8000<url>"
+curl -b cookies.txt -o ndvi.tif "http://localhost:8000<url>"
 ```
 
-Each reference has `kind` (`geotiff` or `png`), `path`, `url` and `stats`; the keys each algorithm returns are listed under [Job artifacts](docs/ARCHITECTURE.md#job-artifacts). The upload response also has a `preview_url` for the PNG preview of the uploaded file.
+Each reference has `kind` (`geotiff` or `png`), `path`, `url`, `stats`, `size_bytes` and, once the job has finished, `download_name`; the keys each algorithm returns are listed under [Job artifacts](docs/ARCHITECTURE.md#job-artifacts). The upload response also has a `preview_url` for the PNG preview of the uploaded file.
 
 ## Docker Deployment
+
+To run the public demo (GitHub sign-in, rate limits, pre-installed models, behind a TLS proxy), follow the runbook in [docs/DEPLOY_DEMO.md](docs/DEPLOY_DEMO.md).
 
 ### Services
 
@@ -665,7 +734,11 @@ GROQ_API_KEY=your_key  # 300+ tokens/sec
 
 Both are 768 × 768 px at 30 m (23.04 km × 23.04 km) in EPSG:32636 with the upper-left corner at (453240, 5167860), about 32.39-32.69° E, 46.46-46.66° N: the lower Dnipro around Kherson, downstream of the dam. They have five bands, B2-B6 (blue, green, red, NIR, SWIR1), named in the band descriptions, stored as int16 reflectance × 10000 with nodata -9999 and DEFLATE compression. They are cut (rows 640-1408, columns 256-1024) from 2906 × 1479 px scenes that are not in the repository.
 
-The pair shows the flooding after the breach: the share of valid pixels with NDWI = (B3 - B5) / (B3 + B5) above 0 grows from 9 % to 40 %, and NDWI changes by more than 0.3 on 41.2 % of them, almost all of it an increase. Upload both files and ask, for example:
+The pair shows the flooding after the breach. On this crop, as the app computes it (NDWI change, open water where NDWI = (B3 - B5) / (B3 + B5) > 0.2), open water grows from 13.9 km² to 170.0 km²: water is gained on 156.8 km² (about +157 km²) and lost on 0.6 km², and 373.5 km² show no change. These are the numbers that the Workspace, the Result detail, the landing caption and the docs quote for the sample.
+
+The full 2906 × 1479 px scene, which the landing page's hero image shows, differs: measured with ΔNDWI > 0.3, open water grows from 32 km² to 256 km², with 428 km² gained and 43 km² lost. Those figures describe the full scene only, not the app's result on the bundled crop.
+
+Prithvi needs the six HLS bands B2-B7 and the bundled crop has B2-B6, so it refuses the sample with an explanation (see [Model weights](#model-weights)); NBR, which also needs B7, is refused with an explanation too. Attach the pair ("Try with the Kakhovka sample" on the landing page, "+ Attach the Kakhovka sample" in an empty Workspace, or `POST /v1/sample`), or upload both files, and ask, for example:
 
 ```text
 "Compare before and after images to detect changes"      (NDVI change, the default)
@@ -723,24 +796,53 @@ task --list  # Show all available commands
 task typecheck  # or: uv run mypy .
 
 # TypeScript
-cd cognitive_ui && npm run lint
+cd cognitive_ui && npm run typecheck  # tsc -b --noEmit
 ```
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details. Licences of the third-party models it downloads are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+This project is licensed under the GNU Affero General Public License version 3 or, at your option, any later version (SPDX `AGPL-3.0-or-later`) - see the [LICENSE](LICENSE) file for details. [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) lists the licences of the third-party models it downloads, of the self-hosted fonts and of the oblast boundaries on the map, and the basemap and imagery credits the interface shows.
 
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
+## Contributors
+
+Besides the authors of the paper, these people contributed to DT4LC:
+
+- [Roman Petrov](https://github.com/pingmar): the EVI algorithm ([#31](https://github.com/IPT-MMDA/DT4LC-project/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/DT4LC-project/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/DT4LC-project/pull/47)).
+- [Kostia](https://github.com/Kostia9): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/DT4LC-project/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/DT4LC-project/pull/36)).
+- [Yehor](https://github.com/code1715): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/DT4LC-project/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/DT4LC-project/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/DT4LC-project/pull/42)).
+- [NataliaGon](https://github.com/NataliaGon): Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/DT4LC-project/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/DT4LC-project/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/DT4LC-project/pull/35)), which the v0.6.0 result layers build on.
+- [nik4nd](https://github.com/nik4nd): structured error responses ([#49](https://github.com/IPT-MMDA/DT4LC-project/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/DT4LC-project/pull/51)), which the v0.6.0 map mode builds on.
+- [Hanna Yailymova](https://github.com/annayailymova): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/DT4LC-project/pull/66)) and the repository's first commit.
+
 ## Citation
 
+The paper describing DT4LC is under review at the [Journal of Open Source Software](https://joss.theoj.org/) ([review thread](https://github.com/openjournals/joss-reviews/issues/11334)). Its volume, issue, pages and DOI are to be announced; until then, cite it as:
+
 ```bibtex
-@software{dt4lc,
-  author = {Anton Chernyatevich},
-  title = {DT4LC - Digital Twin for Land Cover},
-  year = {2025},
-  url = {https://github.com/IPT-MMDA/DT4LC-project}
+@article{chernyatevich2026dt4lc,
+  author  = {Chernyatevich, Anton and Malyniak, Volodymyr and Drozd, Sofiia and Kussul, Nataliia and Shelestov, Andrii and Salii, Yevhenii and Yavorskyi, Oleksandr and Kolotii, Andrii and Giuliani, Gregory and Poussin, Charlotte},
+  title   = {{DT4LC}: A Cognitive Digital Twin Framework for Land Cover Change Detection},
+  journal = {Journal of Open Source Software},
+  year    = {2026},
+  note    = {Under review; volume, issue, pages and DOI to be announced},
+  url     = {https://github.com/IPT-MMDA/DT4LC-project}
 }
 ```
+
+To cite the software itself, use [CITATION.cff](CITATION.cff) (GitHub's "Cite this repository" button), or:
+
+```bibtex
+@software{dt4lc_software,
+  author  = {Chernyatevich, Anton and Malyniak, Volodymyr and Drozd, Sofiia and Kussul, Nataliia and Shelestov, Andrii and Salii, Yevhenii and Yavorskyi, Oleksandr and Kolotii, Andrii and Giuliani, Gregory and Poussin, Charlotte},
+  title   = {{DT4LC}: Digital Twin for Land Cover},
+  version = {0.6.0},
+  year    = {2026},
+  url     = {https://github.com/IPT-MMDA/DT4LC-project}
+}
+```
+
+The conference and journal papers behind the framework are listed in [CITATION.cff](CITATION.cff) and cited in [paper.md](paper.md).

@@ -25,5 +25,14 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-explicit-any": "warn",
     },
+  },
+  {
+    // E2E harness and flows: plain Node ESM (tests/e2e/README.md).
+    extends: [js.configs.recommended],
+    files: ["tests/e2e/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.node, ...globals.browser },
+    },
   }
 );

@@ -18,6 +18,18 @@ def is_initialized() -> bool:
     return _ee_initialized
 
 
+def is_configured() -> bool:
+    """Whether Earth Engine is initialised, or can be: ``GEE_PROJECT_ID`` and an existing key file.
+
+    Cheap (no network, no ``ee.Initialize``). Default gcloud credentials count only once
+    :func:`initialize_gee` has used them.
+    """
+    if _ee_initialized:
+        return True
+    key = os.getenv("GEE_SERVICE_ACCOUNT_KEY", "")
+    return bool(os.getenv("GEE_PROJECT_ID")) and bool(key) and Path(key).is_file()
+
+
 def initialize_gee() -> bool:
     """Initialize Google Earth Engine API.
 

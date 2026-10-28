@@ -33,6 +33,7 @@ Pull requests are reviewed by maintainers before merging.
 
 - `dev` is the integration branch: feature and fix branches start from it and their pull requests target it.
 - `master` holds released code. A release is a pull request from `dev` into `master`; the release commit on `master` is tagged `vX.Y.Z` (for example `v0.4.0`).
+- From v0.6.0 on, the release branch `release/vX.Y.Z` is merged into `dev`, and `dev` into `master`, with GitHub's "Create a merge commit", never squashed, so `master` keeps every commit with its author. The detailed history of v0.5.x, which was squashed on `master`, stays on the `release/v0.5.0` and `release/v0.5.1` branches, which are kept.
 - Before tagging, the version is set to the same `X.Y.Z` in `dta/__init__.py`, `cognitive_ui/package.json` and `CITATION.cff` (with `date-released`).
 
 ## Development Setup
@@ -69,9 +70,15 @@ uv run mypy dta server
 ```bash
 cd cognitive_ui
 npm install
-npm run dev                 # starts on http://localhost:5173
-npm test                    # vitest
+npm run dev                 # starts on http://localhost:3000, with /v1 proxied to :8000
+npm run lint                # ESLint
+npm run typecheck           # TypeScript type check (tsc -b --noEmit)
+npm test                    # unit and component tests (vitest)
+npm run build               # production build into dist/, which the browser tests serve
+npm run e2e:smoke           # browser smoke test (Playwright) on dist/ and a real API
 ```
+
+The browser tests need the backend's Python environment (above) and a Chromium headless shell; see [cognitive_ui/tests/e2e/README.md](cognitive_ui/tests/e2e/README.md). On Linux, if the browser fails to start because shared libraries are missing (`libnss3`, `libnspr4`, `libasound2`), run `cognitive_ui/tests/e2e/setup-libs.sh`: it downloads them and extracts them into `cognitive_ui/tests/e2e/.libroot/` without root, and the test runner adds them to the browser's library path.
 
 ### Docker (full stack)
 

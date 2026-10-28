@@ -1,0 +1,75 @@
+# DT4LC public demo: an override of docker-compose.yml (docs/DEPLOY_DEMO.md).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml --profile demo up -d --build
+#
+# or put these two lines in the demo host's .env, and plain `docker compose up -d` does the same:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.demo.yml
+#   COMPOSE_PROFILES=demo
+#
+# What changes from the default stack:
+# - models-init (profile demo) downloads the model weights into the models_data volume once; a
+#   second run skips installed models. DEMO_SKIP_MODEL_DOWNLOAD=1 skips the downloads.
+# - backend publishes no port: the frontend's nginx is the only way in, so nobody can reach the
+#   backend directly with a forged X-Forwarded-For. It trusts that header from the demo network
+#   only, runs as DT4LC_DEPLOYMENT=demo, and only operators may download models.
+# - frontend serves deploy/nginx-demo.conf.template: per-IP rate limits (429 RATE_LIMITED),
+#   the client IP forwarded, uploads up to 200 MB. HTTPS is left to a reverse proxy in front.
+# - ollama (profile ollama) publishes no port either; the backend reaches it on the demo network.
+# - the network has a fixed subnet (DEMO_SUBNET), which backend and nginx trust for the client IP.
+#   Run `docker compose down` once when switching between the default stack and the demo.
+# Sessions, guest limits and GitHub sign-in come from .env, as in the default stack.
+
+services:
+  models-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dt4lc-models-init
+    profiles:
+      - demo
+    env_file:
+      - .env
+    environment:
+      - DT4LC_MODEL_CACHE=/app/models
+      - DEMO_SKIP_MODEL_DOWNLOAD=${DEMO_SKIP_MODEL_DOWNLOAD:-}
+    volumes:
+      - models_data:/app/models
+      - ./deploy/models_init.py:/app/deploy/models_init.py:ro
+    command: ["python", "/app/deploy/models_init.py"]
+    healthcheck:
+      disable: true  # a one-shot job; the image's check polls the API it never starts
+    restart: "no"
+
+  ollama:
+    ports: !reset []
+
+  backend:
+    ports: !reset []
+    environment:
+      - DT4LC_DEPLOYMENT=demo
+      - DT4LC_MODEL_CACHE=/app/models
+      # Models are pre-installed; guests and members must not start downloads
+      - MODEL_DOWNLOAD_ON_DEMAND=operators
+      # Only nginx (on the demo network) may name the client IP
+      - FORWARDED_ALLOW_IPS=${DEMO_SUBNET:-172.30.60.0/24}
+    volumes:
+      - models_data:/app/models
+    depends_on:
+      models-init:
+        condition: service_completed_successfully
+
+  frontend:
+    environment:
+      - DEMO_SUBNET=${DEMO_SUBNET:-172.30.60.0/24}
+    volumes:
+      - ./deploy/nginx-demo.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DEMO_SUBNET:-172.30.60.0/24}
+
+volumes:
+  models_data:
+    driver: local

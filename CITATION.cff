@@ -4,8 +4,8 @@ message: >-
   If you use this software, please cite it using the metadata from this file
   and the preferred-citation below.
 type: software
-version: 0.5.1
-date-released: "2026-10-22"
+version: 0.6.0
+date-released: "2026-10-24"
 authors:
   - given-names: Anton
     family-names: Chernyatevich
@@ -74,7 +74,64 @@ keywords:
   - NDVI
   - geospatial
   - foundation-models
-license: AGPL-3.0
+license: AGPL-3.0-or-later
+preferred-citation:
+  type: article
+  title: "DT4LC: A Cognitive Digital Twin Framework for Land Cover Change Detection"
+  authors:
+    - given-names: Anton
+      family-names: Chernyatevich
+      email: chernyatevich.a@gmail.com
+      affiliation: >-
+        Department of Mathematical Modelling and Data Analysis,
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0009-0003-5292-6067"
+    - given-names: Volodymyr
+      family-names: Malyniak
+      affiliation: >-
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0009-0008-0840-4276"
+    - given-names: Sofiia
+      family-names: Drozd
+      affiliation: >-
+        Department of Mathematical Modelling and Data Analysis,
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0000-0002-5149-5520"
+    - given-names: Nataliia
+      family-names: Kussul
+      affiliation: "University of Maryland, College Park, MD, USA"
+      orcid: "https://orcid.org/0000-0002-9704-9702"
+    - given-names: Andrii
+      family-names: Shelestov
+      affiliation: >-
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0000-0001-9256-4097"
+    - given-names: Yevhenii
+      family-names: Salii
+      affiliation: >-
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0009-0006-0395-8099"
+    - given-names: Oleksandr
+      family-names: Yavorskyi
+      affiliation: >-
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0009-0001-5175-3825"
+    - given-names: Andrii
+      family-names: Kolotii
+      affiliation: >-
+        National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"
+      orcid: "https://orcid.org/0000-0002-6972-4483"
+    - given-names: Gregory
+      family-names: Giuliani
+      affiliation: "University of Geneva, Switzerland"
+      orcid: "https://orcid.org/0000-0002-1825-8865"
+    - given-names: Charlotte
+      family-names: Poussin
+      affiliation: "University of Geneva, Switzerland"
+  journal: "Journal of Open Source Software"
+  year: 2026
+  status: submitted
+  notes: "Under review (openjournals/joss-reviews#11334); volume, issue, pages and DOI to be announced."
 references:
   - type: article
     title: >-
@@ -185,10 +242,10 @@ references:
       - given-names: Charlotte
         family-names: Poussin
     collection-title: >-
-      IGARSS 2026 -- IEEE International Geoscience and Remote
+      IGARSS 2026 -- 2026 IEEE International Geoscience and Remote
       Sensing Symposium
     year: 2026
-    status: in-press
+    doi: "10.1109/IGARSS60577.2026.11730842"
   - type: conference-paper
     title: >-
       Hybrid-Deterministic Fallback for Dependable LLM Provider

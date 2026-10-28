@@ -1,0 +1,104 @@
+{
+ "name": "kakhovka_hls_l30",
+ "line": "HLS L30 · B2–B6 · 30 m · 4.0 MB · 2023-06-01 → 06-09",
+ "attachments": [
+  {
+   "id": "f7bcb2ae",
+   "filename": "hlsl_20230601.tif",
+   "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230601.tif",
+   "preview_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Fuploads%2Ff7bcb2ae_hlsl_20230601.png",
+   "metadata": {
+    "sensor": "HLS L30",
+    "bands": [
+     {
+      "index": 1,
+      "code": "B2",
+      "description": "B2"
+     },
+     {
+      "index": 2,
+      "code": "B3",
+      "description": "B3"
+     },
+     {
+      "index": 3,
+      "code": "B4",
+      "description": "B4"
+     },
+     {
+      "index": 4,
+      "code": "B5",
+      "description": "B5"
+     },
+     {
+      "index": 5,
+      "code": "B6",
+      "description": "B6"
+     }
+    ],
+    "dtype": "int16",
+    "resolution_m": 30,
+    "date": "2023-06-01",
+    "size_bytes": 4180159,
+    "size_label": "4.0 MB",
+    "crs": "EPSG:32636",
+    "bounds_wgs84": [
+     32.388779,
+     46.455331,
+     32.691118,
+     46.663879
+    ],
+    "line": "HLS L30 · B2–B6 · 30 m · 2023-06-01"
+   }
+  },
+  {
+   "id": "f7bcb2ae",
+   "filename": "hlsl_20230609.tif",
+   "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+   "preview_url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Fuploads%2Ff7bcb2ae_hlsl_20230609.png",
+   "metadata": {
+    "sensor": "HLS L30",
+    "bands": [
+     {
+      "index": 1,
+      "code": "B2",
+      "description": "B2"
+     },
+     {
+      "index": 2,
+      "code": "B3",
+      "description": "B3"
+     },
+     {
+      "index": 3,
+      "code": "B4",
+      "description": "B4"
+     },
+     {
+      "index": 4,
+      "code": "B5",
+      "description": "B5"
+     },
+     {
+      "index": 5,
+      "code": "B6",
+      "description": "B6"
+     }
+    ],
+    "dtype": "int16",
+    "resolution_m": 30,
+    "date": "2023-06-09",
+    "size_bytes": 3839983,
+    "size_label": "3.7 MB",
+    "crs": "EPSG:32636",
+    "bounds_wgs84": [
+     32.388779,
+     46.455331,
+     32.691118,
+     46.663879
+    ],
+    "line": "HLS L30 · B2–B6 · 30 m · 2023-06-09"
+   }
+  }
+ ]
+}
