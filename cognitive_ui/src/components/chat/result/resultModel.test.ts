@@ -15,6 +15,7 @@ import {
   dayMonth,
   downloadName,
   formatKm2,
+  formatArea,
   formatPercent,
   formatValue,
   prettyFormula,
@@ -410,6 +411,11 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
   const ramp = { kind: 'index', range: [0, 100], ramp: ['#f2efe6', '#5c1a1b'] };
   const jobOf = (key: string, artifact: unknown) => ({ result: { execution: { artifacts: { [key]: artifact } } } });
 
+  it('formats areas in km²: two decimals under 10, one under 100, a trace as <0.01', () => {
+    expect([0.001, 0.36, 9.996, 48.31, 1204.4].map((v) => formatArea(v))).toEqual(['<0.01 km²', '0.36 km²', '10.0 km²', '48.3 km²', '1 204 km²']);
+    expect(formatArea(-1.45, { sign: true })).toBe('−1.45 km²');
+  });
+
   it('hazards: one view per hazard with its year, a local twin, the start map, and the hazards table', () => {
     const vis: Record<string, unknown> = {};
     const rasters: Record<string, unknown> = {};
@@ -424,10 +430,10 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       index_type: 'change_rank',
       statistics: {
         valid_pixels: 1200,
-        start_class_ha: { Trees: 50, Crops: 58 },
+        start_class_km2: { Trees: 0.5, Crops: 0.58 },
         hazards: [
-          { group: 'any_change', title: 'Any land-cover change', raster: 'change_rank', year: 2028, eligible_ha: 108, top_decile_ha: 10.8, top_decile_percent: 10, skill: { auc: 0.8, best_null_auc: 0.73 } },
-          { group: 'forest_loss', title: 'Forest loss', raster: 'rank_forest_loss', year: 2027, eligible_ha: 50, top_decile_ha: 2, top_decile_percent: 4, skill: null },
+          { group: 'any_change', title: 'Any land-cover change', raster: 'change_rank', year: 2028, eligible_km2: 1.08, top_decile_km2: 0.108, top_decile_percent: 10, skill: { auc: 0.8, best_null_auc: 0.73 } },
+          { group: 'forest_loss', title: 'Forest loss', raster: 'rank_forest_loss', year: 2027, eligible_km2: 0.5, top_decile_km2: 0.02, top_decile_percent: 4, skill: null },
         ],
         summary: ['Forest loss by 2027: 4 % ...'],
       },
@@ -435,15 +441,13 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       visualizations: vis,
       rasters,
     }));
-    expect(c.kind).toBe('landcover');
-    if (c.kind !== 'landcover') return;
+    if (c.kind !== 'landcover') throw new Error(c.kind);
     expect(c.title).toBe('Land-cover hazards · from 2025');
     expect(c.views.map((v) => [v.key, v.label])).toEqual([['change_rank', 'Any change'], ['rank_forest_loss', 'Forest loss'], ['start_class', 'Now']]);
     expect(c.views[1].overlay).toBe('rank by 2027 · vs Ukraine');
     expect(c.local.rank_forest_loss.raster?.path).toBe('/o/rank_forest_loss_local.tif');
-    expect(c.classes.map((x) => [x.name, x.value, x.colour])).toEqual([['Trees', '50 ha', '#397d49'], ['Crops', '58 ha', '#e49635']]);
-    expect(c.tables[0].rows[0].cells).toEqual(['2028', '108 ha', '11 ha (10.0 %)', '0.80 vs 0.73']);
-    expect(c.summary).toEqual(['Forest loss by 2027: 4 % ...']);
+    expect(c.classes.map((x) => [x.name, x.value, x.colour])).toEqual([['Trees', '0.50 km²', '#397d49'], ['Crops', '0.58 km²', '#e49635']]);
+    expect(c.tables[0].rows[0].cells).toEqual(['2028', '1.08 km²', '0.11 km² (10.0 %)', '0.80 vs 0.73']);
   });
 
   it('an old hazard job without a hazards list stays an index card', () => {
@@ -451,41 +455,47 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.kind).toBe('index');
   });
 
-  it('forecast: forecast, changes and start maps; class table and both matrices; the amounts wording', () => {
+  it('forecast: the changes first over the faded start map, the condition once, the largest transitions', () => {
     const c = card(jobOf('LandCoverForecast', {
       statistics: {
-        t0: 2025, year: 2028, changed_percent: 6.2, amounts: 'trend scenario',
-        classes: [{ class: 'Crops', before_ha: 1000, after_ha: 820, change_ha: -180, change_percent: -18 }, { class: 'Rangeland', before_ha: 200, after_ha: 380, change_ha: 180, change_percent: 90 }],
-        matrix: { classes: ['Crops', 'Rangeland'], hectares: [[820, 180], [0, 200]], row_percent: [[82, 18], [0, 100]] },
-        trend: { pair: [2022, 2025], area_km2: 144, matrix: { classes: ['Crops'], hectares: [[10]], row_percent: [[100]] } },
-        summary: ['If the 2022–2025 trend continues, by 2028 Crops would decrease by 18 % (180 ha), mainly to Rangeland (180 ha).'],
+        t0: 2025, year: 2029, horizon_years: 4, changed_percent: 4.5, changed_km2: 3.31, amounts: 'trend scenario',
+        summary_lead: 'If the 2021–2025 trend continues, by 2029:',
+        summary: ['Crops would decrease by 24 % (net 1.45 km²); its largest loss is to Rangeland (3.45 km²).'],
+        checked: 'Where change lands was checked ...',
+        transitions: [{ from: 'Crops', to: 'Rangeland', km2: 3.45, percent_of_from: 5.7 }],
+        classes: [{ class: 'Crops', before_km2: 10, after_km2: 8.2, change_km2: -1.8, change_percent: -18 }],
+        matrix: { classes: ['Crops', 'Rangeland'], km2: [[8.2, 1.8], [0, 2]], row_percent: [[82, 18], [0, 100]] },
+        trend: { pair: [2021, 2025], area_km2: 144, matrix: { classes: ['Crops'], km2: [[10]], row_percent: [[100]] } },
       },
       visualizations: { class_forecast_map_bare: ref('f', classes), changed_map_bare: ref('c', classes), class_start_map_bare: ref('s', classes) },
       rasters: { class_forecast: tif('f'), changed: tif('c'), class_start: tif('s') },
     }));
     if (c.kind !== 'landcover') throw new Error(c.kind);
-    expect(c.title).toBe('Land-cover forecast · 2028');
-    expect(c.note).toBe('amounts: 2022–2025 trend scenario');
-    expect(c.views.map((v) => v.label)).toEqual(['2028', 'Changes', '2025']);
-    expect(c.tables.map((t) => t.title)).toEqual(['Class areas', 'Transitions 2025–2028', 'Trend used: 2022–2025 around the area']);
-    expect(c.tables[0].rows[0].cells).toEqual(['10.0 km²', '820 ha', '−180 ha', '−18 %']);
-    expect(c.tables[1].rows[0].cells).toEqual(['820 ha (82 %)', '180 ha (18 %)']);
+    expect(c.title).toBe('Land-cover forecast · 2025 → 2029');
+    expect(c.note).toBe('scenario: 2021–2025 trend');
+    expect(c.views.map((v) => v.label)).toEqual(['Changes', '2029', '2025']);
+    expect(c.views[0].base?.path).toBe('/o/s.png');
+    expect(c.stats.map((x) => [x.label, x.value])).toEqual([['Changing', '3.31 km² · 4.5 %'], ['Largest change', 'Crops → Rangeland 3.45 km²'], ['Horizon', '4 years']]);
+    expect(c.lead).toBe('If the 2021–2025 trend continues, by 2029:');
+    expect(c.transitions).toEqual([{ from: 'Crops', to: 'Rangeland', fromColour: '#e49635', toColour: '#e3e2c3', area: '3.45 km²', share: '5.7 % of Crops' }]);
+    expect(c.tables[0].rows[0].cells).toEqual(['10.0 km²', '8.20 km²', '−1.80 km²', '−18 %']);
+    expect(c.tables[1].rows[0].cells).toEqual(['8.20 km² (82 %)', '1.80 km² (18 %)']);
     expect(c.tables[1].rows[1].cells[0]).toBe('·');
   });
 
-  it('history: periods in the title, area per year table', () => {
-    const c = card(jobOf('LandCoverHistory', {
-      statistics: {
-        years: [2017, 2018], area_ha: { Crops: [1500, 1400] }, periods: { start: [2017, 2019], end: [2023, 2025] },
-        changed_percent: 12.5, changed_percent_single_years: 20.1, single_year_pair: [2017, 2025],
-        classes: [], matrix: { classes: [], hectares: [], row_percent: [] }, summary: [],
-      },
-      visualizations: {}, rasters: {},
-    }));
+  it('history: periods in the title, area per year in km², an older job in hectares too', () => {
+    const base = {
+      years: [2017, 2018], periods: { start: [2017, 2019], end: [2023, 2025] },
+      changed_percent: 12.5, changed_km2: 2.1, changed_percent_single_years: 20.1, single_year_pair: [2017, 2025],
+      classes: [], matrix: { classes: [] }, summary: [],
+    };
+    const c = card(jobOf('LandCoverHistory', { statistics: { ...base, area_km2: { Crops: [15, 14] } }, visualizations: {}, rasters: {} }));
     if (c.kind !== 'landcover') throw new Error(c.kind);
     expect(c.title).toBe('Land-cover history · 2017–2019 → 2023–2025');
-    expect(c.stats.map((s) => [s.label, s.value])).toEqual([['Changed', '12.5 %'], ['Single years 2017–2025', '20.1 %']]);
-    const perYear = c.tables.find((t) => t.title === 'Area per year');
-    expect(perYear?.rows).toEqual([{ label: 'Crops', colour: undefined, cells: ['15.0 km²', '14.0 km²'] }]);
+    expect(c.stats.map((s) => [s.label, s.value])).toEqual([['Changed', '2.10 km² · 12.5 %'], ['Largest change', '—'], ['Single years 2017–2025', '20.1 %']]);
+    const perYear = (m: ResultCardModel) => (m.kind === 'landcover' ? m.tables.find((t) => t.title === 'Area per year')?.rows : undefined);
+    expect(perYear(c)).toEqual([{ label: 'Crops', colour: undefined, cells: ['15.0 km²', '14.0 km²'] }]);
+    const old = card(jobOf('LandCoverHistory', { statistics: { ...base, area_ha: { Crops: [1500, 1400] } }, visualizations: {}, rasters: {} }));
+    expect(perYear(old)?.[0].cells).toEqual(['15.0 km²', '14.0 km²']);
   });
 });

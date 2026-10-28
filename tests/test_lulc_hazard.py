@@ -404,11 +404,13 @@ def test_forecast_follows_the_trend_amounts_and_words_them_by_the_bundle(tmp_pat
         res2 = inference.write_forecast(bundle, cube, 2, [a, b], (2019, 2021), grid, [30.0, 50.0, 30.1, 50.1])
     st = res3["statistics"]
     rows = {r["class"]: r for r in st["classes"]}
-    assert rows["Crops"]["after_ha"] == pytest.approx(5 * stats.CELL_HA)  # 10 Crops cells, half move
-    assert rows["Built"]["change_ha"] == pytest.approx(5 * stats.CELL_HA)
-    assert rows["Trees"]["change_ha"] == 0  # Trees did not change in the trend area
-    assert st["amounts"] == "trend scenario" and st["summary"][0].startswith("If the 2018–2021 trend continues")
-    assert res2["statistics"]["amounts"] == "expected" and res2["statistics"]["summary"][0].startswith("By 2023,")
+    assert rows["Crops"]["after_km2"] == pytest.approx(5 * stats.CELL_KM2)  # 10 Crops cells, half move
+    assert rows["Built"]["change_km2"] == pytest.approx(5 * stats.CELL_KM2)
+    assert rows["Trees"]["change_km2"] == 0  # Trees did not change in the trend area
+    assert st["amounts"] == "trend scenario" and st["summary_lead"] == "If the 2018–2021 trend continues, by 2024:"
+    assert st["summary"][0].startswith("Crops would decrease by 50 %") and "scenario" in st["checked"]
+    assert st["transitions"][0] == {"from": "Crops", "to": "Built", "km2": 0.0045, "percent_of_from": 50.0}
+    assert res2["statistics"]["amounts"] == "expected" and res2["statistics"]["summary_lead"] == "Expected by 2023:"
     assert set(res3["rasters"]) == {"class_start", "class_forecast", "changed"}
 
 
@@ -452,11 +454,25 @@ def test_allocate_fills_quotas_by_score() -> None:
 def test_sentences_name_the_largest_net_change_and_its_main_destination() -> None:
     m = np.zeros((8, 8), int)
     m[3, 3], m[3, 7], m[7, 7] = 60, 40, 100  # Crops: 100 -> 60, 40 to Rangeland
-    out = stats.sentences(m, "Between 2021 and 2025,", "{past}")
-    assert out[0] == (
-        "Between 2021 and 2025, Crops decreased by 40 % (net 4 ha); its largest loss is to Rangeland (4 ha)."
-    )
-    assert out[1].startswith("Between 2021 and 2025, Rangeland increased by 40 %")
+    out = stats.sentences(m, "{past}")
+    assert out[0] == "Crops decreased by 40 % (net 0.04 km²); its largest loss is to Rangeland (0.04 km²)."
+    assert out[1].startswith("Rangeland increased by 40 %")
+
+
+def test_sentences_skip_small_changes_and_say_so() -> None:
+    m = np.zeros((8, 8), int)
+    m[3, 3], m[3, 7], m[7, 7] = 990, 2, 1008  # 2 of 2 000 cells: 0.1 % of the area, 0.2 % of Crops
+    assert stats.sentences(m, "{past}") == ["No class changes by more than 1 % of the area or 5 % of itself."]
+
+
+def test_top_transitions_are_the_largest_flows_with_their_share() -> None:
+    m = np.zeros((8, 8), int)
+    m[3, 3], m[3, 7], m[3, 4], m[7, 7] = 60, 30, 10, 100
+    assert stats.top_transitions(m) == [
+        {"from": "Crops", "to": "Rangeland", "km2": 0.027, "percent_of_from": 30.0},
+        {"from": "Crops", "to": "Built", "km2": 0.009, "percent_of_from": 10.0},
+    ]
+    assert stats.changed_km2(m) == 0.036
 
 
 def test_history_summary_counts_areas_per_year_and_damps_flicker() -> None:
@@ -465,6 +481,17 @@ def test_history_summary_counts_areas_per_year_and_damps_flicker() -> None:
     cls[4, 0, 0] = rng_  # one-year flicker: not a change between the periods
     cls[6:, 1, 1] = rng_  # a lasting change
     s = history.summarise(cls, list(range(2017, 2026)))
-    assert s["area_ha"]["Crops"][0] == pytest.approx(4 * stats.CELL_HA)
+    assert s["area_km2"]["Crops"][0] == pytest.approx(4 * stats.CELL_KM2)
     assert s["changed_percent"] == 25.0 and s["periods"] == {"start": [2017, 2019], "end": [2023, 2025]}
-    assert s["summary"][0].startswith("Between 2017–2019 and 2023–2025, Crops decreased by 25 %")
+    assert s["summary_lead"] == "Between 2017–2019 and 2023–2025:"
+    assert s["summary"][0].startswith("Crops decreased by 25 %")
+
+
+def test_km2_text_keeps_two_decimals_for_small_areas() -> None:
+    assert [stats.km2_text(v) for v in (0.001, 0.36, 9.996, 48.31, 1204.4)] == [
+        "<0.01 km²",
+        "0.36 km²",
+        "10.0 km²",
+        "48.3 km²",
+        "1 204 km²",
+    ]

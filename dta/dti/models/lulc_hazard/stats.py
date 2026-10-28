@@ -14,8 +14,10 @@ import numpy as np
 from . import features
 
 K = len(features.ESRI_CLASSES)
-CELL_HA = features.RES * features.RES / 1e4  # hectares per 30 m cell
+CELL_KM2 = features.RES * features.RES / 1e6  # km² per 30 m cell (0.0009)
 MIN_SHARE = 0.01  # a class below 1 % of the area gets no sentence
+MIN_NET_AREA = 0.01  # a net change below 1 % of the area ...
+MIN_NET_CLASS = 0.05  # ... and below 5 % of the class is not worth a sentence
 MAX_SENTENCES = 4
 
 
@@ -104,19 +106,19 @@ def allocate(start: np.ndarray, quota: np.ndarray, score: np.ndarray, seed: int 
 
 
 def matrix_table(m: np.ndarray) -> dict[str, Any]:
-    """A transition matrix for the result: class names, hectares, and each row's shares in %."""
+    """A transition matrix for the result: class names, km², and each row's shares in %."""
     names = list(features.ESRI_CLASSES)
     keep = [i for i in range(K) if m[i].sum() or m[:, i].sum()]
     rows = m[np.ix_(keep, keep)]
     return {
         "classes": [names[i] for i in keep],
-        "hectares": [[round(float(v) * CELL_HA, 2) for v in r] for r in rows],
+        "km2": [[km2(v) for v in r] for r in rows],
         "row_percent": [[round(100.0 * float(v) / max(int(r.sum()), 1), 1) for v in r] for r in rows],
     }
 
 
 def class_table(before: np.ndarray, after: np.ndarray) -> list[dict[str, Any]]:
-    """Per class present at either date: hectares before and after, change in hectares and in %."""
+    """Per class present at either date: km² before and after, change in km² and in %."""
     out = []
     for i, name in enumerate(features.ESRI_CLASSES):
         if before[i] == 0 and after[i] == 0:
@@ -125,32 +127,42 @@ def class_table(before: np.ndarray, after: np.ndarray) -> list[dict[str, Any]]:
         out.append(
             {
                 "class": name,
-                "before_ha": round(float(before[i]) * CELL_HA, 2),
-                "after_ha": round(float(after[i]) * CELL_HA, 2),
-                "change_ha": round(d * CELL_HA, 2),
+                "before_km2": km2(before[i]),
+                "after_km2": km2(after[i]),
+                "change_km2": km2(d),
                 "change_percent": round(100.0 * d / before[i], 1) if before[i] else None,
             }
         )
     return out
 
 
-def _ha(cells: float) -> str:
-    return ha_text(cells * CELL_HA)
+def km2(cells: float) -> float:
+    """Area of ``cells`` 30 m cells in km², rounded to whole cells (4 decimals)."""
+    return round(float(cells) * CELL_KM2, 4)
 
 
-def ha_text(ha: float) -> str:
-    """Hectares as text: "412 ha", or km² from 1 000 ha ("12.5 km²")."""
-    if ha >= 1000:
-        return f"{ha / 100:,.1f} km²".replace(",", " ")
-    return f"{ha:,.0f} ha".replace(",", " ")
+def _area(cells: float) -> str:
+    return km2_text(float(cells) * CELL_KM2)
 
 
-def sentences(m: np.ndarray, lead: str, verb: str) -> list[str]:
-    """Plain sentences for the largest net class changes of transition matrix ``m`` (cells).
+def km2_text(value: float) -> str:
+    """km² as text: "0.36 km²" under 10, "48.3 km²" under 100, "1 204 km²" above; "<0.01 km²" for a trace."""
+    v = abs(value)
+    if 0 < v < 0.005:
+        return "<0.01 km²"
+    # Thresholds after rounding, so 9.996 reads "10.0 km²", not "10.00 km²".
+    text = f"{v:.2f}" if v < 9.995 else f"{v:.1f}" if v < 99.95 else f"{v:,.0f}".replace(",", " ")
+    return f"{text} km²"
 
-    ``lead`` opens each sentence ("Between 2021 and 2025,"), ``verb`` is "decreased" style past or "is expected to
-    decrease" style future: the sentence reads "<lead> <Class> <verb> by M % (net A ha); its largest loss is to
-    <Y> (B ha)." B is a gross flow, so it can exceed the net change A when the class also gains elsewhere.
+
+def sentences(m: np.ndarray, verb: str) -> list[str]:
+    """Plain sentences for the class changes of transition matrix ``m`` (cells) worth reading.
+
+    ``verb`` is "decreased" style past or "would decrease" style future; the caller states the period or the
+    condition once, above the sentences. A sentence reads "<Class> <verb> by M % (net A km²); its largest loss is to
+    <Y> (B km²)." B is a gross flow, so it can exceed the net change A when the class also gains elsewhere. A class
+    is named when its net change is at least :data:`MIN_NET_AREA` of the area or :data:`MIN_NET_CLASS` of the class
+    (and the class covers at least :data:`MIN_SHARE` of the area); if none is, one sentence says so.
     """
     before, after = m.sum(1), m.sum(0)
     total = max(int(before.sum()), 1)
@@ -161,6 +173,8 @@ def sentences(m: np.ndarray, lead: str, verb: str) -> list[str]:
             break
         if max(before[i], after[i]) < MIN_SHARE * total:
             continue
+        if abs(net[i]) < MIN_NET_AREA * total and abs(net[i]) < MIN_NET_CLASS * max(before[i], 1):
+            continue
         name = features.ESRI_CLASSES[i]
         down = net[i] < 0
         flows = m[i].copy() if down else m[:, i].copy()
@@ -168,10 +182,38 @@ def sentences(m: np.ndarray, lead: str, verb: str) -> list[str]:
         j = int(np.argmax(flows))
         word = verb.format(dir="decrease" if down else "increase", past="decreased" if down else "increased")
         flow = "loss is to" if down else "gain is from"
-        main = f"; its largest {flow} {features.ESRI_CLASSES[j]} ({_ha(flows[j])})" if flows[j] > 0 else ""
+        main = f"; its largest {flow} {features.ESRI_CLASSES[j]} ({_area(flows[j])})" if flows[j] > 0 else ""
         if before[i]:
             pct = 100.0 * abs(net[i]) / before[i]
-            out.append(f"{lead} {name} {word} by {pct:.0f} % (net {_ha(abs(net[i]))}){main}.")
+            out.append(f"{name} {word} by {pct:.0f} % (net {_area(abs(net[i]))}){main}.")
         else:
-            out.append(f"{lead} {name} {word} from none to {_ha(net[i])}{main}.")
+            out.append(f"{name} {word} from none to {_area(net[i])}{main}.")
+    if not out:
+        area, own = 100 * MIN_NET_AREA, 100 * MIN_NET_CLASS
+        out.append(f"No class changes by more than {area:.0f} % of the area or {own:.0f} % of itself.")
     return out
+
+
+def top_transitions(m: np.ndarray, n: int = 5) -> list[dict[str, Any]]:
+    """The ``n`` largest class-to-class flows of ``m`` (cells): from, to, km² and the share of the from-class."""
+    off = m.astype(float).copy()
+    np.fill_diagonal(off, 0)
+    out = []
+    for k in np.argsort(-off, axis=None, kind="stable")[:n]:
+        a, b = divmod(int(k), K)
+        if off[a, b] <= 0:
+            break
+        out.append(
+            {
+                "from": features.ESRI_CLASSES[a],
+                "to": features.ESRI_CLASSES[b],
+                "km2": km2(off[a, b]),
+                "percent_of_from": round(100.0 * off[a, b] / max(int(m[a].sum()), 1), 1),
+            }
+        )
+    return out
+
+
+def changed_km2(m: np.ndarray) -> float:
+    """Area of the cells whose class differs between the two dates of ``m``."""
+    return km2(m.sum() - np.trace(m))

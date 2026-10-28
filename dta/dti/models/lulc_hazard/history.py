@@ -37,11 +37,11 @@ def summarise(cls: np.ndarray, years: list[int]) -> dict[str, Any]:
     m = stats.matrix(start, end)
     m1 = stats.matrix(cls[0], cls[-1])
     valid = max(int(m.sum()), 1)
-    lead = f"Between {first[0]}–{first[-1]} and {last[0]}–{last[-1]},"
+    lead = f"Between {first[0]}–{first[-1]} and {last[0]}–{last[-1]}:"
     return {
         "years": years,
-        "area_ha": {
-            n: [round(float(c) * stats.CELL_HA, 2) for c in (cls == i + 1).reshape(len(years), -1).sum(1)]
+        "area_km2": {
+            n: [stats.km2(c) for c in (cls == i + 1).reshape(len(years), -1).sum(1)]
             for i, n in enumerate(features.ESRI_CLASSES)
             if (cls == i + 1).any()
         },
@@ -51,7 +51,10 @@ def summarise(cls: np.ndarray, years: list[int]) -> dict[str, Any]:
         "changed_percent": round(100.0 * float(m.sum() - np.trace(m)) / valid, 1),
         "changed_percent_single_years": round(100.0 * float(m1.sum() - np.trace(m1)) / max(int(m1.sum()), 1), 1),
         "single_year_pair": [years[0], years[-1]],
-        "summary": stats.sentences(m, lead, "{past}"),
+        "summary_lead": lead,
+        "summary": stats.sentences(m, "{past}"),
+        "transitions": stats.top_transitions(m),
+        "changed_km2": stats.changed_km2(m),
     }
 
 

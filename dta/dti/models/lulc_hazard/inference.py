@@ -434,8 +434,8 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                 "raster": key,
                 "horizon_years": h,
                 "year": cube.t0 + h,
-                "eligible_ha": round(float(ok.sum()) * stats.CELL_HA, 1),
-                "top_decile_ha": round(float((national[ok] >= 90).sum()) * stats.CELL_HA, 1),
+                "eligible_km2": stats.km2(ok.sum()),
+                "top_decile_km2": stats.km2((national[ok] >= 90).sum()),
                 "top_decile_percent": round(100.0 * float((national[ok] >= 90).mean()), 1) if ok.any() else None,
                 "mean_rank": round(float(np.nanmean(national)), 1) if ok.any() else None,
                 "skill": _skill(bundle, h, g),
@@ -464,14 +464,13 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "cells_without_model": int((valid & ~ranked).sum()),
         "top_decile_percent": round(100.0 * float((main[ranked] >= 90).mean()), 2) if ranked.any() else None,
         "start_class_percent": shares,
-        "start_class_ha": {
-            n: round(float((cube.start_class == i + 1).sum()) * stats.CELL_HA, 2)
-            for i, n in enumerate(features.ESRI_CLASSES)
+        "start_class_km2": {
+            n: stats.km2((cube.start_class == i + 1).sum()) for i, n in enumerate(features.ESRI_CLASSES)
         },
         "hazards": hazards,
         "summary": [
-            f"{h['title']} by {h['year']}: {h['top_decile_percent']:.0f} % of the {stats.ha_text(h['eligible_ha'])} "
-            f"that could make this change ranks in the national top 10 % ({stats.ha_text(h['top_decile_ha'])})."
+            f"{h['title']} by {h['year']}: {h['top_decile_percent']:.0f} % of the {stats.km2_text(h['eligible_km2'])} "
+            f"that could make this change ranks in the national top 10 % ({stats.km2_text(h['top_decile_km2'])})."
             for h in hazards
             if h["top_decile_percent"] is not None
         ],
@@ -551,10 +550,16 @@ def write_forecast(
     m = stats.matrix(cube.start_class, end)
     year = cube.t0 + h
     expected = bool(bundle["served"].get("amounts_expected", {}).get(str(h)))
+    longest = int(bundle["served"].get("map") or 0)
     if expected:
-        lead, verb = f"By {year},", "is expected to {dir}"
+        lead, verb = f"Expected by {year}:", "is expected to {dir}"
+        checked = f"Placement and amounts checked in a backtest up to {longest} years ahead."
     else:
-        lead, verb = f"If the {pair[0]}–{pair[1]} trend continues, by {year}", "would {dir}"
+        lead, verb = f"If the {pair[0]}–{pair[1]} trend continues, by {year}:", "would {dir}"
+        checked = (
+            f"Where change lands was checked in a backtest up to {longest} years ahead; how much changes is a "
+            f"scenario: the {pair[0]}–{pair[1]} trend did worse than assuming no change in that backtest."
+        )
     style = artifact_files.class_style({i + 1: ESRI_COLOURS[n] for i, n in enumerate(features.ESRI_CLASSES)})
     rasters = {
         "class_start": np.where(cube.start_class > 0, cube.start_class, np.nan).astype(np.float32),
@@ -568,7 +573,11 @@ def write_forecast(
         "classes": stats.class_table(m.sum(1), m.sum(0)),
         "matrix": stats.matrix_table(m),
         "changed_percent": round(100.0 * float(m.sum() - np.trace(m)) / max(int(m.sum()), 1), 1),
-        "summary": stats.sentences(m, lead, verb),
+        "summary_lead": lead,
+        "summary": stats.sentences(m, verb),
+        "transitions": stats.top_transitions(m),
+        "changed_km2": stats.changed_km2(m),
+        "checked": checked,
         "amounts": "expected" if expected else "trend scenario",
         "trend": {
             "pair": list(pair),

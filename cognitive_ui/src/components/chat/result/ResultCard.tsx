@@ -21,6 +21,7 @@ import {
   type ResultCardModel,
   type Stat,
   type TableModel,
+  type TransitionItem,
   type Tone,
 } from './resultModel';
 
@@ -96,17 +97,25 @@ export function ViewToggle({ views, active, onChange }: { views: CardView[]; act
   );
 }
 
-/** The bare map full-bleed (transparent off the raster, over surface2); else the full figure, whole. */
-function MapImage({ view, alt }: { view: CardView; alt: string }) {
+/**
+ * The bare map full-bleed (transparent off the raster, over surface2); else the full figure, whole.
+ * `contain` shows the whole map at its own aspect (class maps, where a cropped edge hides classes);
+ * a view's `base` is drawn faded beneath it.
+ */
+function MapImage({ view, alt, contain = false }: { view: CardView; alt: string; contain?: boolean }) {
   const shown = view.bare ?? view.image;
+  const fit = view.bare && !contain ? 'object-cover' : 'object-contain';
   return (
     <div className="relative h-[250px] bg-surface2 border-b border-border2">
+      {view.base && shown && (
+        <img data-testid="result-image-base" src={resolveApiUrl(view.base.url)} alt="" aria-hidden className={cn('absolute inset-0 w-full h-full opacity-30', fit)} />
+      )}
       {shown ? (
         <img
           data-testid="result-image"
           src={resolveApiUrl(shown.url)}
           alt={alt}
-          className={cn('absolute inset-0 w-full h-full', view.bare ? 'object-cover' : 'object-contain')}
+          className={cn('absolute inset-0 w-full h-full', fit)}
         />
       ) : (
         <p className="absolute inset-0 flex items-center justify-center text-control text-muted">No image for this view</p>
@@ -378,15 +387,48 @@ export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: 
   return <ClassLegend classes={model.classes.filter((c) => shown.size === 0 || shown.has(c.name))} />;
 }
 
-/** The sentences the server wrote from the numbers. */
-export function LandCoverSummary({ lines, className }: { lines: string[]; className?: string }) {
+/** The sentences the server wrote from the numbers, under the period or condition they share. */
+export function LandCoverSummary({ lines, lead, className }: { lines: string[]; lead?: string; className?: string }) {
   if (lines.length === 0) return null;
   return (
-    <ul data-testid="landcover-summary" className={cn('flex flex-col gap-[6px] text-[12.5px] leading-snug', className)}>
-      {lines.map((l) => (
-        <li key={l}>{l}</li>
-      ))}
-    </ul>
+    <div data-testid="landcover-summary" className={cn('flex flex-col gap-[6px] text-[12.5px] leading-snug', className)}>
+      {lead && <p className="font-semibold">{lead}</p>}
+      <ul className="flex flex-col gap-[4px] list-disc pl-4">
+        {lines.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The largest class-to-class flows: "Trees → Crops   0.79 km²   4 % of Trees". */
+export function TransitionList({ items, className }: { items: TransitionItem[]; className?: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div className={className}>
+      <p className="text-label uppercase text-muted mb-[6px]">Largest transitions</p>
+      <table data-testid="landcover-transitions" className="w-full text-[12px]">
+        <tbody>
+          {items.map((t) => (
+            <tr key={`${t.from}-${t.to}`}>
+              <th scope="row" className="py-[2px] pr-2 text-left font-normal whitespace-nowrap">
+                <span className="inline-flex items-center gap-[5px]">
+                  <Swatch style={t.fromColour ? { background: t.fromColour } : undefined} />
+                  {t.from}
+                  <span aria-hidden className="text-muted">→</span>
+                  <span className="sr-only">to</span>
+                  <Swatch style={t.toColour ? { background: t.toColour } : undefined} />
+                  {t.to}
+                </span>
+              </th>
+              <td className="py-[2px] pr-2 text-right font-mono whitespace-nowrap">{t.area}</td>
+              <td className="py-[2px] text-right font-mono text-muted whitespace-nowrap">{t.share}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -465,12 +507,14 @@ function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel 
         <ViewToggle views={model.views} active={base.key} onChange={setActive} />
         {hasLocal && <ScopeToggle local={local} onChange={setLocal} />}
       </div>
-      <MapImage view={view} alt={`${model.title}, ${view.overlay}`} />
+      <MapImage view={view} alt={`${model.title}, ${view.overlay}`} contain />
       <LegendBlock source={model.source}>
         <LandCoverLegend model={model} view={view} />
       </LegendBlock>
       <StatsRow stats={model.stats} />
-      <LandCoverSummary lines={model.summary} className="px-3 py-[10px] border-b border-border2" />
+      <LandCoverSummary lines={model.summary} lead={model.lead} className="px-3 py-[10px] border-b border-border2" />
+      <TransitionList items={model.transitions} className="px-3 py-[10px] border-b border-border2" />
+      {model.checked && <p data-testid="landcover-checked" className="px-3 py-2 text-[11.5px] text-muted border-b border-border2">{model.checked}</p>}
       <Actions jobId={jobId} model={model} view={view} />
     </CardShell>
   );

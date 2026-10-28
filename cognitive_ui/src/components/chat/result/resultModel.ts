@@ -52,6 +52,8 @@ export interface CardView {
   bare?: ArtifactRef;  // the map alone, shown full-bleed; older jobs have none
   raster?: ArtifactRef;
   legend?: LayerLegend;
+  /** A map drawn faded under `bare` (the start map under the changed cells). */
+  base?: ArtifactRef;
 }
 
 export interface ClassItem {
@@ -93,10 +95,25 @@ export type ResultCardModel =
       local: Record<string, CardView>;
       classes: ClassItem[];
       stats: Stat[];
+      /** The period or condition the summary sentences share, said once above them. */
+      lead?: string;
       summary: string[];
+      transitions: TransitionItem[];
+      /** How far the result was checked, in one sentence. */
+      checked?: string;
       tables: TableModel[];
     })
   | (CardBase & { kind: 'image'; views: [CardView] });
+
+/** One class-to-class flow of a land-cover card: "Trees → Crops · 0.79 km² · 4 % of Trees". */
+export interface TransitionItem {
+  from: string;
+  to: string;
+  fromColour?: string;
+  toColour?: string;
+  area: string;
+  share: string;
+}
 
 /** A small table of a land-cover card: a label column (with an optional swatch), then values. */
 export interface TableModel {
@@ -569,14 +586,21 @@ function statisticsCard(artifact: Obj, artifacts: Obj, context: AnalysedContext)
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === 'string' ? v : isNum(v) ? String(v) : '');
 
-/** Hectares: "412 ha" under 1 000 ha, then km² ("12.5 km²"); a real minus and an optional "+". */
-export function formatHa(value: unknown, { sign = false } = {}): string {
+/**
+ * A land-cover area in km² (the server's `*_km2`): two decimals under 10 km², one under 100,
+ * whole and grouped above, "<0.01 km²" for a trace; a real minus and an optional "+".
+ */
+export function formatArea(value: unknown, { sign = false } = {}): string {
   if (!isNum(value)) return '—';
   const abs = Math.abs(value);
   const prefix = value < 0 ? MINUS : sign && value > 0 ? '+' : '';
-  if (abs >= 1000) return `${prefix}${formatKm2(abs / 100).replace(/^</, '')}`;
-  return `${prefix}${abs < 10 && abs > 0 ? abs.toFixed(1) : grouped(abs)} ha`;
+  if (abs > 0 && abs < 0.005) return `${prefix}<0.01 km²`;
+  const digits = abs < 9.995 ? abs.toFixed(2) : abs < 99.95 ? abs.toFixed(1) : grouped(abs);
+  return `${prefix}${digits} km²`;
 }
+
+/** `<key>_km2`, or an older job's `<key>_ha` in km². */
+const km2Of = (o: Obj, key: string): unknown => (isNum(o[`${key}_km2`]) ? o[`${key}_km2`] : isNum(o[`${key}_ha`]) ? (o[`${key}_ha`] as number) / 100 : undefined);
 
 const signedPercent = (v: unknown) => (isNum(v) ? `${v < 0 ? MINUS : v > 0 ? '+' : ''}${Math.abs(v).toFixed(0)} %` : '—');
 
@@ -611,14 +635,14 @@ function landClasses(view: CardView | undefined, areas: Record<string, unknown>)
   return ESRI_CLASSES.filter((n) => isNum(areas[n]) && (areas[n] as number) > 0).map((n) => ({
     name: n,
     colour: esriColour(style, n),
-    value: formatHa(areas[n]),
+    value: formatArea(areas[n]),
   }));
 }
 
 /** Transition matrix `{classes, hectares, row_percent}` as a table: rows from, columns to, hectares (share of the row). */
 function matrixTable(m: Obj, title: string, style: RasterStyle | undefined, note?: string): TableModel | null {
   const classes = arr(m.classes).map(str);
-  const ha = arr(m.hectares).map(arr);
+  const area = (m.km2 ? arr(m.km2) : arr(m.hectares).map((r) => arr(r).map((v) => (isNum(v) ? v / 100 : v)))).map(arr);
   const pct = arr(m.row_percent).map(arr);
   if (classes.length === 0) return null;
   return {
@@ -627,7 +651,7 @@ function matrixTable(m: Obj, title: string, style: RasterStyle | undefined, note
     rows: classes.map((c, i) => ({
       label: c,
       colour: esriColour(style, c),
-      cells: classes.map((_, j) => (isNum(ha[i]?.[j]) && (ha[i][j] as number) > 0 ? `${formatHa(ha[i][j])} (${Number(pct[i]?.[j] ?? 0).toFixed(0)} %)` : '·')),
+      cells: classes.map((_, j) => (isNum(area[i]?.[j]) && (area[i][j] as number) > 0 ? `${formatArea(area[i][j])} (${Number(pct[i]?.[j] ?? 0).toFixed(0)} %)` : '·')),
     })),
     note,
   };
@@ -640,10 +664,23 @@ function classesTable(rows: unknown[], title: string, before: string, after: str
     rows: rows.map(obj).map((r) => ({
       label: str(r.class),
       colour: esriColour(style, str(r.class)),
-      cells: [formatHa(r.before_ha), formatHa(r.after_ha), formatHa(r.change_ha, { sign: true }), signedPercent(r.change_percent)],
+      cells: [formatArea(km2Of(r, 'before')), formatArea(km2Of(r, 'after')), formatArea(km2Of(r, 'change'), { sign: true }), signedPercent(r.change_percent)],
     })),
   };
 }
+
+function transitionsOf(stats: Obj, style: RasterStyle | undefined): TransitionItem[] {
+  return arr(stats.transitions).map(obj).map((t) => ({
+    from: str(t.from),
+    to: str(t.to),
+    fromColour: esriColour(style, str(t.from)),
+    toColour: esriColour(style, str(t.to)),
+    area: formatArea(t.km2),
+    share: `${formatPercent(t.percent_of_from)} of ${str(t.from)}`,
+  }));
+}
+
+const largest = (t: TransitionItem[]): Stat => ({ label: 'Largest change', value: t[0] ? `${t[0].from} → ${t[0].to} ${t[0].area}` : '—' });
 
 function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
   const files = analysed(context, [artifacts.RasterPath, artifact.path]);
@@ -664,6 +701,10 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
   }
   const start = classView(vis, rasters, 'start_class', 'Now', titled('Land cover', t0), titled('Esri land cover', t0));
   views.push(start);
+  // km² per class; an older job has hectares.
+  const startAreas = stats.start_class_km2
+    ? obj(stats.start_class_km2)
+    : Object.fromEntries(Object.entries(obj(stats.start_class_ha)).map(([k, v]) => [k, isNum(v) ? v / 100 : v]));
   const skill = (h: Obj) => {
     const s = obj(h.skill);
     return isNum(s.auc) ? `${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : '—';
@@ -676,20 +717,21 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     bounds: boundsOf(files),
     views,
     local,
-    classes: landClasses(start, obj(stats.start_class_ha)),
+    classes: landClasses(start, startAreas),
     stats: [
       { label: 'Origin year', value: t0 || '—' },
       { label: 'Hazards', value: String(hazards.length) },
       { label: 'Cells ranked', value: formatValue(stats.valid_pixels) },
     ],
     summary: arr(stats.summary).map(str).filter(Boolean),
+    transitions: [],
     tables: hazards.length
       ? [{
           title: 'Hazards',
           columns: ['Hazard', 'By', 'Could change', 'In national top 10 %', 'Backtest AUC vs null'],
           rows: hazards.map((h) => ({
             label: str(h.title),
-            cells: [str(h.year), formatHa(h.eligible_ha), `${formatHa(h.top_decile_ha)} (${formatPercent(h.top_decile_percent)})`, skill(h)],
+            cells: [str(h.year), formatArea(km2Of(h, 'eligible')), `${formatArea(km2Of(h, 'top_decile'))} (${formatPercent(h.top_decile_percent)})`, skill(h)],
           })),
           note: 'Each hazard is shown for the furthest year at which it beat the nulls in a backtest. Ranks compare cells; they are not chances of change.',
         }]
@@ -704,32 +746,38 @@ function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): 
   const rasters = obj(artifact.rasters);
   const t0 = str(stats.t0);
   const year = str(stats.year);
-  const forecast = classView(vis, rasters, 'class_forecast', String(year || 'Forecast'), titled('Land-cover forecast', year), titled('forecast', year));
-  const changed = classView(vis, rasters, 'changed', 'Changes', titled('Forecast changes', `${t0}–${year}`), titled('changed cells', `${t0}–${year}`));
   const now = classView(vis, rasters, 'class_start', String(t0 || 'Now'), titled('Land cover', t0), titled('Esri land cover', t0));
+  const changed = {
+    ...classView(vis, rasters, 'changed', 'Changes', titled('Forecast changes', `${t0}–${year}`), titled('new class', `${t0} → ${year}`)),
+    base: now.bare,
+  };
+  const forecast = classView(vis, rasters, 'class_forecast', String(year || 'Forecast'), titled('Land-cover forecast', year), titled('forecast', year));
   const style = styleOf(forecast.bare);
   const rows = arr(stats.classes).map(obj);
   const trend = obj(stats.trend);
   const pair = arr(trend.pair).map(str);
-  const amounts = str(stats.amounts);
+  const transitions = transitionsOf(stats, style);
   return {
     kind: 'landcover',
-    title: titled('Land-cover forecast', year),
-    note: amounts === 'expected' ? 'amounts checked in a backtest' : `amounts: ${pair.join('–')} trend scenario`,
+    title: titled('Land-cover forecast', `${t0} → ${year}`),
+    note: str(stats.amounts) === 'expected' ? 'expected amounts' : `scenario: ${pair.join('–')} trend`,
     source: 'Esri land cover, AlphaEarth and terrain from Earth Engine',
     bounds: boundsOf(files),
-    views: [forecast, changed, now],
+    views: [changed, forecast, now],
     local: {},
-    classes: landClasses(forecast, Object.fromEntries(rows.map((r) => [str(r.class), r.after_ha]))),
+    classes: landClasses(forecast, Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, 'after')]))),
     stats: [
-      { label: 'From', value: t0 || '—' },
-      { label: 'To', value: year || '—' },
-      { label: 'Cells changing', value: formatPercent(stats.changed_percent) },
+      { label: 'Changing', value: `${formatArea(stats.changed_km2)} · ${formatPercent(stats.changed_percent)}` },
+      largest(transitions),
+      { label: 'Horizon', value: `${str(stats.horizon_years) || '—'} years` },
     ],
+    lead: str(stats.summary_lead) || undefined,
     summary: arr(stats.summary).map(str).filter(Boolean),
+    transitions,
+    checked: str(stats.checked) || undefined,
     tables: [
       classesTable(rows, 'Class areas', t0, year, style),
-      matrixTable(obj(stats.matrix), `Transitions ${t0}–${year}`, style),
+      matrixTable(obj(stats.matrix), `Transitions ${t0} → ${year}`, style),
       matrixTable(obj(trend.matrix), `Trend used: ${pair.join('–')} around the area`, style,
         `Observed Esri transitions in ${formatKm2(trend.area_km2)} around the area; they set how much changes.`),
     ].filter((t): t is TableModel => t !== null),
@@ -745,27 +793,36 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
   const span = (p: unknown) => arr(p).map(str).join('–');
   const first = span(periods.start);
   const last = span(periods.end);
-  const end = classView(vis, rasters, 'class_end', last || 'Now', titled('Land cover', last), titled('majority class', last));
-  const changed = classView(vis, rasters, 'changed', 'Changes', titled('Land-cover changes', `${first} → ${last}`), titled('changed', `${first} → ${last}`));
   const start = classView(vis, rasters, 'class_start', first || 'Then', titled('Land cover', first), titled('majority class', first));
+  const changed = {
+    ...classView(vis, rasters, 'changed', 'Changes', titled('Land-cover changes', `${first} → ${last}`), titled('new class', `${first} → ${last}`)),
+    base: start.bare,
+  };
+  const end = classView(vis, rasters, 'class_end', last || 'Now', titled('Land cover', last), titled('majority class', last));
   const style = styleOf(end.bare);
   const years = arr(stats.years).map(str);
-  const areas = obj(stats.area_ha);
+  const areas = obj(stats.area_km2 ?? stats.area_ha);
+  const scale = stats.area_km2 ? 1 : 0.01;
   const rows = arr(stats.classes).map(obj);
+  const transitions = transitionsOf(stats, style);
   return {
     kind: 'landcover',
     title: titled('Land-cover history', `${first} → ${last}`),
     note: 'Esri, majority of each period',
     source: 'Esri land cover from Earth Engine',
     bounds: boundsOf(files),
-    views: [end, changed, start],
+    views: [changed, end, start],
     local: {},
-    classes: landClasses(end, Object.fromEntries(rows.map((r) => [str(r.class), r.after_ha]))),
+    classes: landClasses(end, Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, 'after')]))),
     stats: [
-      { label: 'Changed', value: formatPercent(stats.changed_percent) },
+      { label: 'Changed', value: `${formatArea(stats.changed_km2)} · ${formatPercent(stats.changed_percent)}` },
+      largest(transitions),
       { label: `Single years ${arr(stats.single_year_pair).map(str).join('–')}`, value: formatPercent(stats.changed_percent_single_years) },
     ],
+    lead: str(stats.summary_lead) || undefined,
     summary: arr(stats.summary).map(str).filter(Boolean),
+    transitions,
+    checked: 'Observed Esri labels; comparing 3-year majorities damps their year-to-year flicker.',
     tables: [
       classesTable(rows, 'Class areas', first, last, style),
       matrixTable(obj(stats.matrix), `Transitions ${first} → ${last}`, style),
@@ -775,7 +832,7 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
         rows: ESRI_CLASSES.filter((n) => Array.isArray(areas[n])).map((n) => ({
           label: n,
           colour: esriColour(style, n),
-          cells: arr(areas[n]).map((v) => formatHa(v)),
+          cells: arr(areas[n]).map((v) => formatArea(isNum(v) ? v * scale : v)),
         })),
         note: 'Single-year Esri maps: part of the year-to-year change is classifier flicker.',
       },

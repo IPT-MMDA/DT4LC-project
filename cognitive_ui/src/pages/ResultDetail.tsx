@@ -15,7 +15,7 @@ import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/ana
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
 import { downloadName, resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
-import { LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, useLandCoverView, ViewToggle } from '../components/chat/result/ResultCard';
+import { LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, TransitionList, useLandCoverView, ViewToggle } from '../components/chat/result/ResultCard';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -141,6 +141,9 @@ function MapPanel({ title, meta, view, legend, height, actions }: { title: strin
         </div>
       </header>
       <div className={cn('relative bg-surface2', height)}>
+        {view.base && shown && (
+          <img src={resolveApiUrl(view.base.url)} alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-30" />
+        )}
         {shown ? (
           <img data-testid="detail-image" src={resolveApiUrl(shown.url)} alt={title} className="absolute inset-0 w-full h-full object-contain" />
         ) : (
@@ -240,7 +243,9 @@ function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string 
           <header className="px-[14px] py-[10px] border-b border-border2">
             <h2 className="text-[13px] font-semibold">Summary</h2>
           </header>
-          <LandCoverSummary lines={model.summary} className="px-[14px] py-[10px]" />
+          <LandCoverSummary lines={model.summary} lead={model.lead} className="px-[14px] py-[10px]" />
+          <TransitionList items={model.transitions} className="px-[14px] pb-[10px]" />
+          {model.checked && <p className="px-[14px] pb-[10px] text-[12px] text-muted">{model.checked}</p>}
         </section>
       )}
       {model.tables.map((t) => (
