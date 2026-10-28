@@ -159,6 +159,11 @@ ROUTES: dict[str, dict[str, str]] = {
         "one": "algorithms/lulc-history@0609",
         "none": "ask:algorithms/lulc-history",
     },
+    "Compare land cover with the pre-war state": {
+        "pair": "algorithms/lulc-since-prewar@0609",
+        "one": "algorithms/lulc-since-prewar@0609",
+        "none": "ask:algorithms/lulc-since-prewar",
+    },
     # Two dates.
     "Compare water before and after the dam breach": {"pair": f"{CD}:ndwi", "none": f"ask:{CD}"},
     "Compare with NDVI change between the same dates": {"pair": f"{CD}:ndvi", "none": f"ask:{CD}"},

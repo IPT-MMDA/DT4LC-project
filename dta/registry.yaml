@@ -989,6 +989,71 @@ instances:
     config:
       region_input: footprint
 
+  # A fixed, descriptive comparison: KPI 2021 (the last pre-war year) against 2024. No war attribution.
+  - id: algorithms/lulc-since-prewar
+    kind: algorithm
+    display_name: "Land cover since the pre-war state"
+    ui:
+      tier: coming
+      order: 8
+      title: Land cover since the pre-war state
+      description: >-
+        How KPI-Ukraine land cover of an area differs between 2021, the last pre-war year, and 2024: class areas,
+        the transition matrix, the main changes in words, and the area the map marks as not cultivated each year.
+      inputs: [Area (upload or map region)]
+      outputs: [Class maps 2021 and 2024, class areas per year, transition matrix, summary]
+      time: "~40 s"
+      prompt: Compare land cover with the pre-war state
+    description: |
+      KPI-Ukraine annual land cover (10 m, C7x legend, 3 x 3 majority to 30 m) of 2021 against 2024, as single
+      years, for the area of the input raster; Ukraine only. Also the area of raw KPI class 20 ("not cultivated",
+      counted as Crop in C7x) for every year 2017-2024. A description of the maps, not the effect of the war.
+    interpretation: |
+      statistics.summary holds sentences written from the numbers; repeat them, do not compute new ones, and do
+      not say the war caused a change: this compares two maps. statistics.checked names the known map artefacts
+      of the period; mention them when a change in Tree or Crop is the answer.
+    keywords: [pre-war, war, invasion, history, change, land-cover, lulc, kpi, transition, matrix, statistics]
+    inputs: [RasterPath]
+    outputs: [LandCoverHistory]
+    triggers:
+      keywords: ["pre-war", "prewar", "pre war", "before the war", "since the war", "since the invasion",
+                 "post-war", "postwar", "wartime", "war period"]
+      action_phrases:
+        - "since the pre-war state"
+        - "compare land cover with the pre-war state"
+        - "compare land cover with pre-war"
+        - "how has land cover changed since the pre-war state"
+        - "land cover changed since the pre-war"
+        - "land cover changed since before the war"
+        - "land cover change since the war"
+        - "land cover change since the invasion"
+        - "land cover changes since the war"
+        - "land cover changes since the invasion"
+        - "lulc changes since the war"
+        - "lulc changes since the invasion"
+        - "lulc since the war"
+        - "changed since the war"
+        - "changed since the invasion"
+        - "compared to pre-war"
+        - "compared to before the war"
+    user_guide:
+      capability_response: |
+        Yes, I can compare KPI-Ukraine land cover of an area in 2021, the last pre-war year, with 2024, with class
+        areas, a transition matrix and the area marked not cultivated each year. Draw a region on the map (up to
+        400 km²) or upload a GeoTIFF of the area.
+      missing_file_response: |
+        Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll compare its land cover
+        in 2021 and 2024.
+      summary_template: "Comparing land cover with the pre-war state"
+    runner:
+      type: python
+      entrypoint: "dta.dti.models.lulc_hazard.history"
+      function: run_prewar
+      args_map:
+        RasterPath: "${RasterPath}"
+    config:
+      region_input: footprint
+
   - id: post-processing/agent-analysis
     kind: postprocess
     keywords: [llm, summarize, analysis]

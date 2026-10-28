@@ -628,3 +628,48 @@ def test_kpi_forecast_statistics_use_kpi_class_names(monkeypatch: pytest.MonkeyP
         "km2": stats.km2(4),
         "percent_of_from": 50.0,
     }
+
+
+# ----------------------------------------------------------------- land cover since the pre-war state
+
+
+def test_prewar_compares_2021_with_2024_as_single_years_and_adds_the_not_cultivated_area(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dta.dti.models.lulc_hazard import history
+
+    years = list(range(2017, 2025))
+    cls = np.ones((len(years), 2, 2), np.uint8)  # Crop everywhere
+    cls[years.index(2024), 0, 0] = 2  # one cell Crop -> Grass by 2024
+    cls[years.index(2022), 1, 1] = 3  # a change inside the period that is gone by 2024
+    grid = features.Grid("EPSG:32636", 0, 0, 2, 2, halo=0)
+    monkeypatch.setattr(history, "footprint_wgs84", lambda path: [30.0, 50.0, 30.01, 50.01])
+    monkeypatch.setattr(features, "grid_for_bbox", lambda bbox: grid)
+    monkeypatch.setattr(history, "_ee", lambda: None)
+    monkeypatch.setattr(features, "available_years", lambda ee, g, ys, source: {"labels": list(ys), "ae": []})
+    raw = {2021: np.array([[18, 18, 10, 2]], np.uint8), 2024: np.array([[1, 1, 1, 2]], np.uint8)}
+    monkeypatch.setattr(history, "prewar_maps", lambda ee, g, ys: (cls, [9 * y % 7 for y in ys], raw))
+    monkeypatch.setattr(history.artifact_files, "save", lambda result, *a, **k: result)
+    r = history.run_prewar("aoi.tif")
+    st = r["statistics"]
+    assert st["periods"] == {"start": [2021], "end": [2024]} and st["summary_lead"] == "Between 2021 and 2024:"
+    assert st["transitions"] == [{"from": "Crop", "to": "Grass", "km2": stats.km2(1), "percent_of_from": 25.0}]
+    assert st["not_cultivated_km2"]["years"] == years and len(st["not_cultivated_km2"]["km2"]) == len(years)
+    assert st["summary"][-2].startswith("Land the map marks as not cultivated (counted as Crop above):")
+    assert st["summary"][-1].endswith("67 % was gardens and parks in 2021, the rest forest.")
+    assert st["checked"] == history.PREWAR_NOTE and r["metadata"]["legend"] == list(features.KPI_CLASSES)
+    assert "war" not in " ".join(st["summary"]).lower()  # describes the maps, attributes nothing
+
+
+def test_prewar_prompts_route_to_the_prewar_comparison() -> None:
+    from dta.dti.coe.triggers import get_trigger_index
+
+    idx = get_trigger_index()
+    for p in (
+        "How has land cover changed since the pre-war state?",
+        "How did land cover change since the war?",
+        "Describe LULC changes since the invasion",
+        "pre-war vs post-war land cover",
+    ):
+        assert idx.find_matching_item(p).id == "algorithms/lulc-since-prewar", p
+    assert idx.find_matching_item("Show how land cover changed since 2017").id == "algorithms/lulc-history"

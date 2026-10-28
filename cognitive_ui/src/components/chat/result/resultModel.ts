@@ -888,7 +888,7 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
     summary: arr(stats.summary).map(str).filter(Boolean),
     transitions,
     hazards: [],
-    checked: `Observed ${legend.label} labels; comparing 3-year majorities damps their year-to-year flicker.`,
+    checked: str(stats.checked) || `Observed ${legend.label} labels; comparing 3-year majorities damps their year-to-year flicker.`,
     tables: [
       classesTable(rows, 'Class areas', first, last, style, names),
       matrixTable(obj(stats.matrix), `Transitions ${first} → ${last}`, style, names),
@@ -902,7 +902,20 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
         })),
         note: `Single-year ${legend.label} maps: part of the year-to-year change is classifier flicker.`,
       },
+      fallowTable(obj(stats.not_cultivated_km2)),
     ].filter((t): t is TableModel => t !== null),
+  };
+}
+
+/** Area the KPI map marks as not cultivated (raw class 20) per year, `{years, km2}`; null when absent. */
+function fallowTable(f: Obj): TableModel | null {
+  const years = arr(f.years).map(str);
+  if (years.length === 0) return null;
+  return {
+    title: 'Marked not cultivated (KPI class 20)',
+    columns: ['', ...years],
+    rows: [{ label: 'Area', cells: arr(f.km2).map((v) => formatArea(v)) }],
+    note: 'Counted as Crop in the class tables above; abandoned cropland shows here, not as a change to Grass.',
   };
 }
 

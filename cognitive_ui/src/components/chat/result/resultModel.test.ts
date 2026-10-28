@@ -518,6 +518,26 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.tables[2].rows[0].label).toBe('Grass');
   });
 
+  it('since the pre-war state: single years in the title, the fixed note, the not-cultivated row', () => {
+    const kpi = { kind: 'class', classes: { '1': '#e49635', '2': '#e3e2c3' } };
+    const c = card(jobOf('LandCoverHistory', {
+      statistics: {
+        periods: { start: [2021], end: [2024] }, years: [2021, 2024], changed_percent: 1, changed_km2: 0.1,
+        area_km2: { Crop: [2, 1.9], Grass: [0, 0.1] }, classes: [], transitions: [],
+        not_cultivated_km2: { years: [2021, 2024], km2: [0.5, 1.25] }, checked: 'A description of the maps.',
+      },
+      metadata: { legend: ['Crop', 'Grass', 'Tree', 'Built', 'Water', 'Wetland', 'Bare'], source: 'KPI-Ukraine national land cover' },
+      visualizations: { class_start_map_bare: ref('s', kpi), changed_map_bare: ref('c', kpi), class_end_map_bare: ref('e', kpi) },
+      rasters: { class_start: tif('s'), changed: tif('c'), class_end: tif('e') },
+    }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.title).toBe('Land-cover history · 2021 → 2024');
+    expect(c.checked).toBe('A description of the maps.');
+    const fallow = c.tables.find((t) => t.title.startsWith('Marked not cultivated'));
+    expect(fallow?.columns).toEqual(['', '2021', '2024']);
+    expect(fallow?.rows[0].cells).toEqual(['0.50 km²', '1.25 km²']);
+  });
+
   it('history: periods in the title, area per year in km², an older job in hectares too', () => {
     const base = {
       years: [2017, 2018], periods: { start: [2017, 2019], end: [2023, 2025] },

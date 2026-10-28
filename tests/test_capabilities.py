@@ -360,6 +360,7 @@ def test_demo_coming_tier_is_collapsed_with_whole_descriptions(demo: dict[str, A
         "Land-cover change hazard",
         "Land-cover forecast",
         "Land-cover history",
+        "Land cover since the pre-war state",
     ]
     assert coming["items"][3] == {
         "id": "models/runoff-ensemble",
