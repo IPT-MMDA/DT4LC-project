@@ -149,6 +149,16 @@ ROUTES: dict[str, dict[str, str]] = {
         "one": "models/lulc-change-hazard@0609",
         "none": "ask:models/lulc-change-hazard",
     },
+    "Forecast the land cover map for the coming years": {
+        "pair": "models/lulc-forecast@0609",
+        "one": "models/lulc-forecast@0609",
+        "none": "ask:models/lulc-forecast",
+    },
+    "Show how land cover changed since 2017": {
+        "pair": "algorithms/lulc-history@0609",
+        "one": "algorithms/lulc-history@0609",
+        "none": "ask:algorithms/lulc-history",
+    },
     # Two dates.
     "Compare water before and after the dam breach": {"pair": f"{CD}:ndwi", "none": f"ask:{CD}"},
     "Compare with NDVI change between the same dates": {"pair": f"{CD}:ndvi", "none": f"ask:{CD}"},

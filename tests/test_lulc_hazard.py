@@ -18,7 +18,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from dta.dti import artifact_files
-from dta.dti.models.lulc_hazard import features, inference
+from dta.dti.models.lulc_hazard import features, history, inference, stats
 
 KPI_ORIGIN = (-303030.0, 5803330.0)
 
@@ -189,7 +189,8 @@ def test_write_result_saves_styled_rasters_and_no_arrays(tmp_path: Path) -> None
         result = inference.write_result(bundle, _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
 
     assert result["index_type"] == "change_rank"
-    assert set(result["rasters"]) == {"change_rank", "rank_trees_to_crops", "rank_crops_to_built", "start_class"}
+    ranks = {"change_rank", "rank_trees_to_crops", "rank_crops_to_built"}
+    assert set(result["rasters"]) == ranks | {f"{k}_local" for k in ranks} | {"start_class"}
     assert "change_rank_map_bare" in result["visualizations"]
     json.dumps(result)  # references and numbers only
     with rasterio.open(result["rasters"]["change_rank"]["path"]) as src:
@@ -309,3 +310,159 @@ def test_features_match_the_training_cube(window: str, t0: int) -> None:
         assert np.array_equal(np.isfinite(a), np.isfinite(b)), c
         tol = 2e-4 if c in features.AE_COLUMNS else 1e-4  # the cube stores AlphaEarth as float16
         assert np.nanmax(np.abs(a - b)) <= tol, c
+
+
+# ----------------------------------------------------------------- format 2: hazard groups, horizons, forecast
+
+
+def _bundle_2(columns: list[str]) -> dict[str, Any]:
+    b1 = _bundle(columns)
+    q = list(np.linspace(0.0, 1.0, 101))
+    groups = {
+        "any_change": {"title": "Any land-cover change", "from": ["Trees", "Crops", "Water"], "to": None},
+        "forest_loss": {"title": "Forest loss", "from": ["Trees"], "to": ["Crops", "Rangeland"]},
+        "urban_expansion": {"title": "Urban expansion", "from": ["Crops", "Rangeland"], "to": ["Built"]},
+    }
+    hz = {"from_classes": b1["from_classes"], "reference_quantiles": dict.fromkeys(groups, q)}
+    return {
+        **{
+            k: b1[k] for k in ("model_id", "version", "target", "legend", "columns", "t0_min", "dem", "grid", "domain")
+        },
+        "format": inference.FORMAT_2,
+        "groups": groups,
+        "horizons": {"2": {"pair": [2023, 2025], **hz}, "3": {"pair": [2022, 2025], **hz}},
+        "served": {
+            "hazards": {"any_change": 3, "forest_loss": 2, "urban_expansion": 0},
+            "map": 3,
+            "amounts_expected": {"2": True, "3": False},
+        },
+        "skill": {"3": {"hazards": {"any_change": {"auc": 0.8}}}},
+    }
+
+
+def test_format_1_converts_to_one_horizon_serving_hazards_only() -> None:
+    pytest.importorskip("xgboost")
+    b2 = inference.as_format_2(_bundle(COLUMNS))
+    inference.check_bundle(b2)
+    assert set(b2["groups"]) == {"any_change", "trees_to_crops", "crops_to_built"}
+    assert b2["served"] == {"hazards": dict.fromkeys(b2["groups"], 4), "map": 0, "amounts_expected": {}}
+
+
+def test_check_bundle_2_refuses_a_served_horizon_without_models() -> None:
+    pytest.importorskip("xgboost")
+    b = _bundle_2(COLUMNS)
+    inference.check_bundle(b)
+    bad = json.loads(json.dumps(b))
+    bad["served"]["map"] = 4
+    with pytest.raises(inference.BundleError, match=r"\[4\]"):
+        inference.check_bundle(bad)
+
+
+def test_hazards_take_each_group_at_its_own_horizon_and_skip_unserved_groups(tmp_path: Path) -> None:
+    pytest.importorskip("xgboost")
+    with artifact_files.step_outputs(tmp_path, "1_ChangeHazardMap"):
+        result = inference.write_result(_bundle_2(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
+    hazards = {h["group"]: h for h in result["statistics"]["hazards"]}
+    assert set(hazards) == {"any_change", "forest_loss"}  # urban expansion is not served
+    assert hazards["any_change"]["year"] == 2024 and hazards["forest_loss"]["year"] == 2023
+    assert hazards["any_change"]["skill"] == {"auc": 0.8}
+    assert result["metadata"]["forecast_to"] == 2024
+    with rasterio.open(result["rasters"]["rank_forest_loss"]["path"]) as src:
+        r = src.read(1)
+    assert np.isfinite(r[0:2]).all() and np.isnan(r[2:]).all()  # Trees cells only
+    with rasterio.open(result["rasters"]["rank_forest_loss_local"]["path"]) as src:
+        loc = src.read(1)[0:2]
+    assert loc.min() > 0 and loc.max() < 100 and np.isclose(np.mean(loc), 50.0)
+
+
+def test_local_percentile_is_mid_rank_within_the_area() -> None:
+    out = inference.local_percentile(np.array([0.1, 0.2, 0.2, np.nan, 0.4]))
+    assert np.allclose(out[[0, 1, 2, 4]], [12.5, 50.0, 50.0, 87.5]) and np.isnan(out[3])
+
+
+def test_trend_grid_is_a_12_km_square_on_the_area_lattice_and_centred() -> None:
+    g = features.Grid("EPSG:32636", 300000.0, 5600000.0, 100, 60)
+    t = inference.trend_grid(g)
+    assert (t.nx, t.ny) == (400, 400)
+    assert t.x0 + features.RES * (t.nx / 2) == pytest.approx(g.x0 + features.RES * (g.nx / 2))
+    assert ((t.x0 - g.x0) / features.RES).is_integer() and ((t.y0 - g.y0) / features.RES).is_integer()
+    big = features.Grid("EPSG:32636", 0.0, 0.0, 500, 450)
+    assert (inference.trend_grid(big).nx, inference.trend_grid(big).ny) == (500, 450)
+
+
+def test_forecast_follows_the_trend_amounts_and_words_them_by_the_bundle(tmp_path: Path) -> None:
+    pytest.importorskip("xgboost")
+    bundle = _bundle_2(COLUMNS)
+    cube = _cube(COLUMNS)
+    crops, built = features.ESRI_CLASSES.index("Crops") + 1, features.ESRI_CLASSES.index("Built") + 1
+    a = np.full((10, 10), crops, np.uint8)
+    b = a.copy()
+    b[:5] = built  # half of the trend area's Crops became Built
+    grid = cube.grid
+    with artifact_files.step_outputs(tmp_path, "1_LULCForecast"):
+        res3 = inference.write_forecast(bundle, cube, 3, [a, b], (2018, 2021), grid, [30.0, 50.0, 30.1, 50.1])
+        res2 = inference.write_forecast(bundle, cube, 2, [a, b], (2019, 2021), grid, [30.0, 50.0, 30.1, 50.1])
+    st = res3["statistics"]
+    rows = {r["class"]: r for r in st["classes"]}
+    assert rows["Crops"]["after_ha"] == pytest.approx(5 * stats.CELL_HA)  # 10 Crops cells, half move
+    assert rows["Built"]["change_ha"] == pytest.approx(5 * stats.CELL_HA)
+    assert rows["Trees"]["change_ha"] == 0  # Trees did not change in the trend area
+    assert st["amounts"] == "trend scenario" and st["summary"][0].startswith("If the 2018–2021 trend continues")
+    assert res2["statistics"]["amounts"] == "expected" and res2["statistics"]["summary"][0].startswith("By 2023,")
+    assert set(res3["rasters"]) == {"class_start", "class_forecast", "changed"}
+
+
+def test_forecast_is_refused_beyond_the_checked_horizon(tmp_path: Path) -> None:
+    pytest.importorskip("xgboost")
+    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(_bundle_2(COLUMNS)))
+    area = _footprint(tmp_path, 300000.0, 5600000.0, 3000.0)
+    with pytest.raises(ValueError, match="up to 3 years"):
+        inference.run_forecast(area, str(tmp_path), horizon=4)
+    _write_bundle(tmp_path)  # format 1: no map
+    with pytest.raises(inference.BundleError, match="hazards only"):
+        inference.run_forecast(area, str(tmp_path))
+
+
+# ----------------------------------------------------------------- statistics and history
+
+
+def test_majority_breaks_ties_with_the_latest_year() -> None:
+    stack = np.array([[[1, 2]], [[1, 3]], [[2, 4]]], np.uint8)  # cell 0: 1,1,2; cell 1: 2,3,4 (all differ)
+    assert stats.majority(stack).tolist() == [[1, 4]]
+
+
+def test_demand_splits_each_class_by_its_rate_and_keeps_classes_absent_from_the_trend() -> None:
+    start = np.array([4] * 10 + [2] * 3, np.uint8)
+    rate = np.zeros((8, 8))
+    rate[3, 3], rate[3, 7] = 0.75, 0.25  # Crops: a quarter to Rangeland
+    q = stats.demand(start, rate)
+    assert q[3, 3] + q[3, 7] == 10 and q[3, 7] in (2, 3)
+    assert q[1, 1] == 3  # Trees absent from the trend: all stay
+
+
+def test_allocate_fills_quotas_by_score() -> None:
+    start = np.array([4, 4, 4, 0], np.uint8)
+    quota = np.zeros((8, 8), int)
+    quota[3, 4] = 1  # one Crops cell becomes Built
+    score = np.zeros((4, 8), np.float32)
+    score[:, 4] = [0.2, 0.9, 0.5, 1.0]
+    assert stats.allocate(start, quota, score).tolist() == [4, 5, 4, 0]
+
+
+def test_sentences_name_the_largest_net_change_and_its_main_destination() -> None:
+    m = np.zeros((8, 8), int)
+    m[3, 3], m[3, 7], m[7, 7] = 60, 40, 100  # Crops: 100 -> 60, 40 to Rangeland
+    out = stats.sentences(m, "Between 2021 and 2025,", "{past}")
+    assert out[0] == "Between 2021 and 2025, Crops decreased by 40 % (4 ha), mainly to Rangeland (4 ha)."
+    assert out[1].startswith("Between 2021 and 2025, Rangeland increased by 40 %")
+
+
+def test_history_summary_counts_areas_per_year_and_damps_flicker() -> None:
+    crops, rng_ = 4, 8
+    cls = np.full((9, 2, 2), crops, np.uint8)
+    cls[4, 0, 0] = rng_  # one-year flicker: not a change between the periods
+    cls[6:, 1, 1] = rng_  # a lasting change
+    s = history.summarise(cls, list(range(2017, 2026)))
+    assert s["area_ha"]["Crops"][0] == pytest.approx(4 * stats.CELL_HA)
+    assert s["changed_percent"] == 25.0 and s["periods"] == {"start": [2017, 2019], "end": [2023, 2025]}
+    assert s["summary"][0].startswith("Between 2017–2019 and 2023–2025, Crops decreased by 25 %")
