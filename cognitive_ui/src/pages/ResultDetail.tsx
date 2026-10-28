@@ -15,6 +15,7 @@ import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/ana
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
 import { downloadName, resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
+import { LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, useLandCoverView, ViewToggle } from '../components/chat/result/ResultCard';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -218,10 +219,47 @@ const SINGLE_TITLES: Record<ResultCardModel['kind'], string> = {
   fields: 'Field boundaries',
   statistics: 'Statistics',
   image: 'Map',
+  landcover: 'Map',
 };
+
+type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
+
+/** A land-cover result: the map with its view (and Ukraine / this area) toggles, the summary, then its tables. */
+function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string }) {
+  const { base, view, hasLocal, local, setLocal, setActive } = useLandCoverView(model);
+  if (!base || !view) return null;
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <ViewToggle views={model.views} active={base.key} onChange={setActive} />
+        {hasLocal && <ScopeToggle local={local} onChange={setLocal} />}
+      </div>
+      <MapPanel title={view.layerName} meta={view.overlay || meta} view={view} legend={<LandCoverLegend model={model} view={view} />} height="h-[360px]" actions />
+      {model.summary.length > 0 && (
+        <section aria-label="Summary" className={panel}>
+          <header className="px-[14px] py-[10px] border-b border-border2">
+            <h2 className="text-[13px] font-semibold">Summary</h2>
+          </header>
+          <LandCoverSummary lines={model.summary} className="px-[14px] py-[10px]" />
+        </section>
+      )}
+      {model.tables.map((t) => (
+        <section key={t.title} aria-label={t.title} className={panel}>
+          <header className="px-[14px] py-[10px] border-b border-border2">
+            <h2 className="text-[13px] font-semibold">{t.title}</h2>
+          </header>
+          <div className="px-[6px] py-2">
+            <LandCoverTable table={t} />
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
 
 function Maps({ job, model, meta, dates: [from, to] }: { job: DetailJob; model: ResultCardModel; meta: string; dates: string[] }) {
   if (model.kind === 'statistics') return null;
+  if (model.kind === 'landcover') return <LandCoverPanels model={model} meta={meta} />;
   if (model.kind === 'change') {
     const index = changeIndexLabel(job);
     const [difference, ...dates] = model.views;

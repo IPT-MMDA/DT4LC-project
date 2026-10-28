@@ -20,6 +20,7 @@ import {
   type LegendItem,
   type ResultCardModel,
   type Stat,
+  type TableModel,
   type Tone,
 } from './resultModel';
 
@@ -73,9 +74,9 @@ function CardShell({ model, toggle, children }: { model: ResultCardModel; toggle
   );
 }
 
-function ViewToggle({ views, active, onChange }: { views: CardView[]; active: CardView['key']; onChange: (key: CardView['key']) => void }) {
+export function ViewToggle({ views, active, onChange }: { views: CardView[]; active: CardView['key']; onChange: (key: CardView['key']) => void }) {
   return (
-    <div role="group" aria-label="Result view" className="flex-none flex border border-border rounded-control overflow-hidden text-[11.5px]">
+    <div role="group" aria-label="Result view" className="flex-none flex max-w-full overflow-x-auto border border-border rounded-control text-[11.5px] whitespace-nowrap">
       {views.map((v, i) => (
         <button
           key={v.key}
@@ -360,6 +361,121 @@ function ImageCard({ jobId, model }: { jobId: string; model: Extract<ResultCardM
   );
 }
 
+type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
+
+/** A class view's legend (its classes with the card's areas), else the view's ramp. */
+export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: CardView }) {
+  if (view.legend?.kind === 'ramp') {
+    return (
+      <span className="flex items-center gap-2">
+        <span className="text-muted">less likely</span>
+        <RampLegend ramp={view.legend} />
+        <span className="text-muted">more likely</span>
+      </span>
+    );
+  }
+  const shown = new Set((view.legend?.kind === 'change' ? view.legend.classes ?? [] : []).map((c) => c.label));
+  return <ClassLegend classes={model.classes.filter((c) => shown.size === 0 || shown.has(c.name))} />;
+}
+
+/** The sentences the server wrote from the numbers. */
+export function LandCoverSummary({ lines, className }: { lines: string[]; className?: string }) {
+  if (lines.length === 0) return null;
+  return (
+    <ul data-testid="landcover-summary" className={cn('flex flex-col gap-[6px] text-[12.5px] leading-snug', className)}>
+      {lines.map((l) => (
+        <li key={l}>{l}</li>
+      ))}
+    </ul>
+  );
+}
+
+export function LandCoverTable({ table }: { table: TableModel }) {
+  const head = 'text-label uppercase text-muted font-semibold text-right first:text-left px-2 py-[6px] whitespace-nowrap';
+  const cell = 'px-2 py-1 text-right whitespace-nowrap';
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="landcover-table" aria-label={table.title} className="w-full font-mono text-[11.5px]">
+        <thead>
+          <tr>
+            {table.columns.map((c) => (
+              <th key={c} scope="col" className={head}>
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((r) => (
+            <tr key={r.label} className="border-t border-border2">
+              <th scope="row" className="px-2 py-1 text-left font-sans font-normal whitespace-nowrap">
+                <span className="flex items-center gap-[6px]">
+                  {r.colour && <Swatch style={{ background: r.colour }} />}
+                  {r.label}
+                </span>
+              </th>
+              {r.cells.map((v, i) => (
+                <td key={i} className={cell}>
+                  {v}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {table.note && <p className="px-2 pt-[6px] text-[11px] text-muted">{table.note}</p>}
+    </div>
+  );
+}
+
+/** National / within-area toggle of a hazard view; nothing for a view without a local twin. */
+export function ScopeToggle({ local, onChange }: { local: boolean; onChange: (local: boolean) => void }) {
+  return (
+    <div role="group" aria-label="Rank against" className="flex-none flex border border-border rounded-control overflow-hidden text-[11.5px]">
+      {[false, true].map((on) => (
+        <button
+          key={String(on)}
+          type="button"
+          aria-pressed={local === on}
+          onClick={() => onChange(on)}
+          className={cn('px-[9px] py-1', on && 'border-l border-border', local === on ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
+        >
+          {on ? 'This area' : 'Ukraine'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The active view of a land-cover card: its key, the national/local scope, and the view shown. */
+export function useLandCoverView(model: LandCoverModel) {
+  const [active, setActive] = useState<string>(model.views[0]?.key ?? '');
+  const [local, setLocal] = useState(false);
+  const base = model.views.find((v) => v.key === active) ?? model.views[0];
+  const twin = base && model.local[base.key];
+  return { base, view: local && twin ? twin : base, hasLocal: Boolean(twin), local, setLocal, setActive };
+}
+
+function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel }) {
+  const { base, view, hasLocal, local, setLocal, setActive } = useLandCoverView(model);
+  if (!base || !view) return null;
+  return (
+    <CardShell model={model}>
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border2">
+        <ViewToggle views={model.views} active={base.key} onChange={setActive} />
+        {hasLocal && <ScopeToggle local={local} onChange={setLocal} />}
+      </div>
+      <MapImage view={view} alt={`${model.title}, ${view.overlay}`} />
+      <LegendBlock source={model.source}>
+        <LandCoverLegend model={model} view={view} />
+      </LegendBlock>
+      <StatsRow stats={model.stats} />
+      <LandCoverSummary lines={model.summary} className="px-3 py-[10px] border-b border-border2" />
+      <Actions jobId={jobId} model={model} view={view} />
+    </CardShell>
+  );
+}
+
 export function ResultCardView({ jobId, model }: { jobId: string; model: ResultCardModel }) {
   switch (model.kind) {
     case 'change':
@@ -374,6 +490,8 @@ export function ResultCardView({ jobId, model }: { jobId: string; model: ResultC
       return <StatisticsCard jobId={jobId} model={model} />;
     case 'image':
       return <ImageCard jobId={jobId} model={model} />;
+    case 'landcover':
+      return <LandCoverCard jobId={jobId} model={model} />;
   }
 }
 

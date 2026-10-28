@@ -44,7 +44,7 @@ export interface LegendItem {
 
 /** One image of a card: the map shown, the raster behind it and the overlay label. */
 export interface CardView {
-  key: 'difference' | 'before' | 'after' | 'map';
+  key: string;  // 'difference' | 'before' | 'after' | 'map', or a raster key of a land-cover card
   label: string;  // the toggle's text
   layerName: string;  // its row in the Layers panel
   overlay: string;  // the mono label on the image, '' for none
@@ -86,7 +86,25 @@ export type ResultCardModel =
   | (CardBase & { kind: 'classification'; views: [CardView]; classes: ClassItem[] })
   | (CardBase & { kind: 'fields'; views: [CardView]; stats: Stat[] })
   | (CardBase & { kind: 'statistics'; views: []; bands: BandRow[] })
+  | (CardBase & {
+      kind: 'landcover';
+      views: CardView[];
+      /** A view's twin ranked within the area (hazards): shown by the Ukraine / This area toggle. */
+      local: Record<string, CardView>;
+      classes: ClassItem[];
+      stats: Stat[];
+      summary: string[];
+      tables: TableModel[];
+    })
   | (CardBase & { kind: 'image'; views: [CardView] });
+
+/** A small table of a land-cover card: a label column (with an optional swatch), then values. */
+export interface TableModel {
+  title: string;
+  columns: string[];
+  rows: { label: string; colour?: string; cells: string[] }[];
+  note?: string;
+}
 
 /** The files (or region) the analysis was asked about: the user message's context. */
 export interface AnalysedContext {
@@ -96,7 +114,10 @@ export interface AnalysedContext {
 
 // --- Display tables ---------------------------------------------------------------
 
-const INDEX_ARTIFACTS = ['NDVIMap', 'EVIMap', 'NDWIMap', 'NDSIMap', 'ChangeHazardMap'];
+const INDEX_ARTIFACTS = ['NDVIMap', 'EVIMap', 'NDWIMap', 'NDSIMap', 'ChangeHazardMap'];  // ChangeHazardMap: old jobs
+
+/** Esri land-cover classes, in the order of their raster values 1-8 (dta/dti/models/lulc_hazard/features.py). */
+const ESRI_CLASSES = ['Water', 'Trees', 'FloodedVeg', 'Crops', 'Built', 'Bare', 'Snow', 'Rangeland'];
 
 /** Sensor (upload `metadata.sensor`, region `dataset`) → the source line's long name. */
 export const SENSOR_NAMES: Record<string, string> = {
@@ -543,6 +564,225 @@ function statisticsCard(artifact: Obj, artifacts: Obj, context: AnalysedContext)
 }
 
 /** Any other step output with an image (a model's outputs): the image and its raster. */
+// --- Land cover: hazards, forecast, history (dta/dti/models/lulc_hazard) -----------------
+
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const str = (v: unknown): string => (typeof v === 'string' ? v : isNum(v) ? String(v) : '');
+
+/** Hectares: "412 ha" under 1 000 ha, then km² ("12.5 km²"); a real minus and an optional "+". */
+export function formatHa(value: unknown, { sign = false } = {}): string {
+  if (!isNum(value)) return '—';
+  const abs = Math.abs(value);
+  const prefix = value < 0 ? MINUS : sign && value > 0 ? '+' : '';
+  if (abs >= 1000) return `${prefix}${formatKm2(abs / 100).replace(/^</, '')}`;
+  return `${prefix}${abs < 10 && abs > 0 ? abs.toFixed(1) : grouped(abs)} ha`;
+}
+
+const signedPercent = (v: unknown) => (isNum(v) ? `${v < 0 ? MINUS : v > 0 ? '+' : ''}${Math.abs(v).toFixed(0)} %` : '—');
+
+/** Colour of Esri class `name` from a class style (keys are the raster values 1-8). */
+function esriColour(style: RasterStyle | undefined, name: string): string | undefined {
+  return style?.kind === 'class' ? style.classes[String(ESRI_CLASSES.indexOf(name) + 1)] : undefined;
+}
+
+function classView(vis: Obj, rasters: Obj, key: string, label: string, layerName: string, overlay: string): CardView {
+  const bare = bareOf(vis, `${key}_map`);
+  const style = styleOf(bare);
+  const classes: LegendClass[] =
+    style?.kind === 'class'
+      ? ESRI_CLASSES.filter((_, i) => style.classes[String(i + 1)]).map((n) => ({ label: n, tone: 'neutral' as Tone, colour: esriColour(style, n) }))
+      : [];
+  return {
+    key, label, layerName, overlay,
+    image: asRef(vis[`${key}_map`]), bare, raster: asRef(rasters[key]),
+    ...(classes.length > 0 && { legend: { kind: 'change' as const, classes } }),
+  };
+}
+
+function rankView(vis: Obj, rasters: Obj, key: string, label: string, layerName: string, overlay: string): CardView {
+  const bare = bareOf(vis, `${key}_map`);
+  const ramp = rampOf(styleOf(bare));
+  return { key, label, layerName, overlay, image: asRef(vis[`${key}_map`]), bare, raster: asRef(rasters[key]), legend: ramp && { kind: 'ramp', ...ramp } };
+}
+
+/** The class legend of a class view, with each class's area from `rows` (class → hectares). */
+function landClasses(view: CardView | undefined, areas: Record<string, unknown>): ClassItem[] {
+  const style = styleOf(view?.bare);
+  return ESRI_CLASSES.filter((n) => isNum(areas[n]) && (areas[n] as number) > 0).map((n) => ({
+    name: n,
+    colour: esriColour(style, n),
+    value: formatHa(areas[n]),
+  }));
+}
+
+/** Transition matrix `{classes, hectares, row_percent}` as a table: rows from, columns to, hectares (share of the row). */
+function matrixTable(m: Obj, title: string, style: RasterStyle | undefined, note?: string): TableModel | null {
+  const classes = arr(m.classes).map(str);
+  const ha = arr(m.hectares).map(arr);
+  const pct = arr(m.row_percent).map(arr);
+  if (classes.length === 0) return null;
+  return {
+    title,
+    columns: ['From \\ to', ...classes],
+    rows: classes.map((c, i) => ({
+      label: c,
+      colour: esriColour(style, c),
+      cells: classes.map((_, j) => (isNum(ha[i]?.[j]) && (ha[i][j] as number) > 0 ? `${formatHa(ha[i][j])} (${Number(pct[i]?.[j] ?? 0).toFixed(0)} %)` : '·')),
+    })),
+    note,
+  };
+}
+
+function classesTable(rows: unknown[], title: string, before: string, after: string, style: RasterStyle | undefined): TableModel {
+  return {
+    title,
+    columns: ['Class', before, after, 'Change', 'Change %'],
+    rows: rows.map(obj).map((r) => ({
+      label: str(r.class),
+      colour: esriColour(style, str(r.class)),
+      cells: [formatHa(r.before_ha), formatHa(r.after_ha), formatHa(r.change_ha, { sign: true }), signedPercent(r.change_percent)],
+    })),
+  };
+}
+
+function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
+  const files = analysed(context, [artifacts.RasterPath, artifact.path]);
+  const stats = obj(artifact.statistics);
+  const meta = obj(artifact.metadata);
+  const vis = obj(artifact.visualizations);
+  const rasters = obj(artifact.rasters);
+  const hazards = arr(stats.hazards).map(obj);
+  const t0 = str(meta.t0);
+  const views: CardView[] = [];
+  const local: Record<string, CardView> = {};
+  for (const h of hazards) {
+    const key = str(h.raster);
+    const title = str(h.title);
+    const year = str(h.year);
+    views.push(rankView(vis, rasters, key, title.split(' ')[0] === 'Any' ? 'Any change' : title, `${title} · ${year}`, titled(`rank by ${year}`, 'vs Ukraine')));
+    local[key] = rankView(vis, rasters, `${key}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'within this area'));
+  }
+  const start = classView(vis, rasters, 'start_class', 'Now', titled('Land cover', t0), titled('Esri land cover', t0));
+  views.push(start);
+  const skill = (h: Obj) => {
+    const s = obj(h.skill);
+    return isNum(s.auc) ? `${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : '—';
+  };
+  return {
+    kind: 'landcover',
+    title: titled('Land-cover hazards', t0 && `from ${t0}`),
+    note: 'ranks, not probabilities',
+    source: 'Esri land cover, AlphaEarth and terrain from Earth Engine',
+    bounds: boundsOf(files),
+    views,
+    local,
+    classes: landClasses(start, obj(stats.start_class_ha)),
+    stats: [
+      { label: 'Origin year', value: t0 || '—' },
+      { label: 'Hazards', value: String(hazards.length) },
+      { label: 'Cells ranked', value: formatValue(stats.valid_pixels) },
+    ],
+    summary: arr(stats.summary).map(str).filter(Boolean),
+    tables: hazards.length
+      ? [{
+          title: 'Hazards',
+          columns: ['Hazard', 'By', 'Could change', 'In national top 10 %', 'Backtest AUC vs null'],
+          rows: hazards.map((h) => ({
+            label: str(h.title),
+            cells: [str(h.year), formatHa(h.eligible_ha), `${formatHa(h.top_decile_ha)} (${formatPercent(h.top_decile_percent)})`, skill(h)],
+          })),
+          note: 'Each hazard is shown for the furthest year at which it beat the nulls in a backtest. Ranks compare cells; they are not chances of change.',
+        }]
+      : [],
+  };
+}
+
+function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
+  const files = analysed(context, [artifacts.RasterPath, artifact.path]);
+  const stats = obj(artifact.statistics);
+  const vis = obj(artifact.visualizations);
+  const rasters = obj(artifact.rasters);
+  const t0 = str(stats.t0);
+  const year = str(stats.year);
+  const forecast = classView(vis, rasters, 'class_forecast', String(year || 'Forecast'), titled('Land-cover forecast', year), titled('forecast', year));
+  const changed = classView(vis, rasters, 'changed', 'Changes', titled('Forecast changes', `${t0}–${year}`), titled('changed cells', `${t0}–${year}`));
+  const now = classView(vis, rasters, 'class_start', String(t0 || 'Now'), titled('Land cover', t0), titled('Esri land cover', t0));
+  const style = styleOf(forecast.bare);
+  const rows = arr(stats.classes).map(obj);
+  const trend = obj(stats.trend);
+  const pair = arr(trend.pair).map(str);
+  const amounts = str(stats.amounts);
+  return {
+    kind: 'landcover',
+    title: titled('Land-cover forecast', year),
+    note: amounts === 'expected' ? 'amounts checked in a backtest' : `amounts: ${pair.join('–')} trend scenario`,
+    source: 'Esri land cover, AlphaEarth and terrain from Earth Engine',
+    bounds: boundsOf(files),
+    views: [forecast, changed, now],
+    local: {},
+    classes: landClasses(forecast, Object.fromEntries(rows.map((r) => [str(r.class), r.after_ha]))),
+    stats: [
+      { label: 'From', value: t0 || '—' },
+      { label: 'To', value: year || '—' },
+      { label: 'Cells changing', value: formatPercent(stats.changed_percent) },
+    ],
+    summary: arr(stats.summary).map(str).filter(Boolean),
+    tables: [
+      classesTable(rows, 'Class areas', t0, year, style),
+      matrixTable(obj(stats.matrix), `Transitions ${t0}–${year}`, style),
+      matrixTable(obj(trend.matrix), `Trend used: ${pair.join('–')} around the area`, style,
+        `Observed Esri transitions in ${formatKm2(trend.area_km2)} around the area; they set how much changes.`),
+    ].filter((t): t is TableModel => t !== null),
+  };
+}
+
+function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
+  const files = analysed(context, [artifacts.RasterPath, artifact.path]);
+  const stats = obj(artifact.statistics);
+  const vis = obj(artifact.visualizations);
+  const rasters = obj(artifact.rasters);
+  const periods = obj(stats.periods);
+  const span = (p: unknown) => arr(p).map(str).join('–');
+  const first = span(periods.start);
+  const last = span(periods.end);
+  const end = classView(vis, rasters, 'class_end', last || 'Now', titled('Land cover', last), titled('majority class', last));
+  const changed = classView(vis, rasters, 'changed', 'Changes', titled('Land-cover changes', `${first} → ${last}`), titled('changed', `${first} → ${last}`));
+  const start = classView(vis, rasters, 'class_start', first || 'Then', titled('Land cover', first), titled('majority class', first));
+  const style = styleOf(end.bare);
+  const years = arr(stats.years).map(str);
+  const areas = obj(stats.area_ha);
+  const rows = arr(stats.classes).map(obj);
+  return {
+    kind: 'landcover',
+    title: titled('Land-cover history', `${first} → ${last}`),
+    note: 'Esri, majority of each period',
+    source: 'Esri land cover from Earth Engine',
+    bounds: boundsOf(files),
+    views: [end, changed, start],
+    local: {},
+    classes: landClasses(end, Object.fromEntries(rows.map((r) => [str(r.class), r.after_ha]))),
+    stats: [
+      { label: 'Changed', value: formatPercent(stats.changed_percent) },
+      { label: `Single years ${arr(stats.single_year_pair).map(str).join('–')}`, value: formatPercent(stats.changed_percent_single_years) },
+    ],
+    summary: arr(stats.summary).map(str).filter(Boolean),
+    tables: [
+      classesTable(rows, 'Class areas', first, last, style),
+      matrixTable(obj(stats.matrix), `Transitions ${first} → ${last}`, style),
+      {
+        title: 'Area per year',
+        columns: ['Class', ...years],
+        rows: ESRI_CLASSES.filter((n) => Array.isArray(areas[n])).map((n) => ({
+          label: n,
+          colour: esriColour(style, n),
+          cells: arr(areas[n]).map((v) => formatHa(v)),
+        })),
+        note: 'Single-year Esri maps: part of the year-to-year change is classifier flicker.',
+      },
+    ].filter((t): t is TableModel => t !== null),
+  };
+}
+
 function imageCard(artifact: Obj, context: AnalysedContext, title: string): ResultCardModel | null {
   const image = firstRef(artifact.visualizations, 'png');
   if (!image) return null;
@@ -570,6 +810,11 @@ export function resultCardOf(job: Pick<JobRecord, 'result'>, context: AnalysedCo
   if (has('BandMathChangeMap')) return changeCard(get('BandMathChangeMap'), artifacts, context, true);
   if (has('ChangeMap')) return changeCard(get('ChangeMap'), artifacts, context, false);
   if (has('BandMathMap')) return indexCard(get('BandMathMap'), artifacts, context, true);
+  if (has('LandCoverForecast')) return forecastCard(get('LandCoverForecast'), artifacts, context);
+  if (has('LandCoverHistory')) return historyCard(get('LandCoverHistory'), artifacts, context);
+  if (has('ChangeHazardMap') && Array.isArray(obj(get('ChangeHazardMap').statistics).hazards)) {
+    return hazardCard(get('ChangeHazardMap'), artifacts, context);
+  }
   const index = INDEX_ARTIFACTS.find(has);
   if (index) return indexCard(get(index), artifacts, context, false);
   if (has('LULCMap')) return lulcCard(get('LULCMap'), artifacts, context);

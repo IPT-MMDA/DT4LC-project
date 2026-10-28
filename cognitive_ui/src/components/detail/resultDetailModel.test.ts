@@ -235,3 +235,10 @@ describe('the map line, title and context', () => {
     expect(regionOfJob({ id: 'r2', region: null })).toBeUndefined();
   });
 });
+
+describe('plan steps of the land-cover models', () => {
+  it('no "after − before" and no region-input config on a change-hazard step', () => {
+    const p = planSummary(job({ status: 'completed', events: [], plan: { steps: [{ uses: 'models/lulc-change-hazard', config: { region_input: 'footprint' } }] } }), registry, []);
+    expect(p.lines[0].params).not.toMatch(/after|region input/);
+  });
+});

@@ -128,7 +128,7 @@ export interface Conversation {
 }
 
 /** Which result card a finished analysis shows (components/chat/result/resultModel.ts). */
-export type ResultCardKind = 'index' | 'change' | 'classification' | 'fields' | 'statistics' | 'image';
+export type ResultCardKind = 'index' | 'change' | 'classification' | 'fields' | 'statistics' | 'image' | 'landcover';
 
 // Structured result data for context management
 export interface JobResultData {
