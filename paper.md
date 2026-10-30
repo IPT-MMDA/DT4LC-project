@@ -103,6 +103,6 @@ Generative AI was also used in development. Claude (Anthropic) was used for code
 
 # Acknowledgements
 
-This work was supported by the project "DT4LC -- Developing Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning" (Grant 2023.01/0040), the Ukrainian-Swiss Joint Research Programme (USJRP) funded by the Swiss National Science Foundation (SNSF), the HORIZON Europe projects SWIFTT (Grant 101082732) and FUTUREFOR (Grant 101180278) and the NASA-funded projects "Assessment of the Impact of War in Ukraine on National Protected Areas" (Grant 80NSSC25K7652) and "Detecting and Mapping War-Induced Damage to Agricultural Fields in Ukraine Using Multi-Modal Remote Sensing Data" (Grant 80NSSC24K0354).
+This work was supported by the project "DT4LC -- Developing Scalable Digital Twin Models for Land Cover Change Detection Using Machine Learning" (Grant 2023.01/0040), the Ukrainian-Swiss Joint Research Programme (USJRP) funded by the Swiss National Science Foundation (SNSF), the HORIZON Europe project FUTUREFOR (Grant 101180278), the applied research project "Next-generation Copernicus services: an intelligent digital twin for forest cover analysis in Ukraine" funded by the Ministry of Education and Science of Ukraine (Order No. 23 of 9 January 2026), and the NASA-funded projects "Assessment of the Impact of War in Ukraine on National Protected Areas" (Grant 80NSSC25K7652) and "Detecting and Mapping War-Induced Damage to Agricultural Fields in Ukraine Using Multi-Modal Remote Sensing Data" (Grant 80NSSC24K0354).
 
 # References

@@ -1,0 +1,77 @@
+{
+  "creators": [
+    {
+      "affiliation": "Department of Mathematical Modelling and Data Analysis, National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Chernyatevich, Anton",
+      "orcid": "0009-0003-5292-6067"
+    },
+    {
+      "affiliation": "National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Malyniak, Volodymyr",
+      "orcid": "0009-0008-0840-4276"
+    },
+    {
+      "affiliation": "Department of Mathematical Modelling and Data Analysis, National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Drozd, Sofiia",
+      "orcid": "0000-0002-5149-5520"
+    },
+    {
+      "affiliation": "University of Maryland, College Park, MD, USA",
+      "name": "Kussul, Nataliia",
+      "orcid": "0000-0002-9704-9702"
+    },
+    {
+      "affiliation": "National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Shelestov, Andrii",
+      "orcid": "0000-0001-9256-4097"
+    },
+    {
+      "affiliation": "National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Salii, Yevhenii",
+      "orcid": "0009-0006-0395-8099"
+    },
+    {
+      "affiliation": "National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Yavorskyi, Oleksandr",
+      "orcid": "0009-0001-5175-3825"
+    },
+    {
+      "affiliation": "National Technical University of Ukraine \"Igor Sikorsky Kyiv Polytechnic Institute\"",
+      "name": "Kolotii, Andrii",
+      "orcid": "0000-0002-6972-4483"
+    },
+    {
+      "affiliation": "University of Geneva, Switzerland",
+      "name": "Giuliani, Gregory",
+      "orcid": "0000-0002-1825-8865"
+    },
+    {
+      "affiliation": "University of Geneva, Switzerland",
+      "name": "Poussin, Charlotte"
+    }
+  ],
+  "description": "A cognitive digital twin framework for land cover change detection and vegetation analysis using satellite imagery, machine learning, and LLM-powered orchestration. Developed at the Department of Mathematical Modelling and Data Analysis, Igor Sikorsky Kyiv Polytechnic Institute.",
+  "keywords": [
+    "digital-twin",
+    "land-cover",
+    "change-detection",
+    "remote-sensing",
+    "satellite-imagery",
+    "machine-learning",
+    "NDVI",
+    "geospatial",
+    "foundation-models"
+  ],
+  "license": "agpl-3.0-or-later",
+  "publication_date": "2026-10-31",
+  "title": "DT4LC: A Cognitive Digital Twin Framework for Land Cover Change Detection",
+  "upload_type": "software",
+  "access_right": "open",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/IPT-MMDA/DT4LC-project",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ]
+}

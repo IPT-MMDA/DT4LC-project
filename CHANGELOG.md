@@ -2,7 +2,7 @@
 
 All notable changes to DT4LC are listed here, newest first. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each release, with its full notes and container images, is on the [GitHub releases page](https://github.com/IPT-MMDA/DT4LC-project/releases).
 
-## [0.6.0] - Unreleased
+## [0.6.0] - 2026-10-31
 
 A conversation-first workspace replaces the job-centred interface: you describe an analysis in plain language, and the assistant says what it will do, runs it and shows the result in the same message. `v0.6.0-alpha.1` was a preview with the backend contracts and the Workspace.
 
