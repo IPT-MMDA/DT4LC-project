@@ -15,8 +15,7 @@ import numpy as np
 
 from . import features
 
-ESRI = features.ESRI_CLASSES
-K = len(ESRI)
+K = len(features.ESRI_CLASSES)
 CELL_KM2 = features.RES * features.RES / 1e6  # km² per 30 m cell (0.0009)
 MIN_SHARE = 0.01  # a class below 1 % of the area gets no sentence
 MIN_NET_AREA = 0.01  # a net change below 1 % of the area ...
@@ -122,7 +121,7 @@ def allocate(start: np.ndarray, quota: np.ndarray, score: np.ndarray, seed: int 
     return out
 
 
-def matrix_table(m: np.ndarray, names: Sequence[str] = ESRI) -> dict[str, Any]:
+def matrix_table(m: np.ndarray, names: Sequence[str] = features.ESRI_CLASSES) -> dict[str, Any]:
     """A transition matrix for the result: class names, km², and each row's shares in %."""
     names = list(names)
     keep = [i for i in range(len(names)) if m[i].sum() or m[:, i].sum()]
@@ -134,7 +133,9 @@ def matrix_table(m: np.ndarray, names: Sequence[str] = ESRI) -> dict[str, Any]:
     }
 
 
-def class_table(before: np.ndarray, after: np.ndarray, names: Sequence[str] = ESRI) -> list[dict[str, Any]]:
+def class_table(
+    before: np.ndarray, after: np.ndarray, names: Sequence[str] = features.ESRI_CLASSES
+) -> list[dict[str, Any]]:
     """Per class present at either date: km² before and after, change in km² and in %."""
     out = []
     for i, name in enumerate(names):
@@ -172,7 +173,7 @@ def km2_text(value: float) -> str:
     return f"{text} km²"
 
 
-def sentences(m: np.ndarray, verb: str, names: Sequence[str] = ESRI) -> list[str]:
+def sentences(m: np.ndarray, verb: str, names: Sequence[str] = features.ESRI_CLASSES) -> list[str]:
     """Plain sentences for the class changes of transition matrix ``m`` (cells) worth reading.
 
     ``verb`` is "decreased" style past or "would decrease" style future; the caller states the period or the
@@ -211,7 +212,7 @@ def sentences(m: np.ndarray, verb: str, names: Sequence[str] = ESRI) -> list[str
     return out
 
 
-def top_transitions(m: np.ndarray, n: int = 5, names: Sequence[str] = ESRI) -> list[dict[str, Any]]:
+def top_transitions(m: np.ndarray, n: int = 5, names: Sequence[str] = features.ESRI_CLASSES) -> list[dict[str, Any]]:
     """The ``n`` largest class-to-class flows of ``m`` (cells): from, to, km² and the share of the from-class."""
     off = m.astype(float).copy()
     np.fill_diagonal(off, 0)

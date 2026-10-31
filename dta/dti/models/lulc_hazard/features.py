@@ -164,9 +164,6 @@ KPI = LabelSource(
 SOURCES = {s.key: s for s in (ESRI, KPI)}
 LABEL_NAMES = {"esri": "Esri", "kpi": "KPI-Ukraine"}  # short names for messages
 
-NBR_COLUMNS = ESRI.nbr_columns
-COLUMNS = ESRI.columns
-
 
 class FeatureUnavailableError(RuntimeError):
     """Earth Engine has no input for this area and year (e.g. no AlphaEarth embedding of ``t0``)."""
@@ -518,7 +515,7 @@ def check_columns(columns: Iterable[str], source: LabelSource = ESRI) -> list[st
 def build_features(
     grid: Grid,
     t0: int,
-    columns: Iterable[str] = COLUMNS,
+    columns: Iterable[str],
     ee: Any = None,
     check_years: bool = True,
     dem: str = DEM_DEFAULT,

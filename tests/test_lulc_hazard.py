@@ -346,7 +346,7 @@ def test_features_match_the_training_cube(window: str, t0: int) -> None:
     w = pd.read_csv(repo / "artifacts" / "dataset_v1" / "windows.csv").set_index("window_id").loc[window]
     grid = features.Grid("EPSG:32636", float(w.x0_core) - 600, float(w.y0_core) + 600, 400, 400)
     labels, x, names = cube_io.load(window, t0, "esri", ("static", "hist_esri", "ae"))
-    cols = [c for c in features.COLUMNS if c in names]
+    cols = [c for c in features.ESRI.columns if c in names]
     cube = features.build_features(grid, t0, cols, ee=ee, dem="glo30")  # the DEM release the cube was built from
 
     assert np.array_equal(cube.start_class.ravel(), labels[t0])
