@@ -257,7 +257,8 @@ class TriggerIndex:
         "compare", "change", "before", "difference", "between the two dates", "gained", "lost", ...),
         except inside a longer trigger of an item that produces none ("change" in "likely to change")."""
         p = without_rejected(prompt.lower())
-        change, other = [], []
+        change: list[tuple[int, int]] = []
+        other: list[tuple[int, int]] = []
         for item in self.user_runnable_items:
             if item.triggers is None:
                 continue

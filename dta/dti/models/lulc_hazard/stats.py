@@ -172,7 +172,7 @@ def sentences(m: np.ndarray, verb: str, names: Sequence[str] = ESRI) -> list[str
     before, after = m.sum(1), m.sum(0)
     total = max(int(before.sum()), 1)
     net = after.astype(int) - before.astype(int)
-    out = []
+    out: list[str] = []
     for i in np.argsort(-np.abs(net), kind="stable"):
         if len(out) == MAX_SENTENCES or net[i] == 0:
             break

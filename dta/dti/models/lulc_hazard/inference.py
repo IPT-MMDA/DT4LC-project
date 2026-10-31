@@ -400,6 +400,8 @@ def region_name(domain: dict[str, Any]) -> str:
 
 
 def _ee() -> Any:
+    import ee
+
     from dta.dti.data_sources import gee_common
     from dta.dti.data_sources.gee_region import EarthEngineNotConfiguredError
 
@@ -407,7 +409,7 @@ def _ee() -> Any:
         raise EarthEngineNotConfiguredError(
             "Earth Engine isn't configured on this server, so I can't build the change-hazard features."
         )
-    return gee_common.ee
+    return ee
 
 
 def _area(RasterPath: str, bundle: dict[str, Any]) -> tuple[list[float], features.Grid]:  # noqa: N803
@@ -435,10 +437,9 @@ def _cube(ee: Any, bundle: dict[str, Any], grid: features.Grid, t0: int | None) 
     need_ae = any(c in features.AE_COLUMNS for c in bundle["columns"])
     source = source_of(bundle)
     latest = t0 is None
-    if latest:
-        t0 = features.latest_t0(ee, grid, first=t0_min, need_ae=need_ae, source=source)
+    year = features.latest_t0(ee, grid, first=t0_min, need_ae=need_ae, source=source) if t0 is None else t0
     return features.build_features(
-        grid, t0, bundle["columns"], ee=ee, check_years=not latest, dem=bundle.get("dem", LEGACY_DEM), source=source
+        grid, year, bundle["columns"], ee=ee, check_years=not latest, dem=bundle.get("dem", LEGACY_DEM), source=source
     )
 
 

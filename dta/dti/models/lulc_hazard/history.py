@@ -140,7 +140,7 @@ def run_prewar(RasterPath: str) -> dict[str, Any]:  # noqa: N803
             f"{src.title} has no map of this area for {missing}; it covers Ukraine."
         )
     cls, fallow, raw = prewar_maps(ee, grid, years)
-    extra = {
+    extra: dict[str, Any] = {
         "not_cultivated_km2": {"years": years, "km2": [stats.km2(v / 9) for v in fallow]},
         "checked": PREWAR_NOTE,
     }

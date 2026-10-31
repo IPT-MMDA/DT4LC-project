@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { resolveApiUrl } from '../../../api/client';
 import { getJob } from '../../../api/jobs';
+import { useLandCoverView } from '../../../hooks/useLandCoverView';
 import { DOCKED_MAP_QUERY, useMediaQuery } from '../../../hooks/useMediaQuery';
 import { useAppStore } from '../../../store/useAppStore';
 import { findConversationByJobId, useChatStore } from '../../../store/useChatStore';
@@ -22,6 +23,7 @@ import {
   type Stat,
   type TableModel,
   type HazardItem,
+  type LandCoverModel,
   type TransitionItem,
   type Tone,
 } from './resultModel';
@@ -371,8 +373,6 @@ function ImageCard({ jobId, model }: { jobId: string; model: Extract<ResultCardM
   );
 }
 
-type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
-
 /** A class view's legend (its classes with the card's areas), else the view's ramp. */
 export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: CardView }) {
   if (view.items) {
@@ -496,15 +496,6 @@ export function ScopeToggle({ local, onChange, labels }: { local: boolean; onCha
       ))}
     </div>
   );
-}
-
-/** The active view of a land-cover card: its key, the national/local scope, and the view shown. */
-export function useLandCoverView(model: LandCoverModel) {
-  const [active, setActive] = useState<string>(model.views[0]?.key ?? '');
-  const [local, setLocal] = useState(false);
-  const base = model.views.find((v) => v.key === active) ?? model.views[0];
-  const twin = base && model.local[base.key];
-  return { base, view: local && twin ? twin : base, hasLocal: Boolean(twin), local, setLocal, setActive };
 }
 
 /** The hazards as selectable rows: hue, name, the high-risk area out of the area that could change, and a bar of the

@@ -14,8 +14,8 @@ import { Failure } from '../components/chat/analysis/AnalysisMessage';
 import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/analysis/StatusPill';
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
-import { downloadName, resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
-import { HazardList, LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, TransitionList, useLandCoverView, ViewToggle } from '../components/chat/result/ResultCard';
+import { downloadName, resultCardOf, type CardView, type LandCoverModel, type ResultCardModel } from '../components/chat/result/resultModel';
+import { HazardList, LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, TransitionList, ViewToggle } from '../components/chat/result/ResultCard';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -36,6 +36,7 @@ import { useResultActions } from '../components/detail/useResultActions';
 import { analysisContext, whenLabel } from '../components/library/libraryModel';
 import { useAttachFiles } from '../hooks/useAttachFiles';
 import { interpretationOf } from '../hooks/useJobEvents';
+import { useLandCoverView } from '../hooks/useLandCoverView';
 import { useChatStore } from '../store/useChatStore';
 
 // /app/results/:id: one analysis from
@@ -224,8 +225,6 @@ const SINGLE_TITLES: Record<ResultCardModel['kind'], string> = {
   image: 'Map',
   landcover: 'Map',
 };
-
-type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
 
 /** A land-cover result: the map with its view (and region / this area) toggles, the summary, then its tables. */
 function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string }) {

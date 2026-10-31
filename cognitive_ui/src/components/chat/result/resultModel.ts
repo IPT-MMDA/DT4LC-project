@@ -111,6 +111,8 @@ export type ResultCardModel =
     })
   | (CardBase & { kind: 'image'; views: [CardView] });
 
+export type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
+
 /** One hazard of a hazard card: its risk levels in this area, for the selector row. */
 export interface HazardItem {
   key: string;  // the view it selects

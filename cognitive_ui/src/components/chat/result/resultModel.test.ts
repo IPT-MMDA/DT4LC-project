@@ -524,7 +524,8 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.source).toBe('KPI-Ukraine land cover, AlphaEarth and terrain from Earth Engine');
     expect(c.transitions[0]).toMatchObject({ from: 'Grass', to: 'Tree', fromColour: '#e3e2c3', toColour: '#397d49' });
     expect(c.classes).toEqual([{ name: 'Tree', colour: '#397d49', value: '3.50 km²' }]);
-    expect(c.views[2].legend?.kind === 'change' && c.views[2].legend.classes.map((x) => x.label)).toEqual(['Crop', 'Grass', 'Tree', 'Built']);
+    const legend = c.views[2]?.legend;
+    expect(legend?.kind === 'change' && legend.classes?.map((x) => x.label)).toEqual(['Crop', 'Grass', 'Tree', 'Built']);
     expect(c.tables[2].rows[0].label).toBe('Grass');
   });
 
