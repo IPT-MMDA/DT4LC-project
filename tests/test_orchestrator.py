@@ -562,3 +562,18 @@ class TestOrchestratorPlanOrder:
         postproc_idx = next((i for i, s in enumerate(steps) if "post-processing/" in s), None)
         if postproc_idx is not None:
             assert postproc_idx > processing_idx, "Postprocessing should come after processing"
+
+
+def test_a_plan_without_the_interpretation_gets_it_last() -> None:
+    """The LLM planner can leave out the postprocess (a typed "Predict future LULC here"); the card then lacks its
+    written interpretation, which every built-in analysis has."""
+    from dta.dti.coe.orchestrator import require_analysis_step
+    from dta.dti.registry import load_registry
+
+    reg = load_registry()
+    steps = [PlanStep(uses="input/region-footprint"), PlanStep(uses="models/lulc-forecast")]
+    out = require_analysis_step(ExecutionPlan(flow="forecast", steps=steps), reg)
+    last = "post-processing/agent-analysis"
+    assert [s.uses for s in out.steps] == ["input/region-footprint", "models/lulc-forecast", last]
+    again = require_analysis_step(out, reg)  # one already there is not added twice
+    assert [s.uses for s in again.steps].count(last) == 1

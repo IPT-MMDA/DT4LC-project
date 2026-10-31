@@ -5,7 +5,7 @@ from typing import Any
 
 from dta.dti.data_sources.gee_region import inject_region_fetch
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import Attachment, ChatRequest, ExecutionPlan, Registry
+from dta.dti.schemas import Attachment, ChatRequest, ExecutionPlan, PlanStep, Registry
 
 from .context_agent import _deterministic_context, analyze
 from .intent_classifier import IntentType, classify_intent
@@ -155,9 +155,12 @@ def _analysis_steps(plan: ExecutionPlan, reg: Registry) -> list[str]:
 
 
 def require_analysis_step(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
-    """``plan``, unless it has no algorithm or model step (only reads and summarises): PlanError."""
+    """``plan`` with the postprocess (the written interpretation) last, which the LLM planner can leave out;
+    PlanError if it has no algorithm or model step (only reads and summarises)."""
     if not _analysis_steps(plan, reg):
         raise PlanError(NO_ANALYSIS_STEP)
+    if not any(get_item(reg, s.uses).kind == "postprocess" for s in plan.steps):
+        plan.steps += [PlanStep(uses=it.id) for it in reg.instances if it.kind == "postprocess"][:1]
     return plan
 
 
