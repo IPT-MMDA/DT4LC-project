@@ -496,10 +496,23 @@ def test_sentences_name_the_largest_net_change_and_its_main_destination() -> Non
     assert out[1].startswith("Rangeland increased by 40 %")
 
 
+def test_sentences_name_a_small_class_that_doubles_and_a_large_one_that_shifts_a_little() -> None:
+    m = np.zeros((8, 8), int)
+    m[3, 3], m[3, 7], m[3, 4] = 9_000, 60, 40  # Crops lose 1 % of themselves: 60 cells to Rangeland, 40 to Built
+    m[7, 7], m[4, 4], m[0, 0] = 400, 40, 460  # Rangeland (4 % of the area) gains 15 %, Built (0.4 %) doubles
+    out = stats.sentences(m, "{past}")
+    assert out == [
+        "Crops decreased by 1.1 % (net 0.09 km²); its largest loss is to Rangeland (0.05 km²).",
+        "Rangeland increased by 15 % (net 0.05 km²); its largest gain is from Crops (0.05 km²).",
+        "Built increased by 100 % (net 0.04 km²); its largest gain is from Crops (0.04 km²).",
+    ]
+
+
 def test_sentences_skip_small_changes_and_say_so() -> None:
     m = np.zeros((8, 8), int)
-    m[3, 3], m[3, 7], m[7, 7] = 990, 2, 1008  # 2 of 2 000 cells: 0.1 % of the area, 0.2 % of Crops
-    assert stats.sentences(m, "{past}") == ["No class changes by more than 1 % of the area or 5 % of itself."]
+    m[3, 3], m[3, 7], m[7, 7] = 990, 1, 1009  # 1 of 2 000 cells: under 0.1 % of the area
+    assert stats.sentences(m, "{past}") == ["No class changes by more than 0.1 % of the area."]
+    assert [stats.percent_text(v) for v in (0.04, 0.64, 9.96, 17.4)] == ["<0.1 %", "0.6 %", "10 %", "17 %"]
 
 
 def test_top_transitions_are_the_largest_flows_with_their_share() -> None:

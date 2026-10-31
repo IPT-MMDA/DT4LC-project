@@ -17,10 +17,8 @@ from . import features
 
 K = len(features.ESRI_CLASSES)
 CELL_KM2 = features.RES * features.RES / 1e6  # km² per 30 m cell (0.0009)
-MIN_SHARE = 0.01  # a class below 1 % of the area gets no sentence
-MIN_NET_AREA = 0.01  # a net change below 1 % of the area ...
-MIN_NET_CLASS = 0.05  # ... and below 5 % of the class is not worth a sentence
-MAX_SENTENCES = 4
+MIN_NET_AREA = 0.001  # a net change below 0.1 % of the area is not worth a sentence
+MAX_SENTENCES = 5
 
 
 def counts(cls: np.ndarray, k: int = K) -> np.ndarray:
@@ -173,26 +171,32 @@ def km2_text(value: float) -> str:
     return f"{text} km²"
 
 
+def percent_text(value: float) -> str:
+    """A share as text: "0.6 %" under 10, "17 %" above; "<0.1 %" for a trace."""
+    v = abs(value)
+    if 0 < v < 0.05:
+        return "<0.1 %"
+    # Thresholds after rounding, so 9.96 reads "10 %", not "10.0 %".
+    return f"{v:.1f} %" if v < 9.95 else f"{v:.0f} %"
+
+
 def sentences(m: np.ndarray, verb: str, names: Sequence[str] = features.ESRI_CLASSES) -> list[str]:
     """Plain sentences for the class changes of transition matrix ``m`` (cells) worth reading.
 
     ``verb`` is "decreased" style past or "would decrease" style future; the caller states the period or the
     condition once, above the sentences. A sentence reads "<Class> <verb> by M % (net A km²); its largest loss is to
-    <Y> (B km²)." B is a gross flow, so it can exceed the net change A when the class also gains elsewhere. A class
-    is named when its net change is at least :data:`MIN_NET_AREA` of the area or :data:`MIN_NET_CLASS` of the class
-    (and the class covers at least :data:`MIN_SHARE` of the area); if none is, one sentence says so.
+    <Y> (B km²)." B is a gross flow, so it can exceed the net change A when the class also gains elsewhere. Classes
+    are named by net change, largest first, up to :data:`MAX_SENTENCES`, while it is at least :data:`MIN_NET_AREA` of
+    the area: a small class that doubles is named as well as a large one that shifts by a fraction of itself. If
+    none is, one sentence says so.
     """
     before, after = m.sum(1), m.sum(0)
     total = max(int(before.sum()), 1)
     net = after.astype(int) - before.astype(int)
     out: list[str] = []
     for i in np.argsort(-np.abs(net), kind="stable"):
-        if len(out) == MAX_SENTENCES or net[i] == 0:
+        if len(out) == MAX_SENTENCES or net[i] == 0 or abs(net[i]) < MIN_NET_AREA * total:
             break
-        if max(before[i], after[i]) < MIN_SHARE * total:
-            continue
-        if abs(net[i]) < MIN_NET_AREA * total and abs(net[i]) < MIN_NET_CLASS * max(before[i], 1):
-            continue
         name = names[i]
         down = net[i] < 0
         flows = m[i].copy() if down else m[:, i].copy()
@@ -202,13 +206,12 @@ def sentences(m: np.ndarray, verb: str, names: Sequence[str] = features.ESRI_CLA
         flow = "loss is to" if down else "gain is from"
         main = f"; its largest {flow} {names[j]} ({_area(flows[j])})" if flows[j] > 0 else ""
         if before[i]:
-            pct = 100.0 * abs(net[i]) / before[i]
-            out.append(f"{name} {word} by {pct:.0f} % (net {_area(abs(net[i]))}){main}.")
+            pct = percent_text(100.0 * abs(net[i]) / before[i])
+            out.append(f"{name} {word} by {pct} (net {_area(abs(net[i]))}){main}.")
         else:
             out.append(f"{name} {word} from none to {_area(net[i])}{main}.")
     if not out:
-        area, own = 100 * MIN_NET_AREA, 100 * MIN_NET_CLASS
-        out.append(f"No class changes by more than {area:.0f} % of the area or {own:.0f} % of itself.")
+        out.append(f"No class changes by more than {100 * MIN_NET_AREA:.1f} % of the area.")
     return out
 
 
