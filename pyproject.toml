@@ -42,6 +42,8 @@ server = [
     "timm>=1.0.15",
     "ultralytics>=8.3.0",
     "huggingface-hub>=0.25.0",
+    # The LULC change-hazard model's boosters (dta/dti/models/lulc_hazard/model.py)
+    "xgboost>=2.0",
     # Imported directly by upstream Delineate-Anything (methods/main)
     "psutil>=5.9.0",
     "scipy>=1.10.0",
