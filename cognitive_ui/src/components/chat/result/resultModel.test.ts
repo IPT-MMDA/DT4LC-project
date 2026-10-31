@@ -463,7 +463,7 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect([c.hazards[1].sparse, c.hazards[1].sentence]).toEqual([true, 'Little tree cover here (0.20 km²)']);
     expect(c.views.map((v) => v.key)).toEqual(['rank_urban_expansion_level', 'rank_forest_loss_level', 'change_rank_level', 'start_class']);
     expect(c.views[0].base?.path).toBe('/o/start_bare.png');
-    expect(c.views[0].items?.[0]).toEqual({ name: 'High · 10 % most likely in Ukraine', colour: '#b2182b', value: '1.00 km²' });
+    expect(c.views[0].items?.map((i) => i.name)).toEqual(['High · top 10 % in Ukraine', 'Elevated · top 25 %', 'Moderate · top 50 %']);
     expect(c.local.rank_urban_expansion_level.raster?.path).toBe('/o/rank_urban_expansion_local.tif');
     expect(c.stats.map((x) => [x.label, x.value])).toEqual([
       ['Area analysed', '39.5 km²'],
@@ -474,8 +474,17 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.region).toBe('Ukraine');
     const swiss = card(jobOf('ChangeHazardMap', { index_type: 'change_rank', statistics: { hazards: [hz('urban_expansion', 'Urban expansion', 2029, 10)] }, metadata: { t0: 2025, compared_with: 'Switzerland' }, visualizations: vis, rasters }));
     if (swiss.kind !== 'landcover') throw new Error(swiss.kind);
-    expect([swiss.region, swiss.views[0].overlay]).toEqual(['Switzerland', expect.stringContaining('ranked in Switzerland')]);
-    expect(swiss.checked).toContain('same land across Switzerland');
+    expect([swiss.region, swiss.views[0].overlay, swiss.checked, swiss.note]).toEqual(['Switzerland', '', undefined, undefined]);
+    // A job from before region_percent: the old 10 / 15 / 25 % levels.
+    expect(c.tables[0].note).toContain('high = the top 10 % most likely');
+    expect(c.hazards[0].levels.map((l) => l.regionPercent)).toEqual([10, 15, 25]);
+    const narrow = card(jobOf('ChangeHazardMap', {
+      index_type: 'change_rank',
+      statistics: { hazards: [{ ...hz('urban_expansion', 'Built-up expansion', 2028, 4), levels: levels(4).map((l) => ({ ...l, region_percent: 5 })) }] },
+      metadata: { t0: 2025 }, visualizations: vis, rasters,
+    }));
+    if (narrow.kind !== 'landcover') throw new Error(narrow.kind);
+    expect(narrow.tables[0].note).toContain('elevated = the top 10 %, moderate = the top 15 %');
   });
 
   it('an old hazard job without a hazards list stays an index card', () => {
@@ -505,6 +514,11 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.views[0].base?.path).toBe('/o/s.png');
     expect(c.stats.map((x) => [x.label, x.value])).toEqual([['Changing', '3.31 km² · 4.5 %'], ['Largest change', 'Crops → Rangeland 3.45 km²'], ['Horizon', '4 years']]);
     expect(c.lead).toBe('If the 2021–2025 trend continues, by 2029:');
+    expect([c.views[0].overlay, c.checked]).toEqual(['', 'Where change lands was checked ...']);
+    // Expected amounts: no note and no line on the backtest; only a scenario says what its amounts are.
+    const expected = card(jobOf('LandCoverForecast', { statistics: { t0: 2025, year: 2028, amounts: 'expected', checked: 'Placement and amounts checked ...' }, visualizations: {}, rasters: {} }));
+    if (expected.kind !== 'landcover') throw new Error(expected.kind);
+    expect([expected.note, expected.checked]).toEqual([undefined, undefined]);
     expect(c.transitions).toEqual([{ from: 'Crops', to: 'Rangeland', fromColour: '#e49635', toColour: '#e3e2c3', area: '3.45 km²', share: '5.7 % of Crops in 2025' }]);
     // Each map's legend has its own areas: what turns into each class, the forecast year's, the start year's.
     expect(c.views.map((v) => v.items?.map((i) => `${i.name} ${i.value}`))).toEqual([['Rangeland 1.80 km²'], ['Crops 8.20 km²'], ['Crops 10.0 km²']]);
@@ -556,16 +570,20 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(fallow?.rows[0].cells).toEqual(['0.50 km²', '1.25 km²']);
   });
 
-  it('history: periods in the title, area per year in km², an older job in hectares too', () => {
+  it('history: first and last year in the title, area analysed, no note, area per year in km², an older job in hectares too', () => {
     const base = {
       years: [2017, 2018], periods: { start: [2017, 2019], end: [2023, 2025] },
       changed_percent: 12.5, changed_km2: 2.1, changed_percent_single_years: 20.1, single_year_pair: [2017, 2025],
-      classes: [], matrix: { classes: [] }, summary: [],
+      classes: [{ class: 'Crops', before_km2: 10, after_km2: 12 }, { class: 'Grass', before_km2: 6.8, after_km2: 4.8 }],
+      matrix: { classes: [] }, summary: [],
     };
     const c = card(jobOf('LandCoverHistory', { statistics: { ...base, area_km2: { Crops: [15, 14] } }, visualizations: {}, rasters: {} }));
     if (c.kind !== 'landcover') throw new Error(c.kind);
-    expect(c.title).toBe('Land-cover history · 2017–2019 → 2023–2025');
-    expect(c.stats.map((s) => [s.label, s.value])).toEqual([['Changed', '2.10 km² · 12.5 %'], ['Largest change', '—'], ['Single years 2017–2025', '20.1 %']]);
+    expect(c.title).toBe('Land-cover history · 2017 → 2025');
+    expect(c.note).toBeUndefined();
+    expect(c.views.map((v) => v.label)).toEqual(['Changes', '2025', '2017']);
+    expect(c.checked).toBeUndefined();
+    expect(c.stats.map((s) => [s.label, s.value])).toEqual([['Changed', '2.10 km² · 12.5 %'], ['Largest change', '—'], ['Area analysed', '16.8 km²']]);
     const perYear = (m: ResultCardModel) => (m.kind === 'landcover' ? m.tables.find((t) => t.title === 'Area per year')?.rows : undefined);
     expect(perYear(c)).toEqual([{ label: 'Crops', colour: undefined, cells: ['15.0 km²', '14.0 km²'] }]);
     const old = card(jobOf('LandCoverHistory', { statistics: { ...base, area_ha: { Crops: [1500, 1400] } }, visualizations: {}, rasters: {} }));

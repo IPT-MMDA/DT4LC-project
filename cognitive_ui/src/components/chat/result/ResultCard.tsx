@@ -379,7 +379,7 @@ export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: 
     return (
       <>
         <ClassLegend classes={view.items} />
-        {view.base && <span className="text-muted">grey: land cover now</span>}
+        {view.base && <span className="text-muted">grey: unchanged</span>}
       </>
     );
   }
@@ -519,8 +519,8 @@ export function HazardControls({ model, state }: { model: LandCoverModel; state:
   );
 }
 
-/** Where each risk level ends when the land matches the region: 10, 25 and 50 % (High, + Elevated, + Moderate). */
-const REGION_SHARES = [10, 25, 50];
+/** Where each risk level ends when the land matches the region: 5, 10 and 15 % (High, + Elevated, + Moderate). */
+const regionTicks = (levels: HazardItem['levels']) => levels.map((_, i) => levels.slice(0, i + 1).reduce((a, l) => a + l.regionPercent, 0));
 
 /** The hazards as selectable rows: hue, name, the high-risk area out of the area that could change, and a bar of the
  *  risk levels over that area; a legend of the levels below. Rows where little could change are dimmed. */
@@ -556,7 +556,7 @@ export function HazardList({ hazards, active, onChange, region }: { hazards: Haz
                 {h.levels.map((l) => (
                   <span key={l.label} style={{ width: `${Math.min(100, l.percent)}%`, background: l.colour }} />
                 ))}
-                {h.levels.length > 0 && REGION_SHARES.map((p) => <span key={p} className="absolute inset-y-0 w-px bg-text/60" style={{ left: `${p}%` }} />)}
+                {regionTicks(h.levels).map((p) => <span key={p} className="absolute inset-y-0 w-px bg-text/60" style={{ left: `${p}%` }} />)}
               </span>
             </button>
           );
@@ -598,7 +598,7 @@ function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel 
           <HazardControls model={model} state={state} />
         </div>
       )}
-      <MapImage view={view} alt={`${model.title}, ${view.overlay}`} contain />
+      <MapImage view={view} alt={[model.title, view.overlay].filter(Boolean).join(', ')} contain />
       <LegendBlock source={model.source}>
         <LandCoverLegend model={model} view={view} />
       </LegendBlock>

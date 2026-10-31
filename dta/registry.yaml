@@ -839,9 +839,9 @@ instances:
       horizon at which the hazard beat the nulls in a backtest). Values are percentiles (0-100) of the hazard's
       probability among the training cells that could make that change, not probabilities: 90 means more likely
       than 90 % of them. The <key>_local layers rank the same score among this area's own cells (where first).
-      A hazard's top_decile_percent is the share of its land here at high risk; across Ukraine that share is 10 %
-      by construction, so above 10 % means this area is more prone to that change than the country, below 10 %
-      less. The hazards overlap (one cell can be at risk of several) and each is ranked on its own scale, so their
+      Risk levels cut the national rank: high = top 5 %, elevated = top 5-10 %, moderate = top 10-15 %. A level's
+      percent is the share of the hazard's land here at that level and region_percent its share across Ukraine,
+      so a high percent above 5 means this area is more prone to that change than the country, below 5 less. The hazards overlap (one cell can be at risk of several) and each is ranked on its own scale, so their
       high-risk areas do not add up to that of any change, and a large high-risk area of a rare change (see
       skill.observed_rate, the share of such land across Ukraine that made it in the backtest) does not mean much
       of it will change. Not a forecast of how much will change, and not a hazard in the disaster-risk sense.

@@ -119,7 +119,8 @@ export interface HazardItem {
   title: string;
   year: string;
   colour?: string;
-  levels: { label: string; range: string; colour?: string; area: string; percent: number }[];
+  /** `percent`: share of this area's land at the level; `regionPercent`: its share across the region (5, 5, 5). */
+  levels: { label: string; range: string; colour?: string; area: string; percent: number; regionPercent: number }[];
   high: string;  // "1.91 km² · 10 %"
   skill?: string;  // "AUC 0.98 vs 0.87 (best null)"
   observed?: string;  // share of such land across the region that made the change in the backtest: "2.8 %"
@@ -733,6 +734,10 @@ function transitionsOf(stats: Obj, style: RasterStyle | undefined, names: string
 
 const largest = (t: TransitionItem[]): Stat => ({ label: 'Largest change', value: t[0] ? `${t[0].from} → ${t[0].to} ${t[0].area}` : '—' });
 
+/** A level's share of the region's land in jobs from before `region_percent`: High, Elevated, Moderate. */
+const OLD_REGION_PERCENT = [10, 15, 25];
+const formatShare = (v: number) => String(Number(v.toFixed(1)));
+
 function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): ResultCardModel {
   const files = analysed(context, [artifacts.RasterPath, artifact.path]);
   const stats = obj(artifact.statistics);
@@ -759,23 +764,30 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     const rank = str(h.raster);
     const title = str(h.title);
     const year = str(h.year);
-    const levels = arr(h.levels).map(obj).map((l) => ({
+    const levels = arr(h.levels).map(obj).map((l, i) => ({
       label: str(l.level),
-      range: str(l.range),
+      range: '',
       colour: isHex(l.colour) ? l.colour : undefined,
       area: formatArea(l.km2),
       percent: isNum(l.percent) ? l.percent : 0,
+      regionPercent: isNum(l.region_percent) ? l.region_percent : (OLD_REGION_PERCENT[i] ?? 0),
     }));
+    // Worded cumulatively from the shares, also for jobs that stored "next 5 %": high "top 5 % in Ukraine", then "top 10 %".
+    let upTo = 0;
+    for (const [i, l] of levels.entries()) {
+      upTo += l.regionPercent;
+      l.range = `top ${formatShare(upTo)} %${i === 0 ? ` in ${region}` : ''}`;
+    }
     const levelKey = str(h.level_raster);
     const main: CardView = levelKey
       ? {
-          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, titled(`risk by ${year}`, `ranked in ${region}`)),
+          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, ''),
           items: levels.map((l) => ({ name: `${l.label} · ${l.range}`, colour: l.colour, value: l.area })),
         }
-      : rankView(vis, rasters, rank, title, `${title} · ${year}`, titled(`rank by ${year}`, `ranked in ${region}`));
+      : rankView(vis, rasters, rank, title, `${title} · ${year}`, '');
     main.base = start.bare;
     views.push(main);
-    local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'ranked in this area')), base: start.bare };
+    local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, ''), base: start.bare };
     const s = obj(h.skill);
     const high = levels[0] ?? { area: formatArea(km2Of(h, 'top_decile')), percent: highShare(h) };
     const eligible = km2Of(h, 'eligible');
@@ -809,12 +821,13 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     }
   });
   // Areas of different hazards don't compare (each has its own land and scale); their shares at high risk do, as
-  // each is 10 % across the region. `sorted` puts the largest share first.
+  // each is the same across the region. `sorted` puts the largest share first.
   const top = hazards.find((h) => !h.overall && !h.sparse);
+  // Cumulative, as the legend: high = top 5 %, elevated = top 10 %, moderate = top 15 %.
+  const [hi = '—', el = '—', mo = '—'] = (hazards[0]?.levels ?? []).map((_, i, ls) => `${formatShare(ls.slice(0, i + 1).reduce((a, l) => a + l.regionPercent, 0))} %`);
   return {
     kind: 'landcover',
     title: titled('Land-cover hazards', t0 && `from ${t0}`),
-    note: 'risk levels are national ranks, not probabilities',
     source: null,  // the land-cover cards name their label source in the title, note and map overlay
     bounds: boundsOf(files),
     views,
@@ -829,10 +842,6 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     summary: [],
     transitions: [],
     hazards,
-    checked:
-      `High = the top 10 % of the same land across ${region}, so 10 % of it is high risk there; ticks on the bars mark those shares. ` +
-      `The hazards overlap and each is ranked on its own scale, so their areas don't add up to any change. ` +
-      'Each is shown for the furthest year at which it beat simple rules in a 2021 backtest.',
     tables: hazards.length
       ? [{
           title: 'Hazards',
@@ -843,7 +852,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
             cells: [h.year, ...[0, 1, 2].map((i) => (h.levels[i] ? `${h.levels[i].area} (${formatPercent(h.levels[i].percent)})` : '—')), h.observed ?? '—', h.skill ?? '—'],
           })),
           note:
-            `Each cell is ranked among the same land across ${region}: high = the top 10 % most likely to make this change, elevated = the next 15 %, moderate = the next 25 %. ` +
+            `Each cell is ranked among the same land across ${region}: high = the top ${hi} most likely to make this change, elevated = the top ${el}, moderate = the top ${mo}. ` +
             `These are ranks, not chances of change: "Changed in ${region}" is the share of such land that made the change in the backtest, so a rare change can have a large high-risk area.`,
         }]
       : [],
@@ -861,7 +870,7 @@ function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): 
   const names = legend.names;
   const now = classView(vis, rasters, 'class_start', String(t0 || 'Now'), titled('Land cover', t0), titled(`${legend.label} land cover`, t0), names);
   const changed = {
-    ...classView(vis, rasters, 'changed', 'Changes', titled('Forecast changes', `${t0}–${year}`), titled('new class', `${t0} → ${year}`), names),
+    ...classView(vis, rasters, 'changed', 'Changes', titled('Forecast changes', `${t0}–${year}`), '', names),
     base: now.bare,
   };
   const forecast = classView(vis, rasters, 'class_forecast', String(year || 'Forecast'), titled('Land-cover forecast', year), titled('forecast', year), names);
@@ -869,12 +878,14 @@ function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): 
   const rows = arr(stats.classes).map(obj);
   const trend = obj(stats.trend);
   const pair = arr(trend.pair).map(str);
+  const expected = str(stats.amounts) === 'expected';
   const transitions = transitionsOf(stats, style, names, t0);
   const area = (key: string) => Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, key)]));
   return {
     kind: 'landcover',
     title: titled('Land-cover forecast', `${t0} → ${year}`),
-    note: str(stats.amounts) === 'expected' ? 'expected amounts' : `scenario: ${pair.join('–')} trend`,
+    // Expected amounts are the default and need no note; a trend scenario does.
+    note: expected ? undefined : `scenario: ${pair.join('–')} trend`,
     source: null,
     bounds: boundsOf(files),
     views: [withAreas(changed, gainsOf(obj(stats.matrix)), names), withAreas(forecast, area('after'), names), withAreas(now, area('before'), names)],
@@ -889,7 +900,8 @@ function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): 
     summary: arr(stats.summary).map(str).filter(Boolean),
     transitions,
     hazards: [],
-    checked: str(stats.checked) || undefined,
+    // Only a trend scenario's caveat (its amounts did worse than no change in the backtest) is worth the line.
+    checked: expected ? undefined : str(stats.checked) || undefined,
     tables: [
       classesTable(rows, 'Class areas', t0, year, style, names),
       matrixTable(obj(stats.matrix), `Transitions ${t0} → ${year}`, style, names),
@@ -908,14 +920,19 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
   const span = (p: unknown) => arr(p).map(str).join('–');
   const first = span(periods.start);
   const last = span(periods.end);
+  // The title, layer, overlay and view toggles name only the first and last year; the views' overlays and the lead
+  // keep the periods.
+  const from = str(arr(periods.start)[0]);
+  const to = str(arr(periods.end).at(-1));
+  const fromTo = `${from} → ${to}`;
   const legend = landLegend(obj(artifact.metadata));
   const names = legend.names;
-  const start = classView(vis, rasters, 'class_start', first || 'Then', titled('Land cover', first), titled('majority class', first), names);
+  const start = classView(vis, rasters, 'class_start', from || 'Then', titled('Land cover', first), titled('majority class', first), names);
   const changed = {
-    ...classView(vis, rasters, 'changed', 'Changes', titled('Land-cover changes', `${first} → ${last}`), titled('new class', `${first} → ${last}`), names),
+    ...classView(vis, rasters, 'changed', 'Changes', titled('Land-cover changes', fromTo), titled('colour: class it became', fromTo), names),
     base: start.bare,
   };
-  const end = classView(vis, rasters, 'class_end', last || 'Now', titled('Land cover', last), titled('majority class', last), names);
+  const end = classView(vis, rasters, 'class_end', to || 'Now', titled('Land cover', last), titled('majority class', last), names);
   const style = styleOf(end.bare);
   const years = arr(stats.years).map(str);
   const areas = obj(stats.area_km2 ?? stats.area_ha);
@@ -923,10 +940,10 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
   const rows = arr(stats.classes).map(obj);
   const transitions = transitionsOf(stats, style, names, first);
   const area = (key: string) => Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, key)]));
+  const analysed_ = Object.values(area('before')).reduce<number>((a, v) => a + (isNum(v) ? v : 0), 0);
   return {
     kind: 'landcover',
-    title: titled('Land-cover history', `${first} → ${last}`),
-    note: `${legend.label}, majority of each period`,
+    title: titled('Land-cover history', fromTo),
     source: null,
     bounds: boundsOf(files),
     views: [withAreas(changed, gainsOf(obj(stats.matrix)), names), withAreas(end, area('after'), names), withAreas(start, area('before'), names)],
@@ -935,13 +952,13 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
     stats: [
       { label: 'Changed', value: `${formatArea(stats.changed_km2)} · ${formatPercent(stats.changed_percent)}` },
       largest(transitions),
-      { label: `Single years ${arr(stats.single_year_pair).map(str).join('–')}`, value: formatPercent(stats.changed_percent_single_years) },
+      { label: 'Area analysed', value: rows.length ? formatArea(analysed_) : '—' },
     ],
     lead: str(stats.summary_lead) || undefined,
     summary: arr(stats.summary).map(str).filter(Boolean),
     transitions,
     hazards: [],
-    checked: str(stats.checked) || `Observed ${legend.label} labels; comparing 3-year majorities damps their year-to-year flicker.`,
+    checked: str(stats.checked) || undefined,
     tables: [
       classesTable(rows, 'Class areas', first, last, style, names),
       matrixTable(obj(stats.matrix), `Transitions ${first} → ${last}`, style, names),

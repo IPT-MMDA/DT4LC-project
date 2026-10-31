@@ -549,7 +549,7 @@ def test_km2_text_keeps_two_decimals_for_small_areas() -> None:
 
 def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path) -> None:
     pytest.importorskip("xgboost")
-    assert inference.risk_levels(np.array([10.0, 55, 80, 95, np.nan])).tolist()[1:4] == [1.0, 2.0, 3.0]
+    assert inference.risk_levels(np.array([80.0, 87, 92, 96, np.nan])).tolist()[1:4] == [1.0, 2.0, 3.0]
     assert inference.level_colours("#b2182b") == {3: "#b2182b", 2: "#d17480", 1: "#e8babf"}
     with artifact_files.step_outputs(tmp_path, "1_ChangeHazardMap"):
         result = inference.write_result(_bundle(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
@@ -559,7 +559,8 @@ def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path)
         and forest["level_raster"] == "rank_forest_loss_level"
     )
     assert [lv["level"] for lv in forest["levels"]] == ["High", "Elevated", "Moderate"]
-    assert forest["levels"][0]["range"] == "top 10 % in Ukraine"
+    assert forest["levels"][0]["range"] == "top 5 % in Ukraine"
+    assert [lv["region_percent"] for lv in forest["levels"]] == [5.0, 5.0, 5.0]
     assert forest["title"] == "Tree cover loss" and forest["to_land"] == "cropland and rangeland"
     assert next(h for h in result["statistics"]["hazards"] if h["group"] == "any_change")["to_land"] == "another class"
     assert result["statistics"]["summary"][-1].startswith("The hazards overlap")
@@ -739,7 +740,7 @@ def test_hazard_land_is_named_in_words() -> None:
         inference.land_text(["Crops", "Rangeland", "Trees"], features.ESRI_CLASSES)
         == "cropland, rangeland and tree cover"
     )
-    assert [r[3] for r in inference.RISK_LEVELS] == ["top 10 % in {region}", "next 15 %", "next 25 %"]
+    assert [r[3] for r in inference.RISK_LEVELS] == ["top 5 % in {region}", "top 10 %", "top 15 %"]
     assert inference.region_name({"name": "Ukraine (its bounding box)"}) == "Ukraine"
     assert inference.region_name({"name": "Switzerland", "short": "Switzerland"}) == "Switzerland"
     assert inference.region_name({"bbox": [5.9, 45.8, 10.5, 47.8]}) == "the training region"

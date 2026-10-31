@@ -57,12 +57,17 @@ GROUP_COLOURS = {
 OTHER_COLOUR = "#4d4d4d"  # a group without its own hue
 # Risk levels on the national rank, highest first: (raster value, name, lowest percentile, wording; {region}: the
 # bundle's region, :func:`region_name`). Cells below the last level are left uncoloured, so the start map drawn under
-# them shows through.
+# them shows through. Narrow, so a rare change does not colour most of the land: 15 % of it across the region. The
+# wording is cumulative: elevated or higher is the top 10 %.
 RISK_LEVELS = (
-    (3, "High", 90.0, "top 10 % in {region}"),
-    (2, "Elevated", 75.0, "next 15 %"),
-    (1, "Moderate", 50.0, "next 25 %"),
+    (3, "High", 95.0, "top 5 % in {region}"),
+    (2, "Elevated", 90.0, "top 10 %"),
+    (1, "Moderate", 85.0, "top 15 %"),
 )
+# Share of the region's land at each level (raster value -> %): 5, 5 and 5.
+REGION_PERCENT = {
+    v: (100.0 if i == 0 else RISK_LEVELS[i - 1][2]) - low for i, (v, _, low, _) in enumerate(RISK_LEVELS)
+}
 # What each class is called in sentences ("21.4 km² of 169 km² of cropland and grassland").
 LAND_WORDS = {
     "Crop": "cropland",
@@ -275,6 +280,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                         "colour": shades[value],
                         "km2": stats.km2((level == value).sum()),
                         "percent": round(100.0 * float((level == value).sum()) / n_ok, 1),
+                        "region_percent": REGION_PERCENT[value],
                     }
                     for value, name, _, wording in RISK_LEVELS
                 ],
@@ -314,11 +320,13 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "hazards": hazards,
         "summary": [
             *(
-                f"{h['title']} ({h['land']} to {h['to_land']}) by {h['year']}: {stats.km2_text(h['top_decile_km2'])}"
-                f" of the {stats.km2_text(h['eligible_km2'])} of {h['land']} ({h['top_decile_percent']:g} %) is at "
-                f"high risk, i.e. in the top 10 % of such land across {region}.{_base_rate(h, region)}"
+                f"{h['title']} ({h['land']} to {h['to_land']}) by {h['year']}: {stats.km2_text(high['km2'])}"
+                f" of the {stats.km2_text(h['eligible_km2'])} of {h['land']} ({high['percent']:g} %) is at "
+                f"high risk, i.e. in the top {high['region_percent']:g} % of such land across {region}."
+                f"{_base_rate(h, region)}"
                 for h in hazards
                 if h["top_decile_percent"] is not None
+                for high in h["levels"][:1]
             ),
             "The hazards overlap (one cell can be at risk of several) and each is ranked on its own scale, so their "
             "high-risk areas do not add up to the high-risk area of any change.",
