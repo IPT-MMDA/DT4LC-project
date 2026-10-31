@@ -362,13 +362,6 @@ def test_demo_data_sources_and_guest_limits(demo: dict[str, Any]) -> None:
             "configured",
             "Configured",
         ),
-        (
-            "Land-cover maps · KPI-Ukraine / Esri",
-            "Read through Earth Engine by the land-cover analyses: KPI-Ukraine 2016–2025 (10 m, Ukraine) and "
-            "Esri/Impact Observatory 2017–2025 (10 m, global)",
-            "configured",
-            "Configured",
-        ),
     ]
     assert data["note"] == "Guests: up to 5 analyses per hour, results kept 24 h in this browser, no account needed."
     assert demo["guest_limits"] == {"analyses_per_hour": 5, "kept_hours": 24}

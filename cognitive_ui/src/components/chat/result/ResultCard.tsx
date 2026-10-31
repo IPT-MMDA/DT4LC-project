@@ -480,7 +480,7 @@ export function LandCoverTable({ table }: { table: TableModel }) {
 }
 
 /** National / within-area toggle of a hazard view; nothing for a view without a local twin. */
-export function ScopeToggle({ local, onChange, labels = ['Ukraine', 'This area'] }: { local: boolean; onChange: (local: boolean) => void; labels?: [string, string] }) {
+export function ScopeToggle({ local, onChange, labels }: { local: boolean; onChange: (local: boolean) => void; labels: [string, string] }) {
   return (
     <div role="group" aria-label="Rank against" className="flex-none flex border border-border rounded-control overflow-hidden text-[11.5px]">
       {[false, true].map((on) => (
@@ -509,7 +509,7 @@ export function useLandCoverView(model: LandCoverModel) {
 
 /** The hazards as selectable rows: hue, name, the high-risk area out of the area that could change, and a bar of the
  *  risk levels over that area; a legend of the levels below. Rows where little could change are dimmed. */
-export function HazardList({ hazards, active, onChange }: { hazards: HazardItem[]; active: string; onChange: (key: string) => void }) {
+export function HazardList({ hazards, active, onChange, region }: { hazards: HazardItem[]; active: string; onChange: (key: string) => void; region: string }) {
   const legend = (hazards.find((h) => h.key === active) ?? hazards[0])?.levels ?? [];
   return (
     <div className="flex flex-col border-b border-border2">
@@ -547,7 +547,7 @@ export function HazardList({ hazards, active, onChange }: { hazards: HazardItem[
       </div>
       {legend.length > 0 && (
         <div data-testid="hazard-legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-[6px] text-[10.5px] text-muted">
-          <span>Compared with the same land across Ukraine:</span>
+          <span>Compared with the same land across {region}:</span>
           {legend.map((l) => (
             <span key={l.label} className="inline-flex items-center gap-1">
               <span aria-hidden className="inline-block h-[8px] w-[12px] rounded-[2px]" style={{ background: l.colour }} />
@@ -566,7 +566,7 @@ function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel 
   return (
     <CardShell model={model}>
       {model.hazards.length > 0 ? (
-        <HazardList hazards={model.hazards} active={base.key} onChange={setActive} />
+        <HazardList hazards={model.hazards} active={base.key} onChange={setActive} region={model.region ?? 'the training region'} />
       ) : (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border2">
           <ViewToggle views={model.views} active={base.key} onChange={setActive} />
@@ -574,7 +574,7 @@ function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel 
       )}
       {model.hazards.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-y border-border2">
-          {hasLocal && <ScopeToggle local={local} onChange={setLocal} labels={['Compared with Ukraine', 'Within this area']} />}
+          {hasLocal && <ScopeToggle local={local} onChange={setLocal} labels={[`Compared with ${model.region ?? 'the training region'}`, 'Within this area']} />}
           <button
             type="button"
             aria-pressed={base.key === 'start_class'}

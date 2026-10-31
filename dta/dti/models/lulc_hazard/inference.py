@@ -93,10 +93,11 @@ GROUP_COLOURS = {
     "overgrowth": "#1b7837",
 }
 OTHER_COLOUR = "#4d4d4d"  # a group of a format-1 bundle (a single transition)
-# Risk levels on the national rank, highest first: (raster value, name, lowest percentile, wording).
-# Cells below the last level are left uncoloured, so the start map drawn under them shows through.
+# Risk levels on the national rank, highest first: (raster value, name, lowest percentile, wording; {region}: the
+# bundle's region, :func:`region_name`). Cells below the last level are left uncoloured, so the start map drawn under
+# them shows through.
 RISK_LEVELS = (
-    (3, "High", 90.0, "10 % most likely in Ukraine"),
+    (3, "High", 90.0, "10 % most likely in {region}"),
     (2, "Elevated", 75.0, "next 15 %"),
     (1, "Moderate", 50.0, "next 25 %"),
 )
@@ -392,6 +393,12 @@ def check_domain(bbox: list[float], domain: dict[str, Any]) -> None:
         )
 
 
+def region_name(domain: dict[str, Any]) -> str:
+    """The short name of the region the ranks compare with: ``domain.short``, else ``domain.name`` without its
+    bracket ("Ukraine (its bounding box)" -> "Ukraine")."""
+    return domain.get("short") or domain.get("name", "").split(" (")[0].strip() or "the training region"
+
+
 def _ee() -> Any:
     from dta.dti.data_sources import gee_common
     from dta.dti.data_sources.gee_region import EarthEngineNotConfiguredError
@@ -471,6 +478,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
     bundle = as_format_2(bundle)
     source = source_of(bundle)
     names = source.classes
+    region = region_name(bundle["domain"])
     grid = cube.grid
     shape = (grid.ny, grid.nx)
     start = cube.start_class.ravel()
@@ -510,7 +518,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                 "levels": [
                     {
                         "level": name,
-                        "range": wording,
+                        "range": wording.format(region=region),
                         "colour": shades[value],
                         "km2": stats.km2((level == value).sum()),
                         "percent": round(100.0 * float((level == value).sum()) / n_ok, 1),
@@ -553,7 +561,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "summary": [
             f"{h['title']} by {h['year']}: {stats.km2_text(h['top_decile_km2'])} of the "
             f"{stats.km2_text(h['eligible_km2'])} of {h['land']} is at high risk (among the 10 % most likely in "
-            "Ukraine)."
+            f"{region})."
             for h in hazards
             if h["top_decile_percent"] is not None
         ],
@@ -574,6 +582,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
             "values": "percentile of the hazard's probability among the training cells that could make it; "
             "<key>_local: among this area's cells; ranks only",
             "domain": bundle["domain"].get("name"),
+            "compared_with": region,
             "bbox_wgs84": [round(v, 6) for v in bbox],
             "grid": {"crs": grid.crs, "resolution_m": features.RES, "width": grid.nx, "height": grid.ny},
             "feature_seconds": cube.seconds,

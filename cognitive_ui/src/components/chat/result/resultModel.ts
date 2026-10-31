@@ -93,8 +93,10 @@ export type ResultCardModel =
   | (CardBase & {
       kind: 'landcover';
       views: CardView[];
-      /** A view's twin ranked within the area (hazards): shown by the Ukraine / This area toggle. */
+      /** A view's twin ranked within the area (hazards): shown by the region / This area toggle. */
       local: Record<string, CardView>;
+      /** The region the hazard ranks compare with (`metadata.compared_with`), e.g. "Ukraine". */
+      region?: string;
       classes: ClassItem[];
       stats: Stat[];
       /** The period or condition the summary sentences share, said once above them. */
@@ -718,6 +720,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
   const rasters = obj(artifact.rasters);
   const t0 = str(meta.t0);
   const legend = landLegend(meta);
+  const region = str(meta.compared_with) || 'Ukraine';  // a job from before compared_with existed: the Ukraine model
   const start = classView(vis, rasters, 'start_class', `Land cover ${t0}`, titled('Land cover', t0), titled(`${legend.label} land cover`, t0), legend.names);
   // km² per class; an older job has hectares.
   const startAreas = stats.start_class_km2
@@ -745,10 +748,10 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     const levelKey = str(h.level_raster);
     const main: CardView = levelKey
       ? {
-          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, titled(`risk by ${year}`, 'vs Ukraine')),
+          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, titled(`risk by ${year}`, `vs ${region}`)),
           items: levels.map((l) => ({ name: `${l.label} · ${l.range}`, colour: l.colour, value: l.area })),
         }
-      : rankView(vis, rasters, rank, title, `${title} · ${year}`, titled(`rank by ${year}`, 'vs Ukraine'));
+      : rankView(vis, rasters, rank, title, `${title} · ${year}`, titled(`rank by ${year}`, `vs ${region}`));
     main.base = start.bare;
     views.push(main);
     local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'within this area')), base: start.bare };
@@ -791,6 +794,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     bounds: boundsOf(files),
     views,
     local,
+    region,
     classes: landClasses(start, startAreas, legend.names),
     stats: [
       { label: 'Area analysed', value: formatArea(analysed_) },
@@ -800,7 +804,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     summary: [],
     transitions: [],
     hazards,
-    checked: 'Each hazard is shown for the furthest year at which it beat simple rules in a 2021 backtest. High = among the 10 % most likely in Ukraine, compared with the same land.',
+    checked: `Each hazard is shown for the furthest year at which it beat simple rules in a 2021 backtest. High = among the 10 % most likely in ${region}, compared with the same land.`,
     tables: hazards.length
       ? [{
           title: 'Hazards',
@@ -810,7 +814,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
             colour: h.colour,
             cells: [h.year, ...[0, 1, 2].map((i) => (h.levels[i] ? `${h.levels[i].area} (${formatPercent(h.levels[i].percent)})` : '—')), h.skill ?? '—'],
           })),
-          note: 'Each cell is compared with the same land across Ukraine: high = among the 10 % most likely to make this change, elevated = the next 15 %, moderate = the next 25 %. These are ranks, not chances of change.',
+          note: `Each cell is compared with the same land across ${region}: high = among the 10 % most likely to make this change, elevated = the next 15 %, moderate = the next 25 %. These are ranks, not chances of change.`,
         }]
       : [],
   };

@@ -111,11 +111,6 @@ SAMPLE_DIR = RESOURCES_PATH / "kahovka_data"  # the folder keeps its name; the p
 SAMPLE_DETAIL = "kakhovka_hls_l30 · HLS L30 · 2023-06-01 → 06-09"
 EE_TITLE = "Earth Engine · Sentinel-2 / Landsat / MODIS"
 EE_DETAIL = "Fetch by region, dates, bands and cloud filter from the Map"
-LAND_COVER_TITLE = "Land-cover maps · KPI-Ukraine / Esri"
-LAND_COVER_DETAIL = (
-    "Read through Earth Engine by the land-cover analyses: KPI-Ukraine 2016–2025 (10 m, Ukraine) and "
-    "Esri/Impact Observatory 2017–2025 (10 m, global)"
-)
 
 
 def deployment() -> Literal["demo", "local"]:
@@ -197,15 +192,11 @@ def build_capabilities(
     display = (model_display_name(assistant.model) or assistant.provider) if connected else None
     builtin_items, coming_items = _ui_items()
 
-    # Models: status per model, ordered like the model-based built-in cards. A model whose analyses are all
-    # still coming is listed with them, not here.
+    # Models: status per model, ordered like the model-based built-in cards.
     step_ui = {i.model_id: _ui(i) for i in builtin_items if i.model_id}
     model_order = {i.model_id: n for n, i in enumerate(builtin_items) if i.model_id}
-    coming_only = {i.model_id for i in coming_items if i.model_id} - set(step_ui)
     models: list[dict[str, Any]] = []
     for state in sorted(states, key=lambda s: model_order.get(s["id"], len(model_order))):
-        if state["id"] in coming_only:
-            continue
         status, label = _model_status(state, role)
         ui_model = step_ui[state["id"]].model if state["id"] in step_ui else None
         models.append(
@@ -351,13 +342,6 @@ def build_capabilities(
                     "id": "earth-engine",
                     "title": EE_TITLE,
                     "detail": EE_DETAIL,
-                    "status": "configured" if ee_configured else "not_configured",
-                    "status_label": "Configured" if ee_configured else "Not configured",
-                },
-                {
-                    "id": "land-cover",
-                    "title": LAND_COVER_TITLE,
-                    "detail": LAND_COVER_DETAIL,
                     "status": "configured" if ee_configured else "not_configured",
                     "status_label": "Configured" if ee_configured else "Not configured",
                 },

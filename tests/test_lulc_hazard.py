@@ -509,6 +509,8 @@ def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path)
         and forest["level_raster"] == "rank_forest_loss_level"
     )
     assert [lv["level"] for lv in forest["levels"]] == ["High", "Elevated", "Moderate"]
+    assert forest["levels"][0]["range"] == "10 % most likely in Ukraine"
+    assert result["metadata"]["compared_with"] == "Ukraine"
     with rasterio.open(result["rasters"]["rank_forest_loss_level"]["path"]) as src:
         level = src.read(1)
         assert src.tags()["DT4LC_KIND"] == "class"
@@ -684,4 +686,7 @@ def test_hazard_land_is_named_in_words() -> None:
         inference.land_text(["Crops", "Rangeland", "Trees"], features.ESRI_CLASSES)
         == "cropland, rangeland and tree cover"
     )
-    assert [r[3] for r in inference.RISK_LEVELS] == ["10 % most likely in Ukraine", "next 15 %", "next 25 %"]
+    assert [r[3] for r in inference.RISK_LEVELS] == ["10 % most likely in {region}", "next 15 %", "next 25 %"]
+    assert inference.region_name({"name": "Ukraine (its bounding box)"}) == "Ukraine"
+    assert inference.region_name({"name": "Switzerland", "short": "Switzerland"}) == "Switzerland"
+    assert inference.region_name({"bbox": [5.9, 45.8, 10.5, 47.8]}) == "the training region"

@@ -227,7 +227,7 @@ const SINGLE_TITLES: Record<ResultCardModel['kind'], string> = {
 
 type LandCoverModel = Extract<ResultCardModel, { kind: 'landcover' }>;
 
-/** A land-cover result: the map with its view (and Ukraine / this area) toggles, the summary, then its tables. */
+/** A land-cover result: the map with its view (and region / this area) toggles, the summary, then its tables. */
 function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string }) {
   const { base, view, hasLocal, local, setLocal, setActive } = useLandCoverView(model);
   if (!base || !view) return null;
@@ -235,7 +235,7 @@ function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string 
     <>
       {model.hazards.length > 0 ? (
         <section aria-label="Hazards" className={panel}>
-          <HazardList hazards={model.hazards} active={base.key} onChange={setActive} />
+          <HazardList hazards={model.hazards} active={base.key} onChange={setActive} region={model.region ?? 'the training region'} />
         </section>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
@@ -244,7 +244,7 @@ function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string 
       )}
       {hasLocal && (
         <div className="flex flex-wrap items-center gap-2">
-          <ScopeToggle local={local} onChange={setLocal} labels={['Compared with Ukraine', 'Within this area']} />
+          <ScopeToggle local={local} onChange={setLocal} labels={[`Compared with ${model.region ?? 'the training region'}`, 'Within this area']} />
         </div>
       )}
       <MapPanel title={view.layerName} meta={view.overlay || meta} view={view} legend={<LandCoverLegend model={model} view={view} />} height="h-[360px]" actions />

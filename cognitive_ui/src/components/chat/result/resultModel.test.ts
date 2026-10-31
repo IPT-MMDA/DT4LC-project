@@ -465,6 +465,12 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       ['Most at risk', 'Urban expansion · 1.00 km² high'],
       ['Horizon', '2029 (Forest loss 2027)'],
     ]);
+    // No metadata.compared_with (a job from before it): Ukraine; else the bundle's region.
+    expect(c.region).toBe('Ukraine');
+    const swiss = card(jobOf('ChangeHazardMap', { index_type: 'change_rank', statistics: { hazards: [hz('urban_expansion', 'Urban expansion', 2029, 10)] }, metadata: { t0: 2025, compared_with: 'Switzerland' }, visualizations: vis, rasters }));
+    if (swiss.kind !== 'landcover') throw new Error(swiss.kind);
+    expect([swiss.region, swiss.views[0].overlay]).toEqual(['Switzerland', expect.stringContaining('vs Switzerland')]);
+    expect(swiss.checked).toContain('most likely in Switzerland');
   });
 
   it('an old hazard job without a hazards list stays an index card', () => {
