@@ -122,9 +122,10 @@ export interface HazardItem {
   levels: { label: string; range: string; colour?: string; area: string; percent: number }[];
   high: string;  // "1.91 km² · 10 %"
   skill?: string;  // "AUC 0.98 vs 0.87 (best null)"
-  sentence: string;  // "High risk: 21.4 km² of 169 km² of cropland and grassland"
+  observed?: string;  // share of such land across the region that made the change in the backtest: "2.8 %"
+  sentence: string;  // "Cropland and grassland → built-up land · high risk 21.4 km² of 169 km² (13 %)"
   sparse: boolean;  // under 1 % of the area analysed could make this change
-  highKm2: number;
+  overall: boolean;  // the any-change hazard, which overlaps all the others
 }
 
 /** One class-to-class flow of a land-cover card: "Trees → Crops · 0.79 km² · 4 % of Trees". */
@@ -617,6 +618,7 @@ function statisticsCard(artifact: Obj, artifacts: Obj, context: AnalysedContext)
 
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === 'string' ? v : isNum(v) ? String(v) : '');
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * A land-cover area in km² (the server's `*_km2`): two decimals under 10 km², one under 100,
@@ -671,10 +673,26 @@ function landClasses(view: CardView | undefined, areas: Record<string, unknown>,
   }));
 }
 
+/** A transition matrix's cells in km² (`km2`, or an older job's `hectares`), rows from, columns to. */
+const matrixKm2 = (m: Obj): unknown[][] => (m.km2 ? arr(m.km2) : arr(m.hectares).map((r) => arr(r).map((v) => (isNum(v) ? v / 100 : v)))).map(arr);
+
+/** Per class, the km² that turn into it (a matrix column off its diagonal): the areas of the changes map. */
+function gainsOf(m: Obj): Record<string, number> {
+  const classes = arr(m.classes).map(str);
+  const area = matrixKm2(m);
+  return Object.fromEntries(classes.map((c, j) => [c, classes.reduce((sum, _, i) => sum + (i !== j && isNum(area[i]?.[j]) ? (area[i][j] as number) : 0), 0)]));
+}
+
+/** `view` with its own legend: its classes with `areas` (class → km²), when any has an area. */
+function withAreas(view: CardView, areas: Record<string, unknown>, names: string[]): CardView {
+  const items = landClasses(view, areas, names);
+  return items.length > 0 ? { ...view, items } : view;
+}
+
 /** Transition matrix `{classes, hectares, row_percent}` as a table: rows from, columns to, hectares (share of the row). */
 function matrixTable(m: Obj, title: string, style: RasterStyle | undefined, names: string[], note?: string): TableModel | null {
   const classes = arr(m.classes).map(str);
-  const area = (m.km2 ? arr(m.km2) : arr(m.hectares).map((r) => arr(r).map((v) => (isNum(v) ? v / 100 : v)))).map(arr);
+  const area = matrixKm2(m);
   const pct = arr(m.row_percent).map(arr);
   if (classes.length === 0) return null;
   return {
@@ -701,14 +719,15 @@ function classesTable(rows: unknown[], title: string, before: string, after: str
   };
 }
 
-function transitionsOf(stats: Obj, style: RasterStyle | undefined, names: string[]): TransitionItem[] {
+/** The largest flows; each share is of the from-class at `start` (the first date), not of the class areas shown. */
+function transitionsOf(stats: Obj, style: RasterStyle | undefined, names: string[], start: string): TransitionItem[] {
   return arr(stats.transitions).map(obj).map((t) => ({
     from: str(t.from),
     to: str(t.to),
     fromColour: classColour(style, names, str(t.from)),
     toColour: classColour(style, names, str(t.to)),
     area: formatArea(t.km2),
-    share: `${formatPercent(t.percent_of_from)} of ${str(t.from)}`,
+    share: `${formatPercent(t.percent_of_from)} of ${str(t.from)}${start && ` in ${start}`}`,
   }));
 }
 
@@ -750,17 +769,19 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     const levelKey = str(h.level_raster);
     const main: CardView = levelKey
       ? {
-          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, titled(`risk by ${year}`, `vs ${region}`)),
+          ...classView(vis, rasters, levelKey, title, `${title} · ${year}`, titled(`risk by ${year}`, `ranked in ${region}`)),
           items: levels.map((l) => ({ name: `${l.label} · ${l.range}`, colour: l.colour, value: l.area })),
         }
-      : rankView(vis, rasters, rank, title, `${title} · ${year}`, titled(`rank by ${year}`, `vs ${region}`));
+      : rankView(vis, rasters, rank, title, `${title} · ${year}`, titled(`rank by ${year}`, `ranked in ${region}`));
     main.base = start.bare;
     views.push(main);
-    local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'within this area')), base: start.bare };
+    local[main.key] = { ...rankView(vis, rasters, `${rank}_local`, title, `${title} · ${year} · in area`, titled(`rank by ${year}`, 'ranked in this area')), base: start.bare };
     const s = obj(h.skill);
     const high = levels[0] ?? { area: formatArea(km2Of(h, 'top_decile')), percent: highShare(h) };
     const eligible = km2Of(h, 'eligible');
-    const highKm2 = isNum(obj(arr(h.levels)[0]).km2) ? (obj(arr(h.levels)[0]).km2 as number) : isNum(km2Of(h, 'top_decile')) ? (km2Of(h, 'top_decile') as number) : 0;
+    const overall = h.group === 'any_change';
+    const land = overall ? 'all land' : str(h.land) || 'the land this applies to';
+    const to = str(h.to_land);  // older jobs name only the land a hazard starts from
     hazards.push({
       key: main.key,
       title,
@@ -769,9 +790,10 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
       levels,
       high: `${high.area} · ${formatPercent(high.percent)}`,
       skill: isNum(s.auc) ? `AUC ${Number(s.auc).toFixed(2)}${isNum(s.best_null_auc) ? ` vs ${Number(s.best_null_auc).toFixed(2)}` : ''}` : undefined,
-      sentence: `High risk: ${high.area} of ${formatArea(eligible)} of ${str(h.land) || 'the land this applies to'}`,
+      observed: isNum(s.observed_rate) ? `${Number((100 * s.observed_rate).toPrecision(2))} %` : undefined,
+      sentence: `${capitalise(land)}${to && !overall ? ` → ${to}` : ''} · high risk ${high.area} of ${formatArea(eligible)} (${formatPercent(high.percent)})`,
       sparse: false,
-      highKm2,
+      overall,
     });
     hazardEligible.push(isNum(eligible) ? eligible : 0);
   }
@@ -786,13 +808,14 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
       h.sentence = `Little ${str(sorted[i].land) || 'land this applies to'} here (${formatArea(hazardEligible[i])})`;
     }
   });
-  const named = hazards.filter((h) => !h.title.startsWith('Any') && !h.sparse);
-  const top = named.length ? named.reduce((a, b) => (b.highKm2 > a.highKm2 ? b : a)) : undefined;
+  // Areas of different hazards don't compare (each has its own land and scale); their shares at high risk do, as
+  // each is 10 % across the region. `sorted` puts the largest share first.
+  const top = hazards.find((h) => !h.overall && !h.sparse);
   return {
     kind: 'landcover',
     title: titled('Land-cover hazards', t0 && `from ${t0}`),
     note: 'risk levels are national ranks, not probabilities',
-    source: `${legend.label} land cover, AlphaEarth and terrain from Earth Engine`,
+    source: null,  // the land-cover cards name their label source in the title, note and map overlay
     bounds: boundsOf(files),
     views,
     local,
@@ -800,23 +823,28 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
     classes: landClasses(start, startAreas, legend.names),
     stats: [
       { label: 'Area analysed', value: formatArea(analysed_) },
-      { label: 'Most at risk', value: top ? `${top.title} · ${top.levels[0]?.area ?? top.high} high` : '—' },
+      { label: 'Highest relative risk', value: top ? `${top.title} · ${formatPercent(top.levels[0]?.percent ?? 0)} high` : '—' },
       { label: 'Horizon', value: shorter.length ? `${longest} (${shorter.join(', ')})` : longest },
     ],
     summary: [],
     transitions: [],
     hazards,
-    checked: `Each hazard is shown for the furthest year at which it beat simple rules in a 2021 backtest. High = among the 10 % most likely in ${region}, compared with the same land.`,
+    checked:
+      `High = the top 10 % of the same land across ${region}, so 10 % of it is high risk there; ticks on the bars mark those shares. ` +
+      `The hazards overlap and each is ranked on its own scale, so their areas don't add up to any change. ` +
+      'Each is shown for the furthest year at which it beat simple rules in a 2021 backtest.',
     tables: hazards.length
       ? [{
           title: 'Hazards',
-          columns: ['Hazard', 'By', 'High', 'Elevated', 'Moderate', 'Backtest'],
+          columns: ['Hazard', 'By', 'High', 'Elevated', 'Moderate', `Changed in ${region}`, 'Backtest'],
           rows: hazards.map((h) => ({
             label: h.title,
             colour: h.colour,
-            cells: [h.year, ...[0, 1, 2].map((i) => (h.levels[i] ? `${h.levels[i].area} (${formatPercent(h.levels[i].percent)})` : '—')), h.skill ?? '—'],
+            cells: [h.year, ...[0, 1, 2].map((i) => (h.levels[i] ? `${h.levels[i].area} (${formatPercent(h.levels[i].percent)})` : '—')), h.observed ?? '—', h.skill ?? '—'],
           })),
-          note: `Each cell is compared with the same land across ${region}: high = among the 10 % most likely to make this change, elevated = the next 15 %, moderate = the next 25 %. These are ranks, not chances of change.`,
+          note:
+            `Each cell is ranked among the same land across ${region}: high = the top 10 % most likely to make this change, elevated = the next 15 %, moderate = the next 25 %. ` +
+            `These are ranks, not chances of change: "Changed in ${region}" is the share of such land that made the change in the backtest, so a rare change can have a large high-risk area.`,
         }]
       : [],
   };
@@ -841,16 +869,17 @@ function forecastCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): 
   const rows = arr(stats.classes).map(obj);
   const trend = obj(stats.trend);
   const pair = arr(trend.pair).map(str);
-  const transitions = transitionsOf(stats, style, names);
+  const transitions = transitionsOf(stats, style, names, t0);
+  const area = (key: string) => Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, key)]));
   return {
     kind: 'landcover',
     title: titled('Land-cover forecast', `${t0} → ${year}`),
     note: str(stats.amounts) === 'expected' ? 'expected amounts' : `scenario: ${pair.join('–')} trend`,
-    source: `${legend.label} land cover, AlphaEarth and terrain from Earth Engine`,
+    source: null,
     bounds: boundsOf(files),
-    views: [changed, forecast, now],
+    views: [withAreas(changed, gainsOf(obj(stats.matrix)), names), withAreas(forecast, area('after'), names), withAreas(now, area('before'), names)],
     local: {},
-    classes: landClasses(forecast, Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, 'after')])), names),
+    classes: landClasses(forecast, area('after'), names),
     stats: [
       { label: 'Changing', value: `${formatArea(stats.changed_km2)} · ${formatPercent(stats.changed_percent)}` },
       largest(transitions),
@@ -892,16 +921,17 @@ function historyCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): R
   const areas = obj(stats.area_km2 ?? stats.area_ha);
   const scale = stats.area_km2 ? 1 : 0.01;
   const rows = arr(stats.classes).map(obj);
-  const transitions = transitionsOf(stats, style, names);
+  const transitions = transitionsOf(stats, style, names, first);
+  const area = (key: string) => Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, key)]));
   return {
     kind: 'landcover',
     title: titled('Land-cover history', `${first} → ${last}`),
     note: `${legend.label}, majority of each period`,
-    source: `${legend.label} land cover from Earth Engine`,
+    source: null,
     bounds: boundsOf(files),
-    views: [changed, end, start],
+    views: [withAreas(changed, gainsOf(obj(stats.matrix)), names), withAreas(end, area('after'), names), withAreas(start, area('before'), names)],
     local: {},
-    classes: landClasses(end, Object.fromEntries(rows.map((r) => [str(r.class), km2Of(r, 'after')])), names),
+    classes: landClasses(end, area('after'), names),
     stats: [
       { label: 'Changed', value: `${formatArea(stats.changed_km2)} · ${formatPercent(stats.changed_percent)}` },
       largest(transitions),

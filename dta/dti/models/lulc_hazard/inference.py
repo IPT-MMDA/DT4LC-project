@@ -59,7 +59,7 @@ OTHER_COLOUR = "#4d4d4d"  # a group without its own hue
 # bundle's region, :func:`region_name`). Cells below the last level are left uncoloured, so the start map drawn under
 # them shows through.
 RISK_LEVELS = (
-    (3, "High", 90.0, "10 % most likely in {region}"),
+    (3, "High", 90.0, "top 10 % in {region}"),
     (2, "Elevated", 75.0, "next 15 %"),
     (1, "Moderate", 50.0, "next 25 %"),
 )
@@ -90,13 +90,15 @@ def land_text(classes: list[str], legend: tuple[str, ...]) -> str:
 
 LEVEL_TINT = {3: 1.0, 2: 0.6, 1: 0.3}  # share of the hazard's hue mixed with white
 
+# Named after the classes they move between (KPI "Built", "Tree"), not after "urban" or "forest", which the labels
+# do not separate; they win over a bundle's own titles.
 GROUP_TITLES = {
-    ANY: "Any land-cover change",
-    "urban_expansion": "Urban expansion",
-    "forest_loss": "Forest loss",
+    ANY: "Any change",
+    "urban_expansion": "Built-up expansion",
+    "forest_loss": "Tree cover loss",
     "cropland_abandonment": "Cropland abandonment",
-    "recultivation": "Re-cultivation",
-    "overgrowth": "Overgrowth and afforestation",
+    "recultivation": "Cropland expansion",
+    "overgrowth": "Tree cover gain",
 }
 
 
@@ -213,6 +215,18 @@ def _skill(bundle: dict[str, Any], h: int, group: str) -> dict[str, Any] | None:
     return s.get("hazards", {}).get(group) if isinstance(s.get("hazards"), dict) else None
 
 
+def _base_rate(hazard: dict[str, Any], region: str) -> str:
+    """The sentence on how common the change was: " In the backtest, 2.8 % of such land across Ukraine made this
+    change within 3 years."; "" without a backtest rate."""
+    rate = (hazard.get("skill") or {}).get("observed_rate")
+    if not isinstance(rate, int | float):
+        return ""
+    return (
+        f" In the backtest, {100.0 * rate:.2g} % of such land across {region} made this change within "
+        f"{hazard['horizon_years']} years."
+    )
+
+
 def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[float]) -> dict[str, Any]:
     """Predict hazards on ``cube`` and save their rasters as job artifacts; returns the step result."""
     source = source_of(bundle)
@@ -250,7 +264,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         hazards.append(
             {
                 "group": g,
-                "title": bundle["groups"][g].get("title") or GROUP_TITLES.get(g, g),
+                "title": GROUP_TITLES.get(g) or bundle["groups"][g].get("title") or g,
                 "colour": colour,
                 "raster": key,
                 "level_raster": f"{key}_level",
@@ -268,6 +282,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                 "year": cube.t0 + h,
                 "eligible_km2": stats.km2(ok.sum()),
                 "land": land_text(list(bundle["groups"][g]["from"]), names),
+                "to_land": land_text(list(to), names) if (to := bundle["groups"][g].get("to")) else "another class",
                 "top_decile_km2": stats.km2((national[ok] >= 90).sum()),
                 "top_decile_percent": round(100.0 * float((national[ok] >= 90).mean()), 1) if ok.any() else None,
                 "mean_rank": round(float(np.nanmean(national)), 1) if ok.any() else None,
@@ -298,11 +313,15 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "start_class_km2": {n: stats.km2((cube.start_class == i + 1).sum()) for i, n in enumerate(names)},
         "hazards": hazards,
         "summary": [
-            f"{h['title']} by {h['year']}: {stats.km2_text(h['top_decile_km2'])} of the "
-            f"{stats.km2_text(h['eligible_km2'])} of {h['land']} is at high risk (among the 10 % most likely in "
-            f"{region})."
-            for h in hazards
-            if h["top_decile_percent"] is not None
+            *(
+                f"{h['title']} ({h['land']} to {h['to_land']}) by {h['year']}: {stats.km2_text(h['top_decile_km2'])}"
+                f" of the {stats.km2_text(h['eligible_km2'])} of {h['land']} ({h['top_decile_percent']:g} %) is at "
+                f"high risk, i.e. in the top 10 % of such land across {region}.{_base_rate(h, region)}"
+                for h in hazards
+                if h["top_decile_percent"] is not None
+            ),
+            "The hazards overlap (one cell can be at risk of several) and each is ranked on its own scale, so their "
+            "high-risk areas do not add up to the high-risk area of any change.",
         ],
     }
     h0 = hazards[0]["horizon_years"]

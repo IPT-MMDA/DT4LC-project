@@ -15,7 +15,7 @@ import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/ana
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
 import { downloadName, resultCardOf, type CardView, type LandCoverModel, type ResultCardModel } from '../components/chat/result/resultModel';
-import { HazardList, LandCoverLegend, LandCoverSummary, LandCoverTable, ScopeToggle, TransitionList, ViewToggle } from '../components/chat/result/ResultCard';
+import { HazardControls, HazardList, LandCoverLegend, LandCoverSummary, LandCoverTable, TransitionList, ViewToggle } from '../components/chat/result/ResultCard';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -228,7 +228,8 @@ const SINGLE_TITLES: Record<ResultCardModel['kind'], string> = {
 
 /** A land-cover result: the map with its view (and region / this area) toggles, the summary, then its tables. */
 function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string }) {
-  const { base, view, hasLocal, local, setLocal, setActive } = useLandCoverView(model);
+  const state = useLandCoverView(model);
+  const { base, view, setActive } = state;
   if (!base || !view) return null;
   return (
     <>
@@ -241,9 +242,9 @@ function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string 
           <ViewToggle views={model.views} active={base.key} onChange={setActive} />
         </div>
       )}
-      {hasLocal && (
+      {model.hazards.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <ScopeToggle local={local} onChange={setLocal} labels={[`Compared with ${model.region ?? 'the training region'}`, 'Within this area']} />
+          <HazardControls model={model} state={state} />
         </div>
       )}
       <MapPanel title={view.layerName} meta={view.overlay || meta} view={view} legend={<LandCoverLegend model={model} view={view} />} height="h-[360px]" actions />

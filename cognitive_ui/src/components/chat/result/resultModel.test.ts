@@ -436,12 +436,13 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       level_raster: `${group === 'any_change' ? 'change_rank' : `rank_${group}`}_level`, levels: levels(high), skill,
       eligible_km2: group === 'forest_loss' ? 0.2 : 10,
       land: group === 'forest_loss' ? 'tree cover' : 'cropland and grassland',
+      ...(group === 'urban_expansion' && { to_land: 'built-up land' }),
     });
     const c = card(jobOf('ChangeHazardMap', {
       index_type: 'change_rank',
       statistics: {
         start_class_km2: { Trees: 18.5, Crops: 21 },
-        hazards: [hz('any_change', 'Any land-cover change', 2029, 30), hz('forest_loss', 'Forest loss', 2027, 2), hz('urban_expansion', 'Urban expansion', 2029, 10, { auc: 0.983, best_null_auc: 0.869 })],
+        hazards: [hz('any_change', 'Any land-cover change', 2029, 30), hz('forest_loss', 'Forest loss', 2027, 2), hz('urban_expansion', 'Urban expansion', 2029, 10, { auc: 0.983, best_null_auc: 0.869, observed_rate: 0.0001 })],
       },
       metadata: { t0: 2025 },
       visualizations: vis,
@@ -454,7 +455,11 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       ['Any land-cover change', '2029', '3.00 km² · 30.0 %'],
     ]);
     expect(c.hazards[0].skill).toBe('AUC 0.98 vs 0.87');
-    expect(c.hazards[0].sentence).toBe('High risk: 1.00 km² of 10.0 km² of cropland and grassland');
+    expect(c.hazards[0].sentence).toBe('Cropland and grassland → built-up land · high risk 1.00 km² of 10.0 km² (10.0 %)');
+    expect(c.hazards[2].sentence).toBe('All land · high risk 3.00 km² of 10.0 km² (30.0 %)');  // no arrow on any change
+    expect(c.hazards.map((h) => h.overall)).toEqual([false, false, true]);
+    expect(c.tables[0].rows[0].cells.slice(-2)).toEqual(['0.01 %', 'AUC 0.98 vs 0.87']);
+    expect(c.source).toBeNull();
     expect([c.hazards[1].sparse, c.hazards[1].sentence]).toEqual([true, 'Little tree cover here (0.20 km²)']);
     expect(c.views.map((v) => v.key)).toEqual(['rank_urban_expansion_level', 'rank_forest_loss_level', 'change_rank_level', 'start_class']);
     expect(c.views[0].base?.path).toBe('/o/start_bare.png');
@@ -462,15 +467,15 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.local.rank_urban_expansion_level.raster?.path).toBe('/o/rank_urban_expansion_local.tif');
     expect(c.stats.map((x) => [x.label, x.value])).toEqual([
       ['Area analysed', '39.5 km²'],
-      ['Most at risk', 'Urban expansion · 1.00 km² high'],
+      ['Highest relative risk', 'Urban expansion · 10.0 % high'],
       ['Horizon', '2029 (Forest loss 2027)'],
     ]);
     // No metadata.compared_with (a job from before it): Ukraine; else the bundle's region.
     expect(c.region).toBe('Ukraine');
     const swiss = card(jobOf('ChangeHazardMap', { index_type: 'change_rank', statistics: { hazards: [hz('urban_expansion', 'Urban expansion', 2029, 10)] }, metadata: { t0: 2025, compared_with: 'Switzerland' }, visualizations: vis, rasters }));
     if (swiss.kind !== 'landcover') throw new Error(swiss.kind);
-    expect([swiss.region, swiss.views[0].overlay]).toEqual(['Switzerland', expect.stringContaining('vs Switzerland')]);
-    expect(swiss.checked).toContain('most likely in Switzerland');
+    expect([swiss.region, swiss.views[0].overlay]).toEqual(['Switzerland', expect.stringContaining('ranked in Switzerland')]);
+    expect(swiss.checked).toContain('same land across Switzerland');
   });
 
   it('an old hazard job without a hazards list stays an index card', () => {
@@ -500,13 +505,15 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.views[0].base?.path).toBe('/o/s.png');
     expect(c.stats.map((x) => [x.label, x.value])).toEqual([['Changing', '3.31 km² · 4.5 %'], ['Largest change', 'Crops → Rangeland 3.45 km²'], ['Horizon', '4 years']]);
     expect(c.lead).toBe('If the 2021–2025 trend continues, by 2029:');
-    expect(c.transitions).toEqual([{ from: 'Crops', to: 'Rangeland', fromColour: '#e49635', toColour: '#e3e2c3', area: '3.45 km²', share: '5.7 % of Crops' }]);
+    expect(c.transitions).toEqual([{ from: 'Crops', to: 'Rangeland', fromColour: '#e49635', toColour: '#e3e2c3', area: '3.45 km²', share: '5.7 % of Crops in 2025' }]);
+    // Each map's legend has its own areas: what turns into each class, the forecast year's, the start year's.
+    expect(c.views.map((v) => v.items?.map((i) => `${i.name} ${i.value}`))).toEqual([['Rangeland 1.80 km²'], ['Crops 8.20 km²'], ['Crops 10.0 km²']]);
     expect(c.tables[0].rows[0].cells).toEqual(['10.0 km²', '8.20 km²', '−1.80 km²', '−18 %']);
     expect(c.tables[1].rows[0].cells).toEqual(['8.20 km² (82 %)', '1.80 km² (18 %)']);
     expect(c.tables[1].rows[1].cells[0]).toBe('·');
   });
 
-  it('forecast from the KPI model: class names and colours follow metadata.legend, the source names KPI', () => {
+  it('forecast from the KPI model: class names and colours follow metadata.legend, no source line', () => {
     const kpi = { kind: 'class', classes: { '1': '#e49635', '2': '#e3e2c3', '3': '#397d49', '4': '#c4281b' } };
     const c = card(jobOf('LandCoverForecast', {
       statistics: {
@@ -521,7 +528,7 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
       rasters: { class_forecast: tif('f'), changed: tif('c'), class_start: tif('s') },
     }));
     if (c.kind !== 'landcover') throw new Error(c.kind);
-    expect(c.source).toBe('KPI-Ukraine land cover, AlphaEarth and terrain from Earth Engine');
+    expect(c.source).toBeNull();
     expect(c.transitions[0]).toMatchObject({ from: 'Grass', to: 'Tree', fromColour: '#e3e2c3', toColour: '#397d49' });
     expect(c.classes).toEqual([{ name: 'Tree', colour: '#397d49', value: '3.50 km²' }]);
     const legend = c.views[2]?.legend;

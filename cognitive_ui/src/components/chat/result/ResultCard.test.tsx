@@ -287,3 +287,31 @@ describe('ResultCard', () => {
     await screen.findByRole('region', { name: 'Water change · NDWI' });
   });
 });
+
+describe('hazard card', () => {
+  const view = (key: string, overlay: string) => ({ key, label: key, layerName: key, overlay });
+  const hazard = (key: string, title: string, overall = false) => ({
+    key, title, year: '2028', levels: [], high: '', sentence: '', sparse: false, overall,
+  });
+  const hazards = {
+    kind: 'landcover', title: 'Land-cover hazards', note: null, source: null, bounds: null,
+    views: [view('rank_a_level', 'risk a'), view('change_rank_level', 'risk any'), view('start_class', 'land cover')],
+    local: { rank_a_level: view('rank_a_local', 'rank a in area'), change_rank_level: view('change_rank_local', 'rank any in area') },
+    region: 'Ukraine', classes: [], stats: [], summary: [], transitions: [], tables: [],
+    hazards: [hazard('rank_a_level', 'Tree cover loss'), hazard('change_rank_level', 'Any change', true)],
+  } as unknown as ResultCardModel;
+  const pressed = () => screen.getAllByRole('button', { pressed: true }).map((b) => b.textContent);
+
+  it('keeps the scope toggle while the land cover shows, and a scope or hazard returns to the hazard', () => {
+    renderIn(<ResultCardView jobId={JOB} model={hazards} />);
+    expect(pressed()).toEqual(['Ukraine']);
+    fireEvent.click(screen.getByRole('button', { name: 'Land cover now' }));
+    expect(screen.getByRole('group', { name: 'Rank within' })).toBeTruthy();
+    expect(pressed()).toEqual(['Land cover now']);
+    fireEvent.click(screen.getByRole('button', { name: 'this area' }));
+    expect(pressed()).toEqual(['this area']);
+    fireEvent.click(screen.getByRole('button', { name: 'Land cover now' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Any change/ }));
+    expect(pressed()).toEqual(['this area']);
+  });
+});

@@ -479,24 +479,48 @@ export function LandCoverTable({ table }: { table: TableModel }) {
   );
 }
 
-/** National / within-area toggle of a hazard view; nothing for a view without a local twin. */
-export function ScopeToggle({ local, onChange, labels }: { local: boolean; onChange: (local: boolean) => void; labels: [string, string] }) {
+/** National / within-area toggle of a hazard view; `local` null presses neither (the start map is shown). */
+export function ScopeToggle({ local, onChange, labels }: { local: boolean | null; onChange: (local: boolean) => void; labels: [string, string] }) {
   return (
-    <div role="group" aria-label="Rank against" className="flex-none flex border border-border rounded-control overflow-hidden text-[11.5px]">
-      {[false, true].map((on) => (
-        <button
-          key={String(on)}
-          type="button"
-          aria-pressed={local === on}
-          onClick={() => onChange(on)}
-          className={cn('px-[9px] py-1', on && 'border-l border-border', local === on ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
-        >
-          {on ? labels[1] : labels[0]}
-        </button>
-      ))}
+    <div role="group" aria-label="Rank within" className="flex-none flex items-center gap-[6px] text-[11.5px]">
+      <span className="text-muted">Rank within</span>
+      <div className="flex border border-border rounded-control overflow-hidden">
+        {[false, true].map((on) => (
+          <button
+            key={String(on)}
+            type="button"
+            aria-pressed={local === on}
+            onClick={() => onChange(on)}
+            className={cn('px-[9px] py-1', on && 'border-l border-border', local === on ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
+          >
+            {on ? labels[1] : labels[0]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
+
+/** Below a hazard list: the scope toggle and the start-map button, both kept while the start map shows. */
+export function HazardControls({ model, state }: { model: LandCoverModel; state: ReturnType<typeof useLandCoverView> }) {
+  const { hasLocal, local, landNow, setLocal, setLandNow } = state;
+  return (
+    <>
+      {hasLocal && <ScopeToggle local={landNow ? null : local} onChange={setLocal} labels={[model.region ?? 'the training region', 'this area']} />}
+      <button
+        type="button"
+        aria-pressed={landNow}
+        onClick={() => setLandNow(!landNow)}
+        className={cn('px-[9px] py-1 rounded-control border border-border text-[11.5px]', landNow ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
+      >
+        Land cover now
+      </button>
+    </>
+  );
+}
+
+/** Where each risk level ends when the land matches the region: 10, 25 and 50 % (High, + Elevated, + Moderate). */
+const REGION_SHARES = [10, 25, 50];
 
 /** The hazards as selectable rows: hue, name, the high-risk area out of the area that could change, and a bar of the
  *  risk levels over that area; a legend of the levels below. Rows where little could change are dimmed. */
@@ -516,6 +540,7 @@ export function HazardList({ hazards, active, onChange, region }: { hazards: Haz
               onClick={() => onChange(h.key)}
               className={cn(
                 'grid grid-cols-[4px_minmax(0,1.6fr)_minmax(80px,1fr)] items-center gap-x-3 px-3 py-[7px] text-left border-b border-border2 last:border-b-0',
+                h.overall && 'border-t border-t-border',
                 on ? 'bg-surface2' : 'hover:bg-surface2/60',
                 h.sparse && 'opacity-50',
               )}
@@ -527,10 +552,11 @@ export function HazardList({ hazards, active, onChange, region }: { hazards: Haz
                 </span>
                 <span className="block text-[11.5px] text-muted">{h.sentence}</span>
               </span>
-              <span aria-hidden className="flex h-[8px] w-full rounded-[2px] overflow-hidden bg-surface2 border border-border2">
+              <span aria-hidden className="relative flex h-[8px] w-full rounded-[2px] overflow-hidden bg-surface2 border border-border2">
                 {h.levels.map((l) => (
                   <span key={l.label} style={{ width: `${Math.min(100, l.percent)}%`, background: l.colour }} />
                 ))}
+                {h.levels.length > 0 && REGION_SHARES.map((p) => <span key={p} className="absolute inset-y-0 w-px bg-text/60" style={{ left: `${p}%` }} />)}
               </span>
             </button>
           );
@@ -538,13 +564,16 @@ export function HazardList({ hazards, active, onChange, region }: { hazards: Haz
       </div>
       {legend.length > 0 && (
         <div data-testid="hazard-legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-[6px] text-[10.5px] text-muted">
-          <span>Compared with the same land across {region}:</span>
           {legend.map((l) => (
             <span key={l.label} className="inline-flex items-center gap-1">
               <span aria-hidden className="inline-block h-[8px] w-[12px] rounded-[2px]" style={{ background: l.colour }} />
               {l.label}: {l.range}
             </span>
           ))}
+          <span className="inline-flex items-center gap-1">
+            <span aria-hidden className="inline-block h-[10px] w-px bg-text/60" />
+            share at each level across {region}
+          </span>
         </div>
       )}
     </div>
@@ -552,7 +581,8 @@ export function HazardList({ hazards, active, onChange, region }: { hazards: Haz
 }
 
 function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel }) {
-  const { base, view, hasLocal, local, setLocal, setActive } = useLandCoverView(model);
+  const state = useLandCoverView(model);
+  const { base, view, setActive } = state;
   if (!base || !view) return null;
   return (
     <CardShell model={model}>
@@ -565,15 +595,7 @@ function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel 
       )}
       {model.hazards.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-y border-border2">
-          {hasLocal && <ScopeToggle local={local} onChange={setLocal} labels={[`Compared with ${model.region ?? 'the training region'}`, 'Within this area']} />}
-          <button
-            type="button"
-            aria-pressed={base.key === 'start_class'}
-            onClick={() => setActive(base.key === 'start_class' ? model.hazards[0].key : 'start_class')}
-            className={cn('px-[9px] py-1 rounded-control border border-border text-[11.5px]', base.key === 'start_class' ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
-          >
-            Land cover now
-          </button>
+          <HazardControls model={model} state={state} />
         </div>
       )}
       <MapImage view={view} alt={`${model.title}, ${view.overlay}`} contain />
