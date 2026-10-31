@@ -821,6 +821,9 @@ instances:
       outputs: [Rank per hazard (national and within the area), start class]
       time: "~1 min"
       prompt: Map where land cover is most likely to change
+      followups:
+        - Forecast the land cover map for the coming years
+        - Show how land cover changed since 2017
       model:
         title: LULC change model (KPI-Ukraine)
         short: LULC change model
@@ -892,6 +895,9 @@ instances:
       outputs: [Forecast class map, class areas, transition matrix, summary]
       time: "~1 min"
       prompt: Forecast the land cover map for the coming years
+      followups:
+        - Map where land cover is most likely to change
+        - Show how land cover changed since 2017
       model:
         title: LULC change model (KPI-Ukraine)
         short: LULC change model
@@ -953,6 +959,9 @@ instances:
       outputs: [Class maps then and now, class areas per year, transition matrix, summary]
       time: "~30 s"
       prompt: Show how land cover changed since 2017
+      followups:
+        - Map where land cover is most likely to change
+        - Compare land cover with the pre-war state
     description: |
       KPI-Ukraine annual land cover (10 m, C7x legend, 3 x 3 majority to 30 m) of every year from 2017 for the
       area of the input raster, from the Earth Engine collection kpi_ukraine_lc; Ukraine only. The main
@@ -1007,6 +1016,9 @@ instances:
       outputs: [Class maps 2021 and 2024, class areas per year, transition matrix, summary]
       time: "~40 s"
       prompt: Compare land cover with the pre-war state
+      followups:
+        - Show how land cover changed since 2017
+        - Map where land cover is most likely to change
     description: |
       KPI-Ukraine annual land cover (10 m, C7x legend, 3 x 3 majority to 30 m) of 2021 against 2024, as single
       years, for the area of the input raster; Ukraine only. Also the area of raw KPI class 20 ("not cultivated",

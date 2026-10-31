@@ -52,6 +52,10 @@ EXPECTED: dict[str, str | tuple[str, dict[str, Any]]] = {
     "Map snow cover with NDSI": ("algorithms/ndsi", {}),
     "Classify land cover in this image": ("algorithms/lulc-classifier", {}),
     "Give me statistics for every band": ("algorithms/statistics", {}),
+    "Map where land cover is most likely to change": ("models/lulc-change-hazard", {}),
+    "Forecast the land cover map for the coming years": ("models/lulc-forecast", {}),
+    "Show how land cover changed since 2017": ("algorithms/lulc-history", {}),
+    "Compare land cover with the pre-war state": ("algorithms/lulc-since-prewar", {}),
 }
 
 
