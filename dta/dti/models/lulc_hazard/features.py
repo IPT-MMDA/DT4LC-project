@@ -402,6 +402,27 @@ def label_image(ee: Any, grid: Grid, year: int, source: LabelSource = ESRI) -> A
     return images.mosaic().setDefaultProjection(fine).select(["b1"])
 
 
+def label_codes(ee: Any, grid: Grid, year: int, source: LabelSource = ESRI) -> np.ndarray:
+    """The ``source`` map's raw 10 m codes of ``year`` on the full ``grid`` (halo included); 0 where it has none."""
+    codes = pull(ee, label_image(ee, grid, year, source), ["b1"], grid, FINE, TILE["labels"], nodata=0)[0]
+    return np.nan_to_num(codes, nan=0).astype(np.uint8)
+
+
+def label_codes_by_year(ee: Any, grid: Grid, years: Sequence[int], source: LabelSource = ESRI) -> list[np.ndarray]:
+    """:func:`label_codes` of each of ``years``, several years at once while that stays within :data:`THREADS`
+    concurrent requests."""
+    side = TILE["labels"]
+    scale = round(RES / FINE)
+    tiles = math.ceil(grid.width * scale / side) * math.ceil(grid.height * scale / side)
+    with ThreadPoolExecutor(max(1, min(THREADS // tiles, len(years)))) as ex:
+        return list(ex.map(lambda y: label_codes(ee, grid, y, source), years))
+
+
+def label_classes(codes: np.ndarray, source: LabelSource = ESRI) -> np.ndarray:
+    """30 m class index (1-based, 0 = no data) of 10 m raw ``codes``: the 3 x 3 mode of their classes."""
+    return mode3(source.lut[codes], len(source.classes))
+
+
 def check_dem(dem: str) -> str:
     if dem not in DEM_ASSETS:
         raise ValueError(f"Unknown DEM {dem!r}; one of {', '.join(DEM_ASSETS)}.")
@@ -523,9 +544,7 @@ def build_features(
     core = grid.core
 
     t = time.time()
-    codes = pull(ee, label_image(ee, grid, t0, source), ["b1"], grid, FINE, TILE["labels"], nodata=0)[0]
-    codes = np.nan_to_num(codes, nan=0).astype(np.uint8)
-    cls = mode3(source.lut[codes], len(source.classes))
+    cls = label_classes(label_codes(ee, grid, t0, source), source)
     cube.start_class = cls[core].copy()
     if any(c in source.nbr_columns for c in columns):
         for r, shares in neighbourhood_shares(cls, k=len(source.classes)).items():

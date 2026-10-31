@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import threading
+import time
 from types import SimpleNamespace
 from typing import Any
 
@@ -294,6 +296,21 @@ def test_throttled_pulls_back_off_and_retry_while_too_large_ones_split(monkeypat
     large = _Pixels("Total request size (60000000 bytes) must be less than or equal to 50331648 bytes.")
     features._pull_tile(SimpleNamespace(data=large), None, ["b1"], "EPSG:32636", 0.0, 0.0, 128, 128, 10.0)
     assert large.sizes == [(128, 128)] + [(64, 64)] * 4
+
+
+def test_history_fetches_years_side_by_side_and_keeps_their_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    grid = features.Grid("EPSG:32636", 0.0, 0.0, 4, 4, halo=1)  # 18 x 18 px at 10 m: one tile per year
+    threads = set()
+
+    def codes(ee: Any, g: features.Grid, year: int, source: features.LabelSource) -> np.ndarray:
+        threads.add(threading.get_ident())
+        time.sleep(0.05)
+        return np.full((g.height * 3, g.width * 3), {2017: 1, 2018: 2, 2019: 4}[year], np.uint8)
+
+    monkeypatch.setattr(features, "label_codes", codes)
+    cls = history.label_years(None, grid, [2017, 2018, 2019])
+    assert cls.shape == (3, 4, 4) and [int(c[0, 0]) for c in cls] == [1, 2, 3]  # Water, Trees, FloodedVeg
+    assert len(threads) > 1
 
 
 def test_registry_wires_the_model() -> None:

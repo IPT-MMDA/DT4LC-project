@@ -433,12 +433,17 @@ def _area(RasterPath: str, bundle: dict[str, Any]) -> tuple[list[float], feature
     check_domain(bbox, bundle["domain"])
     g = bundle["grid"]
     grid = features.grid_for_bbox(bbox, g.get("crs", "auto"), g.get("origin", (0.0, 0.0)))
+    check_size(grid, "the change-hazard model")
+    return bbox, grid
+
+
+def check_size(grid: features.Grid, what: str) -> None:
+    """ValueError if ``grid`` is larger than :data:`MAX_AREA_KM2`; ``what`` names the analysis in the message."""
     if grid.area_km2 > MAX_AREA_KM2:
         raise ValueError(
-            f"This area is {grid.area_km2:.0f} km²; the change-hazard model runs on at most {MAX_AREA_KM2:.0f} km². "
+            f"This area is {grid.area_km2:.0f} km²; {what} runs on at most {MAX_AREA_KM2:.0f} km². "
             "Draw a smaller region."
         )
-    return bbox, grid
 
 
 def _check_t0(bundle: dict[str, Any], t0: int | None) -> None:

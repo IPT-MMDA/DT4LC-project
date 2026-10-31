@@ -24,7 +24,7 @@ import numpy as np
 from dta.dti import artifact_files
 
 from . import features, stats
-from .inference import MAX_AREA_KM2, _ee, footprint_wgs84
+from .inference import _ee, check_size, footprint_wgs84
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +45,8 @@ def label_years(
     ee: Any, grid: features.Grid, years: list[int], source: features.LabelSource = features.ESRI
 ) -> np.ndarray:
     """``(years, ny, nx)`` class index of ``source`` on the core of ``grid``."""
-    return np.stack(
-        [features.build_features(grid, y, [], ee=ee, check_years=False, source=source).start_class for y in years]
-    )
+    codes = features.label_codes_by_year(ee, grid, years, source)
+    return np.stack([features.label_classes(c, source)[grid.core] for c in codes])
 
 
 def compared(cls: np.ndarray, years: list[int], k: int, pair: tuple[int, int] | None) -> tuple[np.ndarray, np.ndarray]:
@@ -105,11 +104,7 @@ def run(RasterPath: str, last_year: int | None = None, source: str = "esri") -> 
     src = features.SOURCES[source]
     bbox = footprint_wgs84(RasterPath)
     grid = features.grid_for_bbox(bbox)
-    if grid.area_km2 > MAX_AREA_KM2:
-        raise ValueError(
-            f"This area is {grid.area_km2:.0f} km²; the land-cover history runs on at most {MAX_AREA_KM2:.0f} km². "
-            "Draw a smaller region."
-        )
+    check_size(grid, "the land-cover history")
     ee = _ee()
     last = last_year or date.today().year
     have = features.available_years(ee, grid, range(features.T0_FIRST, last + 1), src)["labels"]
@@ -126,11 +121,7 @@ def run_prewar(RasterPath: str) -> dict[str, Any]:  # noqa: N803
     src = features.KPI
     bbox = footprint_wgs84(RasterPath)
     grid = features.grid_for_bbox(bbox)
-    if grid.area_km2 > MAX_AREA_KM2:
-        raise ValueError(
-            f"This area is {grid.area_km2:.0f} km²; the land-cover comparison runs on at most {MAX_AREA_KM2:.0f} km². "
-            "Draw a smaller region."
-        )
+    check_size(grid, "the land-cover comparison")
     ee = _ee()
     years = list(range(features.T0_FIRST, LATEST + 1))
     have = features.available_years(ee, grid, years, src)["labels"]
@@ -166,12 +157,8 @@ def prewar_maps(ee: Any, grid: features.Grid, years: list[int]) -> tuple[np.ndar
     src = features.KPI
     core10 = tuple(slice(sl.start * 3, sl.stop * 3) for sl in grid.core)
     cls, fallow, raw = [], [], {}
-    for y in years:
-        codes = features.pull(
-            ee, features.label_image(ee, grid, y, src), ["b1"], grid, features.FINE, features.TILE["labels"], nodata=0
-        )[0]
-        codes = np.nan_to_num(codes, nan=0).astype(np.uint8)
-        cls.append(features.mode3(src.lut[codes], len(src.classes))[grid.core])
+    for y, codes in zip(years, features.label_codes_by_year(ee, grid, years, src), strict=True):
+        cls.append(features.label_classes(codes, src)[grid.core])
         fallow.append(int((codes[core10] == NOT_CULTIVATED).sum()))
         if y in (PREWAR, LATEST):
             raw[y] = codes[core10]
