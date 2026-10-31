@@ -6,10 +6,12 @@ The parity test against the training cube is behind ``@pytest.mark.network`` and
 
 from __future__ import annotations
 
+import io
 import json
 import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -266,6 +268,32 @@ def test_latest_t0_is_the_newest_year_with_both_inputs(monkeypatch: pytest.Monke
     have = {"labels": [2025], "ae": [2024]}
     with pytest.raises(features.FeatureUnavailableError, match="AlphaEarth"):
         features.latest_t0(None, grid, last=2026)
+
+
+class _Pixels:
+    """``ee.data.computePixels`` that raises ``errors`` in turn, then returns a 1-band NPY of the requested size."""
+
+    def __init__(self, *errors: str) -> None:
+        self.errors, self.sizes = list(errors), []
+
+    def computePixels(self, req: dict[str, Any]) -> bytes:  # noqa: N802 - the Earth Engine name
+        dims = req["grid"]["dimensions"]
+        self.sizes.append((dims["width"], dims["height"]))
+        if self.errors:
+            raise Exception(self.errors.pop(0))  # Earth Engine raises plain exceptions
+        buf = io.BytesIO()
+        np.save(buf, np.zeros((dims["height"], dims["width"]), [("b1", "f4")]))
+        return buf.getvalue()
+
+
+def test_throttled_pulls_back_off_and_retry_while_too_large_ones_split(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(features.time, "sleep", lambda s: None)
+    throttled = _Pixels("Too Many Requests: request rate or concurrency limit was exceeded")
+    features._pull_tile(SimpleNamespace(data=throttled), None, ["b1"], "EPSG:32636", 0.0, 0.0, 128, 128, 10.0)
+    assert throttled.sizes == [(128, 128)] * 2
+    large = _Pixels("Total request size (60000000 bytes) must be less than or equal to 50331648 bytes.")
+    features._pull_tile(SimpleNamespace(data=large), None, ["b1"], "EPSG:32636", 0.0, 0.0, 128, 128, 10.0)
+    assert large.sizes == [(128, 128)] + [(64, 64)] * 4
 
 
 def test_registry_wires_the_model() -> None:

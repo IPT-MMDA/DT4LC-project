@@ -88,6 +88,9 @@ TERRAIN_COLUMNS = ("elevation_m", "slope_deg", "aspect_sin_east", "aspect_cos_no
 AE_COLUMNS = tuple(f"ae_{b}" for b in AE_BANDS)
 
 THREADS = 4  # concurrent computePixels requests
+# Earth Engine error words: a request it throttles is retried; one it refuses as too large is split
+_THROTTLED = ("too many requests", "rate limit", "concurrency limit", "quota")
+_TOO_LARGE = ("too many pixels", "must be less than", "memory")
 TILE = {"labels": 1024, "dem": 1024, "ae": 256}  # tile side in pixels: each response stays well under 48 MB
 
 
@@ -334,7 +337,7 @@ def _pull_once(
             return np.stack([rec[b] for b in bands]).astype(np.float32)
         except Exception as e:  # noqa: BLE001 - Earth Engine raises plain exceptions for quota and size errors
             text = str(e).lower()
-            if any(k in text for k in ("too many pixels", "must be less than", "exceed", "memory")):
+            if not any(k in text for k in _THROTTLED) and any(k in text for k in _TOO_LARGE):
                 raise MemoryError(str(e)) from e
             last = e
             time.sleep(min(30, 2**attempt))
