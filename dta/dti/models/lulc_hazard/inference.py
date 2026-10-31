@@ -59,10 +59,12 @@ training cells, written when the bundle is exported.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from functools import lru_cache
 import json
 import logging
 from pathlib import Path
+import threading
 from typing import Any
 
 import numpy as np
@@ -273,12 +275,28 @@ def as_format_2(bundle: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-@lru_cache(maxsize=32)
-def _booster(model_id: str, version: str, key: str, text: str) -> Any:
+# id of a bundle's booster JSON -> (that JSON, its parsed booster). Bundles are cached per file, so the same JSON
+# object comes back on every run; holding it keeps its id from being reused.
+_BOOSTERS: OrderedDict[int, tuple[Any, Any]] = OrderedDict()
+_BOOSTERS_MAX = 32
+_boosters_lock = threading.Lock()
+
+
+def _booster(spec: Any) -> Any:
+    """The parsed XGBoost booster of the booster JSON ``spec``, parsed once per JSON object."""
+    with _boosters_lock:
+        hit = _BOOSTERS.get(id(spec))
+        if hit is not None and hit[0] is spec:
+            _BOOSTERS.move_to_end(id(spec))
+            return hit[1]
     import xgboost as xgb
 
     booster = xgb.Booster()
-    booster.load_model(bytearray(text, "utf-8"))
+    booster.load_model(bytearray(json.dumps(spec), "utf-8"))
+    with _boosters_lock:
+        _BOOSTERS[id(spec)] = (spec, booster)
+        while len(_BOOSTERS) > _BOOSTERS_MAX:
+            _BOOSTERS.popitem(last=False)
     return booster
 
 
@@ -286,7 +304,7 @@ def _booster(model_id: str, version: str, key: str, text: str) -> Any:
 
 
 def probabilities(
-    bundle: dict[str, Any], from_classes: dict[str, Any], x: np.ndarray, start: np.ndarray, key: str = ""
+    bundle: dict[str, Any], from_classes: dict[str, Any], x: np.ndarray, start: np.ndarray
 ) -> np.ndarray:
     """``(cells, classes)`` probability of each legend class at the interval's end; NaN rows where no model applies.
 
@@ -306,9 +324,7 @@ def probabilities(
         else:
             import xgboost as xgb
 
-            booster = _booster(
-                bundle["model_id"], str(bundle.get("version", "")), f"{key}:{name}", json.dumps(spec["booster"])
-            )
+            booster = _booster(spec["booster"])
             raw = np.asarray(booster.predict(xgb.DMatrix(x[idx], missing=np.nan)), dtype=np.float64)
             p = np.stack([1.0 - raw, raw], axis=1) if raw.ndim == 1 else raw
             if p.shape[1] != len(to):
@@ -496,7 +512,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
             continue
         hz = bundle["horizons"][str(h)]
         if h not in probs:
-            probs[h] = probabilities(bundle, hz["from_classes"], x, start, key=str(h))
+            probs[h] = probabilities(bundle, hz["from_classes"], x, start)
         score = group_score(probs[h], start, bundle["groups"][g], names)
         key = INDEX_TYPE if g == ANY else f"rank_{g}"
         national = percentile(score, hz["reference_quantiles"][g]).reshape(shape)
@@ -640,9 +656,7 @@ def write_forecast(
     grid = cube.grid
     shape = (grid.ny, grid.nx)
     start = cube.start_class.ravel()
-    p = probabilities(
-        bundle, bundle["horizons"][str(h)]["from_classes"], cube.matrix(bundle["columns"]), start, str(h)
-    )
+    p = probabilities(bundle, bundle["horizons"][str(h)]["from_classes"], cube.matrix(bundle["columns"]), start)
     trend_m = stats.matrix(trend[0], trend[1], k)
     if not trend_m.any():  # a year with no map reads as all no data, which is no trend rather than no change
         raise features.FeatureUnavailableError(

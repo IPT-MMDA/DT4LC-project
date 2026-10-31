@@ -92,21 +92,33 @@ def allocate(start: np.ndarray, quota: np.ndarray, score: np.ndarray, seed: int 
         idx = np.flatnonzero(start == a)
         q = quota[a - 1].copy()
         q[a - 1] = 0
-        if idx.size == 0 or q.sum() == 0:
+        left = int(q.sum())
+        if idx.size == 0 or left == 0:
             continue
         b = np.tile(np.arange(1, k + 1), idx.size)
         cell = np.repeat(idx, k)
         sc = np.nan_to_num(score[idx].ravel().astype(np.float64), nan=-1.0)
         keep = b != a
         b, cell, sc = b[keep], cell[keep], sc[keep]
+        order = np.lexsort((rng.random(sc.size), -sc))
+        # A target meets at most ``left`` of its pairs before its quota is full: the q[t] it takes and at most
+        # left - q[t] whose cell another target took first. Its later pairs, and every pair of a target with no
+        # quota, are never taken, so the loop below skips them.
+        bo = b[order]
+        rank = np.empty(bo.size, np.int64)
+        for t in range(1, k + 1):
+            at = bo == t
+            rank[at] = np.arange(int(at.sum())) if q[t - 1] > 0 else left
+        order = order[rank < left]
         taken = np.zeros(start.size, bool)
-        for j in np.lexsort((rng.random(sc.size), -sc)):
-            if q.sum() == 0:
-                break
-            if q[b[j] - 1] > 0 and not taken[cell[j]]:
-                taken[cell[j]] = True
-                out[cell[j]] = b[j]
-                q[b[j] - 1] -= 1
+        for t, c in zip(b[order].tolist(), cell[order].tolist(), strict=True):
+            if q[t - 1] > 0 and not taken[c]:
+                taken[c] = True
+                out[c] = t
+                q[t - 1] -= 1
+                left -= 1
+                if left == 0:
+                    break
     return out
 
 

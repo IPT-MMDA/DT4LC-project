@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from functools import lru_cache
 import logging
 from typing import Any
 import uuid
@@ -138,19 +139,24 @@ def footprint_config(region: dict[str, Any]) -> dict[str, Any]:
     return {"name": f"Area of {region.get('name') or 'the region'}", "bbox": list(region["bounds"])}
 
 
+@lru_cache(maxsize=1)
+def _region_inputs() -> dict[str, bool | None]:
+    """Registry id -> whether that analysis (algorithm or model) takes only the area of its input; None for
+    other items. Read once per process, as the trigger index is (restart the backend after editing the registry)."""
+    from dta.dti.registry import load_registry
+
+    return {
+        item.id: item.config.get("region_input") == "footprint" if item.kind in ("algorithm", "model") else None
+        for item in load_registry().instances
+    }
+
+
 def footprint_only(plan: ExecutionPlan) -> bool:
     """Whether every analysis (algorithm or model) step of ``plan`` takes only the area of its input."""
-    from dta.dti.registry import get_item, load_registry
-
-    reg = load_registry()
-    kinds = []
-    for step in plan.steps:
-        try:
-            item = get_item(reg, step.uses)
-        except KeyError:
-            return False
-        if item.kind in ("algorithm", "model"):
-            kinds.append(item.config.get("region_input") == "footprint")
+    items = _region_inputs()
+    if any(step.uses not in items for step in plan.steps):
+        return False
+    kinds = [items[step.uses] for step in plan.steps if items[step.uses] is not None]
     return bool(kinds) and all(kinds)
 
 

@@ -8,7 +8,7 @@ Intelligently chooses between:
 import logging
 
 from dta.dti.coe.plan_validator import BAND_MATH_ENTRYPOINT
-from dta.dti.coe.triggers import TriggerIndex, get_trigger_index, phrase_in, without_rejected
+from dta.dti.coe.triggers import TriggerIndex, phrase_in, without_rejected
 from dta.dti.registry import find_items_by_keywords, find_items_producing
 from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep, Registry, RegistryItem
 
@@ -95,9 +95,7 @@ def _is_change_detection_request(ctx: ContextUnderstanding, reg: Registry) -> bo
     # A change word inside another item's longer trigger ("likely to change" of the change-hazard model) is
     # that item's, not a request for change detection (TriggerIndex.asks_for_change).
     if has_strong_signal:
-        index = get_trigger_index()
-        if index.registry is not reg:  # a registry passed in (tests): index its own triggers
-            index = TriggerIndex.from_registry(reg)
+        index = TriggerIndex.from_registry(reg)  # the plan's own registry; building an index is cheap
         has_strong_signal = index.asks_for_change(goal_lower) or any(index.asks_for_change(k) for k in keywords)
 
     # Structural signals — generic, not algorithm-specific:
