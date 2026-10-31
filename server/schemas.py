@@ -803,7 +803,7 @@ class GEELayerIdResponse(BaseModel):  # type: ignore[misc]
 # A nested read-only object (``sign_in``, ``earth_engine``, ``storage``...) is one ``false``
 # entry of its parent's map.
 
-LLMProviderName = Literal["gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai"]
+LLMProviderName = Literal["gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai", "openrouter"]
 DownloadPolicy = Literal["all", "members", "operators", "none"]
 SettingSource = Literal["override", "env", "default"]
 

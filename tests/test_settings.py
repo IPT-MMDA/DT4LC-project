@@ -140,7 +140,16 @@ def test_dev_role_operator_gets_five_sections_and_no_key_value(settings_file: Pa
     assistant = body["assistant"]
     assert assistant["provider_order"] == ["gemini", "groq"]
     assert list(assistant["providers"])[:2] == ["gemini", "groq"]
-    assert set(assistant["providers"]) == {"gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai"}
+    assert set(assistant["providers"]) == {
+        "gemini",
+        "groq",
+        "ollama",
+        "apertus",
+        "anthropic",
+        "mistral",
+        "openai",
+        "openrouter",
+    }
     gemini, ollama = assistant["providers"]["gemini"], assistant["providers"]["ollama"]
     assert gemini["key_present"] is True and gemini["available"] is True and gemini["multiple_models"] is True
     assert ollama["key_required"] is False and ollama["available"] is False

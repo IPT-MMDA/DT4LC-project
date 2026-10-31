@@ -179,6 +179,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   anthropic: 'Anthropic',
   mistral: 'Mistral',
   openai: 'OpenAI',
+  openrouter: 'OpenRouter',
 };
 export const providerLabel = (name: string) => PROVIDER_LABELS[name] ?? name;
 

@@ -50,6 +50,7 @@ SECRET_ENV = (
     "MISTRAL_API_KEY",
     "OPENAI_API_KEY",
     "GPT_SECRET",
+    "OPENROUTER_API_KEY",
     "GITHUB_CLIENT_SECRET",
     "SESSION_SECRET",
 )
@@ -74,6 +75,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
     "mistral": ProviderSpec("MISTRAL_MODELS", ("mistral", "DEFAULT_MISTRAL_MODEL"), True, ("MISTRAL_API_KEY",)),
     "openai": ProviderSpec(
         "OPENAI_MODELS", ("openai", "DEFAULT_OPENAI_MODEL"), True, ("OPENAI_API_KEY", "GPT_SECRET")
+    ),
+    "openrouter": ProviderSpec(
+        "OPENROUTER_MODELS", ("openrouter", "DEFAULT_OPENROUTER_MODEL"), True, ("OPENROUTER_API_KEY",)
     ),
 }
 

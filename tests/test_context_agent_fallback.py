@@ -36,7 +36,15 @@ from server.jobs import JobQueue, JobStatus, SQLiteJobStore
 BEFORE = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
 AFTER = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
 _CLOSED_PORT = "http://127.0.0.1:9"
-_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
+_KEY_VARS = (
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENAI_API_KEY",
+    "GPT_SECRET",
+    "ANTHROPIC_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+)
 
 
 @pytest.fixture(autouse=True)

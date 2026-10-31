@@ -42,7 +42,15 @@ from server.utils import UPLOAD_DIR
 pytestmark = pytest.mark.usefixtures("sample_uploads")
 SAMPLE_0601 = str(UPLOAD_DIR / "hlsl_20230601.tif")
 SAMPLE_0609 = str(UPLOAD_DIR / "hlsl_20230609.tif")
-_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
+_KEY_VARS = (
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENAI_API_KEY",
+    "GPT_SECRET",
+    "ANTHROPIC_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+)
 
 NDMI_PROMPT = "Map moisture change with NDMI between the two dates"
 NDMI_TEXT = (
