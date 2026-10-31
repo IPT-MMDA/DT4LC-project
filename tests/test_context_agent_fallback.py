@@ -92,7 +92,7 @@ def test_outage_returns_deterministic_context(caplog: pytest.LogCaptureFixture) 
         goal="calculate NDVI",
         desired_outputs=["NDVIMap"],
         required_inputs=["RasterPath"],
-        hints={"keywords": ndvi.triggers.keywords},
+        hints={"keywords": ndvi.triggers.keywords, "item": "algorithms/ndvi"},
     )
     assert "All LLM providers failed: ollama" in caplog.text
 

@@ -199,7 +199,8 @@ def _deterministic_context(req: ChatRequest) -> ContextUnderstanding:
     that asks for change (a change-detection trigger: "compare", "change", "before",
     "difference", ...), asks for a ChangeMap from before/after rasters with no keywords,
     so the planner takes the index type from the goal. Another matched item gives its
-    first output, its inputs and its trigger keywords: a single-image analysis, which
+    first output, its inputs, its trigger keywords and its id (``hints["item"]``, so the
+    planner does not read a change word in the prompt as change detection): a single-image analysis, which
     reads one of the attachments (the one whose date the prompt names, else the later-dated one, see
     :func:`~dta.dti.coe.orchestrator.single_image_attachment`). No match keeps only the
     uploaded raster.
@@ -219,7 +220,7 @@ def _deterministic_context(req: ChatRequest) -> ContextUnderstanding:
             goal=req.prompt,
             desired_outputs=item.outputs[:1],
             required_inputs=list(item.inputs),
-            hints={"keywords": list(item.triggers.keywords) if item.triggers else []},
+            hints={"keywords": list(item.triggers.keywords) if item.triggers else [], "item": item.id},
         )
     return ContextUnderstanding(
         goal=req.prompt,

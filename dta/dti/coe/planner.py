@@ -77,6 +77,11 @@ def _is_change_detection_request(ctx: ContextUnderstanding, reg: Registry) -> bo
     specific knowledge): "before AND after" co-occurrence, and the user
     explicitly requesting ChangeMap as a desired output.
     """
+    # The prompt's triggers already chose an item that makes no ChangeMap (_deterministic_context): its request.
+    matched = next((it for it in reg.instances if ctx.hints and it.id == ctx.hints.get("item")), None)
+    if matched is not None and "ChangeMap" not in matched.outputs:
+        return False
+
     item = _get_change_detection_item(reg)
     triggers_kw: list[str] = []
     if item is not None and item.triggers is not None:

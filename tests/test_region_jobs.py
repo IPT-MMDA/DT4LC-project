@@ -421,6 +421,8 @@ def test_a_footprint_only_plan_takes_the_regions_area_and_fetches_no_imagery(
         ("Map where land cover is most likely to change", "models/lulc-change-hazard"),
         ("Forecast the land cover map for the coming years", "models/lulc-forecast"),
         ("Show how land cover changed since 2017", "algorithms/lulc-history"),
+        # "change" outside the item's own trigger is still the item's request, not change detection.
+        ("Show land cover change compared to pre-war", "algorithms/lulc-since-prewar"),
     ],
 )
 def test_footprint_items_are_planned_from_the_prompt_not_the_assistants_rewrite(
