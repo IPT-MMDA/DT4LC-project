@@ -752,6 +752,7 @@ function hazardCard(artifact: Obj, artifacts: Obj, context: AnalysedContext): Re
   const startAreas = stats.start_class_km2
     ? obj(stats.start_class_km2)
     : Object.fromEntries(Object.entries(obj(stats.start_class_ha)).map(([k, v]) => [k, isNum(v) ? v / 100 : v]));
+  // The high-risk share: the first level's, or the top decile (rank >= 90) a job from before the risk levels stored.
   const highShare = (h: Obj) => (isNum(obj(arr(h.levels)[0]).percent) ? (obj(arr(h.levels)[0]).percent as number) : isNum(h.top_decile_percent) ? h.top_decile_percent : 0);
   // Named hazards by their share at high risk, then "any change" as the overview.
   const all = arr(stats.hazards).map(obj);

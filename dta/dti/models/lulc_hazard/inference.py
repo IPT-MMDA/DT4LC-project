@@ -289,8 +289,6 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                 "eligible_km2": stats.km2(ok.sum()),
                 "land": land_text(list(bundle["groups"][g]["from"]), names),
                 "to_land": land_text(list(to), names) if (to := bundle["groups"][g].get("to")) else "another class",
-                "top_decile_km2": stats.km2((national[ok] >= 90).sum()),
-                "top_decile_percent": round(100.0 * float((national[ok] >= 90).mean()), 1) if ok.any() else None,
                 "mean_rank": round(float(np.nanmean(national)), 1) if ok.any() else None,
                 "skill": _skill(bundle, h, g),
             }
@@ -314,7 +312,6 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
         "valid_pixels": int(ranked.sum()),
         "cells": int(main.size),
         "cells_without_model": int((valid & ~ranked).sum()),
-        "top_decile_percent": round(100.0 * float((main[ranked] >= 90).mean()), 2) if ranked.any() else None,
         "start_class_percent": shares,
         "start_class_km2": {n: stats.km2((cube.start_class == i + 1).sum()) for i, n in enumerate(names)},
         "hazards": hazards,
@@ -325,7 +322,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
                 f"high risk, i.e. in the top {high['region_percent']:g} % of such land across {region}."
                 f"{_base_rate(h, region)}"
                 for h in hazards
-                if h["top_decile_percent"] is not None
+                if h["mean_rank"] is not None
                 for high in h["levels"][:1]
             ),
             "The hazards overlap (one cell can be at risk of several) and each is ranked on its own scale, so their "

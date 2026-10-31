@@ -561,6 +561,7 @@ def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path)
     assert [lv["level"] for lv in forest["levels"]] == ["High", "Elevated", "Moderate"]
     assert forest["levels"][0]["range"] == "top 5 % in Ukraine"
     assert [lv["region_percent"] for lv in forest["levels"]] == [5.0, 5.0, 5.0]
+    assert "top_decile_percent" not in forest and "top_decile_percent" not in result["statistics"]  # see the levels
     assert forest["title"] == "Tree cover loss" and forest["to_land"] == "cropland and rangeland"
     assert next(h for h in result["statistics"]["hazards"] if h["group"] == "any_change")["to_land"] == "another class"
     assert result["statistics"]["summary"][-1].startswith("The hazards overlap")

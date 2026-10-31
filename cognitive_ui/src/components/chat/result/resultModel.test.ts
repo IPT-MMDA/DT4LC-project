@@ -457,6 +457,14 @@ describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, alg
     expect(c.hazards[0].skill).toBe('AUC 0.98 vs 0.87');
     expect(c.hazards[0].sentence).toBe('Cropland and grassland → built-up land · high risk 1.00 km² of 10.0 km² (10.0 %)');
     expect(c.hazards[2].sentence).toBe('All land · high risk 3.00 km² of 10.0 km² (30.0 %)');  // no arrow on any change
+    // A job from before the risk levels: its high risk is the top decile it stored.
+    const old = card(jobOf('ChangeHazardMap', {
+      index_type: 'change_rank',
+      statistics: { hazards: [{ ...hz('forest_loss', 'Forest loss', 2027, 0), levels: [], top_decile_km2: 0.05, top_decile_percent: 25 }] },
+      metadata: { t0: 2025 }, visualizations: vis, rasters,
+    }));
+    if (old.kind !== 'landcover') throw new Error(old.kind);
+    expect(old.hazards[0].high).toBe('0.05 km² · 25.0 %');
     expect(c.hazards.map((h) => h.overall)).toEqual([false, false, true]);
     expect(c.tables[0].rows[0].cells.slice(-2)).toEqual(['0.01 %', 'AUC 0.98 vs 0.87']);
     expect(c.source).toBeNull();
