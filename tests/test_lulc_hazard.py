@@ -380,6 +380,10 @@ def test_check_bundle_2_refuses_a_served_horizon_without_models() -> None:
     pytest.importorskip("xgboost")
     b = _bundle_2(COLUMNS)
     inference.check_bundle(b)
+    # Quantiles are read at a group's served horizon only, so a shorter horizon may leave them out.
+    h2 = b["horizons"]["2"]
+    h2["reference_quantiles"] = {g: q for g, q in h2["reference_quantiles"].items() if g != "any_change"}
+    inference.check_bundle(b)
     bad = json.loads(json.dumps(b))
     bad["served"]["map"] = 4
     with pytest.raises(inference.BundleError, match=r"\[4\]"):
@@ -440,6 +444,9 @@ def test_forecast_follows_the_trend_amounts_and_words_them_by_the_bundle(tmp_pat
     assert st["transitions"][0] == {"from": "Crops", "to": "Built", "km2": 0.0045, "percent_of_from": 50.0}
     assert res2["statistics"]["amounts"] == "expected" and res2["statistics"]["summary_lead"] == "Expected by 2023:"
     assert set(res3["rasters"]) == {"class_start", "class_forecast", "changed"}
+    none = np.zeros_like(a)  # Earth Engine had no map of the trend's start year
+    with pytest.raises(features.FeatureUnavailableError, match="no trend to follow"):
+        inference.write_forecast(bundle, cube, 3, [none, b], (2018, 2021), grid, [30.0, 50.0, 30.1, 50.1])
 
 
 def test_forecast_is_refused_beyond_the_checked_horizon(tmp_path: Path) -> None:

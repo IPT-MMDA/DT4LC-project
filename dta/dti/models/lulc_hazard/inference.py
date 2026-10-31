@@ -237,7 +237,7 @@ def check_bundle(bundle: dict[str, Any]) -> None:
     for h, hz in bundle["horizons"].items():
         _check_from_classes(hz["from_classes"], names, f"horizons[{h}].")
         for g, gh in served.get("hazards", {}).items():
-            if gh and int(h) <= gh:
+            if gh and int(h) == int(gh):  # a group is ranked at its served horizon only
                 if g not in bundle["groups"]:
                     raise BundleError(f"served hazard {g!r} is not a group of the bundle.")
                 _check_quantiles(hz["reference_quantiles"].get(g), f"{h}:{g}")
@@ -644,6 +644,10 @@ def write_forecast(
         bundle, bundle["horizons"][str(h)]["from_classes"], cube.matrix(bundle["columns"]), start, str(h)
     )
     trend_m = stats.matrix(trend[0], trend[1], k)
+    if not trend_m.any():  # a year with no map reads as all no data, which is no trend rather than no change
+        raise features.FeatureUnavailableError(
+            f"{source.title} has no {pair[0]} or {pair[1]} map around this area, so there is no trend to follow."
+        )
     quota = stats.demand(start, stats.rates(trend_m))
     end = stats.allocate(start, quota, p, seed=cube.t0 * 100 + h).reshape(shape)
     m = stats.matrix(cube.start_class, end, k)
