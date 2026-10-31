@@ -924,7 +924,7 @@ instances:
     model_id: lulc-change-hazard-kpi
     triggers:
       keywords: ["land cover forecast", "land-cover forecast", "lulc forecast", "lulc prediction",
-                 "land cover prediction", "future land cover", "future land-cover"]
+                 "land cover prediction", "future land cover", "future land-cover", "future lulc"]
       action_phrases:
         - "forecast the land cover map"
         - "forecast land cover map"

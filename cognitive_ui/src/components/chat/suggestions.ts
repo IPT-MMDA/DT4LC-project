@@ -12,6 +12,7 @@ export const SUGGESTIONS: Suggestion[] = [
   { prompt: 'Compare water before and after the dam breach', time: '~50 s' },
   { prompt: 'Detect field boundaries east of the river', time: '~2 min' },
   { prompt: 'Classify land cover on the flooded fields', time: '~90 s' },
+  { prompt: 'Predict future LULC', time: '~1 min' },
 ];
 
 /** With the sample attached: also the composed NDMI example (never NBR: the sample has no B7) and Prithvi. */
