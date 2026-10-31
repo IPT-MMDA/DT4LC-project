@@ -50,7 +50,7 @@ export interface UserMessage extends BaseMessage {
   region?: ChatRegion;
 }
 
-export type RegionDataset = 'HLS L30' | 'HLS S30' | 'Sentinel-2' | 'Landsat 8/9' | 'MODIS';
+export type RegionDataset = 'HLS L30' | 'HLS S30' | 'Sentinel-2' | 'Landsat 8/9' | 'MODIS' | 'LULC';
 
 /**
  * A region from the map as the composer holds it and POST /v1/chat sends it

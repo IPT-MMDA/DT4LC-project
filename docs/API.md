@@ -533,7 +533,7 @@ The named indices NDMI, NBR, SAVI and NDBI are composed from the attached files'
 |-------|---------|
 | `geometry` or `bbox` | Exactly one: a GeoJSON Polygon or MultiPolygon in WGS84, or `[west, south, east, north]` in degrees |
 | `name`, `place` | Optional, at most 80 characters each; shown in the chip line |
-| `dataset` | `HLS L30`, `HLS S30`, `Sentinel-2`, `Landsat 8/9` or `MODIS` |
+| `dataset` | `HLS L30`, `HLS S30`, `Sentinel-2`, `Landsat 8/9` or `MODIS`; or `LULC`, the area for the land-cover analyses (no bands; the dates play no part) |
 | `start_date`, `end_date` | `YYYY-MM-DD`, start not after end. A single-date analysis fetches one median composite over the range; a change analysis fetches one around each date |
 | `bands` | Band codes, e.g. `["B2", "B5"]`; default: the dataset's default bands |
 | `cloud_max` | Maximum cloud cover in percent, 0–100, default 20 |
@@ -551,6 +551,8 @@ A region over 2,500 km², an unknown field or band, or a malformed geometry is a
 ```
 
 When files are attached as well, the files are analysed, the region is not fetched, and the echo has `note`: "Files are attached, so the analysis reads them and doesn't fetch this region." The fetch steps are `input` steps named like "Fetch HLS L30 · 2023-05-29 → 06-04". Without Earth Engine credentials a region job fails at planning with `EE_NOT_CONFIGURED`.
+
+**LULC.** The land-cover analyses (change hazard, forecast, history, since pre-war) build their own data for the area from Earth Engine: KPI-Ukraine land cover and AlphaEarth embeddings. They take a region with `"dataset": "LULC"`, whose input step writes the region's bounds and fetches no imagery; its line is `Region · 251 km² · LULC`. Each side refuses the other at planning (`PLAN_FAILED`): a land-cover analysis with an imagery dataset says to pick LULC, an imagery analysis with LULC says to pick HLS L30, Sentinel-2 or MODIS.
 
 **Attachment paths.** Each attachment's `path` gets the directory and owner checks of [GET /v1/download](#get-v1download). A session may attach its own uploads and sample copies (the paths that `POST /v1/upload` and `POST /v1/sample` return) and the artifacts of its own jobs. Files in the directories that have no owners stay usable, as for downloads: temporary and model outputs, `run-*` folders in the outputs directory, Delineate-Anything's working directory and Earth Engine exports. Operators may attach any file in the served directories. A path outside them, including one that leaves them through `..`, is 403:
 

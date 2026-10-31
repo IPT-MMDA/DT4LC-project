@@ -869,9 +869,9 @@ instances:
     user_guide:
       capability_response: |
         Yes, I can rank where KPI-Ukraine land cover is most likely to change, from Earth Engine features of the area
-        (Ukraine only for now). Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
+        (Ukraine only for now). Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
-        Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll rank where land
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll rank where land
         cover is most likely to change.
       summary_template: "Ranking land-cover change hazard"
     runner:
@@ -934,9 +934,9 @@ instances:
     user_guide:
       capability_response: |
         Yes, I can forecast the KPI-Ukraine land-cover map a few years ahead for an area in Ukraine, with class areas
-        and a transition matrix. Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
+        and a transition matrix. Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
-        Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll forecast its land
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll forecast its land
         cover.
       summary_template: "Forecasting land cover"
     runner:
@@ -990,9 +990,9 @@ instances:
     user_guide:
       capability_response: |
         Yes, I can show how KPI-Ukraine land cover of an area changed since 2017, with class areas per year and a
-        transition matrix. Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area.
+        transition matrix. Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
-        Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll show how its land
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll show how its land
         cover changed since 2017.
       summary_template: "Summarising land-cover history"
     runner:
@@ -1059,10 +1059,10 @@ instances:
     user_guide:
       capability_response: |
         Yes, I can compare KPI-Ukraine land cover of an area in 2021, the last pre-war year, with 2024, with class
-        areas, a transition matrix and the area marked not cultivated each year. Draw a region on the map (up to
+        areas, a transition matrix and the area marked not cultivated each year. Draw a region on the map with the LULC dataset (up to
         400 km²) or upload a GeoTIFF of the area.
       missing_file_response: |
-        Draw a region on the map (up to 400 km²) or upload a GeoTIFF of the area, and I'll compare its land cover
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll compare its land cover
         in 2021 and 2024.
       summary_template: "Comparing land cover with the pre-war state"
     runner:

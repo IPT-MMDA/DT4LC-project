@@ -247,6 +247,9 @@ def test_region_echo_has_area_bounds_and_line() -> None:
     assert small["line"] == "Region · Dnipro floodplain · 3.4 km² · Sentinel-2 · 2023-06-01 → 2024-01-05 · ≤20 % cloud"
     assert _echo(bands=["SR_B5", "b6", "B5"])["bands"] == ["B5", "B6"]
 
+    lulc = _echo(dataset="LULC", name=None, place=None)
+    assert (lulc["line"], lulc["bands"]) == ("Region · 537 km² · LULC", [])
+
 
 _TRIANGLE = [[[32.4, 46.5], [32.5, 46.5], [32.5, 46.6], [32.4, 46.5]]]
 _BOW_TIE = [[[32.4, 46.5], [32.5, 46.6], [32.5, 46.5], [32.4, 46.6], [32.4, 46.5]]]
@@ -266,6 +269,7 @@ _BOW_TIE = [[[32.4, 46.5], [32.5, 46.6], [32.5, 46.5], [32.4, 46.6], [32.4, 46.5
         pytest.param({"dataset": "Planet"}, id="unknown-dataset"),
         pytest.param({"bands": ["B8"]}, id="band-not-in-dataset"),
         pytest.param({"bands": []}, id="no-bands"),
+        pytest.param({"dataset": "LULC", "bands": ["B2"]}, id="bands-on-lulc"),
         pytest.param({"cloud_max": 120}, id="cloud-over-100"),
         pytest.param({"name": "x" * 81}, id="long-name"),
         pytest.param({"unknown": 1}, id="unknown-field"),
@@ -399,13 +403,14 @@ def test_an_edited_plan_fetches_only_the_jobs_region(queue: JobQueue) -> None:
 # --- Footprint only: a model that builds its own data from the area -----------------------------
 
 FOOTPRINT = {"name": "Area of Dnipro floodplain", "bbox": SAMPLE_BOUNDS}
+LULC = {"dataset": "LULC"}
 
 
 def test_a_footprint_only_plan_takes_the_regions_area_and_fetches_no_imagery(
     ee_configured: list[dict[str, Any]],
 ) -> None:
     result = orchestrate(
-        ChatRequest(prompt="Map where land cover is most likely to change", metadata={"region": _echo()})
+        ChatRequest(prompt="Map where land cover is most likely to change", metadata={"region": _echo(**LULC)})
     )
     assert result["ok"], result
     assert [(s["uses"], s["config"]) for s in result["plan"]["steps"][:2]] == [
@@ -431,7 +436,7 @@ def test_footprint_items_are_planned_from_the_prompt_not_the_assistants_rewrite(
     from dta.dti.coe import orchestrator as orch
 
     monkeypatch.setattr(orch, "analyze", lambda *a, **k: pytest.fail("the assistant was asked to rewrite the goal"))
-    result = orchestrate(ChatRequest(prompt=prompt, metadata={"region": _echo()}))
+    result = orchestrate(ChatRequest(prompt=prompt, metadata={"region": _echo(**LULC)}))
     assert result["ok"], result
     assert [s["uses"] for s in result["plan"]["steps"][:2]] == ["input/region-footprint", step]
 
@@ -453,8 +458,33 @@ def test_a_plan_with_an_imagery_analysis_keeps_the_fetch() -> None:
             PlanStep(uses="models/lulc-change-hazard"),
         ]
     )
-    gee_region.inject_region_fetch(edited, _echo())
+    gee_region.inject_region_fetch(edited, _echo(**LULC))
     assert (edited.steps[0].uses, edited.steps[0].config) == ("input/region-footprint", FOOTPRINT)
+
+
+@pytest.mark.parametrize(
+    ("analysis", "dataset", "says"),
+    [
+        ("models/lulc-change-hazard", "HLS L30", "not HLS L30 imagery. Pick the LULC dataset"),
+        ("algorithms/lulc-history", "Sentinel-2", "not Sentinel-2 imagery. Pick the LULC dataset"),
+        ("algorithms/ndvi", "LULC", "Pick HLS L30, Sentinel-2 or MODIS"),
+    ],
+)
+def test_a_region_whose_dataset_the_analysis_does_not_read_is_refused(analysis: str, dataset: str, says: str) -> None:
+    """No silent swap: a land-cover analysis needs a LULC region, an imagery analysis an imagery dataset."""
+    plan = ExecutionPlan(steps=[PlanStep(uses="input/file"), PlanStep(uses=analysis)])
+    with pytest.raises(gee_region.RegionDatasetError, match=says):
+        gee_region.inject_region_fetch(plan, _echo(dataset=dataset))
+
+
+def test_a_land_cover_job_on_an_imagery_region_fails_at_planning_and_says_so(
+    ee_configured: list[dict[str, Any]],
+) -> None:
+    with pytest.raises(gee_region.RegionDatasetError) as e:
+        orchestrate(ChatRequest(prompt="Map where land cover is most likely to change", metadata={"region": _echo()}))
+    failed = classify_failure(e.value, stage="planning")
+    assert (failed["code"], failed["message"]) == ("PLAN_FAILED", gee_region.NEEDS_LULC.format(dataset="HLS L30"))
+    assert ee_configured == []
 
 
 def test_the_footprint_is_a_tiny_raster_of_the_regions_bounds() -> None:

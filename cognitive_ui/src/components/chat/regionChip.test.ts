@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { DrawnRegion } from '../../store/useAppStore';
 import type { ChatRegion } from '../../types';
-import { dateRange, formatArea, regionChipLines, regionFromMap, regionLine, sampleDates } from './regionChip';
+import { defaultImagery, regionFromImagery } from '../map/mode/imagery';
+import { dateRange, formatArea, regionChipLines, regionLine, sampleDates } from './regionChip';
 
 const REGION: ChatRegion = {
   id: 'r1',
@@ -54,11 +55,15 @@ describe('region chip line', () => {
     expect(dateRange('2022-12-20', '2023-01-19')).toBe('2022-12-20 → 2023-01-19');
     expect(dateRange('2023-06-01', '2023-06-01')).toBe('2023-06-01');
   });
+
+  it('has no dates or cloud limit for a LULC region', () => {
+    expect(regionLine({ ...REGION, name: undefined, place: undefined, dataset: 'LULC', area_km2: 251 })).toBe('Region · 251 km² · LULC');
+  });
 });
 
-describe('regionFromMap', () => {
-  it('defaults to HLS L30, the last 30 days ending today and ≤20 % cloud, with the area from turf', () => {
-    const region = regionFromMap(DRAWN, undefined, new Date(2026, 9, 23));
+describe('a drawn region with the default imagery', () => {
+  it('is HLS L30, the last 30 days ending today and ≤20 % cloud, with the area from turf', () => {
+    const region = regionFromImagery(DRAWN, defaultImagery(undefined, new Date(2026, 9, 23)));
     expect(region).toMatchObject({
       id: 'region-1',
       name: 'Dnipro floodplain · Kherson',
@@ -84,7 +89,7 @@ describe('regionFromMap', () => {
       { id: 'o', filename: 'own.tif', metadata: { date: '2024-07-11' } },
     ]);
     expect(dates).toEqual(['2023-06-01', '2023-06-09']);
-    expect(regionFromMap(DRAWN, dates)).toMatchObject({ start_date: '2023-06-01', end_date: '2023-06-09' });
+    expect(regionFromImagery(DRAWN, defaultImagery(dates))).toMatchObject({ start_date: '2023-06-01', end_date: '2023-06-09' });
     expect(sampleDates([])).toBeUndefined();
   });
 });

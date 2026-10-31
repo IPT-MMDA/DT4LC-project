@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import apiClient from '../api/client';
 import { sampleAttachments } from '../api/sample';
 import type { Capabilities } from '../api/hooks/useCapabilities';
+import { NO_IMAGERY } from '../components/map/mode/imagery';
 import { AppRoutes } from '../routes';
 import { useAppStore, type DrawnRegion } from '../store/useAppStore';
 import { useChatStore } from '../store/useChatStore';
@@ -182,6 +183,23 @@ describe('map mode imagery panel', () => {
     });
     await waitFor(() => expect(location.current).toBe('/app'));
     expect(screen.getByTestId('region-chip').textContent).toContain('Region · Region 10:00:00');
+  });
+
+  it('LULC hides dates, cloud and bands, has nothing to fetch, and sends the area as a LULC region', async () => {
+    mockApi(DEMO);
+    renderMap();
+    fireEvent.click(button('LULC'));
+    expect(panel().getByTestId('dataset-description').textContent).toMatch(/^KPI-Ukraine land cover/);
+    expect(panel().queryByLabelText('Start date')).toBeNull();
+    expect(panel().queryByRole('slider', { name: 'Max cloud cover' })).toBeNull();
+    expect(panel().queryByRole('group', { name: 'Bands' })).toBeNull();
+    await waitFor(() => expect(panel().getByTestId('fetch-reason').textContent).toBe(NO_IMAGERY));
+    expect((button('Fetch to map') as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(button('Send to chat'));
+    expect(useChatStore.getState().pendingRegion).toMatchObject({ dataset: 'LULC', bands: [] });
+    await waitFor(() => expect(location.current).toBe('/app'));
+    expect(screen.getByTestId('region-chip').textContent).toMatch(/^Region · Region 10:00:00427 km² · LULC/);
   });
 
   it('Select all and Clear set the bands; without a band or a region nothing can be sent', () => {

@@ -1,5 +1,3 @@
-import { area } from '@turf/turf';
-import type { DrawnRegion } from '../../store/useAppStore';
 import type { ChatRegion, MessageAttachment } from '../../types';
 
 // The region chip: "Region · Dnipro floodplain · Kherson · 412 km² ·
@@ -19,17 +17,11 @@ export function dateRange(start: string, end: string): string {
   return `${start} → ${start.slice(0, 4) === end.slice(0, 4) ? end.slice(5) : end}`;
 }
 
+/** A LULC region has no dates or cloud limit: "Region · 251 km² · LULC". */
 export function regionLine(region: ChatRegion): string {
   if (region.line) return region.line;
-  return [
-    'Region',
-    region.name,
-    region.place,
-    formatArea(region.area_km2),
-    region.dataset,
-    dateRange(region.start_date, region.end_date),
-    `≤${region.cloud_max} % cloud`,
-  ]
+  const imagery = region.dataset === 'LULC' ? [] : [dateRange(region.start_date, region.end_date), `≤${region.cloud_max} % cloud`];
+  return ['Region', region.name, region.place, formatArea(region.area_km2), region.dataset, ...imagery]
     .filter(Boolean)
     .join(' · ');
 }
@@ -42,11 +34,6 @@ export function regionChipLines(region: ChatRegion): { title: string; detail: st
   return { title: parts.slice(0, at).join(' · '), detail: parts.slice(at).join(' · ') };
 }
 
-function isoDay(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 /** The first and last `metadata.date` of the sample's files, when the conversation has the sample. */
 export function sampleDates(attachments: MessageAttachment[]): [string, string] | undefined {
   const dates = attachments
@@ -54,24 +41,4 @@ export function sampleDates(attachments: MessageAttachment[]): [string, string] 
     .map((a) => a.metadata?.date as string)
     .sort();
   return dates.length > 0 ? [dates[0], dates[dates.length - 1]] : undefined;
-}
-
-/**
- * A drawn region as the composer's pending region: HLS L30, ≤20 % cloud, the last
- * 30 days ending `today` (or the sample's dates), the map's name, the area by turf.
- */
-export function regionFromMap(drawn: DrawnRegion, dates?: [string, string], today = new Date()): ChatRegion {
-  const start = new Date(today);
-  start.setDate(today.getDate() - REGION_DEFAULTS.days);
-  const [start_date, end_date] = dates ?? [isoDay(start), isoDay(today)];
-  return {
-    id: drawn.id,
-    geometry: drawn.geometry.geometry,
-    ...(drawn.name ? { name: drawn.name } : {}),
-    dataset: REGION_DEFAULTS.dataset,
-    start_date,
-    end_date,
-    cloud_max: REGION_DEFAULTS.cloud_max,
-    area_km2: area(drawn.geometry) / 1e6,
-  };
 }

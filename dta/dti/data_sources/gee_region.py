@@ -13,10 +13,12 @@ N = :data:`CHANGE_WINDOW_DAYS` (8, one HLS L30 revisit), cut down so the windows
 apart: N = min(8, (days between the dates − 1) // 2). For 2023-06-01 → 2023-06-09 that
 is ±3 days: 2023-05-29 → 06-04 and 2023-06-06 → 06-12. Dates are inclusive.
 
-Footprint only. When every analysis step of a single-input plan builds its own data from the
-area (registry ``config: region_input: footprint``), the input becomes ``input/region-footprint``
-(:mod:`region_footprint`), which writes the region's bounds as a tiny raster and fetches nothing;
-the region's dates, dataset and bands play no part then.
+LULC. A region with the ``LULC`` dataset is an area for the analyses that build their own data
+from it (registry ``config: region_input: footprint``: KPI-Ukraine land cover and AlphaEarth
+embeddings). Its input is ``input/region-footprint`` (:mod:`region_footprint`), which writes the
+region's bounds as a tiny raster and fetches nothing; its dates play no part. Each side refuses the
+other (:class:`RegionDatasetError`): a land-cover analysis needs a ``LULC`` region, an imagery
+analysis an imagery dataset.
 
 Datasets. The names the map offers map to the collections the existing fetchers use
 (:mod:`gee_landsat`, :mod:`gee_sentinel2`, :mod:`gee_modis`); see :data:`DATASETS`.
@@ -57,6 +59,21 @@ FETCH_FOR = {
     FOOTPRINT: FETCH_SINGLE,
 }
 CONFIG_KEYS = frozenset({"name", "dataset", "bbox", "start_date", "end_date", "bands", "cloud_max"})
+# The region dataset of the land-cover analyses: an area, no imagery (module docstring).
+LULC = "LULC"
+NEEDS_LULC = (
+    "This land-cover analysis builds its own data for the area (KPI-Ukraine land cover and AlphaEarth embeddings), "
+    "not {dataset} imagery. Pick the LULC dataset on the map and send the region again."
+)
+NEEDS_IMAGERY = (
+    "The LULC dataset is for the land-cover analyses (change hazard, forecast, history); this analysis reads "
+    "imagery. Pick HLS L30, Sentinel-2 or MODIS on the map and send the region again."
+)
+
+
+class RegionDatasetError(ValueError):
+    """A region whose dataset the plan's analysis does not read: imagery for a land-cover analysis, or ``LULC``
+    for an imagery one."""
 
 
 class EarthEngineNotConfiguredError(RuntimeError):
@@ -164,12 +181,17 @@ def inject_region_fetch(plan: ExecutionPlan, region: dict[str, Any]) -> Executio
     """Replace ``plan``'s file inputs with Earth Engine fetches of ``region`` (the job's region echo).
 
     A plan with before/after inputs gets two fetches (:func:`change_windows`); a plan with one
-    input gets one over the whole date range, or the region's footprint when every analysis step
-    builds its own data from the area (:func:`footprint_only`). Existing fetch steps get their
-    config rewritten, so an edited plan cannot fetch anything but the job's region.
+    input gets one over the whole date range. A ``LULC`` region gives the region's footprint instead,
+    when every analysis step builds its own data from the area (:func:`footprint_only`); any other
+    pairing raises :class:`RegionDatasetError`. Existing fetch steps get their config rewritten, so an
+    edited plan cannot fetch anything but the job's region.
     """
     change = any(FETCH_FOR.get(s.uses) in (FETCH_BEFORE, FETCH_AFTER) for s in plan.steps)
     footprint = not change and footprint_only(plan)
+    if footprint and region["dataset"] != LULC:
+        raise RegionDatasetError(NEEDS_LULC.format(dataset=region["dataset"]))
+    if region["dataset"] == LULC and not footprint:
+        raise RegionDatasetError(NEEDS_IMAGERY)
     start, end = region["start_date"], region["end_date"]
     before, after = change_windows(start, end) if change else ((start, end), (start, end))
     for step in plan.steps:

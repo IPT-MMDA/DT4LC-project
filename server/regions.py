@@ -13,7 +13,7 @@ from pyproj import Geod
 from shapely.geometry import box, shape
 from shapely.geometry.base import BaseGeometry
 
-from dta.dti.data_sources.gee_region import date_range
+from dta.dti.data_sources.gee_region import LULC, date_range
 
 # Largest region a job may fetch (50 km × 50 km). A fetch can still be too large for Earth Engine's
 # direct download at fine resolution (Sentinel-2 at 10 m); the fetch step then fails and says so.
@@ -77,8 +77,10 @@ def format_area(km2: float) -> str:
 def region_line(region: dict[str, Any]) -> str:
     """``"Region · Dnipro floodplain · Kherson · 412 km² · HLS L30 · 2023-06-01 → 06-09 · ≤20 % cloud"``.
 
-    ``name`` and ``place`` are left out when missing.
+    ``name`` and ``place`` are left out when missing; a ``LULC`` region has no dates or cloud limit
+    (``"Region · 412 km² · LULC"``).
     """
     parts = ["Region", region.get("name"), region.get("place"), format_area(region["area_km2"]), region["dataset"]]
-    parts += [date_range(region["start_date"], region["end_date"]), f"≤{region['cloud_max']} % cloud"]
+    if region["dataset"] != LULC:
+        parts += [date_range(region["start_date"], region["end_date"]), f"≤{region['cloud_max']} % cloud"]
     return " · ".join(p for p in parts if p)

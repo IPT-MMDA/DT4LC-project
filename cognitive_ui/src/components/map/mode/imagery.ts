@@ -8,6 +8,7 @@ import { REGION_DEFAULTS } from '../../chat/regionChip';
 // Map mode's imagery panel: dataset, dates, cloud and
 // bands become the region of POST /v1/jobs and /v1/chat (docs/API.md "Regions"), or
 // an Earth Engine fetch through /v1/gee/bulk-fetch. Pure: the panel renders these.
+// LULC is no imagery: the area for the land-cover analyses, which build their own data.
 
 export interface ImageryBand {
   code: string;  // the region's band code (server/schemas.py JobRegion.bands)
@@ -20,8 +21,8 @@ export interface ImageryDataset {
   description: string;  // the line under it
   bands: ImageryBand[];
   defaultBands: string[];
-  /** The bulk-fetch dataset and its band names (dta/dti/data_sources/gee_region.py). */
-  gee: { id: 'landsat-8' | 'sentinel-2' | 'modis'; prefix: string };
+  /** The bulk-fetch dataset and its band names (dta/dti/data_sources/gee_region.py); none for LULC. */
+  gee?: { id: 'landsat-8' | 'sentinel-2' | 'modis'; prefix: string };
 }
 
 const band = (code: string, name: string, short = code): ImageryBand => ({ code, label: `${short} ${name}` });
@@ -58,7 +59,17 @@ export const IMAGERY_DATASETS: ImageryDataset[] = [
     defaultBands: ['sur_refl_b01', 'sur_refl_b02'],
     gee: { id: 'modis', prefix: '' },
   },
+  {
+    id: 'LULC',
+    label: 'LULC',
+    description: 'KPI-Ukraine land cover + AlphaEarth embeddings · 30 m · Ukraine · for the land-cover analyses',
+    bands: [],
+    defaultBands: [],
+  },
 ];
+
+/** Why Fetch to map has nothing to fetch for a dataset without imagery. */
+export const NO_IMAGERY = 'LULC is the area for the land-cover analyses; it has no imagery to fetch';
 
 export function datasetOf(id: RegionDataset): ImageryDataset {
   return IMAGERY_DATASETS.find((d) => d.id === id) ?? IMAGERY_DATASETS[0];
@@ -121,7 +132,7 @@ export const MAX_REGION_KM2 = 2500;
 export function regionProblem(region: DrawnRegion | null, imagery: Imagery): string | null {
   if (!region) return 'Draw or select a region first';
   if (imagery.start_date > imagery.end_date) return 'The start date is after the end date';
-  if (imagery.bands.length === 0) return 'Pick at least one band';
+  if (imagery.bands.length === 0 && datasetOf(imagery.dataset).bands.length > 0) return 'Pick at least one band';
   if (regionAreaKm2(region) > MAX_REGION_KM2) return 'Regions are limited to 2 500 km²; draw a smaller one';
   return null;
 }
@@ -160,6 +171,7 @@ export function fetchPeriods(start: string, end: string): { pre: [string, string
 /** Fetch to map as `POST /v1/gee/bulk-fetch`: the region's bounds, the dataset's band names, both windows. */
 export function bulkFetchRequest(region: DrawnRegion, imagery: Imagery): BulkFetchRequest {
   const { gee } = datasetOf(imagery.dataset);
+  if (!gee) throw new Error(NO_IMAGERY);
   const { pre, post } = fetchPeriods(imagery.start_date, imagery.end_date);
   return {
     bbox: region.bbox,

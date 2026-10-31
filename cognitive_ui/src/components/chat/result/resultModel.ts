@@ -177,6 +177,7 @@ export const SENSOR_NAMES: Record<string, string> = {
   'Sentinel-2': 'Copernicus Sentinel-2',
   'Landsat 8/9': 'USGS Landsat 8/9',
   MODIS: 'NASA MODIS',
+  LULC: 'KPI-Ukraine land cover + AlphaEarth embeddings',
 };
 
 /** Change wording per index: the cover reported in `statistics.<key>` and the legend words. */

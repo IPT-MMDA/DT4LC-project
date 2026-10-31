@@ -9,6 +9,7 @@ import { cn } from '../../../utils/cn';
 import { formatArea, sampleDates } from '../../chat/regionChip';
 import {
   IMAGERY_DATASETS,
+  NO_IMAGERY,
   datasetOf,
   defaultImagery,
   earthEngineStatus,
@@ -196,7 +197,7 @@ export function ImageryPanel({ sheet = false }: { sheet?: boolean }) {
   const fetcher = useFetchToMap();
   const problem = regionProblem(region, imagery);
 
-  const fetchReason = earthEngine.reason ?? problem;
+  const fetchReason = earthEngine.reason ?? problem ?? (dataset.gee ? null : NO_IMAGERY);
   const sendReason = problem;
 
   const sendToChat = () => {
@@ -258,73 +259,77 @@ export function ImageryPanel({ sheet = false }: { sheet?: boolean }) {
             {dataset.description}
           </p>
 
-          <div className="flex gap-[6px] items-center font-mono text-[12px]">
-            <input
-              type="date"
-              aria-label="Start date"
-              value={imagery.start_date}
-              max={imagery.end_date}
-              onChange={(e) => e.target.value && setImagery({ ...imagery, start_date: e.target.value })}
-              className="flex-1 min-w-0 px-[9px] py-[6px] rounded-[6px] border border-border bg-surface"
-            />
-            <span aria-hidden className="text-faint">→</span>
-            <input
-              type="date"
-              aria-label="End date"
-              value={imagery.end_date}
-              min={imagery.start_date}
-              onChange={(e) => e.target.value && setImagery({ ...imagery, end_date: e.target.value })}
-              className="flex-1 min-w-0 px-[9px] py-[6px] rounded-[6px] border border-border bg-surface"
-            />
-          </div>
+          {dataset.gee && (
+            <>
+              <div className="flex gap-[6px] items-center font-mono text-[12px]">
+                <input
+                  type="date"
+                  aria-label="Start date"
+                  value={imagery.start_date}
+                  max={imagery.end_date}
+                  onChange={(e) => e.target.value && setImagery({ ...imagery, start_date: e.target.value })}
+                  className="flex-1 min-w-0 px-[9px] py-[6px] rounded-[6px] border border-border bg-surface"
+                />
+                <span aria-hidden className="text-faint">→</span>
+                <input
+                  type="date"
+                  aria-label="End date"
+                  value={imagery.end_date}
+                  min={imagery.start_date}
+                  onChange={(e) => e.target.value && setImagery({ ...imagery, end_date: e.target.value })}
+                  className="flex-1 min-w-0 px-[9px] py-[6px] rounded-[6px] border border-border bg-surface"
+                />
+              </div>
 
-          <label className="flex flex-col gap-[6px]">
-            <span className="flex justify-between text-[11.5px] text-muted">
-              <span>Max cloud cover</span>
-              <span data-testid="cloud-value" className="font-mono text-text">{imagery.cloud_max} %</span>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={imagery.cloud_max}
-              aria-label="Max cloud cover"
-              onChange={(e) => setImagery({ ...imagery, cloud_max: Number(e.target.value) })}
-              className="accent-accent"
-            />
-          </label>
+              <label className="flex flex-col gap-[6px]">
+                <span className="flex justify-between text-[11.5px] text-muted">
+                  <span>Max cloud cover</span>
+                  <span data-testid="cloud-value" className="font-mono text-text">{imagery.cloud_max} %</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={imagery.cloud_max}
+                  aria-label="Max cloud cover"
+                  onChange={(e) => setImagery({ ...imagery, cloud_max: Number(e.target.value) })}
+                  className="accent-accent"
+                />
+              </label>
 
-          <div className="flex flex-col gap-[6px]">
-            <div className="flex justify-between text-[11.5px] text-muted">
-              <span>Bands</span>
-              <span>
-                <button type="button" onClick={() => setImagery({ ...imagery, bands: dataset.bands.map((b) => b.code) })} className="hover:text-text">
-                  Select all
-                </button>
-                {' · '}
-                <button type="button" onClick={() => setImagery({ ...imagery, bands: [] })} className="hover:text-text">
-                  Clear
-                </button>
-              </span>
-            </div>
-            <div role="group" aria-label="Bands" className="flex flex-wrap gap-1 font-mono text-[11.5px]">
-              {dataset.bands.map((b) => {
-                const on = imagery.bands.includes(b.code);
-                return (
-                  <button
-                    key={b.code}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => setImagery(toggleBand(imagery, b.code))}
-                    className={cn('px-2 py-1 rounded-[5px]', on ? 'bg-ink text-ink-bg' : 'border border-border text-text2 hover:bg-surface2')}
-                  >
-                    {b.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+              <div className="flex flex-col gap-[6px]">
+                <div className="flex justify-between text-[11.5px] text-muted">
+                  <span>Bands</span>
+                  <span>
+                    <button type="button" onClick={() => setImagery({ ...imagery, bands: dataset.bands.map((b) => b.code) })} className="hover:text-text">
+                      Select all
+                    </button>
+                    {' · '}
+                    <button type="button" onClick={() => setImagery({ ...imagery, bands: [] })} className="hover:text-text">
+                      Clear
+                    </button>
+                  </span>
+                </div>
+                <div role="group" aria-label="Bands" className="flex flex-wrap gap-1 font-mono text-[11.5px]">
+                  {dataset.bands.map((b) => {
+                    const on = imagery.bands.includes(b.code);
+                    return (
+                      <button
+                        key={b.code}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setImagery(toggleBand(imagery, b.code))}
+                        className={cn('px-2 py-1 rounded-[5px]', on ? 'bg-ink text-ink-bg' : 'border border-border text-text2 hover:bg-surface2')}
+                      >
+                        {b.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="flex gap-[6px]">
             <button

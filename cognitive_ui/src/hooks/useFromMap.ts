@@ -1,24 +1,26 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { regionFromMap, sampleDates } from '../components/chat/regionChip';
+import { sampleDates } from '../components/chat/regionChip';
+import { defaultImagery, regionFromImagery } from '../components/map/mode/imagery';
 import { useAppStore } from '../store/useAppStore';
 import { selectActiveMessages, useChatStore } from '../store/useChatStore';
 import { carriedContext } from './useSendMessage';
 
 /**
- * "From map": the map's selected drawn region becomes the composer's region (HLS
- * L30, the last 30 days or the sample's dates, ≤20 % cloud). Without one, open the map.
+ * "From map": the map's selected drawn region becomes the composer's region, with the
+ * imagery panel's dataset, dates, cloud and bands (before any edit: HLS L30, the last
+ * 30 days or the sample's dates, ≤20 % cloud), as Send to chat. Without one, open the map.
  */
 export function useFromMap() {
   const navigate = useNavigate();
   return useCallback(() => {
-    const drawn = useAppStore.getState().selectedRegion;
+    const { selectedRegion: drawn, imagery } = useAppStore.getState();
     if (!drawn) {
       navigate('/app/map');
       return;
     }
     const chat = useChatStore.getState();
     const files = [...chat.pendingAttachments, ...carriedContext(selectActiveMessages(chat)).attachments];
-    chat.setPendingRegion(regionFromMap(drawn, sampleDates(files)));
+    chat.setPendingRegion(regionFromImagery(drawn, imagery ?? defaultImagery(sampleDates(files))));
   }, [navigate]);
 }

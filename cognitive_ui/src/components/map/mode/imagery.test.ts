@@ -4,6 +4,7 @@ import { toChatRegion } from '../../../api/chat';
 import type { DrawnRegion } from '../../../store/useAppStore';
 import { regionLine } from '../../chat/regionChip';
 import {
+  NO_IMAGERY,
   bulkFetchRequest,
   defaultImagery,
   earthEngineStatus,
@@ -69,6 +70,17 @@ describe('the imagery panel as a region', () => {
       cloud_max: 35,
       bands: ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'],
     });
+  });
+
+  it('LULC is an area: no bands, and the chip and request carry no band list', () => {
+    const imagery = withDataset(defaultImagery(['2023-06-01', '2023-06-09']), 'LULC');
+    expect(imagery.bands).toEqual([]);
+    expect(regionProblem(reservoirNorth, imagery)).toBeNull();
+    const region = regionFromImagery(reservoirNorth, { ...imagery });
+    expect(regionLine(region)).toBe('Region · Dnipro floodplain · Kherson · 427 km² · LULC');
+    expect(toChatRegion(region)).not.toHaveProperty('bands');
+    expect(toChatRegion(region).dataset).toBe('LULC');
+    expect(() => bulkFetchRequest(reservoirNorth, imagery)).toThrow(NO_IMAGERY);
   });
 
   it('the region card shows the centroid latitude first', () => {
