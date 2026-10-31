@@ -130,7 +130,7 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         github_repo="Lavreniuk/Delineate-Anything",
         github_tag="main",
     ),
-    # One JSON bundle (dta/dti/models/lulc_hazard/inference.py); the repository is created when the model is exported.
+    # One JSON bundle (dta/dti/models/lulc_hazard/model.py); the repository is created when the model is exported.
     # Label source KPI-Ukraine (bundle target "kpi"); the runner still reads Esri bundles, none is listed.
     "lulc-change-hazard-kpi": ModelInfo(
         id="lulc-change-hazard-kpi",

@@ -22,7 +22,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from dta.dti import artifact_files
-from dta.dti.models.lulc_hazard import features, history, inference, stats
+from dta.dti.models.lulc_hazard import features, history, inference, model, stats
 
 KPI_ORIGIN = (-303030.0, 5803330.0)
 
@@ -117,7 +117,7 @@ def _bundle(columns: list[str]) -> dict[str, Any]:
     }
     hz = {"from_classes": from_classes, "reference_quantiles": dict.fromkeys(groups, q)}
     return {
-        "format": inference.FORMAT,
+        "format": model.FORMAT,
         "model_id": "test-hazard",
         "version": "0",
         "target": "esri",
@@ -155,15 +155,15 @@ COLUMNS = ["elevation_m", "slope_deg", "esri_nbr3_Trees"]
 
 def test_check_bundle_accepts_the_documented_shape_and_names_what_is_wrong() -> None:
     bundle = _bundle(COLUMNS)
-    inference.check_bundle(bundle)
+    model.check_bundle(bundle)
     bad = {**bundle, "groups": {**bundle["groups"], "ice_loss": {"title": "Ice loss", "from": ["Ice"], "to": None}}}
-    with pytest.raises(inference.BundleError, match="ice_loss"):
-        inference.check_bundle(bad)
-    with pytest.raises(inference.BundleError, match="this runner reads"):
-        inference.check_bundle({**bundle, "format": "dt4lc-lulc-hazard/1"})
+    with pytest.raises(model.BundleError, match="ice_loss"):
+        model.check_bundle(bad)
+    with pytest.raises(model.BundleError, match="this runner reads"):
+        model.check_bundle({**bundle, "format": "dt4lc-lulc-hazard/1"})
     bad = {**bundle, "columns": ["elevation_m", "osm_d_major"]}
-    with pytest.raises(inference.BundleError, match="osm_d_major"):
-        inference.check_bundle(bad)
+    with pytest.raises(model.BundleError, match="osm_d_major"):
+        model.check_bundle(bad)
 
 
 def test_probabilities_apply_the_prior_correction_and_leave_unmodelled_classes_unranked() -> None:
@@ -172,10 +172,10 @@ def test_probabilities_apply_the_prior_correction_and_leave_unmodelled_classes_u
     from_classes = bundle["horizons"]["3"]["from_classes"]
     cube = _cube(COLUMNS)
     x, start = cube.matrix(COLUMNS), cube.start_class.ravel()
-    p_all = inference.probabilities(bundle, from_classes, x, start)
-    p_change = inference.group_score(p_all, start, bundle["groups"]["any_change"])
-    p_trees_crops = inference.group_score(p_all, start, {"from": ["Trees"], "to": ["Crops"]})
-    p_crops_built = inference.group_score(p_all, start, {"from": ["Crops"], "to": ["Built"]})
+    p_all = model.probabilities(bundle, from_classes, x, start)
+    p_change = model.group_score(p_all, start, bundle["groups"]["any_change"])
+    p_trees_crops = model.group_score(p_all, start, {"from": ["Trees"], "to": ["Crops"]})
+    p_crops_built = model.group_score(p_all, start, {"from": ["Crops"], "to": ["Built"]})
 
     trees = np.flatnonzero(start == features.ESRI_CLASSES.index("Trees") + 1)
     booster = xgb.Booster()
@@ -194,7 +194,7 @@ def test_probabilities_apply_the_prior_correction_and_leave_unmodelled_classes_u
 
 def test_percentile_is_mid_rank_against_the_reference() -> None:
     q = list(np.linspace(0, 1, 11))
-    out = inference.percentile(np.array([-1.0, 0.0, 0.55, 2.0, np.nan]), q)
+    out = model.percentile(np.array([-1.0, 0.0, 0.55, 2.0, np.nan]), q)
     assert out[0] == 0.0 and out[3] == 100.0 and np.isnan(out[4])
     assert out[1] == pytest.approx(100 * 1 / 22)  # equals the lowest quantile: half of one step
     assert out[2] == pytest.approx(100 * 6 / 11)
@@ -229,7 +229,7 @@ def test_write_result_saves_styled_rasters_and_no_arrays(tmp_path: Path) -> None
 
 
 def _write_bundle(tmp_path: Path) -> Path:
-    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(_bundle(COLUMNS)))
+    (tmp_path / model.BUNDLE_FILE).write_text(json.dumps(_bundle(COLUMNS)))
     return tmp_path
 
 
@@ -264,17 +264,17 @@ def test_run_refuses_areas_outside_the_domain_and_too_large(tmp_path: Path) -> N
 
 
 def test_missing_bundle_is_a_clear_error(tmp_path: Path) -> None:
-    with pytest.raises(inference.BundleError, match="not installed"):
-        inference.load_bundle(tmp_path)
+    with pytest.raises(model.BundleError, match="not installed"):
+        model.load_bundle(tmp_path)
 
 
 def test_bundle_names_a_known_dem() -> None:
     pytest.importorskip("xgboost")
     bundle = _bundle(COLUMNS)
-    with pytest.raises(inference.BundleError, match="lacks dem"):
-        inference.check_bundle({k: v for k, v in bundle.items() if k != "dem"})
-    with pytest.raises(inference.BundleError, match="Unknown DEM"):
-        inference.check_bundle({**bundle, "dem": "srtm"})
+    with pytest.raises(model.BundleError, match="lacks dem"):
+        model.check_bundle({k: v for k, v in bundle.items() if k != "dem"})
+    with pytest.raises(model.BundleError, match="Unknown DEM"):
+        model.check_bundle({**bundle, "dem": "srtm"})
 
 
 def test_latest_t0_is_the_newest_year_with_both_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -338,7 +338,7 @@ def test_registry_wires_the_model() -> None:
     assert item.outputs == ["ChangeHazardMap"] and item.inputs == ["RasterPath"]
     assert item.runner.entrypoint == "dta.dti.models.lulc_hazard.inference"
     model_id = STEP_TO_MODEL_MAP["models/lulc-change-hazard"]
-    assert AVAILABLE_MODELS[model_id].files == [inference.BUNDLE_FILE]
+    assert AVAILABLE_MODELS[model_id].files == [model.BUNDLE_FILE]
 
 
 # ----------------------------------------------------------------- parity with the training cube (engineers only)
@@ -379,15 +379,15 @@ def test_features_match_the_training_cube(window: str, t0: int) -> None:
 def test_check_bundle_refuses_a_served_horizon_without_models() -> None:
     pytest.importorskip("xgboost")
     b = _bundle(COLUMNS)
-    inference.check_bundle(b)
+    model.check_bundle(b)
     # Quantiles are read at a group's served horizon only, so a shorter horizon may leave them out.
     h2 = b["horizons"]["2"]
     h2["reference_quantiles"] = {g: q for g, q in h2["reference_quantiles"].items() if g != "any_change"}
-    inference.check_bundle(b)
+    model.check_bundle(b)
     bad = json.loads(json.dumps(b))
     bad["served"]["map"] = 4
-    with pytest.raises(inference.BundleError, match=r"\[4\]"):
-        inference.check_bundle(bad)
+    with pytest.raises(model.BundleError, match=r"\[4\]"):
+        model.check_bundle(bad)
 
 
 def test_hazards_take_each_group_at_its_own_horizon_and_skip_unserved_groups(tmp_path: Path) -> None:
@@ -408,7 +408,7 @@ def test_hazards_take_each_group_at_its_own_horizon_and_skip_unserved_groups(tmp
 
 
 def test_local_percentile_is_mid_rank_within_the_area() -> None:
-    out = inference.local_percentile(np.array([0.1, 0.2, 0.2, np.nan, 0.4]))
+    out = model.local_percentile(np.array([0.1, 0.2, 0.2, np.nan, 0.4]))
     assert np.allclose(out[[0, 1, 2, 4]], [12.5, 50.0, 50.0, 87.5]) and np.isnan(out[3])
 
 
@@ -451,14 +451,14 @@ def test_forecast_follows_the_trend_amounts_and_words_them_by_the_bundle(tmp_pat
 
 def test_forecast_is_refused_beyond_the_checked_horizon(tmp_path: Path) -> None:
     pytest.importorskip("xgboost")
-    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(_bundle(COLUMNS)))
+    (tmp_path / model.BUNDLE_FILE).write_text(json.dumps(_bundle(COLUMNS)))
     area = _footprint(tmp_path, 300000.0, 5600000.0, 3000.0)
     with pytest.raises(ValueError, match="up to 3 years"):
         inference.run_forecast(area, str(tmp_path), horizon=4)
     no_map = _bundle(COLUMNS)
     no_map["served"]["map"] = 0
-    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(no_map))
-    with pytest.raises(inference.BundleError, match="hazards only"):
+    (tmp_path / model.BUNDLE_FILE).write_text(json.dumps(no_map))
+    with pytest.raises(model.BundleError, match="hazards only"):
         inference.run_forecast(area, str(tmp_path))
 
 
@@ -574,7 +574,7 @@ def kpi_bundle() -> dict:
     cols = list(features.KPI.nbr_columns)[:2]
     refs = list(np.linspace(0, 1, 11))
     return {
-        "format": inference.FORMAT,
+        "format": model.FORMAT,
         "model_id": "kpi-test",
         "version": "t",
         "target": "kpi",
@@ -605,15 +605,15 @@ def kpi_bundle() -> dict:
 
 def test_kpi_bundle_is_checked_against_the_kpi_legend() -> None:
     b = kpi_bundle()
-    inference.check_bundle(b)
-    assert inference.source_of(b) is features.KPI
-    with pytest.raises(inference.BundleError, match="kpi legend"):
-        inference.check_bundle({**b, "legend": list(features.ESRI_CLASSES)})
-    with pytest.raises(inference.BundleError, match="makes no esri_nbr3_Water"):
-        inference.check_bundle({**b, "columns": ["esri_nbr3_Water"]})
-    with pytest.raises(inference.BundleError, match="target must be one of"):
-        inference.check_bundle({**b, "target": "glc"})
-    p = inference.probabilities(
+    model.check_bundle(b)
+    assert model.source_of(b) is features.KPI
+    with pytest.raises(model.BundleError, match="kpi legend"):
+        model.check_bundle({**b, "legend": list(features.ESRI_CLASSES)})
+    with pytest.raises(model.BundleError, match="makes no esri_nbr3_Water"):
+        model.check_bundle({**b, "columns": ["esri_nbr3_Water"]})
+    with pytest.raises(model.BundleError, match="target must be one of"):
+        model.check_bundle({**b, "target": "glc"})
+    p = model.probabilities(
         b, b["horizons"]["1"]["from_classes"], np.zeros((3, 2), np.float32), np.array([1, 2, 4], np.uint8)
     )
     assert p.shape == (3, 7) and p[0, 0] == 1 and p[1, 2] == 1 and np.isnan(p[2]).all()
@@ -623,7 +623,7 @@ def test_kpi_forecast_takes_its_trend_from_pairs_up_to_trend_last(monkeypatch: p
     import json
 
     b = kpi_bundle()
-    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(b))
+    (tmp_path / model.BUNDLE_FILE).write_text(json.dumps(b))
     grid = features.Grid("EPSG:32636", 0, 0, 4, 4, halo=0)
     start = np.array([[1, 1, 2, 2]] * 4, np.uint8)
     cube = features.FeatureCube(
