@@ -22,34 +22,22 @@ placement and these amounts were checked. Results carry the legend in ``metadata
 The values are ranks, not probabilities: the probability level of this model does not carry over to a new period,
 only its ordering of cells does. A percentile of 90 means "more likely to change than 90 % of the training cells".
 
-Bundle format 2 (``<model dir>/lulc_hazard.json``)::
+The bundle (``<model dir>/lulc_hazard.json``, one file, so the model manager downloads it as one)::
 
-    {"format": "dt4lc-lulc-hazard/2", "model_id", "version", "target": "esri" | "kpi", "legend", "columns",
-     "t0_min", "dem", "grid", "domain",                     # as in format 1, below
-     "trend_last": int,                                     # optional: the forecast's trend pair ends by this year
+    {"format": "dt4lc-lulc-hazard/2", "model_id": str, "version": str, "target": "esri" | "kpi",
+     "legend": [the target's class names], "columns": [feature names, in the boosters' order],
+     "t0_min": int,                           # optional, default 2017: earliest origin year it accepts
+     "dem": "glo30_2024_1" | "glo30",         # the Copernicus DEM release the features were built from
+     "grid": {"crs": "EPSG:32636" | "auto", "origin": [x, y]},
+     "domain": {"bbox": [west, south, east, north], "name": str, "short": str},
+     "trend_last": int,                       # optional: the forecast's trend pair ends by this year
      "groups": {"<group>": {"title": str, "from": [classes], "to": [classes] | null}},   # null: any other class
-     "horizons": {"<h>": {"pair": [y0, y1], "from_classes": {...as format 1...},
+     "horizons": {"<h>": {"pair": [y0, y1],
+                          "from_classes": {"<class>": {"to": [class names], "prior_correction": [float per "to"],
+                                                       "booster": <XGBoost JSON model> | null}},
                           "reference_quantiles": {"<group>": [sorted floats]}}},
      "served": {"hazards": {"<group>": h}, "map": h, "amounts_expected": {"<h>": bool}},   # 0: not served
-     "skill": {"<h>": {...}}}                               # optional, copied into the result
-
-Format 1 is one horizon (``interval_years``) whose groups are ``any_change`` and the listed transitions; it serves
-hazards only.
-
-Bundle format 1 (one file, so the model manager downloads it as one)::
-
-    {"format": "dt4lc-lulc-hazard/1", "model_id": str, "version": str, "target": "esri",
-     "legend": [8 Esri class names], "columns": [feature names, in the boosters' order],
-     "interval_years": float, "t0_min": int,   # optional, default 2017: earliest origin year it accepts
-     "dem": "glo30_2024_1" | "glo30",          # optional; a bundle without it was built on dataset v1.0: "glo30"
-     "grid": {"crs": "EPSG:32636" | "auto", "origin": [x, y]},
-     "domain": {"bbox": [west, south, east, north], "name": str},
-     "from_classes": {"<class>": {"to": [class names], "prior_correction": [float per "to"],
-                                  "booster": <XGBoost JSON model> | null}},
-     "transitions": [["<from>", "<to>"], ...],
-     "reference_quantiles": {"any_change": [sorted floats], "<from>-><to>": [sorted floats], ...},
-     "skill": {...}   # optional, copied into the result's metadata
-    }
+     "skill": {"<h>": {...}}}                 # optional, copied into the result
 
 Per from-class, as in training: the booster's class probabilities are multiplied by ``prior_correction`` and
 renormalised; a from-class with one target class has no booster (it always stays); a from-class absent from the
@@ -76,9 +64,7 @@ from . import features, stats
 logger = logging.getLogger(__name__)
 
 BUNDLE_FILE = "lulc_hazard.json"
-FORMAT = "dt4lc-lulc-hazard/1"
-FORMAT_2 = "dt4lc-lulc-hazard/2"
-LEGACY_DEM = "glo30"  # the DEM of a bundle that names none (dataset v1.0)
+FORMAT = "dt4lc-lulc-hazard/2"
 MAX_AREA_KM2 = 400.0  # about 20 x 20 km: 64 embedding bands of 450k cells stay near 120 MB in memory
 INDEX_TYPE = "change_rank"
 ANY = "any_change"
@@ -94,7 +80,7 @@ GROUP_COLOURS = {
     "recultivation": "#2166ac",
     "overgrowth": "#1b7837",
 }
-OTHER_COLOUR = "#4d4d4d"  # a group of a format-1 bundle (a single transition)
+OTHER_COLOUR = "#4d4d4d"  # a group without its own hue
 # Risk levels on the national rank, highest first: (raster value, name, lowest percentile, wording; {region}: the
 # bundle's region, :func:`region_name`). Cells below the last level are left uncoloured, so the start map drawn under
 # them shows through.
@@ -152,7 +138,7 @@ class OutsideDomainError(ValueError):
 
 
 def load_bundle(model_dir: str | Path) -> dict[str, Any]:
-    """The checked bundle of ``model_dir`` in format 2 (a format-1 file is converted; cached per file and mtime)."""
+    """The checked bundle of ``model_dir`` (cached per file and mtime)."""
     path = Path(model_dir) / BUNDLE_FILE
     if not path.is_file():
         raise BundleError(f"No {BUNDLE_FILE} in {model_dir}: the change-hazard model is not installed.")
@@ -161,9 +147,9 @@ def load_bundle(model_dir: str | Path) -> dict[str, Any]:
 
 @lru_cache(maxsize=2)
 def _load_bundle(path: str, mtime_ns: int) -> dict[str, Any]:
-    bundle = json.loads(Path(path).read_text())
+    bundle: dict[str, Any] = json.loads(Path(path).read_text())
     check_bundle(bundle)
-    return as_format_2(bundle)
+    return bundle
 
 
 def source_of(bundle: dict[str, Any]) -> features.LabelSource:
@@ -172,20 +158,6 @@ def source_of(bundle: dict[str, Any]) -> features.LabelSource:
     if source is None:
         raise BundleError(f"Bundle target must be one of {', '.join(features.SOURCES)}, not {bundle.get('target')!r}.")
     return source
-
-
-def _check_common(bundle: dict[str, Any], keys: tuple[str, ...]) -> None:
-    missing = [k for k in keys if k not in bundle]
-    if missing:
-        raise BundleError(f"Bundle lacks {', '.join(missing)}.")
-    source = source_of(bundle)
-    if list(bundle.get("legend", [])) != list(source.classes):
-        raise BundleError(f"Bundle legend must be the {source.key} legend " + ", ".join(source.classes) + ".")
-    try:
-        features.check_columns(bundle["columns"], source)
-        features.check_dem(bundle.get("dem", LEGACY_DEM))
-    except ValueError as e:
-        raise BundleError(str(e)) from e
 
 
 def _check_from_classes(from_classes: dict[str, Any], names: tuple[str, ...], where: str = "") -> None:
@@ -204,33 +176,23 @@ def _check_quantiles(q: Any, key: str) -> None:
 
 
 def check_bundle(bundle: dict[str, Any]) -> None:
-    """BundleError unless ``bundle`` has the shape of format 1 or 2 (module docstring)."""
-    fmt = bundle.get("format")
-    if fmt == FORMAT:
-        _check_common(
-            bundle,
-            (
-                "model_id",
-                "columns",
-                "interval_years",
-                "grid",
-                "domain",
-                "from_classes",
-                "transitions",
-                "reference_quantiles",
-            ),
-        )
-        _check_from_classes(bundle["from_classes"], source_of(bundle).classes)
-        for k in [ANY] + [f"{a}->{b}" for a, b in bundle["transitions"]]:
-            _check_quantiles(bundle["reference_quantiles"].get(k), k)
-        for a, b in bundle["transitions"]:
-            if a not in bundle["from_classes"] or b not in bundle["from_classes"][a]["to"]:
-                raise BundleError(f"Transition {a}->{b} is not one the bundle's models predict.")
-        return
-    if fmt != FORMAT_2:
-        raise BundleError(f"Bundle format {fmt!r}; this runner reads {FORMAT!r} and {FORMAT_2!r}.")
-    _check_common(bundle, ("model_id", "columns", "grid", "domain", "groups", "horizons", "served"))
-    names = source_of(bundle).classes
+    """BundleError unless ``bundle`` has the shape in the module docstring."""
+    if bundle.get("format") != FORMAT:
+        raise BundleError(f"Bundle format {bundle.get('format')!r}; this runner reads {FORMAT!r}.")
+    missing = [
+        k for k in ("model_id", "columns", "dem", "grid", "domain", "groups", "horizons", "served") if k not in bundle
+    ]
+    if missing:
+        raise BundleError(f"Bundle lacks {', '.join(missing)}.")
+    source = source_of(bundle)
+    names = source.classes
+    if list(bundle.get("legend", [])) != list(names):
+        raise BundleError(f"Bundle legend must be the {source.key} legend " + ", ".join(names) + ".")
+    try:
+        features.check_columns(bundle["columns"], source)
+        features.check_dem(bundle["dem"])
+    except ValueError as e:
+        raise BundleError(str(e)) from e
     for g, spec in bundle["groups"].items():
         classes = list(spec.get("from", [])) + list(spec.get("to") or [])
         if not spec.get("from") or any(c not in names for c in classes):
@@ -249,30 +211,6 @@ def check_bundle(bundle: dict[str, Any]) -> None:
     absent = sorted(h for h in needed if str(h) not in bundle["horizons"])
     if absent:
         raise BundleError(f"Served horizons {absent} have no models in the bundle.")
-
-
-def as_format_2(bundle: dict[str, Any]) -> dict[str, Any]:
-    """A checked bundle in format 2; a format-1 bundle becomes one horizon serving its groups' hazards, no map."""
-    if bundle["format"] == FORMAT_2:
-        return bundle
-    h = int(round(bundle["interval_years"]))
-    groups = {ANY: {"title": GROUP_TITLES[ANY], "from": list(bundle["from_classes"]), "to": None}}
-    refs = {ANY: bundle["reference_quantiles"][ANY]}
-    for a, b in bundle["transitions"]:
-        g = f"{a.lower()}_to_{b.lower()}"
-        groups[g] = {"title": f"{a} to {b}", "from": [a], "to": [b]}
-        refs[g] = bundle["reference_quantiles"][f"{a}->{b}"]
-    out = {k: v for k, v in bundle.items() if k not in ("from_classes", "transitions", "reference_quantiles")}
-    out.update(
-        {
-            "format": FORMAT_2,
-            "groups": groups,
-            "horizons": {str(h): {"from_classes": bundle["from_classes"], "reference_quantiles": refs}},
-            "served": {"hazards": dict.fromkeys(groups, h), "map": 0, "amounts_expected": {}},
-            "skill": {str(h): bundle["skill"]} if bundle.get("skill") else {},
-        }
-    )
-    return out
 
 
 # id of a bundle's booster JSON -> (that JSON, its parsed booster). Bundles are cached per file, so the same JSON
@@ -338,15 +276,6 @@ def probabilities(
         full[s[:, 0] == 0, stay] = 1.0
         out[idx] = full
     return out
-
-
-def predict(bundle: dict[str, Any], x: np.ndarray, start: np.ndarray) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Format 1: per cell ``P(change)`` and ``P(from -> to)`` per bundle transition; NaN where no model applies."""
-    p = probabilities(bundle, bundle["from_classes"], x, start)
-    names = source_of(bundle).classes
-    p_change = group_score(p, start, {"from": list(bundle["from_classes"]), "to": None}, names)
-    p_trans = {f"{a}->{b}": group_score(p, start, {"from": [a], "to": [b]}, names) for a, b in bundle["transitions"]}
-    return p_change, p_trans
 
 
 def group_score(
@@ -460,7 +389,7 @@ def _cube(ee: Any, bundle: dict[str, Any], grid: features.Grid, t0: int | None) 
     latest = t0 is None
     year = features.latest_t0(ee, grid, first=t0_min, need_ae=need_ae, source=source) if t0 is None else t0
     return features.build_features(
-        grid, year, bundle["columns"], ee=ee, check_years=not latest, dem=bundle.get("dem", LEGACY_DEM), source=source
+        grid, year, bundle["columns"], ee=ee, check_years=not latest, dem=bundle["dem"], source=source
     )
 
 
@@ -497,7 +426,6 @@ def _skill(bundle: dict[str, Any], h: int, group: str) -> dict[str, Any] | None:
 
 def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[float]) -> dict[str, Any]:
     """Predict hazards on ``cube`` and save their rasters as job artifacts; returns the step result."""
-    bundle = as_format_2(bundle)
     source = source_of(bundle)
     names = source.classes
     region = region_name(bundle["domain"])
@@ -600,7 +528,7 @@ def write_result(bundle: dict[str, Any], cube: features.FeatureCube, bbox: list[
             "legend": list(names),
             "interval_years": h0,
             "forecast_to": cube.t0 + h0,
-            "dem": bundle.get("dem", LEGACY_DEM),
+            "dem": bundle["dem"],
             "values": "percentile of the hazard's probability among the training cells that could make it; "
             "<key>_local: among this area's cells; ranks only",
             "domain": bundle["domain"].get("name"),
@@ -718,7 +646,7 @@ def write_forecast(
             "horizon_years": h,
             "source": source.title,
             "legend": list(names),
-            "dem": bundle.get("dem", LEGACY_DEM),
+            "dem": bundle["dem"],
             "method": "amounts: Markov trend of the latest pair of the same length in a 12 km square around the area; "
             "placement: the model's probabilities, highest first",
             "domain": bundle["domain"].get("name"),

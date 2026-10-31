@@ -100,7 +100,22 @@ def _booster_json(n_classes: int, n_cols: int, seed: int) -> dict[str, Any]:
 
 def _bundle(columns: list[str]) -> dict[str, Any]:
     n = len(columns)
-    quantiles = list(np.linspace(0.0, 1.0, 101))
+    q = list(np.linspace(0.0, 1.0, 101))
+    groups = {
+        "any_change": {"title": "Any land-cover change", "from": ["Trees", "Crops", "Water"], "to": None},
+        "forest_loss": {"title": "Forest loss", "from": ["Trees"], "to": ["Crops", "Rangeland"]},
+        "urban_expansion": {"title": "Urban expansion", "from": ["Crops", "Rangeland"], "to": ["Built"]},
+    }
+    from_classes = {
+        "Trees": {
+            "to": ["Trees", "Crops", "Rangeland"],
+            "prior_correction": [1.0, 0.5, 2.0],
+            "booster": _booster_json(3, n, 1),
+        },
+        "Crops": {"to": ["Crops", "Built"], "prior_correction": [1.0, 1.0], "booster": _booster_json(2, n, 2)},
+        "Water": {"to": ["Water"], "prior_correction": [1.0], "booster": None},
+    }
+    hz = {"from_classes": from_classes, "reference_quantiles": dict.fromkeys(groups, q)}
     return {
         "format": inference.FORMAT,
         "model_id": "test-hazard",
@@ -108,22 +123,18 @@ def _bundle(columns: list[str]) -> dict[str, Any]:
         "target": "esri",
         "legend": list(features.ESRI_CLASSES),
         "columns": columns,
-        "interval_years": 4,
         "t0_min": 2017,
         "dem": "glo30_2024_1",
         "grid": {"crs": "EPSG:32636", "origin": list(KPI_ORIGIN)},
         "domain": {"bbox": [22.0, 44.0, 41.0, 53.0], "name": "Ukraine"},
-        "from_classes": {
-            "Trees": {
-                "to": ["Trees", "Crops", "Rangeland"],
-                "prior_correction": [1.0, 0.5, 2.0],
-                "booster": _booster_json(3, n, 1),
-            },
-            "Crops": {"to": ["Crops", "Built"], "prior_correction": [1.0, 1.0], "booster": _booster_json(2, n, 2)},
-            "Water": {"to": ["Water"], "prior_correction": [1.0], "booster": None},
+        "groups": groups,
+        "horizons": {"2": {"pair": [2023, 2025], **hz}, "3": {"pair": [2022, 2025], **hz}},
+        "served": {
+            "hazards": {"any_change": 3, "forest_loss": 2, "urban_expansion": 0},
+            "map": 3,
+            "amounts_expected": {"2": True, "3": False},
         },
-        "transitions": [["Trees", "Crops"], ["Crops", "Built"]],
-        "reference_quantiles": {"any_change": quantiles, "Trees->Crops": quantiles, "Crops->Built": quantiles},
+        "skill": {"3": {"hazards": {"any_change": {"auc": 0.8}}}},
     }
 
 
@@ -145,34 +156,40 @@ COLUMNS = ["elevation_m", "slope_deg", "esri_nbr3_Trees"]
 def test_check_bundle_accepts_the_documented_shape_and_names_what_is_wrong() -> None:
     bundle = _bundle(COLUMNS)
     inference.check_bundle(bundle)
-    bad = {**bundle, "transitions": [["Trees", "Built"]]}
-    with pytest.raises(inference.BundleError, match="Trees->Built"):
+    bad = {**bundle, "groups": {**bundle["groups"], "ice_loss": {"title": "Ice loss", "from": ["Ice"], "to": None}}}
+    with pytest.raises(inference.BundleError, match="ice_loss"):
         inference.check_bundle(bad)
+    with pytest.raises(inference.BundleError, match="this runner reads"):
+        inference.check_bundle({**bundle, "format": "dt4lc-lulc-hazard/1"})
     bad = {**bundle, "columns": ["elevation_m", "osm_d_major"]}
     with pytest.raises(inference.BundleError, match="osm_d_major"):
         inference.check_bundle(bad)
 
 
-def test_predict_applies_the_prior_correction_and_leaves_unmodelled_classes_unranked() -> None:
+def test_probabilities_apply_the_prior_correction_and_leave_unmodelled_classes_unranked() -> None:
     xgb = pytest.importorskip("xgboost")
     bundle = _bundle(COLUMNS)
+    from_classes = bundle["horizons"]["3"]["from_classes"]
     cube = _cube(COLUMNS)
     x, start = cube.matrix(COLUMNS), cube.start_class.ravel()
-    p_change, p_trans = inference.predict(bundle, x, start)
+    p_all = inference.probabilities(bundle, from_classes, x, start)
+    p_change = inference.group_score(p_all, start, bundle["groups"]["any_change"])
+    p_trees_crops = inference.group_score(p_all, start, {"from": ["Trees"], "to": ["Crops"]})
+    p_crops_built = inference.group_score(p_all, start, {"from": ["Crops"], "to": ["Built"]})
 
     trees = np.flatnonzero(start == features.ESRI_CLASSES.index("Trees") + 1)
     booster = xgb.Booster()
-    booster.load_model(bytearray(json.dumps(bundle["from_classes"]["Trees"]["booster"]), "utf-8"))
+    booster.load_model(bytearray(json.dumps(from_classes["Trees"]["booster"]), "utf-8"))
     raw = booster.predict(xgb.DMatrix(x[trees])) * np.array([1.0, 0.5, 2.0])
     p = raw / raw.sum(1, keepdims=True)
     np.testing.assert_allclose(p_change[trees], 1 - p[:, 0], rtol=1e-5)
-    np.testing.assert_allclose(p_trans["Trees->Crops"][trees], p[:, 1], rtol=1e-5)
+    np.testing.assert_allclose(p_trees_crops[trees], p[:, 1], rtol=1e-5)
 
     water = start == features.ESRI_CLASSES.index("Water") + 1
     assert np.all(p_change[water] == 0.0)  # one target class: always stays
     built = start == features.ESRI_CLASSES.index("Built") + 1
     assert np.all(np.isnan(p_change[built]))  # no model for the class
-    assert np.all(np.isnan(p_trans["Crops->Built"][trees]))  # outside the from-class
+    assert np.all(np.isnan(p_crops_built[trees]))  # outside the from-class
 
 
 def test_percentile_is_mid_rank_against_the_reference() -> None:
@@ -193,7 +210,7 @@ def test_write_result_saves_styled_rasters_and_no_arrays(tmp_path: Path) -> None
         result = inference.write_result(bundle, _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
 
     assert result["index_type"] == "change_rank"
-    ranks = {"change_rank", "rank_trees_to_crops", "rank_crops_to_built"}
+    ranks = {"change_rank", "rank_forest_loss"}  # urban expansion is not served
     assert set(result["rasters"]) == ranks | {f"{k}_{v}" for k in ranks for v in ("local", "level")} | {"start_class"}
     assert "change_rank_map_bare" in result["visualizations"]
     json.dumps(result)  # references and numbers only
@@ -251,12 +268,11 @@ def test_missing_bundle_is_a_clear_error(tmp_path: Path) -> None:
         inference.load_bundle(tmp_path)
 
 
-def test_bundle_dem_defaults_to_the_v1_release_and_unknown_ones_are_refused() -> None:
+def test_bundle_names_a_known_dem() -> None:
     pytest.importorskip("xgboost")
     bundle = _bundle(COLUMNS)
-    del bundle["dem"]
-    inference.check_bundle(bundle)  # a bundle from dataset v1.0 names no DEM
-    assert inference.LEGACY_DEM == "glo30" and features.DEM_DEFAULT == "glo30_2024_1"
+    with pytest.raises(inference.BundleError, match="lacks dem"):
+        inference.check_bundle({k: v for k, v in bundle.items() if k != "dem"})
     with pytest.raises(inference.BundleError, match="Unknown DEM"):
         inference.check_bundle({**bundle, "dem": "srtm"})
 
@@ -357,45 +373,12 @@ def test_features_match_the_training_cube(window: str, t0: int) -> None:
         assert np.nanmax(np.abs(a - b)) <= tol, c
 
 
-# ----------------------------------------------------------------- format 2: hazard groups, horizons, forecast
+# ----------------------------------------------------------------- hazard groups, horizons, forecast
 
 
-def _bundle_2(columns: list[str]) -> dict[str, Any]:
-    b1 = _bundle(columns)
-    q = list(np.linspace(0.0, 1.0, 101))
-    groups = {
-        "any_change": {"title": "Any land-cover change", "from": ["Trees", "Crops", "Water"], "to": None},
-        "forest_loss": {"title": "Forest loss", "from": ["Trees"], "to": ["Crops", "Rangeland"]},
-        "urban_expansion": {"title": "Urban expansion", "from": ["Crops", "Rangeland"], "to": ["Built"]},
-    }
-    hz = {"from_classes": b1["from_classes"], "reference_quantiles": dict.fromkeys(groups, q)}
-    return {
-        **{
-            k: b1[k] for k in ("model_id", "version", "target", "legend", "columns", "t0_min", "dem", "grid", "domain")
-        },
-        "format": inference.FORMAT_2,
-        "groups": groups,
-        "horizons": {"2": {"pair": [2023, 2025], **hz}, "3": {"pair": [2022, 2025], **hz}},
-        "served": {
-            "hazards": {"any_change": 3, "forest_loss": 2, "urban_expansion": 0},
-            "map": 3,
-            "amounts_expected": {"2": True, "3": False},
-        },
-        "skill": {"3": {"hazards": {"any_change": {"auc": 0.8}}}},
-    }
-
-
-def test_format_1_converts_to_one_horizon_serving_hazards_only() -> None:
+def test_check_bundle_refuses_a_served_horizon_without_models() -> None:
     pytest.importorskip("xgboost")
-    b2 = inference.as_format_2(_bundle(COLUMNS))
-    inference.check_bundle(b2)
-    assert set(b2["groups"]) == {"any_change", "trees_to_crops", "crops_to_built"}
-    assert b2["served"] == {"hazards": dict.fromkeys(b2["groups"], 4), "map": 0, "amounts_expected": {}}
-
-
-def test_check_bundle_2_refuses_a_served_horizon_without_models() -> None:
-    pytest.importorskip("xgboost")
-    b = _bundle_2(COLUMNS)
+    b = _bundle(COLUMNS)
     inference.check_bundle(b)
     # Quantiles are read at a group's served horizon only, so a shorter horizon may leave them out.
     h2 = b["horizons"]["2"]
@@ -410,7 +393,7 @@ def test_check_bundle_2_refuses_a_served_horizon_without_models() -> None:
 def test_hazards_take_each_group_at_its_own_horizon_and_skip_unserved_groups(tmp_path: Path) -> None:
     pytest.importorskip("xgboost")
     with artifact_files.step_outputs(tmp_path, "1_ChangeHazardMap"):
-        result = inference.write_result(_bundle_2(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
+        result = inference.write_result(_bundle(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
     hazards = {h["group"]: h for h in result["statistics"]["hazards"]}
     assert set(hazards) == {"any_change", "forest_loss"}  # urban expansion is not served
     assert hazards["any_change"]["year"] == 2024 and hazards["forest_loss"]["year"] == 2023
@@ -441,7 +424,7 @@ def test_trend_grid_is_a_12_km_square_on_the_area_lattice_and_centred() -> None:
 
 def test_forecast_follows_the_trend_amounts_and_words_them_by_the_bundle(tmp_path: Path) -> None:
     pytest.importorskip("xgboost")
-    bundle = _bundle_2(COLUMNS)
+    bundle = _bundle(COLUMNS)
     cube = _cube(COLUMNS)
     crops, built = features.ESRI_CLASSES.index("Crops") + 1, features.ESRI_CLASSES.index("Built") + 1
     a = np.full((10, 10), crops, np.uint8)
@@ -468,11 +451,13 @@ def test_forecast_follows_the_trend_amounts_and_words_them_by_the_bundle(tmp_pat
 
 def test_forecast_is_refused_beyond_the_checked_horizon(tmp_path: Path) -> None:
     pytest.importorskip("xgboost")
-    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(_bundle_2(COLUMNS)))
+    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(_bundle(COLUMNS)))
     area = _footprint(tmp_path, 300000.0, 5600000.0, 3000.0)
     with pytest.raises(ValueError, match="up to 3 years"):
         inference.run_forecast(area, str(tmp_path), horizon=4)
-    _write_bundle(tmp_path)  # format 1: no map
+    no_map = _bundle(COLUMNS)
+    no_map["served"]["map"] = 0
+    (tmp_path / inference.BUNDLE_FILE).write_text(json.dumps(no_map))
     with pytest.raises(inference.BundleError, match="hazards only"):
         inference.run_forecast(area, str(tmp_path))
 
@@ -554,7 +539,7 @@ def test_risk_levels_shade_each_hazards_hue_and_count_their_area(tmp_path: Path)
     assert inference.risk_levels(np.array([10.0, 55, 80, 95, np.nan])).tolist()[1:4] == [1.0, 2.0, 3.0]
     assert inference.level_colours("#b2182b") == {3: "#b2182b", 2: "#d17480", 1: "#e8babf"}
     with artifact_files.step_outputs(tmp_path, "1_ChangeHazardMap"):
-        result = inference.write_result(_bundle_2(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
+        result = inference.write_result(_bundle(COLUMNS), _cube(COLUMNS), [30.0, 50.0, 30.1, 50.1])
     forest = next(h for h in result["statistics"]["hazards"] if h["group"] == "forest_loss")
     assert (
         forest["colour"] == inference.GROUP_COLOURS["forest_loss"]
@@ -589,7 +574,7 @@ def kpi_bundle() -> dict:
     cols = list(features.KPI.nbr_columns)[:2]
     refs = list(np.linspace(0, 1, 11))
     return {
-        "format": inference.FORMAT_2,
+        "format": inference.FORMAT,
         "model_id": "kpi-test",
         "version": "t",
         "target": "kpi",
