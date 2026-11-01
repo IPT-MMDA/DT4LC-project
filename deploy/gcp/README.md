@@ -4,7 +4,7 @@ One Compute Engine VM runs the demo stack of [docs/DEPLOY_DEMO.md](../../docs/DE
 
 | file | where it runs | what it does |
 |---|---|---|
-| `create-vm.sh` | your machine | enables the APIs, reserves a static address, opens 80 and 443 (SSH through IAP only), creates the Earth Engine service account and its key, creates the VM |
+| `terraform/` | your machine | enables the APIs, reserves a static address, opens 80 and 443 (SSH through IAP only), creates the Earth Engine service account, the VM, and optionally a Cloud DNS zone with the A records |
 | `startup.sh` | the VM, first boot | installs Docker Engine with Compose v2 and Caddy, clones the repository at the requested tag, writes the Caddyfile and a `.env` with every non-secret value |
 | `finish.sh` | the VM, after you complete `.env` | validates the compose configuration, builds and starts the stack, runs the section-3 checks |
 | `Caddyfile` | the VM | the TLS proxy for the domain, with `www` redirected |
@@ -14,13 +14,24 @@ Sizing: `e2-standard-4` (4 vCPU, 16 GB) runs the models on CPU in a few minutes;
 ## Steps
 
 1. **Sign in and pick the project.** `gcloud auth login`, then note the project id (not the number) and make sure billing is on for it.
-2. **Create the host:** `PROJECT=<project id> ./deploy/gcp/create-vm.sh`. It prints the static address and the path of the Earth Engine key. Re-running is safe. `REF=dev` before the release is tagged; the default is `v0.6.0`.
-3. **DNS, at the registrar:** two A records, `@` and `www`, to the static address. Caddy fetches the certificate as soon as the name resolves.
-4. **Earth Engine:** register the project for noncommercial use at <https://code.earthengine.google.com/register>. The service account is authorised through the project.
+2. **Create the host with Terraform** (no secret enters the configuration or the state):
+
+   ```sh
+   cd deploy/gcp/terraform
+   cp terraform.tfvars.example terraform.tfvars   # set project; ref = dev until the release is tagged
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+   The outputs give the static address, the zone's nameservers, the service account and the exact `gcloud` commands for the next steps. Re-running `apply` is safe; `terraform destroy` removes everything except the APIs.
+3. **DNS.** With `manage_dns = true` (the default) Terraform created a Cloud DNS zone: at the registrar, replace the nameservers with the four from the `name_servers` output and wait for the change to spread (minutes to a few hours). With `manage_dns = false`, create two A records at the registrar instead, `@` and `www`, to the static address. Caddy fetches the certificate as soon as the name resolves to the host.
+4. **Earth Engine:** register the project for noncommercial use at <https://code.earthengine.google.com/register>, then create the service account's key with the `create_earth_engine_key` output command. The key is written to `~/.dt4lc/`, outside git.
 5. **The GitHub OAuth app:** runbook section 5, with the callback `https://<domain>/v1/auth/github/callback`.
 6. **On the VM:** copy the key, complete `.env`, start.
 
    ```sh
+   # the copy_key and ssh outputs give these two with your values filled in
    gcloud compute scp --zone <zone> --tunnel-through-iap ~/.dt4lc/gee-key-<project>.json dt4lc-demo:gee-key.json
    gcloud compute ssh dt4lc-demo --zone <zone> --tunnel-through-iap
    sudo mv ~/gee-key.json /opt/dt4lc/resources/.cache/gee-key.json && sudo chmod 600 /opt/dt4lc/resources/.cache/gee-key.json
