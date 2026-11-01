@@ -1,0 +1,420 @@
+{
+ "id": "b3c5adb8",
+ "status": "completed",
+ "prompt": "Classify land cover on the flooded fields",
+ "plan": {
+  "flow": "Classify land cover on the flooded fields",
+  "steps": [
+   {
+    "uses": "input/file",
+    "binds": {
+     "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+    },
+    "config": {}
+   },
+   {
+    "uses": "algorithms/lulc-classifier",
+    "binds": {},
+    "config": {}
+   },
+   {
+    "uses": "post-processing/agent-analysis",
+    "binds": {},
+    "config": {}
+   }
+  ],
+  "outputs": [
+   "publish: chat"
+  ],
+  "composed": false
+ },
+ "result": {
+  "execution": {
+   "artifacts": {
+    "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+    "LULCMap": {
+     "class_statistics": {
+      "Water": {
+       "class_id": 1,
+       "pixels": 226963,
+       "percentage": 38.48,
+       "id": 1,
+       "name": "Water",
+       "colour": "#0077be",
+       "percent": 38.48,
+       "area_km2": 204.267
+      },
+      "Snow/Ice": {
+       "class_id": 2,
+       "pixels": 0,
+       "percentage": 0,
+       "id": 2,
+       "name": "Snow/Ice",
+       "colour": "#ffffff",
+       "percent": 0,
+       "area_km2": 0
+      },
+      "Bare Soil": {
+       "class_id": 3,
+       "pixels": 4822,
+       "percentage": 0.82,
+       "id": 3,
+       "name": "Bare Soil",
+       "colour": "#c2b280",
+       "percent": 0.82,
+       "area_km2": 4.34
+      },
+      "Sparse Vegetation": {
+       "class_id": 4,
+       "pixels": 72847,
+       "percentage": 12.35,
+       "id": 4,
+       "name": "Sparse Vegetation",
+       "colour": "#d4e157",
+       "percent": 12.35,
+       "area_km2": 65.562
+      },
+      "Cropland/Grassland": {
+       "class_id": 5,
+       "pixels": 135729,
+       "percentage": 23.01,
+       "id": 5,
+       "name": "Cropland/Grassland",
+       "colour": "#8bc34a",
+       "percent": 23.01,
+       "area_km2": 122.156
+      },
+      "Dense Vegetation": {
+       "class_id": 6,
+       "pixels": 149463,
+       "percentage": 25.34,
+       "id": 6,
+       "name": "Dense Vegetation",
+       "colour": "#2e7d32",
+       "percent": 25.34,
+       "area_km2": 134.517
+      }
+     },
+     "index_statistics": {
+      "ndvi": {
+       "min": -16.241378784179688,
+       "max": 7.508474349975586,
+       "mean": 0.16462105512619019,
+       "std": 0.39733028411865234
+      },
+      "ndwi": {
+       "min": -9.039999961853027,
+       "max": 19.41666603088379,
+       "mean": -0.15730246901512146,
+       "std": 0.40807151794433594
+      },
+      "ndsi": {
+       "min": -6.340425491333008,
+       "max": 3.5185184478759766,
+       "mean": -0.0049216607585549355,
+       "std": 0.4637485444545746
+      }
+     },
+     "statistics": {
+      "total_pixels": 589824,
+      "valid_pixels": 589824,
+      "nodata_pixels": 0,
+      "dominant_class": "Water"
+     },
+     "metadata": {
+      "crs": "EPSG:32636",
+      "transform": [
+       30,
+       0,
+       453240,
+       0,
+       -30,
+       5167860,
+       0,
+       0,
+       1
+      ],
+      "bounds": [
+       453240,
+       5144820,
+       476280,
+       5167860
+      ],
+      "width": 768,
+      "height": 768,
+      "band_count": 5,
+      "has_swir": true
+     },
+     "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+     "rasters": {
+      "classification": {
+       "kind": "geotiff",
+       "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_classification.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_classification.tif",
+       "stats": {
+        "min": 1,
+        "max": 6,
+        "mean": 3.5743543836805554,
+        "valid_pixels": 589824
+       }
+      }
+     },
+     "visualizations": {
+      "classification_map": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_classification_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_classification_map.png",
+       "stats": {}
+      },
+      "distribution_chart": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_distribution_chart.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_distribution_chart.png",
+       "stats": {}
+      },
+      "classification_map_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_classification_map_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_classification_map_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "class",
+         "classes": {
+          "1": "#0077be",
+          "2": "#ffffff",
+          "3": "#c2b280",
+          "4": "#d4e157",
+          "5": "#8bc34a",
+          "6": "#2e7d32"
+         }
+        }
+       }
+      }
+     }
+    },
+    "agent_result": {
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
+     "inputs": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+      "LULCMap": {
+       "class_statistics": {
+        "Water": {
+         "class_id": 1,
+         "pixels": 226963,
+         "percentage": 38.48,
+         "id": 1,
+         "name": "Water",
+         "colour": "#0077be",
+         "percent": 38.48,
+         "area_km2": 204.267
+        },
+        "Snow/Ice": {
+         "class_id": 2,
+         "pixels": 0,
+         "percentage": 0,
+         "id": 2,
+         "name": "Snow/Ice",
+         "colour": "#ffffff",
+         "percent": 0,
+         "area_km2": 0
+        },
+        "Bare Soil": {
+         "class_id": 3,
+         "pixels": 4822,
+         "percentage": 0.82,
+         "id": 3,
+         "name": "Bare Soil",
+         "colour": "#c2b280",
+         "percent": 0.82,
+         "area_km2": 4.34
+        },
+        "Sparse Vegetation": {
+         "class_id": 4,
+         "pixels": 72847,
+         "percentage": 12.35,
+         "id": 4,
+         "name": "Sparse Vegetation",
+         "colour": "#d4e157",
+         "percent": 12.35,
+         "area_km2": 65.562
+        },
+        "Cropland/Grassland": {
+         "class_id": 5,
+         "pixels": 135729,
+         "percentage": 23.01,
+         "id": 5,
+         "name": "Cropland/Grassland",
+         "colour": "#8bc34a",
+         "percent": 23.01,
+         "area_km2": 122.156
+        },
+        "Dense Vegetation": {
+         "class_id": 6,
+         "pixels": 149463,
+         "percentage": 25.34,
+         "id": 6,
+         "name": "Dense Vegetation",
+         "colour": "#2e7d32",
+         "percent": 25.34,
+         "area_km2": 134.517
+        }
+       },
+       "index_statistics": {
+        "ndvi": {
+         "min": -16.241378784179688,
+         "max": 7.508474349975586,
+         "mean": 0.16462105512619019,
+         "std": 0.39733028411865234
+        },
+        "ndwi": {
+         "min": -9.039999961853027,
+         "max": 19.41666603088379,
+         "mean": -0.15730246901512146,
+         "std": 0.40807151794433594
+        },
+        "ndsi": {
+         "min": -6.340425491333008,
+         "max": 3.5185184478759766,
+         "mean": -0.0049216607585549355,
+         "std": 0.4637485444545746
+        }
+       },
+       "statistics": {
+        "total_pixels": 589824,
+        "valid_pixels": 589824,
+        "nodata_pixels": 0,
+        "dominant_class": "Water"
+       },
+       "metadata": {
+        "crs": "EPSG:32636",
+        "transform": [
+         30,
+         0,
+         453240,
+         0,
+         -30,
+         5167860,
+         0,
+         0,
+         1
+        ],
+        "bounds": [
+         453240,
+         5144820,
+         476280,
+         5167860
+        ],
+        "width": 768,
+        "height": 768,
+        "band_count": 5,
+        "has_swir": true
+       },
+       "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+       "rasters": {
+        "classification": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_classification.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_classification.tif",
+         "stats": {
+          "min": 1,
+          "max": 6,
+          "mean": 3.5743543836805554,
+          "valid_pixels": 589824
+         }
+        }
+       },
+       "visualizations": {
+        "classification_map": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_classification_map.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_classification_map.png",
+         "stats": {}
+        },
+        "distribution_chart": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_distribution_chart.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_distribution_chart.png",
+         "stats": {}
+        },
+        "classification_map_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/b3c5adb8/1_LULCMap_classification_map_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fb3c5adb8%2F1_LULCMap_classification_map_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "class",
+           "classes": {
+            "1": "#0077be",
+            "2": "#ffffff",
+            "3": "#c2b280",
+            "4": "#d4e157",
+            "5": "#8bc34a",
+            "6": "#2e7d32"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "followups": [
+   "Map vegetation health with NDVI",
+   "Map open water with NDWI",
+   "Give me statistics for every band"
+  ]
+ },
+ "events": [
+  {
+   "seq": 3,
+   "type": "planning",
+   "data": {
+    "phase": "ready",
+    "steps": [
+     {
+      "index": 1,
+      "id": "input/file",
+      "name": "Read hlsl_20230609.tif",
+      "kind": "input"
+     },
+     {
+      "index": 2,
+      "id": "algorithms/lulc-classifier",
+      "name": "Land Use / Land Cover (LULC) Classification",
+      "kind": "algorithm"
+     },
+     {
+      "index": 3,
+      "id": "post-processing/agent-analysis",
+      "name": "Interpretation",
+      "kind": "postprocess"
+     }
+    ],
+    "composed": false,
+    "t": 1792749817.583
+   }
+  },
+  {
+   "seq": 10,
+   "type": "done",
+   "data": {
+    "elapsed_s": 2.8,
+    "summary": "3 steps · 3 s · Land Use / Land Cover (LULC) Classification",
+    "followups": [
+     "Map vegetation health with NDVI",
+     "Map open water with NDWI",
+     "Give me statistics for every band"
+    ],
+    "t": 1792749820.241
+   }
+  }
+ ],
+ "proposal": null,
+ "region": null
+}

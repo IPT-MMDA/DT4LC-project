@@ -25,12 +25,12 @@ from dta.dti.coe import context_agent
 from dta.dti.coe.context_agent import analyze
 from dta.dti.coe.llm import BaseLLMProvider, LLMResponse, LLMRouter, get_llm_router, reset_llm_router
 from dta.dti.coe.llm.ollama import OllamaProvider
-from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate
+from dta.dti.coe.orchestrator import _inject_file_bindings, orchestrate, single_image_attachment
 from dta.dti.coe.plan_validator import validate
 from dta.dti.coe.planner import plan
 from dta.dti.coe.triggers import get_trigger_index
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding
+from dta.dti.schemas import Attachment, ChatRequest, ContextUnderstanding, RasterMetadata
 from server.jobs import JobQueue, JobStatus, SQLiteJobStore
 
 BEFORE = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
@@ -133,6 +133,113 @@ def test_outage_orchestrate_plans(prompt: str, files: list[str], steps: list[str
         assert binds["IndexType"] == index_type
     else:
         assert binds["RasterPath"] == BEFORE
+
+
+def _dated(*paths: str) -> list[Attachment]:
+    """Attachments with the upload metadata's date, as the UI sends them."""
+    dates = {BEFORE: "2023-06-01", AFTER: "2023-06-09"}
+    return [
+        Attachment(
+            id="sample",
+            filename=Path(p).name,
+            mime_type="image/tiff",
+            path=p,
+            metadata=RasterMetadata(date=dates[p]),
+        )
+        for p in paths
+    ]
+
+
+@pytest.mark.parametrize(
+    ("prompt", "item_id"),
+    [
+        ("Calculate EVI", "algorithms/evi"),
+        ("Calculate NDVI", "algorithms/ndvi"),
+        ("Classify land cover in this image", "algorithms/lulc-classifier"),
+        ("Give me statistics for every band", "algorithms/statistics"),
+    ],
+)
+@pytest.mark.parametrize("order", [(BEFORE, AFTER), (AFTER, BEFORE)], ids=["0601-0609", "0609-0601"])
+def test_single_image_prompt_on_two_files_reads_the_later_one(
+    prompt: str, item_id: str, order: tuple[str, str]
+) -> None:
+    """D1: two attachments planned every prompt as change detection; only a change request compares them."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(*order)))
+
+    assert out["ok"], out.get("error")
+    steps = out["plan"]["steps"]
+    assert [s["uses"] for s in steps] == ["input/file", item_id, "post-processing/agent-analysis"]
+    assert steps[0]["binds"] == {"RasterPath": AFTER}  # by metadata.date, not by position
+
+
+@pytest.mark.parametrize(
+    ("prompt", "index_type"),
+    [
+        ("Compare water before and after the dam breach", "ndwi"),
+        ("What changed between the dates?", "ndvi"),
+        ("Where was vegetation lost?", "ndvi"),
+        ("Show the difference in snow cover", "ndsi"),
+        ("Map water gained between the two dates", "ndwi"),
+        ("Compare NDWI instead of NDVI", "ndwi"),
+    ],
+)
+def test_change_prompt_on_two_files_plans_change_detection(prompt: str, index_type: str) -> None:
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(BEFORE, AFTER)))
+
+    assert out["ok"], out.get("error")
+    steps = out["plan"]["steps"]
+    assert [s["uses"] for s in steps] == [
+        "input/file-before",
+        "input/file-after",
+        "algorithms/change-detection",
+        "post-processing/agent-analysis",
+    ]
+    binds = {k: v for s in steps for k, v in s["binds"].items()}
+    assert binds == {"RasterPathBefore": BEFORE, "RasterPathAfter": AFTER, "IndexType": index_type}
+
+
+@pytest.mark.parametrize(
+    "prompt", ["Calculate NDVI for 1 June", "Calculate NDVI for June 1st", "Calculate NDVI on 2023-06-01"]
+)
+@pytest.mark.parametrize("order", [(BEFORE, AFTER), (AFTER, BEFORE)], ids=["0601-0609", "0609-0601"])
+def test_single_image_prompt_naming_a_date_reads_that_file(prompt: str, order: tuple[str, str]) -> None:
+    """A date in the prompt that one attachment's metadata.date matches picks that file, not the later one."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(*order)))
+
+    assert out["ok"], out.get("error")
+    assert out["plan"]["steps"][0]["binds"] == {"RasterPath": BEFORE}
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    ["Compare NDVI between 1 and 9 June", "Compare NDVI between June 9 and June 1", "NDVI change 06-01 to 06-09"],
+)
+def test_change_prompt_naming_dates_keeps_before_and_after_by_date(prompt: str) -> None:
+    """Named dates bind the earlier file as before, whatever the attachment order and the words' order."""
+    out = orchestrate(ChatRequest(prompt=prompt, attachments=_dated(AFTER, BEFORE)))
+
+    assert out["ok"], out.get("error")
+    binds = {k: v for s in out["plan"]["steps"] for k, v in s["binds"].items()}
+    assert (binds["RasterPathBefore"], binds["RasterPathAfter"]) == (BEFORE, AFTER)
+
+
+def test_single_image_attachment_with_an_unmatched_date_keeps_the_rule() -> None:
+    files = _dated(BEFORE, AFTER)
+
+    assert single_image_attachment(files, "Calculate NDVI for 5 June").path == AFTER  # no file is dated 5 June
+    assert single_image_attachment(files, "NDVI for 1 and 9 June").path == AFTER  # two match: not one file
+    assert single_image_attachment(files, "Calculate NDVI on the 1st").path == BEFORE
+    assert single_image_attachment(_attachments(BEFORE, AFTER), "NDVI for 1 June").path == AFTER  # undated
+
+
+def test_single_image_attachment_without_dates_is_the_last() -> None:
+    files = _attachments(AFTER, BEFORE)
+
+    assert single_image_attachment(files) is files[-1]
+    assert single_image_attachment(_dated(AFTER, BEFORE)).path == AFTER
+    # Only dated files compete: an undated one is never "later".
+    mixed = [_attachments(BEFORE)[0], _dated(AFTER)[0], _attachments(BEFORE)[0]]
+    assert single_image_attachment(mixed) is mixed[1]
 
 
 # --- U2: a reply that fails the structural check -----------------------------
@@ -280,8 +387,21 @@ def _p1_cases() -> Iterator[Any]:
         if item.triggers is None:
             continue
         files = [BEFORE, AFTER] if "RasterPathBefore" in item.inputs else [BEFORE]
+        # Band math needs a formula, which only the LLM planner or the named-index table writes, as a
+        # proposal: the template planner never picks it, so its phrases plan no analysis step.
+        marks = (
+            [
+                pytest.mark.xfail(
+                    raises=AssertionError,
+                    strict=True,
+                    reason="band math is composed only; the template planner never picks it (no formula)",
+                )
+            ]
+            if item.id == "algorithms/band-math"
+            else []
+        )
         for phrase in dict.fromkeys(item.triggers.keywords + item.triggers.action_phrases):
-            yield pytest.param(phrase, files, id=f"{item.id}:{phrase}")
+            yield pytest.param(phrase, files, id=f"{item.id}:{phrase}", marks=marks)
 
 
 @pytest.mark.parametrize(("phrase", "files"), list(_p1_cases()))

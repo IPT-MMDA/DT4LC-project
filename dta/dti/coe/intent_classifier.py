@@ -7,7 +7,13 @@ no change to this file.
 
 Routing logic:
 1. Capability question framing → CONVERSATION with per-item capability response.
-2. Attachments + action keyword → PIPELINE (fast path, no LLM call).
+1b. A conversational rule (``coe/conversation.py``: greeting, thanks, a deictic "here",
+    an explanatory question about a method or result, even with a file or region, or another
+    question without an analysis verb, file or region) → CONVERSATION
+    (``rule`` names it; no ``response`` for a question, which ``POST /v1/chat`` answers).
+2. Attachments (or a region from the map, ``metadata["region"]``) + action keyword,
+   or a named index to compose (NDMI, NBR, ...; ``coe/named_indices.py``) → PIPELINE
+   (fast path, no LLM call).
 3. Imperative action without attachments → CONVERSATION asking for the file.
 4. Clear action phrase (with or without attachments) → PIPELINE.
 5. Otherwise fall through to the LLM (system prompt also rendered from the
@@ -22,11 +28,14 @@ import logging
 import re
 from typing import Any
 
+from dta.dti.coe.conversation import conversational_rule, rule_reply
 from dta.dti.coe.llm import LLMMessage, get_llm_router
+from dta.dti.coe.named_indices import match_named_index
 from dta.dti.coe.triggers import (
     GENERIC_ACTION_VERBS,
     get_trigger_index,
     is_capability_question,
+    looks_like_explanation_question,
 )
 from dta.dti.schemas import ChatRequest
 
@@ -69,8 +78,21 @@ def classify_intent(req: ChatRequest) -> dict[str, Any]:
             "response": idx.render_capability_response(req.prompt),
         }
 
-    # 2. Attachments + action keyword → PIPELINE (no LLM needed).
-    if req.attachments and idx.has_keyword(req.prompt):
+    has_input = bool(req.attachments) or bool(req.metadata.get("region"))  # a region from the map is fetched
+
+    # 1b. Greeting, thanks, "here", or a question about methods → CONVERSATION, before any LLM call.
+    rule = conversational_rule(req.prompt, has_input)
+    if rule is not None:
+        logger.info(f"Quick classification: CONVERSATION ({rule})")
+        result: dict[str, Any] = {"intent": IntentType.CONVERSATION, "reason": f"Conversational: {rule}", "rule": rule}
+        reply = rule_reply(rule, len(req.attachments))
+        if reply is not None:
+            result["response"] = reply
+        return result
+
+    # 2. Attachments + action keyword, or a named index to compose (NDMI, NBR, ...) → PIPELINE (no LLM needed).
+    named = match_named_index(req.prompt) is not None and not looks_like_explanation_question(req.prompt)
+    if has_input and (idx.has_keyword(req.prompt) or named):
         logger.info("Quick classification: PIPELINE (has attachments + action keywords)")
         return {"intent": IntentType.PIPELINE, "reason": "Has attachments and action keywords"}
 
@@ -81,6 +103,7 @@ def classify_intent(req: ChatRequest) -> dict[str, Any]:
             "intent": IntentType.CONVERSATION,
             "reason": "Action request without required file",
             "response": idx.render_missing_file_response(req.prompt),
+            "rule": "missing_input",
         }
 
     # 4. Clear action request (with prior context, perhaps) → PIPELINE.
@@ -143,7 +166,7 @@ def _is_action_without_file(req: ChatRequest) -> bool:
     """True if the prompt is an imperative action request and no file is attached."""
     if req.attachments:
         return False
-    if req.metadata and req.metadata.get("previous_files"):
+    if req.metadata and (req.metadata.get("previous_files") or req.metadata.get("region")):
         return False
     prompt_lower = req.prompt.lower()
     if any(p.search(prompt_lower) for p in _IMPERATIVE_PATTERNS):

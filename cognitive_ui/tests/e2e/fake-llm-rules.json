@@ -1,0 +1,6 @@
+{
+  "default": "This is the E2E fake LLM. No rule matched this request.",
+  "rules": [
+    { "match": "^e2e ping$", "flags": "i", "reply": "e2e pong" }
+  ]
+}

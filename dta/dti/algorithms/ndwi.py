@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 from dta.dti import artifact_files
-from dta.dti.algorithms.spectral_index import calculate_index
+from dta.dti.algorithms.spectral_index import calculate_index, display_style
 from dta.dti.registry import get_item, load_registry
 
 # Standard water threshold; NDWI > 0.3 typically indicates open water.
@@ -31,7 +31,8 @@ def calculate_ndwi(raster_path: str) -> dict[str, Any]:
     with ``water_threshold``, ``water_pixels``, ``water_coverage_percent``),
     ``visualizations``, and ``path``.
     """
-    result, arr, (crs, transform) = calculate_index(raster_path, _config())
+    config = _config()
+    result, arr, (crs, transform) = calculate_index(raster_path, config)
     valid = arr[np.isfinite(arr)]
     if valid.size > 0:
         water_pixels = int(np.sum(valid > WATER_THRESHOLD))
@@ -42,7 +43,15 @@ def calculate_ndwi(raster_path: str) -> dict[str, Any]:
                 "water_coverage_percent": float(water_pixels / valid.size * 100),
             }
         )
-    return artifact_files.save(result, {"ndwi": arr}, result["visualizations"], crs=crs, transform=transform)
+    return artifact_files.save(
+        result,
+        {"ndwi": arr},
+        result["visualizations"],
+        crs=crs,
+        transform=transform,
+        styles={"ndwi": display_style(config)},
+        bare={"ndwi_map": "ndwi"},
+    )
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

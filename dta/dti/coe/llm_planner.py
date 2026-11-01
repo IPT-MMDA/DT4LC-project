@@ -134,6 +134,14 @@ B) CHANGE DETECTION (requires explicit comparison request):
    - For water/flood change: use binds: {"IndexType": "ndwi"}
    DO NOT run separate NDVI/NDSI/NDWI algorithms before change-detection!
 
+C) BAND MATH (an index no component computes, e.g. NDMI):
+   One file: "input/file", then "algorithms/band-math".
+   Two dates: "input/file-before", "input/file-after", then "algorithms/band-math-change"
+   (both index maps and their difference, after minus before).
+   Give the step "config": {"formula": "(B5 - B6) / (B5 + B6)", "name": "NDMI"}.
+   Formulas use only numbers, band codes (B5) or roles (nir, swir, red, green, blue),
+   + - * / and parentheses; use only bands the file has.
+
 COMPONENT PURPOSE (use to match user intent):
 - models/delineate-anything: Field boundaries, parcels, agricultural plots, segmentation
 - algorithms/ndvi: Vegetation index, greenness, plant health from spectral bands
@@ -146,6 +154,7 @@ Output format:
   "steps": [
     {"uses": "component-id-here"},
     {"uses": "component-id-with-params", "binds": {"ParamName": "value"}},
+    {"uses": "algorithms/band-math", "config": {"formula": "...", "name": "..."}},
     ...
   ],
   "reasoning": "brief explanation matching user's specific request"
@@ -181,8 +190,11 @@ Generate a valid pipeline plan as JSON."""
         # Parse JSON response
         plan_data = _parse_plan_json(response.text)
 
-        # Convert to ExecutionPlan (include binds if present)
-        steps = [PlanStep(uses=step["uses"], binds=step.get("binds", {})) for step in plan_data["steps"]]
+        # Convert to ExecutionPlan (include binds and config if present)
+        steps = [
+            PlanStep(uses=step["uses"], binds=step.get("binds", {}), config=step.get("config", {}))
+            for step in plan_data["steps"]
+        ]
 
         # Validate plan
         _validate_plan(steps, reg)

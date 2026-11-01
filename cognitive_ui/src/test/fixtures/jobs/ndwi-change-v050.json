@@ -1,0 +1,234 @@
+{
+ "id": "67a418f3",
+ "status": "completed",
+ "prompt": "Compare water before and after the dam breach",
+ "plan": {
+  "steps": [
+   {
+    "uses": "input/file-before",
+    "config": {}
+   },
+   {
+    "uses": "input/file-after",
+    "config": {}
+   },
+   {
+    "uses": "algorithms/change-detection",
+    "config": {}
+   },
+   {
+    "uses": "post-processing/agent-analysis",
+    "config": {}
+   }
+  ],
+  "composed": false
+ },
+ "result": {
+  "execution": {
+   "artifacts": {
+    "RasterPathBefore": "/app/resources/.cache/uploads/6774daf7_hlsl_20230601.tif",
+    "RasterPathAfter": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif",
+    "ChangeMap": {
+     "statistics": {
+      "min_change": -223.4469757080078,
+      "max_change": 317.7239685058594,
+      "mean_change": 0.3521212637424469,
+      "std_change": 0.9780120849609375,
+      "median_change": 0.15954865515232086,
+      "areas_km2": {
+       "increase": 325.227,
+       "decrease": 9.948,
+       "stable": 195.665
+      },
+      "water": {
+       "before_km2": 13.881,
+       "after_km2": 170.039,
+       "gained_km2": 156.761,
+       "lost_km2": 0.603,
+       "threshold": 0.2
+      }
+     },
+     "index_statistics": {
+      "before": {
+       "mean": -0.5094268918037415,
+       "std": 0.9277563691139221,
+       "min": -317,
+       "max": 224
+      },
+      "after": {
+       "mean": -0.15730246901512146,
+       "std": 0.40807151794433594,
+       "min": -9.039999961853027,
+       "max": 19.41666603088379
+      }
+     },
+     "classification": {
+      "severe_water_loss": {
+       "pixels": 3029,
+       "percentage": 0.51
+      },
+      "moderate_water_loss": {
+       "pixels": 8024,
+       "percentage": 1.36
+      },
+      "stable": {
+       "pixels": 217406,
+       "percentage": 36.86
+      },
+      "moderate_water_gain": {
+       "pixels": 82045,
+       "percentage": 13.91
+      },
+      "strong_water_gain": {
+       "pixels": 279318,
+       "percentage": 47.36
+      },
+      "total_valid_pixels": 589822
+     },
+     "metadata": {
+      "crs": "EPSG:32636",
+      "transform": [
+       30,
+       0,
+       453240,
+       0,
+       -30,
+       5167860,
+       0,
+       0,
+       1
+      ],
+      "bounds": [
+       453240,
+       5144820,
+       476280,
+       5167860
+      ],
+      "width": 768,
+      "height": 768,
+      "before_path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230601.tif",
+      "after_path": "/app/resources/.cache/uploads/6774daf7_hlsl_20230609.tif"
+     },
+     "visualizations": {
+      "change_map": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/67a418f3/2_ChangeMap_change_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F67a418f3%2F2_ChangeMap_change_map.png",
+       "stats": {}
+      },
+      "ndwi_before": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/67a418f3/2_ChangeMap_ndwi_before.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F67a418f3%2F2_ChangeMap_ndwi_before.png",
+       "stats": {}
+      },
+      "ndwi_after": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/67a418f3/2_ChangeMap_ndwi_after.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F67a418f3%2F2_ChangeMap_ndwi_after.png",
+       "stats": {}
+      }
+     },
+     "index_type": "ndwi",
+     "index_name": "NDWI",
+     "rasters": {
+      "change": {
+       "kind": "geotiff",
+       "path": "/app/resources/.cache/outputs/67a418f3/2_ChangeMap_change.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F67a418f3%2F2_ChangeMap_change.tif",
+       "stats": {
+        "min": -223.4469757080078,
+        "max": 317.7239685058594,
+        "mean": 0.3521213360706649,
+        "valid_pixels": 589822
+       }
+      },
+      "index_before": {
+       "kind": "geotiff",
+       "path": "/app/resources/.cache/outputs/67a418f3/2_ChangeMap_index_before.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F67a418f3%2F2_ChangeMap_index_before.tif",
+       "stats": {
+        "min": -317,
+        "max": 224,
+        "mean": -0.5094268105571049,
+        "valid_pixels": 589822
+       }
+      },
+      "index_after": {
+       "kind": "geotiff",
+       "path": "/app/resources/.cache/outputs/67a418f3/2_ChangeMap_index_after.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2F67a418f3%2F2_ChangeMap_index_after.tif",
+       "stats": {
+        "min": -9.039999961853027,
+        "max": 19.41666603088379,
+        "mean": -0.15730245773465,
+        "valid_pixels": 589824
+       }
+      }
+     }
+    },
+    "agent_result": {
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers"
+    }
+   }
+  },
+  "followups": [
+   "Compare with NDVI change between the same dates",
+   "Map moisture change with NDMI between the two dates",
+   "What else can you do with this data?"
+  ]
+ },
+ "events": [
+  {
+   "seq": 3,
+   "type": "planning",
+   "data": {
+    "phase": "ready",
+    "steps": [
+     {
+      "index": 1,
+      "id": "input/file-before",
+      "name": "Read hlsl_20230601.tif",
+      "kind": "input"
+     },
+     {
+      "index": 2,
+      "id": "input/file-after",
+      "name": "Read hlsl_20230609.tif",
+      "kind": "input"
+     },
+     {
+      "index": 3,
+      "id": "algorithms/change-detection",
+      "name": "Change Detection · NDWI",
+      "kind": "algorithm"
+     },
+     {
+      "index": 4,
+      "id": "post-processing/agent-analysis",
+      "name": "Interpretation",
+      "kind": "postprocess"
+     }
+    ],
+    "composed": false,
+    "t": 1792745104.786
+   }
+  },
+  {
+   "seq": 12,
+   "type": "done",
+   "data": {
+    "elapsed_s": 1.2,
+    "summary": "4 steps · 1 s · Change Detection · NDWI",
+    "followups": [
+     "Compare with NDVI change between the same dates",
+     "Map moisture change with NDMI between the two dates",
+     "What else can you do with this data?"
+    ],
+    "t": 1792745105.897
+   }
+  }
+ ],
+ "proposal": null,
+ "region": null
+}

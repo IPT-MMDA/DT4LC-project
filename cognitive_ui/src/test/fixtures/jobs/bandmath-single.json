@@ -1,0 +1,314 @@
+{
+ "id": "a4865116",
+ "status": "completed",
+ "prompt": "Map moisture with NDMI",
+ "plan": {
+  "flow": "Map moisture with NDMI",
+  "steps": [
+   {
+    "uses": "input/file",
+    "binds": {
+     "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+    },
+    "config": {}
+   },
+   {
+    "uses": "algorithms/band-math",
+    "binds": {},
+    "config": {
+     "formula": "(B5 - B6) / (B5 + B6)",
+     "name": "NDMI"
+    }
+   },
+   {
+    "uses": "post-processing/agent-analysis",
+    "binds": {},
+    "config": {}
+   }
+  ],
+  "outputs": [
+   "publish: chat"
+  ],
+  "composed": true
+ },
+ "result": {
+  "execution": {
+   "artifacts": {
+    "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+    "BandMathMap": {
+     "metadata": {
+      "crs": "EPSG:32636",
+      "transform": [
+       30,
+       0,
+       453240,
+       0,
+       -30,
+       5167860,
+       0,
+       0,
+       1
+      ],
+      "bounds": [
+       453240,
+       5144820,
+       476280,
+       5167860
+      ],
+      "width": 768,
+      "height": 768,
+      "count": 5,
+      "bands": {
+       "B5": 4,
+       "B6": 5
+      }
+     },
+     "statistics": {
+      "min": -1,
+      "max": 1,
+      "mean": 0.18433914192318376,
+      "std": 0.18324286816358476,
+      "median": 0.192,
+      "valid_pixels": 589819,
+      "total_pixels": 589824,
+      "display_range": [
+       -1,
+       1
+      ],
+      "display_range_source": "normalized difference"
+     },
+     "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+     "index_type": "band-math",
+     "formula": "(B5 - B6) / (B5 + B6)",
+     "name": "NDMI",
+     "rasters": {
+      "index": {
+       "kind": "geotiff",
+       "path": "/app/resources/.cache/outputs/a4865116/1_BandMathMap_index.tif",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fa4865116%2F1_BandMathMap_index.tif",
+       "stats": {
+        "min": -1,
+        "max": 1,
+        "mean": 0.18433914212502878,
+        "valid_pixels": 589819
+       }
+      }
+     },
+     "visualizations": {
+      "index_map": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/a4865116/1_BandMathMap_index_map.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fa4865116%2F1_BandMathMap_index_map.png",
+       "stats": {}
+      },
+      "index_map_bare": {
+       "kind": "png",
+       "path": "/app/resources/.cache/outputs/a4865116/1_BandMathMap_index_map_bare.png",
+       "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fa4865116%2F1_BandMathMap_index_map_bare.png",
+       "stats": {
+        "width": 768,
+        "height": 768,
+        "style": {
+         "kind": "index",
+         "range": [
+          -1,
+          1
+         ],
+         "ramp": [
+          "#996633",
+          "#ccb280",
+          "#f2f2f2",
+          "#99ccff",
+          "#3380e6",
+          "#003399"
+         ]
+        }
+       }
+      }
+     }
+    },
+    "agent_result": {
+     "summary": "Analysis complete. Results available but summarization failed: No available LLM providers",
+     "inputs": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+      "BandMathMap": {
+       "metadata": {
+        "crs": "EPSG:32636",
+        "transform": [
+         30,
+         0,
+         453240,
+         0,
+         -30,
+         5167860,
+         0,
+         0,
+         1
+        ],
+        "bounds": [
+         453240,
+         5144820,
+         476280,
+         5167860
+        ],
+        "width": 768,
+        "height": 768,
+        "count": 5,
+        "bands": {
+         "B5": 4,
+         "B6": 5
+        }
+       },
+       "statistics": {
+        "min": -1,
+        "max": 1,
+        "mean": 0.18433914192318376,
+        "std": 0.18324286816358476,
+        "median": 0.192,
+        "valid_pixels": 589819,
+        "total_pixels": 589824,
+        "display_range": [
+         -1,
+         1
+        ],
+        "display_range_source": "normalized difference"
+       },
+       "path": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif",
+       "index_type": "band-math",
+       "formula": "(B5 - B6) / (B5 + B6)",
+       "name": "NDMI",
+       "rasters": {
+        "index": {
+         "kind": "geotiff",
+         "path": "/app/resources/.cache/outputs/a4865116/1_BandMathMap_index.tif",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fa4865116%2F1_BandMathMap_index.tif",
+         "stats": {
+          "min": -1,
+          "max": 1,
+          "mean": 0.18433914212502878,
+          "valid_pixels": 589819
+         }
+        }
+       },
+       "visualizations": {
+        "index_map": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/a4865116/1_BandMathMap_index_map.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fa4865116%2F1_BandMathMap_index_map.png",
+         "stats": {}
+        },
+        "index_map_bare": {
+         "kind": "png",
+         "path": "/app/resources/.cache/outputs/a4865116/1_BandMathMap_index_map_bare.png",
+         "url": "/v1/download?path=%2Fapp%2Fresources%2F.cache%2Foutputs%2Fa4865116%2F1_BandMathMap_index_map_bare.png",
+         "stats": {
+          "width": 768,
+          "height": 768,
+          "style": {
+           "kind": "index",
+           "range": [
+            -1,
+            1
+           ],
+           "ramp": [
+            "#996633",
+            "#ccb280",
+            "#f2f2f2",
+            "#99ccff",
+            "#3380e6",
+            "#003399"
+           ]
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "followups": [
+   "Classify land cover in this image",
+   "Give me statistics for every band",
+   "What else can you do with this data?"
+  ]
+ },
+ "events": [
+  {
+   "seq": 4,
+   "type": "planning",
+   "data": {
+    "phase": "ready",
+    "steps": [
+     {
+      "index": 1,
+      "id": "input/file",
+      "name": "Read hlsl_20230609.tif",
+      "kind": "input"
+     },
+     {
+      "index": 2,
+      "id": "algorithms/band-math",
+      "name": "NDMI",
+      "kind": "algorithm"
+     },
+     {
+      "index": 3,
+      "id": "post-processing/agent-analysis",
+      "name": "Interpretation",
+      "kind": "postprocess"
+     }
+    ],
+    "composed": true,
+    "t": 1792749816.443
+   }
+  },
+  {
+   "seq": 11,
+   "type": "done",
+   "data": {
+    "elapsed_s": 0.6,
+    "summary": "3 steps · <1 s · NDMI",
+    "followups": [
+     "Classify land cover in this image",
+     "Give me statistics for every band",
+     "What else can you do with this data?"
+    ],
+    "t": 1792749817.025
+   }
+  }
+ ],
+ "proposal": {
+  "text": "I don't have a moisture algorithm. I can compute NDMI = (NIR − SWIR1)/(NIR + SWIR1) from B5 and B6 — run that?",
+  "plan": {
+   "flow": "Map moisture with NDMI",
+   "steps": [
+    {
+     "uses": "input/file",
+     "binds": {
+      "RasterPath": "/app/resources/.cache/uploads/f7bcb2ae_hlsl_20230609.tif"
+     },
+     "config": {}
+    },
+    {
+     "uses": "algorithms/band-math",
+     "binds": {},
+     "config": {
+      "formula": "(B5 - B6) / (B5 + B6)",
+      "name": "NDMI"
+     }
+    },
+    {
+     "uses": "post-processing/agent-analysis",
+     "binds": {},
+     "config": {}
+    }
+   ],
+   "outputs": [
+    "publish: chat"
+   ],
+   "composed": true
+  }
+ },
+ "region": null
+}

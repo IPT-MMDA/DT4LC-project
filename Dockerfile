@@ -53,5 +53,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/v1/health || exit 1
 
-# Run the server
-CMD ["python", "-m", "uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the server. Behind a reverse proxy, X-Forwarded-For from FORWARDED_ALLOW_IPS (comma-separated
+# addresses or CIDRs) gives the client IP that the per-IP guest quota counts.
+ENV FORWARDED_ALLOW_IPS=127.0.0.1
+CMD ["sh", "-c", "exec python -m uvicorn server.app:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"$FORWARDED_ALLOW_IPS\""]

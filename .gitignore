@@ -53,3 +53,10 @@ resources/key_gee.json
 
 # Windows/WSL alternate data stream artefacts
 *:Zone.Identifier
+
+# Terraform for the demo host (deploy/gcp/terraform): state, your variables, the provider cache
+deploy/gcp/terraform/.terraform/
+deploy/gcp/terraform/*.tfstate
+deploy/gcp/terraform/*.tfstate.*
+deploy/gcp/terraform/terraform.tfvars
+deploy/gcp/terraform/backend.gcs.tf

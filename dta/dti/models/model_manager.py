@@ -19,6 +19,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Bandwidth assumed for download-time estimates before a download has measured its own (50 Mbit/s).
+ASSUMED_DOWNLOAD_BPS = 6_250_000
+
+
+def estimated_download_s(remaining_bytes: int, speed_bps: float = 0.0) -> int:
+    """Seconds to fetch ``remaining_bytes`` at ``speed_bps``, or at :data:`ASSUMED_DOWNLOAD_BPS` if unknown."""
+    return int(remaining_bytes / (speed_bps if speed_bps > 0 else ASSUMED_DOWNLOAD_BPS))
+
 
 class ModelStatus(str, Enum):
     """Model availability status."""
@@ -349,6 +357,78 @@ class ModelManager:
         logger.info(f"Started download for {model_id}")
         return progress
 
+    def download(
+        self,
+        model_id: str,
+        progress_callback: Callable[[DownloadProgress], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+        poll_s: float = 1.0,
+    ) -> DownloadProgress:
+        """Download ``model_id`` and wait until it ends; joins a download already running.
+
+        Every ``poll_s`` seconds the bytes on disk under the model directory (including
+        partial files) update ``downloaded_bytes``, ``progress`` and ``speed_bps``, and
+        ``progress_callback`` gets the progress when the byte count changed. If
+        ``is_cancelled`` returns true the download is cancelled and this returns at once.
+
+        Returns:
+            The final progress: ``status`` is ``AVAILABLE`` on success, ``FAILED`` (with
+            ``error``) on failure, or still ``DOWNLOADING`` when cancelled.
+        """
+        with self._lock:
+            progress = self._downloads.get(model_id)
+        if progress is None or progress.status != ModelStatus.DOWNLOADING:
+            progress = self.start_download(model_id)
+        model_path = self.get_model_path(model_id)
+        started = time.monotonic()
+        last_bytes = -1
+        while progress.status == ModelStatus.DOWNLOADING:
+            if is_cancelled and is_cancelled():
+                self.cancel_download(model_id)
+                return progress
+            on_disk = sum(f.stat().st_size for f in model_path.rglob("*") if f.is_file()) if model_path else 0
+            with self._lock:
+                if progress.status == ModelStatus.DOWNLOADING and progress.total_bytes:
+                    progress.downloaded_bytes = min(max(progress.downloaded_bytes, on_disk), progress.total_bytes)
+                    progress.progress = min(progress.downloaded_bytes / progress.total_bytes, 0.99)
+                    elapsed = time.monotonic() - started
+                    if elapsed > 0 and progress.downloaded_bytes:
+                        progress.speed_bps = progress.downloaded_bytes / elapsed
+            if progress_callback and progress.downloaded_bytes != last_bytes:
+                last_bytes = progress.downloaded_bytes
+                progress_callback(progress)
+            time.sleep(poll_s)
+        if progress_callback:
+            progress_callback(progress)
+        return progress
+
+    def model_states(self) -> list[dict[str, Any]]:
+        """Install state of every managed model, for the capabilities document and the planner.
+
+        Returns:
+            ``[{id, display_name, installed, size_bytes, est_download_s, licence, licence_url, steps}]``;
+            ``steps`` are the registry step ids that need the model, ``est_download_s``
+            assumes :data:`ASSUMED_DOWNLOAD_BPS`.
+        """
+        from dta.dti.executor import STEP_TO_MODEL_MAP
+
+        states = []
+        for model_id, info in AVAILABLE_MODELS.items():
+            size_bytes = info.size_mb * 1024 * 1024
+            states.append(
+                {
+                    "id": model_id,
+                    "display_name": info.name,
+                    "installed": self.is_model_available(model_id),
+                    "size_bytes": size_bytes,
+                    "est_download_s": estimated_download_s(size_bytes),
+                    "licence": info.license,
+                    "licence_url": info.license_url,
+                    "steps": [step for step, mid in STEP_TO_MODEL_MAP.items() if mid == model_id],
+                }
+            )
+        return states
+
     def cancel_download(self, model_id: str) -> bool:
         """Cancel an active download.
 
@@ -655,6 +735,11 @@ def get_model_manager() -> ModelManager:
             if _manager is None:
                 _manager = ModelManager()
     return _manager
+
+
+def model_states() -> list[dict[str, Any]]:
+    """Install state of every managed model (see :meth:`ModelManager.model_states`)."""
+    return get_model_manager().model_states()
 
 
 def reset_model_manager() -> None:

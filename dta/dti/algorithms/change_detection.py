@@ -20,6 +20,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
+from dta.dti.algorithms.spectral_index import RANGES
 from dta.dti.raster import reflectance_divisor
 
 # Try to import matplotlib for visualization, graceful fallback
@@ -137,6 +138,84 @@ INDEX_CONFIG: dict[str, dict[str, Any]] = {
 }
 
 
+# Cover classes whose before/after/gained/lost areas the result reports, per index:
+# (result key, threshold). Open water is NDWI > 0.2; vegetation is NDVI > 0.3, the lower
+# bound of the LULC classifier's cropland/grassland and dense-vegetation classes.
+COVER_THRESHOLDS: dict[str, tuple[str, float]] = {"ndwi": ("water", 0.2), "ndvi": ("vegetation", 0.3)}
+
+
+def _pixel_km2(src: rasterio.DatasetReader) -> float | None:
+    """Area of one pixel in km² for a projected CRS, else ``None``."""
+    if src.crs is None or not src.crs.is_projected:
+        return None
+    return float(abs(src.transform.a * src.transform.e) * src.crs.linear_units_factor[1] ** 2 / 1e6)
+
+
+def _cover_areas(
+    index_before: np.ndarray, index_after: np.ndarray, valid: np.ndarray, threshold: float, pixel_km2: float
+) -> dict[str, float]:
+    """Cover (index > ``threshold``) in km² before and after, and gained / lost, on pixels valid on both dates."""
+    with np.errstate(invalid="ignore"):
+        before = valid & (index_before > threshold)
+        after = valid & (index_after > threshold)
+    return {
+        "before_km2": round(int(before.sum()) * pixel_km2, 3),
+        "after_km2": round(int(after.sum()) * pixel_km2, 3),
+        "gained_km2": round(int((after & ~before).sum()) * pixel_km2, 3),
+        "lost_km2": round(int((before & ~after).sum()) * pixel_km2, 3),
+        "threshold": threshold,
+    }
+
+
+# |change| above this counts as an increase / decrease (``areas_km2`` and the Increase / Decrease classes).
+STABLE_BAND = 0.05
+# Class names (gained, lost, unchanged) of ``class_statistics`` for an index with a cover class.
+COVER_CLASS_NAMES: dict[str, tuple[str, str, str]] = {
+    "ndwi": ("Water gained", "Water lost", "No change"),
+    "ndvi": ("Vegetation gained", "Vegetation lost", "No change"),
+}
+INCREASE_CLASS_NAMES = ("Increase", "Decrease", "Stable")
+
+
+def change_class_statistics(
+    change: np.ndarray,
+    gained: np.ndarray,
+    lost: np.ndarray,
+    names: tuple[str, str, str],
+    pixel_km2: float | None,
+) -> dict[str, dict[str, Any]]:
+    """``class_statistics`` of a change result, shaped as LULC's: per class name ``{id, name, colour,
+    pixels, percent, area_km2, mean_change}``.
+
+    The classes are ``gained`` (id 1), ``lost`` (id 2) and every other valid pixel (id 0), in that
+    order, coloured as the change legend (:data:`artifact_files.CHANGE_RAMP`). ``percent`` is of the
+    valid pixels (finite ``change``), ``area_km2`` is ``None`` without a projected CRS and
+    ``mean_change`` is the mean of ``change`` inside the class (``None`` for an empty class).
+    """
+    valid = np.isfinite(change)
+    gained, lost = valid & gained, valid & lost & ~gained
+    lost_colour, stable_colour, gained_colour = artifact_files.CHANGE_RAMP
+    total = int(valid.sum())
+    classes = (
+        (1, names[0], gained_colour, gained),
+        (2, names[1], lost_colour, lost),
+        (0, names[2], stable_colour, valid & ~gained & ~lost),
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for class_id, name, colour, mask in classes:
+        pixels = int(mask.sum())
+        out[name] = {
+            "id": class_id,
+            "name": name,
+            "colour": colour,
+            "pixels": pixels,
+            "percent": round(100 * pixels / total, 2) if total else 0.0,
+            "area_km2": round(pixels * pixel_km2, 3) if pixel_km2 is not None else None,
+            "mean_change": round(float(change[mask].mean()), 4) if pixels else None,
+        }
+    return out
+
+
 def _get_band_indices(src: rasterio.DatasetReader) -> dict[str, int | None]:
     """Get band indices for different sensors.
 
@@ -159,7 +238,8 @@ def _calculate_index_array(
         index_type: Type of index to calculate
 
     Returns:
-        Index array with values in appropriate range
+        Index array clipped to the formula's range (``spectral_index.RANGES``, as the per-index
+        analyses), NaN where a band is nodata or the denominator is zero
     """
     bands = _get_band_indices(src)
     # src.read(None) would read every band; fail clearly instead.
@@ -256,7 +336,8 @@ def _calculate_index_array(
     else:
         raise ValueError(f"Unknown index type: {index_type}")
 
-    return index
+    # Near-zero denominators (negative stored reflectance) give |index| far beyond the range.
+    return np.clip(index, *RANGES[index_type])
 
 
 def _create_change_visualization(
@@ -370,10 +451,19 @@ def calculate_change(
         Dictionary containing:
             - rasters: GeoTIFF references ``change`` (after - before),
               ``index_before`` and ``index_after``
-            - statistics: Change statistics
+            - statistics: Change statistics; with a projected CRS also
+              ``areas_km2: {increase, decrease, stable}`` (change > 0.05,
+              < -0.05, within ±0.05) and, for NDWI ``water`` and for NDVI
+              ``vegetation``, ``{before_km2, after_km2, gained_km2, lost_km2,
+              threshold}`` (see :data:`COVER_THRESHOLDS`); ``None`` otherwise
             - classification: Pixel classification counts
+            - class_statistics: :func:`change_class_statistics`: for NDWI and NDVI
+              ``Water`` / ``Vegetation gained``, ``... lost`` (the cover class appeared or
+              disappeared) and ``No change``; for other indices ``Increase`` / ``Decrease`` /
+              ``Stable`` (change beyond ±:data:`STABLE_BAND`)
             - metadata: Raster metadata
-            - visualizations: PNG references (if matplotlib available)
+            - visualizations: PNG references (if matplotlib available) and the
+              map-only ``change_map_bare``, ``<index>_before_bare``, ``<index>_after_bare``
             - index_type: The index type used
 
     Raises:
@@ -415,8 +505,9 @@ def calculate_change(
         valid_mask = np.isfinite(change)
         valid_change = change[valid_mask]
 
-        statistics = {}
+        statistics: dict[str, Any] = {}
         classification = {}
+        class_statistics: dict[str, dict[str, Any]] = {}
 
         if valid_change.size > 0:
             statistics = {
@@ -460,6 +551,34 @@ def calculate_change(
                 },
                 "total_valid_pixels": int(total),
             }
+
+            # Areas of the gain / loss / stable classes above, and of the index's cover class.
+            pixel_km2 = _pixel_km2(src_after)
+            with np.errstate(invalid="ignore"):
+                if index_type in COVER_THRESHOLDS:
+                    cover = COVER_THRESHOLDS[index_type][1]
+                    before_cover, after_cover = index_before > cover, index_after > cover
+                    gained, lost = after_cover & ~before_cover, before_cover & ~after_cover
+                    names = COVER_CLASS_NAMES[index_type]
+                else:
+                    gained, lost, names = change > STABLE_BAND, change < -STABLE_BAND, INCREASE_CLASS_NAMES
+            class_statistics = change_class_statistics(change, gained, lost, names, pixel_km2)
+            statistics["areas_km2"] = (
+                {
+                    "increase": round(int(moderate_gain + strong_gain) * pixel_km2, 3),
+                    "decrease": round(int(severe_loss + moderate_loss) * pixel_km2, 3),
+                    "stable": round(int(stable) * pixel_km2, 3),
+                }
+                if pixel_km2 is not None
+                else None
+            )
+            if index_type in COVER_THRESHOLDS:
+                key, threshold = COVER_THRESHOLDS[index_type]
+                statistics[key] = (
+                    _cover_areas(index_before, index_after, valid_mask, threshold, pixel_km2)
+                    if pixel_km2 is not None
+                    else None
+                )
 
         # Index statistics for each image
         valid_before = index_before[np.isfinite(index_before)]
@@ -518,6 +637,7 @@ def calculate_change(
             "statistics": statistics,
             "index_statistics": index_stats,
             "classification": classification,
+            "class_statistics": class_statistics,
             "metadata": metadata,
             "visualizations": visualizations,
             "index_type": index_type,
@@ -529,7 +649,19 @@ def calculate_change(
             result["ndvi_statistics"] = result["index_statistics"]
 
         rasters = {"change": change, "index_before": index_before, "index_after": index_after}
-        return artifact_files.save(result, rasters, visualizations, crs=src_after.crs, transform=src_after.transform)
+        # Tiles and bare PNGs: change on the legend ramp over the change PNG's ±0.5, indices as their PNGs.
+        index_look = artifact_files.index_style(config["index_colors"], config["vmin"], config["vmax"])
+        styles = {"change": artifact_files.change_style(0.5), "index_before": index_look, "index_after": index_look}
+        bare = {"change_map": "change", f"{index_type}_before": "index_before", f"{index_type}_after": "index_after"}
+        return artifact_files.save(
+            result,
+            rasters,
+            visualizations,
+            crs=src_after.crs,
+            transform=src_after.transform,
+            styles=styles,
+            bare=bare,
+        )
 
 
 def run(

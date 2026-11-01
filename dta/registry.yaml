@@ -14,6 +14,8 @@ types:
  - Statistics
  - ChangeMap
  - FieldBoundaries
+ - BandMathMap  # Index from a band-math formula
+ - BandMathChangeMap  # Band-math index for two dates and their difference
 
 instances:
   # Standard single-file input (default for most analyses)
@@ -42,9 +44,70 @@ instances:
     runner:
       type: passthrough
 
+  # Earth Engine fetch of a region sent from the map (POST /v1/jobs "region"). No prompt plans
+  # these: for a job with a region and no files the orchestrator swaps the file inputs above
+  # for them (dta.dti.data_sources.gee_region documents the date windows and datasets). The
+  # step config is {name, dataset, bbox, start_date, end_date, bands, cloud_max}.
+  # `integration` keeps them out of the LLM planner's component list.
+  - id: input/earth-engine
+    kind: input
+    display_name: "Earth Engine fetch"
+    description: One median composite of the region over the date range, as a GeoTIFF.
+    inputs: []
+    outputs: [RasterPath]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.gee_region"
+    integration:
+      type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
+  - id: input/earth-engine-before
+    kind: input
+    display_name: "Earth Engine fetch (before)"
+    description: Median composite of the region around the start date, as a GeoTIFF.
+    inputs: []
+    outputs: [RasterPathBefore]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.gee_region"
+    integration:
+      type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
+  - id: input/earth-engine-after
+    kind: input
+    display_name: "Earth Engine fetch (after)"
+    description: Median composite of the region around the end date, as a GeoTIFF.
+    inputs: []
+    outputs: [RasterPathAfter]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.gee_region"
+    integration:
+      type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
   - id: algorithms/ndvi
     kind: algorithm
     display_name: "NDVI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 1
+      title: NDVI
+      formula: "(NIR−Red)/(NIR+Red)"
+      description: Vegetation density and health.
+      outputs: [Index map, legend, stats]
+      time: "~10 s"
+      prompt: Map vegetation health across the region
+      followups:
+        - Use EVI for dense vegetation
+        - Map open water with NDWI
+        - Classify land cover in this image
     description: |
       NDVI (Normalized Difference Vegetation Index) for vegetation health analysis.
       Computed as (NIR - Red) / (NIR + Red). Values range from -1 to 1, where higher
@@ -88,6 +151,20 @@ instances:
   - id: algorithms/evi
     kind: algorithm
     display_name: "EVI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 2
+      title: EVI
+      formula: "2.5·(NIR−Red)/(NIR+6·Red−7.5·Blue+1)"
+      description: Vegetation in dense canopy where NDVI saturates.
+      outputs: [Index map, legend, stats]
+      time: "~10 s"
+      prompt: Use EVI instead of NDVI for the forest
+      followups:
+        - Map vegetation health with NDVI
+        - Classify land cover in this image
+        - What else can you do with this data?
     description: |
       EVI (Enhanced Vegetation Index) for vegetation health analysis.
       Computed as 2.5 * (NIR - RED) / ((NIR + 6*RED - 7.5*BLUE) + 1). Values range from -1 to 1, where higher
@@ -131,6 +208,20 @@ instances:
   - id: algorithms/ndwi
     kind: algorithm
     display_name: "NDWI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 3
+      title: NDWI
+      formula: "(Green−NIR)/(Green+NIR)"
+      description: Open water and surface moisture.
+      outputs: [Index map, water mask, stats]
+      time: "~10 s"
+      prompt: Where is open water on 9 June?
+      followups:
+        - Map vegetation health with NDVI
+        - Classify land cover in this image
+        - What else can you do with this data?
     description: |
       NDWI (Normalized Difference Water Index) for water body detection.
       Computed as (Green - NIR) / (Green + NIR). Positive values indicate water.
@@ -175,6 +266,20 @@ instances:
   - id: algorithms/ndsi
     kind: algorithm
     display_name: "NDSI Calculation"
+    ui:
+      tier: builtin
+      group: spectral
+      order: 4
+      title: NDSI
+      formula: "(Green−SWIR)/(Green+SWIR)"
+      description: Snow and ice; values above 0.42 usually mean snow.
+      outputs: [Index map, snow mask, stats]
+      time: "~10 s"
+      prompt: Map snow cover with NDSI
+      followups:
+        - Map vegetation health with NDVI
+        - Give me statistics for every band
+        - What else can you do with this data?
     description: |
       NDSI (Normalized Difference Snow Index) for snow and glacier detection.
       Computed as (Green - SWIR) / (Green + SWIR). Values above 0.42 typically
@@ -222,6 +327,20 @@ instances:
   - id: algorithms/snow-classifier
     kind: algorithm
     display_name: "Snow Classifier (multi-criteria)"
+    ui:
+      tier: builtin
+      group: change
+      order: 3
+      title: Snow classifier
+      description: "Multi-criteria: NDSI ≥ 0.4, NDVI below 0.1 and brightness above 0.3."
+      inputs: [Green, Red, NIR, SWIR1]
+      outputs: [Snow / ice / other map, areas]
+      time: "~20 s"
+      prompt: Classify snow and ice robustly
+      followups:
+        - Map snow cover with NDSI
+        - Give me statistics for every band
+        - What else can you do with this data?
     description: |
       Multi-criteria snow classification for robust snow detection. Combines
       NDSI (>=0.4), NDVI (~0.1), and brightness (>0.3) thresholds to reduce
@@ -258,6 +377,20 @@ instances:
   - id: algorithms/statistics
     kind: algorithm
     display_name: "Raster Statistics"
+    ui:
+      tier: builtin
+      group: change
+      order: 4
+      title: Raster statistics
+      description: Min, max, mean, standard deviation, percentiles and histogram per band.
+      inputs: [Any raster]
+      outputs: [Table, histogram, CSV]
+      time: "~5 s"
+      prompt: Give me statistics for every band
+      followups:
+        - Map vegetation health with NDVI
+        - Classify land cover in this image
+        - What else can you do with this data?
     description: |
       Comprehensive raster statistics including min, max, mean, standard deviation,
       and percentiles for all bands. Generates histograms for data distribution analysis.
@@ -292,6 +425,29 @@ instances:
   - id: algorithms/change-detection
     kind: algorithm
     display_name: "Change Detection (multi-index)"
+    ui:
+      tier: builtin
+      group: change
+      order: 1
+      title: Change detection
+      description: Difference of NDVI, NDWI or NDSI between two dates, with lost / gained / unchanged classes and areas.
+      inputs: [Two dates, same bands]
+      outputs: [Difference map, 3 classes, areas]
+      time: "~50 s"
+      prompt: Compare water before and after the dam breach
+      followups:
+        ndwi:
+          - Compare with NDVI change between the same dates
+          - Map moisture change with NDMI between the two dates
+          - What else can you do with this data?
+        ndvi:
+          - Compare with NDWI water change between the same dates
+          - Map moisture change with NDMI between the two dates
+          - What else can you do with this data?
+        default:
+          - Compare with NDVI change between the same dates
+          - Compare with NDWI water change between the same dates
+          - What else can you do with this data?
     description: |
       Multi-index change detection comparing two time periods. Supports NDVI (vegetation),
       NDSI (snow/ice), and NDWI (water) indices. Computes temporal change between before
@@ -334,6 +490,15 @@ instances:
         - "flooding"
         - "before"
         - "after"
+        # Change words: with two files attached, only a prompt naming a trigger compares them.
+        - "change"
+        - "compare"
+        - "difference"
+        - "gained"
+        - "lost"
+        - "between the dates"
+        - "between the two dates"
+        - "between the same dates"
       action_phrases:
         - "change detection"
         - "ndvi change"
@@ -369,6 +534,22 @@ instances:
   - id: algorithms/lulc-classifier
     kind: algorithm
     display_name: "Land Use / Land Cover (LULC) Classification"
+    ui:
+      tier: builtin
+      group: change
+      order: 2
+      title: Land-cover classification
+      description: >-
+        Six classes: water, snow/ice, bare soil, sparse vegetation, cropland/grassland,
+        dense vegetation. Legend and per-class area.
+      inputs: [Blue, Green, Red, NIR (+SWIR)]
+      outputs: [Class map, legend, per-class area]
+      time: "~90 s"
+      prompt: Classify land cover on the flooded fields
+      followups:
+        - Map vegetation health with NDVI
+        - Map open water with NDWI
+        - Give me statistics for every band
     description: |
       Land Use / Land Cover (LULC) classification using spectral index thresholds.
       Classifies pixels into Water, Snow/Ice, Bare Soil, Sparse Vegetation,
@@ -407,9 +588,98 @@ instances:
         GeoTIFF image (4+ bands with NIR) and I'll identify the 6 LULC classes.
       summary_template: "Classifying land cover into 6 classes"
 
+  - id: algorithms/band-math
+    kind: algorithm
+    display_name: "Band Math"
+    ui:  # no tier: not a Capabilities card, only the follow-ups
+      followups:
+        - Classify land cover in this image
+        - Give me statistics for every band
+        - What else can you do with this data?
+    description: |
+      Band math: an index from a formula over band codes or roles, e.g. NDMI = (B5 - B6) / (B5 + B6).
+      The formula takes numbers, band codes (B5, SR_B5) resolved through the band descriptions,
+      band roles (nir, swir, red, green, blue), + - * / and parentheses. Outputs the index
+      map (GeoTIFF + PNG) and its statistics.
+    interpretation: |
+      The value is the formula evaluated per pixel on 0-1 reflectance. A normalized difference
+      (a - b) / (a + b) ranges from -1 to 1 and is positive where band a is brighter than band b;
+      for NDMI = (NIR - SWIR1) / (NIR + SWIR1), higher values mean more vegetation water content
+      or wetter surfaces, negative values dry, bare or built-up surfaces. Other formulas have no
+      fixed range; the map is stretched to the data's 2nd-98th percentile.
+    keywords: [band-math, "band math", "custom index"]
+    inputs: [RasterPath]
+    outputs: [BandMathMap]
+    runner:
+      type: python
+      entrypoint: "dta.dti.algorithms.band_math"
+    triggers:
+      keywords: ["band math", "band-math", "custom index"]
+      action_phrases:
+        - "compute band math"
+    user_guide:
+      capability_response: |
+        Yes, I can compute an index from your own formula over the image's bands, for example
+        NDMI = (B5 - B6) / (B5 + B6). Formulas use band codes (B5) or roles (nir, swir, red,
+        green, blue), numbers, + - * / and parentheses. Please upload a GeoTIFF image.
+      missing_file_response: |
+        I can compute that band-math index for you. Please upload a GeoTIFF image with the
+        bands the formula uses.
+      summary_template: "Computing a band-math index from a formula"
+
+  # Same runner as algorithms/band-math, for two dates: a registry item's inputs are all
+  # required, so "RasterPath or RasterPathBefore + RasterPathAfter" needs a second id. No
+  # triggers: plans name it explicitly, so it never competes with change-detection.
+  - id: algorithms/band-math-change
+    kind: algorithm
+    display_name: "Band Math Change"
+    ui:  # no tier: not a Capabilities card, only the follow-ups
+      followups:
+        ndmi:
+          - Redo the moisture map with a 0.1 threshold
+          - Compare with NDWI water change between the same dates
+          - What else can you do with this data?
+        default:
+          - Compare with NDVI change between the same dates
+          - Compare with NDWI water change between the same dates
+          - What else can you do with this data?
+    description: |
+      Band math for two dates: the formula on the before and after images and the difference
+      (after minus before), with both index maps, the difference map and change statistics.
+    interpretation: |
+      The difference is the formula's value after minus before. Positive values mean the index
+      rose (for NDMI: wetter), negative values that it fell (drier); pixels beyond the threshold
+      (default 0.2) count as increase or decrease, with their areas in km².
+    keywords: [band-math-change, "band math change"]
+    inputs: [RasterPathBefore, RasterPathAfter]
+    outputs: [BandMathChangeMap]
+    runner:
+      type: python
+      entrypoint: "dta.dti.algorithms.band_math"
+    user_guide:
+      summary_template: "Computing a band-math index for both dates and their difference"
+
   - id: models/prithvi-reconstruction
     kind: model
     display_name: "Prithvi MAE Reconstruction"
+    ui:
+      tier: builtin
+      group: models
+      order: 2
+      title: Prithvi reconstruction
+      description: Fills masked or cloudy pixels from the surrounding dates.
+      inputs: [6 HLS bands, cloud mask]
+      outputs: [Reconstructed GeoTIFF, mask band]
+      time: "~3 min"
+      prompt: Fill the cloud gaps in the 9 June image
+      followups:
+        - Map vegetation health with NDVI
+        - Give me statistics for every band
+        - What else can you do with this data?
+      model:
+        title: Prithvi EO v1 (100M)
+        short: Prithvi EO v1
+        description: NASA/IBM foundation model; reconstructs masked or cloudy pixels.
     description: |
       NASA/IBM Prithvi foundation model for satellite imagery analysis. Uses Masked
       Autoencoder (MAE) to reconstruct HLS imagery, revealing learned spatial and
@@ -424,7 +694,7 @@ instances:
     outputs: [Reconstruction]
     model_id: prithvi-eo-v1-100m
     triggers:
-      keywords: [prithvi, reconstruction, mae, "masked autoencoder", "foundation model", embedding, embeddings, features]
+      keywords: [prithvi, reconstruction, reconstruct, mae, "masked autoencoder", "foundation model", "cloud gaps", "fill gaps", "fill the gaps", "gap filling", "masked pixels", "cloudy pixels"]
       action_phrases:
         - "reconstruct image"
         - "reconstruct this image"
@@ -458,6 +728,24 @@ instances:
   - id: models/delineate-anything
     kind: model
     display_name: "Field Boundary Detection (Delineate-Anything)"
+    ui:
+      tier: builtin
+      group: models
+      order: 1
+      title: Field boundaries
+      description: Agricultural parcels as polygons, with an area histogram.
+      inputs: [Red, Green, Blue (10–30 m)]
+      outputs: [GeoPackage, count, area histogram]
+      time: "~2 min"
+      prompt: Detect field boundaries east of the river
+      followups:
+        - Classify land cover in this image
+        - Give me statistics for every band
+        - What else can you do with this data?
+      model:
+        title: Delineate-Anything
+        short: Delineate-Anything
+        description: Field-boundary detection for agricultural parcels.
     description: |
       Delineate-Anything field boundary detection using YOLO-based segmentation.
       Auto-detects data source (Sentinel/Planet/Maxar) and configures appropriate
@@ -466,12 +754,12 @@ instances:
       Field count and total area characterize agricultural parcelization. Mean field size
       (total_area/num_fields) indicates farming scale: <1 ha suggests smallholder systems;
       >10 ha indicates mechanized agriculture. Output GeoPackage preserves source CRS.
-    keywords: [delineate, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, detect, farm, crop, plot, land, polygon, vector, outline, edges]
+    keywords: [delineate, delineation, field, boundary, boundaries, agriculture, parcels, segmentation, yolo, extract, farm, crop, plot, polygon, vector, outline, edges]
     inputs: [RasterPath]
     outputs: [FieldBoundaries]
     model_id: delineate-anything-small
     triggers:
-      keywords: [delineate, field, fields, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
+      keywords: [delineate, delineation, boundary, boundaries, parcel, parcels, "field boundaries", "agricultural parcels"]
       action_phrases:
         - "detect field boundaries"
         - "find field boundaries"
@@ -530,6 +818,10 @@ instances:
 
   - id: models/ndvi-convlstm
     kind: model
+    ui:
+      tier: coming
+      order: 1
+      title: ConvLSTM NDVI forecast
     keywords: [ndvi, forecast, prediction, convlstm, lstm, deep-learning, vegetation, health, greenness, time-series, temporal, ukraine, agriculture, crop, monitoring, satellite, remote-sensing]
     description: |
       ConvLSTM NDVI Forecasting Model - Predicts vegetation health in Ukrainian
@@ -549,6 +841,10 @@ instances:
 
   - id: models/pinn-linda
     kind: model
+    ui:
+      tier: coming
+      order: 2
+      title: PINN-LINDA nowcasting
     keywords: [pinn, physics-informed, neural-network, deep-learning, precipitation, rain, nowcasting, weather, forecast, prediction, linda, lagrangian, radar, meteorology, short-term, real-time]
     description: |
       PINN-LINDA Weather Nowcasting - Physics-Informed Neural Network implementing
@@ -570,6 +866,10 @@ instances:
 
   - id: models/vi-forecasting-dti
     kind: model
+    ui:
+      tier: coming
+      order: 3
+      title: VI forecasting DTI
     keywords: [vegetation, index, ndvi, evi, savi, forecast, prediction, time-series, temporal, earth-engine, gee, satellite, remote-sensing, agriculture, crop, monitoring, cloud-computing]
     description: |
       Vegetation Index Forecasting DTI - Time-series forecasting model for
@@ -586,3 +886,23 @@ instances:
       author: "sofidrozd13"
       hosting: "gee"
       platform: "Google Earth Engine"
+
+  # Coming only (Capabilities): a planned remote service with no runner, so it is never planned or run.
+  - id: models/runoff-ensemble
+    kind: model
+    ui:
+      tier: coming
+      order: 4
+      title: Runoff ensemble
+    keywords: [runoff, discharge, streamflow, hydrology, ensemble]
+    description: |
+      Ensemble runoff estimates from precipitation and land-cover inputs.
+    inputs: [BasinId, DateSplits]
+    outputs: [DischargeSeries]
+    integration:
+      type: http-service
+      url: "https://github.com/IPT-MMDA/runoff-physics-ensemble"
+      status: planned
+    metadata:
+      team: "IPT-MMDA"
+      hosting: "remote"

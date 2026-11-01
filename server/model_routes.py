@@ -1,27 +1,53 @@
 """Model management API routes.
 
 Provides endpoints for listing, downloading, and deleting ML models.
-Downloads are non-blocking and run in background threads.
+Downloads are non-blocking and run in background threads. Listing and status are open;
+download and cancel need a role ``MODEL_DOWNLOAD_ON_DEMAND`` allows, and delete needs an
+operator. Otherwise: 403 ``MODEL_GATED`` with ``details: {model_id}``.
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
+from dta.dti.executor import ModelGatedError, ModelNotInstalledError
 from dta.dti.models import ModelStatus, get_model_manager
 
 from .schemas import (
+    ErrorDetail,
+    ErrorResponse,
     MLModelActionResponse,
     MLModelDetailResponse,
     MLModelDownloadResponse,
     MLModelsListResponse,
 )
+from .sessions import ROLES, CurrentSession, Session, can_download_models
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/ml-models", tags=["models"])
+
+GATED = {403: {"model": ErrorResponse, "description": "MODEL_GATED"}}
+
+
+def _gated(model_id: str, message: str) -> JSONResponse:
+    error = ErrorDetail(code="MODEL_GATED", message=message, details={"model_id": model_id})
+    return JSONResponse(ErrorResponse(error=error).model_dump(mode="json"), status_code=403)
+
+
+def _download_refusal(model_info: dict[str, Any], session: Session) -> JSONResponse | None:
+    """403 ``MODEL_GATED`` unless ``MODEL_DOWNLOAD_ON_DEMAND`` lets the caller's role download,
+    worded as a job's refusal (``server.jobs``): it names the role, unless nobody may download."""
+    if can_download_models(session.role):
+        return None
+    args = ("", model_info["id"], model_info["name"], model_info["size_mb"], "")
+    downloads_off = not any(can_download_models(r) for r in ROLES)
+    error = ModelNotInstalledError(*args) if downloads_off else ModelGatedError(*args, role=session.role)
+    return _gated(model_info["id"], str(error))
 
 
 @router.get(  # type: ignore[misc]
@@ -73,15 +99,18 @@ async def get_model(model_id: str) -> MLModelDetailResponse:
     status_code=202,
     response_model=MLModelDownloadResponse,
     summary="Download ML model",
+    responses=GATED,
 )
-async def start_download(model_id: str) -> MLModelDownloadResponse:
-    """Start a background download of the model weights."""
+async def start_download(model_id: str, session: CurrentSession) -> MLModelDownloadResponse | JSONResponse:
+    """Start a background download of the model weights (403 ``MODEL_GATED`` for a role that may not)."""
     try:
         manager = get_model_manager()
 
         model_info = manager.get_model_info(model_id)
         if model_info is None:
             raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+        if refusal := _download_refusal(model_info, session):
+            return refusal
 
         current_status = manager.get_model_status(model_id)
         if current_status == ModelStatus.DOWNLOADING:
@@ -111,14 +140,18 @@ async def start_download(model_id: str) -> MLModelDownloadResponse:
     "/{model_id}/cancel",
     response_model=MLModelActionResponse,
     summary="Cancel model download",
+    responses=GATED,
 )
-async def cancel_download(model_id: str) -> MLModelActionResponse:
-    """Cancel an in-progress model download."""
+async def cancel_download(model_id: str, session: CurrentSession) -> MLModelActionResponse | JSONResponse:
+    """Cancel an in-progress model download (403 ``MODEL_GATED`` for a role that may not download)."""
     try:
         manager = get_model_manager()
 
-        if manager.get_model_info(model_id) is None:
+        model_info = manager.get_model_info(model_id)
+        if model_info is None:
             raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+        if refusal := _download_refusal(model_info, session):
+            return refusal
 
         if manager.get_model_status(model_id) != ModelStatus.DOWNLOADING:
             raise HTTPException(status_code=400, detail=f"Model '{model_id}' is not currently downloading")
@@ -127,7 +160,7 @@ async def cancel_download(model_id: str) -> MLModelActionResponse:
         if not cancelled:
             raise HTTPException(status_code=400, detail="Failed to cancel download")
 
-        return MLModelActionResponse.model_validate(  # type: ignore[no-any-return]
+        return MLModelActionResponse.model_validate(
             {
                 "model_id": model_id,
                 "status": "cancelling",
@@ -145,15 +178,18 @@ async def cancel_download(model_id: str) -> MLModelActionResponse:
     "/{model_id}",
     response_model=MLModelActionResponse,
     summary="Delete ML model",
+    responses=GATED,
 )
-async def delete_model(model_id: str) -> MLModelActionResponse:
-    """Remove an installed model from the local cache."""
+async def delete_model(model_id: str, session: CurrentSession) -> MLModelActionResponse | JSONResponse:
+    """Remove an installed model from the local cache (operators only; else 403 ``MODEL_GATED``)."""
     try:
         manager = get_model_manager()
 
         model_info = manager.get_model_info(model_id)
         if model_info is None:
             raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+        if not session.operator:
+            return _gated(model_id, f"Only an operator can delete {model_info['name']} from this server.")
 
         if manager.get_model_status(model_id) != ModelStatus.AVAILABLE:
             raise HTTPException(status_code=400, detail=f"Model '{model_id}' is not installed")
@@ -163,7 +199,7 @@ async def delete_model(model_id: str) -> MLModelActionResponse:
             raise HTTPException(status_code=500, detail="Failed to delete model")
 
         logger.info(f"Deleted model {model_id}")
-        return MLModelActionResponse.model_validate(  # type: ignore[no-any-return]
+        return MLModelActionResponse.model_validate(
             {
                 "model_id": model_id,
                 "status": "deleted",

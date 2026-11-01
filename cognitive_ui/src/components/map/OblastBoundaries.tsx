@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { Layer, Source, useMap } from 'react-map-gl/maplibre';
+import { useMapColours } from './mapColours';
 
 const LINE_ID = 'oblast-boundaries-line';
 
 /** Ukrainian oblast boundaries (static GeoJSON in /public), always drawn above imagery. */
 export function OblastBoundaries() {
   const { current: mapRef } = useMap();
+  const colours = useMapColours();
 
   useEffect(() => {
     const map = mapRef?.getMap();
@@ -24,12 +26,13 @@ export function OblastBoundaries() {
   }, [mapRef]);
 
   return (
-    <Source id="oblast-boundaries" type="geojson" data="/ukraine_oblasts.json">
+    // The boundaries derive from OCHA's dataset on HDX (CC BY-IGO 3.0), which requires this credit wherever they are shown.
+    <Source id="oblast-boundaries" type="geojson" data="/ukraine_oblasts.json" attribution="Oblast boundaries: OCHA / HDX, CC BY-IGO 3.0">
       <Layer
         id={LINE_ID}
         type="line"
         paint={{
-          'line-color': '#facc15',
+          'line-color': colours.boundaries,
           'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.8, 10, 2],
           'line-opacity': 0.9,
         }}

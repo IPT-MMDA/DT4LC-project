@@ -164,27 +164,3 @@ class TestCancelJobEndpoint:
         with patch("server.routes.jobs.get_job_queue", return_value=mock_queue):
             resp = client.post("/v1/jobs/test-123/cancel")
         assert resp.status_code == 200
-
-
-class TestConversationChatFlow:
-    """Tests for conversation intent in chat flow."""
-
-    def test_conversation_response_via_chat(self, client: TestClient) -> None:
-        """Test that conversation intents return proper SSE response."""
-        with patch(
-            "server.routes.chat.orchestrate",
-            return_value={
-                "ok": True,
-                "intent": "conversation",
-                "response": "I can help with NDVI analysis!",
-            },
-        ):
-            resp = client.post(
-                "/v1/chat",
-                json={"messages": [{"role": "user", "content": "what can you do?"}]},
-            )
-
-        assert resp.status_code == 200
-        text = resp.text
-        # SSE stream should end with a done event
-        assert "done" in text

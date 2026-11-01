@@ -28,7 +28,7 @@ import numpy as np
 import rasterio
 
 from dta.dti import artifact_files
-from dta.dti.raster import reflectance_divisor
+from dta.dti.raster import pixel_area_km2, reflectance_divisor
 
 # Try to import matplotlib for visualization
 try:
@@ -45,6 +45,9 @@ NDSI_THRESHOLD = 0.4
 NDVI_CENTER = 0.1
 NDVI_TOLERANCE = 0.025
 BRIGHTNESS_THRESHOLD = 0.3
+
+# snow_mask value -> (name, colour), the colours of the classification PNG.
+SNOW_CLASSES = {0: ("No Snow", "#667f4c"), 1: ("Snow", "#ffcc66")}
 
 
 def _create_snow_classification_visualization(
@@ -171,8 +174,10 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
             - rasters: GeoTIFF references ``snow_mask`` (binary snow classification),
               ``ndsi``, ``ndvi`` and ``brightness`` (green band brightness)
             - metadata: Raster metadata
-            - visualizations: PNG references
+            - visualizations: PNG references (+ the map-only ``snow_classification_bare``)
             - statistics: Classification statistics
+            - class_statistics: Per class name (``No Snow``, ``Snow``) ``{id, name,
+              colour, pixels, percent, area_km2}`` (area ``None`` for an unprojected CRS)
             - path: Input path
 
     Raises:
@@ -314,9 +319,23 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
                 title=f"Classification Criteria - {Path(raster_path).stem}",
             )
 
+        pixel_km2 = pixel_area_km2(src.crs, src.transform)
+        class_statistics: dict[str, dict[str, Any]] = {}
+        for class_id, (class_name, colour) in SNOW_CLASSES.items():
+            pixel_count = snow_pixels if class_id == 1 else total_valid - snow_pixels
+            class_statistics[class_name] = {
+                "id": class_id,
+                "name": class_name,
+                "colour": colour,
+                "pixels": pixel_count,
+                "percent": round(100 * pixel_count / total_valid, 2) if total_valid > 0 else 0.0,
+                "area_km2": round(pixel_count * pixel_km2, 3) if pixel_km2 is not None else None,
+            }
+
         result = {
             "metadata": metadata,
             "statistics": stats,
+            "class_statistics": class_statistics,
             "path": str(raster_path),
         }
         rasters = {
@@ -325,7 +344,16 @@ def classify_snow(raster_path: str) -> dict[str, Any]:
             "ndvi": ndvi,
             "brightness": brightness,
         }
-        return artifact_files.save(result, rasters, visualizations, crs=src.crs, transform=src.transform)
+        styles = {"snow_mask": artifact_files.class_style({k: colour for k, (_, colour) in SNOW_CLASSES.items()})}
+        return artifact_files.save(
+            result,
+            rasters,
+            visualizations,
+            crs=src.crs,
+            transform=src.transform,
+            styles=styles,
+            bare={"snow_classification": "snow_mask"},
+        )
 
 
 # Convenience function for registry integration

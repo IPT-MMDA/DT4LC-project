@@ -26,11 +26,13 @@ RESOURCES_PATH = ROOT_DIR / "resources"
 RESOURCES_PATH.mkdir(parents=True, exist_ok=True)
 
 # Main cache directory - resources/.cache/
-CACHE_PATH = RESOURCES_PATH / ".cache"
+# Can be overridden via DT4LC_CACHE_PATH env var; every default below derives from it
+CACHE_PATH = Path(os.environ.get("DT4LC_CACHE_PATH", str(RESOURCES_PATH / ".cache")))
 CACHE_PATH.mkdir(parents=True, exist_ok=True)
 
 # Temporary files - resources/.cache/tmp/
-TEMP_PATH = CACHE_PATH / "tmp"
+# Can be overridden via DT4LC_TEMP_PATH env var
+TEMP_PATH = Path(os.environ.get("DT4LC_TEMP_PATH", str(CACHE_PATH / "tmp")))
 TEMP_PATH.mkdir(parents=True, exist_ok=True)
 
 # ML models cache - resources/.cache/models/
@@ -44,7 +46,8 @@ UPLOADS_PATH = Path(os.environ.get("DT4LC_UPLOADS_PATH", str(CACHE_PATH / "uploa
 UPLOADS_PATH.mkdir(parents=True, exist_ok=True)
 
 # Job output files (GeoTIFF/PNG artifacts) - resources/.cache/outputs/<job_id>/
-OUTPUTS_PATH = CACHE_PATH / "outputs"
+# Can be overridden via DT4LC_OUTPUTS_PATH env var
+OUTPUTS_PATH = Path(os.environ.get("DT4LC_OUTPUTS_PATH", str(CACHE_PATH / "outputs")))
 OUTPUTS_PATH.mkdir(parents=True, exist_ok=True)
 
 # Job storage database - resources/.cache/jobs.db

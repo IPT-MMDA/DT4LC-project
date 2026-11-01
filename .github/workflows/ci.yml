@@ -128,7 +128,8 @@ jobs:
         run: npm run lint
 
       - name: TypeScript check
-        run: npx tsc --noEmit
+        # -b: tsconfig.json has `files: []` and only references the app and node projects.
+        run: npx tsc -b --noEmit
 
   frontend-test:
     name: Frontend Test
@@ -176,3 +177,60 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e-smoke:
+    name: E2E Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
+
+      - name: Install Python dependencies
+        run: uv sync --frozen --extra dev --extra server
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: cognitive_ui/package-lock.json
+
+      - name: Install Node dependencies
+        working-directory: cognitive_ui
+        run: npm ci
+
+      - name: Build
+        working-directory: cognitive_ui
+        run: npm run build
+
+      - name: Install Chromium headless shell
+        working-directory: cognitive_ui
+        run: npx playwright-core install --with-deps chromium-headless-shell
+
+      - name: Run E2E smoke
+        working-directory: cognitive_ui
+        run: npm run e2e:smoke
+        env:
+          E2E_LLM: none
+
+      - name: Upload E2E output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke
+          path: cognitive_ui/tests/e2e/out/

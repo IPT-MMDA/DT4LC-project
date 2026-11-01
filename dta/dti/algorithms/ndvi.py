@@ -64,7 +64,14 @@ def ndvi_change(
         "before_path": ndvi_before.get("path"),
         "after_path": ndvi_after.get("path"),
     }
-    return artifact_files.save(result, {"change": change}, None, crs=crs, transform=transform)
+    return artifact_files.save(
+        result,
+        {"change": change},
+        None,
+        crs=crs,
+        transform=transform,
+        styles={"change": artifact_files.change_style(0.5)},
+    )
 
 
 def run(RasterPath: str) -> dict[str, Any]:  # noqa: N803  # CamelCase mirrors registry input key

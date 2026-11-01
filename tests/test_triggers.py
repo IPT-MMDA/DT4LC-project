@@ -111,6 +111,17 @@ class TestExtensibilityViaTriggerIndex:
             "render_system_prompt should enumerate every user-runnable item from the registry"
         )
 
+    def test_catalog_and_system_prompt_use_whole_descriptions(self) -> None:
+        """Every line of a description, not only the first (v0.5.0 review), as a markdown list."""
+        from dta.dti.registry import get_item, load_registry
+
+        idx = TriggerIndex.from_registry(load_registry())
+        lines = (get_item(idx.registry, "algorithms/change-detection").description or "").strip().splitlines()
+        assert len(lines) > 1
+        catalog = idx.render_catalog_response()
+        assert "\n- **Change Detection (multi-index)** — " + " ".join(" ".join(lines).split()) in catalog
+        assert lines[-1].strip() in idx.render_system_prompt()
+
     def test_generic_verbs_are_constant(self) -> None:
         # GENERIC_ACTION_VERBS belongs to the English layer, not the registry layer:
         # the same set must apply regardless of which items are registered.

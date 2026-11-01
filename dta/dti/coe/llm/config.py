@@ -9,6 +9,8 @@ from typing import Any
 
 import yaml
 
+from dta.config.overrides import getenv
+
 from .router import LLMRouter
 
 # Track model rotation state
@@ -50,7 +52,7 @@ def _is_provider_enabled(provider: str) -> bool:
         True if enabled (default: True)
     """
     env_var = f"LLM_ENABLE_{provider.upper()}"
-    value = os.environ.get(env_var, "true").lower()
+    value = getenv(env_var, "true").lower()
     return value in ("true", "1", "yes", "on")
 
 
@@ -60,7 +62,7 @@ def _get_provider_order() -> list[str]:
     Returns:
         List of provider names in priority order
     """
-    order_str = os.environ.get("LLM_PROVIDER_ORDER", "gemini,groq,ollama")
+    order_str = getenv("LLM_PROVIDER_ORDER", "gemini,groq,ollama")
     return [p.strip().lower() for p in order_str.split(",") if p.strip()]
 
 
@@ -74,7 +76,7 @@ def _get_models_list(env_var: str, default: str) -> list[str]:
     Returns:
         List of model names
     """
-    models_str = os.environ.get(env_var, default)
+    models_str = getenv(env_var, default)
     return [m.strip() for m in models_str.split(",") if m.strip()]
 
 
@@ -129,11 +131,11 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
             return {"type": "gemini", "model": model, "fallback_models": models[i + 1 :] + models[:i]}
     elif provider == "groq":
         if os.environ.get("GROQ_API_KEY"):
-            model = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+            model = getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
             return {"type": "groq", "model": model}
     elif provider == "ollama":
         ollama_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.2")
+        ollama_model = getenv("OLLAMA_MODEL", "llama3.2")
         return {
             "type": "ollama",
             "model": ollama_model,
@@ -142,7 +144,7 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     elif provider == "apertus":
         # Apertus requires explicit opt-in (heavy local model)
         if os.environ.get("APERTUS_ENABLED", "false").lower() in ("true", "1", "yes", "on"):
-            model = os.environ.get("APERTUS_MODEL", "swiss-ai/Apertus-8B")
+            model = getenv("APERTUS_MODEL", "swiss-ai/Apertus-8B")
             device = os.environ.get("APERTUS_DEVICE", "0")  # GPU device index or "cpu"
             dtype = os.environ.get("APERTUS_DTYPE", "bfloat16")
             return {

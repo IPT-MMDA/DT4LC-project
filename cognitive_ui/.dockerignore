@@ -29,3 +29,7 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# E2E harness artefacts
+tests/e2e/.libroot/
+tests/e2e/out/
