@@ -8,7 +8,7 @@ for v in GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET OPERATOR_EMAILS LLM_PROVIDER_ORDE
 done
 docker compose config --quiet && echo "compose config: valid"
 echo "services: $(docker compose config --services | tr '\n' ' ')"
-docker compose up -d --build
+if grep -qE "^COMPOSE_FILE=.*ghcr" .env; then docker compose pull -q && docker compose up -d; else docker compose up -d --build; fi
 docker compose ps -a
 echo "--- health";       curl -s http://127.0.0.1:8080/v1/health | head -c 300; echo
 echo "--- sign-in";      curl -s http://127.0.0.1:8080/v1/auth/status; echo

@@ -49,3 +49,15 @@ variable "manage_dns" {
   type        = bool
   default     = true
 }
+
+variable "github_repository" {
+  description = "owner/name of the GitHub repository whose Actions may deploy to the host (Workload Identity Federation, no stored key). Empty disables the CI identity."
+  type        = string
+  default     = "IPT-MMDA/DT4LC-project"
+}
+
+variable "ci_terraform_apply" {
+  description = "Also let the CI identity apply this configuration (it then needs project-wide roles). Off: CI only updates the containers."
+  type        = bool
+  default     = false
+}

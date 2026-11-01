@@ -6,6 +6,7 @@ locals {
   services = toset(concat(
     ["compute.googleapis.com", "iam.googleapis.com", "earthengine.googleapis.com", "serviceusage.googleapis.com"],
     var.manage_dns ? ["dns.googleapis.com"] : [],
+    var.github_repository != "" ? ["iamcredentials.googleapis.com", "sts.googleapis.com", "iap.googleapis.com", "oslogin.googleapis.com"] : [],
   ))
 }
 

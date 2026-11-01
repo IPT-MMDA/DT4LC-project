@@ -6,7 +6,8 @@ One Compute Engine VM runs the demo stack of [docs/DEPLOY_DEMO.md](../../docs/DE
 |---|---|---|
 | `terraform/` | your machine | enables the APIs, reserves a static address, opens 80 and 443 (SSH through IAP only), creates the Earth Engine service account, the VM, and optionally a Cloud DNS zone with the A records |
 | `startup.sh` | the VM, first boot | installs Docker Engine with Compose v2 and Caddy, clones the repository at the requested tag, writes the Caddyfile and a `.env` with every non-secret value |
-| `finish.sh` | the VM, after you complete `.env` | validates the compose configuration, builds and starts the stack, runs the section-3 checks |
+| `finish.sh` | the VM, after you complete `.env` | validates the compose configuration, pulls the published images (or builds), starts the stack, runs the section-3 checks |
+| `update.sh` | the VM | moves the checkout to a ref and the stack to the matching published images; what `deploy.yml` runs |
 | `Caddyfile` | the VM | the TLS proxy for the domain, with `www` redirected |
 
 Sizing: `e2-standard-4` (4 vCPU, 16 GB) runs the models on CPU in a few minutes; `e2-standard-2` works at about half the price and twice the time. The disk is 50 GB because the backend image is 12 GB.
@@ -44,3 +45,20 @@ Sizing: `e2-standard-4` (4 vCPU, 16 GB) runs the models on CPU in a few minutes;
 8. **Upgrades and backups:** runbook section 10. `resources/.cache/` holds the job database, uploads, outputs, the settings overrides and the Earth Engine key.
 
 The key file stays in `~/.dt4lc/` on your machine and under `resources/.cache/` on the host; both are outside git.
+
+## Automatic deploys from GitHub Actions
+
+`.github/workflows/deploy.yml` does two things, and both are no-ops until the repository variables exist, so forks and contributors are unaffected:
+
+- **containers:** after "Docker Build & Push" has published the images of a release tag or of `master`, it opens an IAP tunnel to the host and runs `update.sh` with that ref and image tag. A merge into `master` therefore reaches the demo a few minutes later as `latest`; a tag reaches it as its version. `workflow_dispatch` deploys any ref by hand.
+- **Terraform:** `plan` on pull requests that touch `deploy/gcp/terraform/`, `apply` on `master` when `TF_APPLY_IN_CI` is `true`. Until then, apply locally.
+
+Authentication is Workload Identity Federation: Terraform creates a `dt4lc-deployer` service account that GitHub Actions of this repository, and no one else, may impersonate. No key is stored in GitHub, and no project id or secret is in the repository.
+
+Set-up, once, by the project owner:
+
+1. Apply locally (steps 1 and 2 above). `terraform output github_actions_variables` prints the values.
+2. In the repository: Settings → Secrets and variables → Actions → Variables: `GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`, `GCP_ZONE`, `GCP_VM`, `DEMO_DOMAIN`. For Terraform in CI, also `TF_STATE_BUCKET` (a bucket you created, see `backend.gcs.tf.example`) and `TF_APPLY_IN_CI`.
+3. Make the two packages public (the package's settings → Change visibility), or the host cannot pull them; the release notes already tell readers to pull them.
+
+Anyone deploying their own instance uses the same Terraform with their own `terraform.tfvars`; with `github_repository = ""` no CI identity is created.

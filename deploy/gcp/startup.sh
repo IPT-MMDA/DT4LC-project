@@ -8,6 +8,9 @@ MARK=/var/lib/dt4lc/provisioned
 MD=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 DOMAIN=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-domain" || echo dt4lc.org)
 REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.0)
+# Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.0 -> 0.6.0, master -> latest).
+TAG=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-image-tag" || true)
+if [ -z "$TAG" ]; then case "$REF" in v[0-9]*) TAG=${REF#v} ;; *) TAG=latest ;; esac; fi
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -q
@@ -51,7 +54,9 @@ PY
       printf '%s=%s\n' "$1" "$2" >> "$ENV"
     fi
   }
-  setvar COMPOSE_FILE docker-compose.yml:docker-compose.demo.yml
+  # Published images (docker-compose.ghcr.yml); drop that file from COMPOSE_FILE to build from source.
+  setvar COMPOSE_FILE docker-compose.yml:docker-compose.demo.yml:docker-compose.ghcr.yml
+  setvar DT4LC_IMAGE_TAG "$TAG"
   setvar COMPOSE_PROFILES demo
   setvar SESSION_SECRET "$(openssl rand -hex 32)"
   setvar SESSION_COOKIE_SECURE true

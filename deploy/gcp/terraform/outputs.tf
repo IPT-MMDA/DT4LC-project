@@ -22,3 +22,15 @@ output "ssh" {
 output "copy_key" {
   value = "gcloud compute scp --zone ${var.zone} --tunnel-through-iap ~/.dt4lc/gee-key-${var.project}.json ${var.vm_name}:gee-key.json"
 }
+
+output "github_actions_variables" {
+  description = "Repository variables for .github/workflows/deploy.yml (Settings > Secrets and variables > Actions > Variables)."
+  value = var.github_repository != "" ? {
+    GCP_PROJECT_ID   = var.project
+    GCP_WIF_PROVIDER = google_iam_workload_identity_pool_provider.github[0].name
+    GCP_DEPLOYER_SA  = google_service_account.deployer[0].email
+    GCP_ZONE         = var.zone
+    GCP_VM           = var.vm_name
+    DEMO_DOMAIN      = var.domain
+  } : {}
+}
