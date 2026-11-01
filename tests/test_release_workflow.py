@@ -33,23 +33,24 @@ def test_release_notes_pull_lowercase_images_and_run_from_source(tmp_path: Path)
     script = notes["run"]
     for expr, value in {
         "${{ github.ref_name }}": "v0.5.0",
-        "${{ github.repository }}": "IPT-MMDA/DT4LC-project",
-        "${{ github.event.repository.name }}": "DT4LC-project",
+        "${{ github.repository }}": "IPT-MMDA/dt4lc",
+        "${{ github.event.repository.name }}": "dt4lc",
+        "${{ needs.prepare.outputs.version }}": "0.5.0",
     }.items():
         script = script.replace(expr, value)
     assert "${{" not in script
     output = tmp_path / "github_output"
     env = {
         "PATH": "/usr/bin:/bin:/usr/local/bin",
-        "BACKEND_REF": "ghcr.io/IPT-MMDA/DT4LC-project/backend:0.5.0",
-        "FRONTEND_REF": "ghcr.io/IPT-MMDA/DT4LC-project/frontend:0.5.0",
+        "BACKEND_REF": "ghcr.io/IPT-MMDA/dt4lc/backend:0.5.0",
+        "FRONTEND_REF": "ghcr.io/IPT-MMDA/dt4lc/frontend:0.5.0",
         "GITHUB_OUTPUT": str(output),
     }
     subprocess.run(["bash", "-c", script], cwd=ROOT, env=env, check=True, capture_output=True)
     text = output.read_text(encoding="utf-8")
 
-    assert "docker pull ghcr.io/ipt-mmda/dt4lc-project/backend:0.5.0" in text
-    assert "docker pull ghcr.io/ipt-mmda/dt4lc-project/frontend:0.5.0" in text
-    assert "git clone --branch v0.5.0 https://github.com/IPT-MMDA/DT4LC-project.git" in text
+    assert "docker pull ghcr.io/ipt-mmda/dt4lc/backend:0.5.0" in text
+    assert "docker pull ghcr.io/ipt-mmda/dt4lc/frontend:0.5.0" in text
+    assert "git clone --branch v0.5.0 https://github.com/IPT-MMDA/dt4lc.git" in text
     assert "docker compose --profile ollama up -d" in text
     assert "dt4lc-deploy" not in text

@@ -69,7 +69,7 @@
   "access_right": "open",
   "related_identifiers": [
     {
-      "identifier": "https://github.com/IPT-MMDA/DT4LC-project",
+      "identifier": "https://github.com/IPT-MMDA/dt4lc",
       "relation": "isSupplementTo",
       "resource_type": "software"
     }

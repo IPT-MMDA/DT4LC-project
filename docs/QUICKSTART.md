@@ -18,7 +18,7 @@ Get up and running with DT4LC in 5 minutes.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and navigate
-cd /path/to/DT4LC-project
+cd /path/to/dt4lc
 
 # Create virtual environment
 uv venv
