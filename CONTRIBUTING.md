@@ -33,7 +33,7 @@ Pull requests are reviewed by maintainers before merging.
 
 - `dev` is the integration branch: feature and fix branches start from it and their pull requests target it.
 - `master` holds released code. A release is a pull request from `dev` into `master`; the release commit on `master` is tagged `vX.Y.Z` (for example `v0.4.0`).
-- From v0.6.0 on, the release branch `release/vX.Y.Z` is merged into `dev`, and `dev` into `master`, with GitHub's "Create a merge commit", never squashed, so `master` keeps every commit with its author. The detailed history of v0.5.x, which was squashed on `master`, stays on the `release/v0.5.0` and `release/v0.5.1` branches, which are kept.
+- From v0.6.1 on, the release branch `release/vX.Y.Z` is merged into `dev`, and `dev` into `master`, with GitHub's "Create a merge commit", never squashed, so `master` keeps every commit with its author. The detailed history of v0.5.0 to v0.6.0, which were squash-merged, stays on the `release/v0.5.0`, `release/v0.5.1` and `release/v0.6.0` branches, which are kept.
 - Before tagging, the version is set to the same `X.Y.Z` in `dta/__init__.py`, `cognitive_ui/package.json` and `CITATION.cff` (with `date-released`).
 
 ## Development Setup

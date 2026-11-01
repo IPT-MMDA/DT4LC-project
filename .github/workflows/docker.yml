@@ -230,6 +230,9 @@ jobs:
           # GHCR image names are lowercase; github.repository is not.
           BACKEND_REF="${BACKEND_REF,,}"
           FRONTEND_REF="${FRONTEND_REF,,}"
+          # The version's section of CHANGELOG.md, when there is one: the notes a reader wants,
+          # instead of one line per commit (merge commits bring hundreds).
+          SECTION=$(awk -v v="${{ needs.prepare.outputs.version }}" 'index($0, "## [" v "]") == 1 {f=1; next} f && /^## \[/ {exit} f {print}' CHANGELOG.md 2>/dev/null | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')
           # Find previous tag (best-effort; first release will have none).
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
@@ -244,6 +247,10 @@ jobs:
             echo "notes<<EOF_NOTES"
             echo "$COMPARE_LINE"
             echo ""
+            if [ -n "$SECTION" ]; then
+              echo "$SECTION"
+              echo ""
+            fi
             echo "## Container Images"
             echo ""
             echo "Both images are published to GitHub Container Registry. Pull with:"
@@ -264,9 +271,11 @@ jobs:
             echo "docker compose --profile ollama up -d  # UI at http://localhost, API docs at http://localhost/docs"
             echo '```'
             echo ""
-            echo "## Changes"
-            echo ""
-            echo "$CHANGES"
+            if [ -z "$SECTION" ]; then
+              echo "## Changes"
+              echo ""
+              echo "$CHANGES"
+            fi
             echo "EOF_NOTES"
           } >> "$GITHUB_OUTPUT"
 
@@ -274,7 +283,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: DT4LC ${{ needs.prepare.outputs.version }}
+          name: ${{ github.ref_name }}
           body: ${{ steps.notes.outputs.notes }}
           draft: true
           # Auto-flag pre-releases on -alpha / -beta / -rc tags so stable

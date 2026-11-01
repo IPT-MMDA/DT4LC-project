@@ -5,7 +5,7 @@ message: >-
   and the preferred-citation below.
 type: software
 version: 0.6.0
-date-released: "2026-10-24"
+date-released: "2026-10-31"
 authors:
   - given-names: Anton
     family-names: Chernyatevich
