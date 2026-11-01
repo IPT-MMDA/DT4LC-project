@@ -2,10 +2,9 @@
 
 [![CI](https://github.com/IPT-MMDA/dt4lc/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/IPT-MMDA/dt4lc/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/IPT-MMDA/dt4lc)](https://github.com/IPT-MMDA/dt4lc/releases)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23865434.svg)](https://doi.org/10.5281/zenodo.23865434)
 [![status](https://joss.theoj.org/papers/02dccf6580cc7f33d2b341001b07fe95/status.svg)](https://joss.theoj.org/papers/02dccf6580cc7f33d2b341001b07fe95)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23865435.svg)](https://doi.org/10.5281/zenodo.23865435N)
-
 
 A cognitive digital twin framework for land cover change detection and vegetation analysis using satellite imagery, machine learning, and LLM-powered orchestration.
 
@@ -840,7 +839,7 @@ The paper describing DT4LC is under review at the [Journal of Open Source Softwa
 }
 ```
 
-To cite the software itself, use [CITATION.cff](CITATION.cff) (GitHub's "Cite this repository" button), or:
+To cite the software itself, use [CITATION.cff](CITATION.cff) (GitHub's "Cite this repository" button), or the entry below. Every release is archived on Zenodo; the DOI 10.5281/zenodo.23865434 always resolves to the latest version, and each release page links its own.
 
 ```bibtex
 @software{dt4lc_software,
@@ -848,6 +847,7 @@ To cite the software itself, use [CITATION.cff](CITATION.cff) (GitHub's "Cite th
   title   = {{DT4LC}: Digital Twin for Land Cover},
   version = {0.6.0},
   year    = {2026},
+  doi     = {10.5281/zenodo.23865435},
   url     = {https://github.com/IPT-MMDA/dt4lc}
 }
 ```

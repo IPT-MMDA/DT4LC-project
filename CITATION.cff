@@ -6,6 +6,14 @@ message: >-
 type: software
 version: 0.6.0
 date-released: "2026-10-31"
+doi: 10.5281/zenodo.23865435
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23865434
+    description: "The Zenodo record of all versions; resolves to the latest release."
+  - type: doi
+    value: 10.5281/zenodo.23865435
+    description: "The Zenodo record of version 0.6.0."
 authors:
   - given-names: Anton
     family-names: Chernyatevich
