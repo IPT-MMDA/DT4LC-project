@@ -3,7 +3,7 @@
 
 A package version is one image manifest, and every tag that points at it belongs to that
 version, so deleting a version removes all of its tags. This script lists the versions of
-``ghcr.io/ipt-mmda/dt4lc-project/backend`` and ``.../frontend`` and deletes only those whose
+``ghcr.io/ipt-mmda/dt4lc/backend`` and ``.../frontend`` and deletes only those whose
 every tag matches one of the patterns given; untagged versions and versions carrying any other
 tag are kept. Without ``--delete`` it only prints what it would do.
 
@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 
 ORG = "IPT-MMDA"
-PACKAGES = ["dt4lc-project/backend", "dt4lc-project/frontend"]
+PACKAGES = ["dt4lc/backend", "dt4lc/frontend"]
 API = "https://api.github.com"
 
 

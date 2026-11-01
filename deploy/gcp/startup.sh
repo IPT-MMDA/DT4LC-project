@@ -28,7 +28,7 @@ apt-get update -q
 apt-get install -y -q docker-ce docker-ce-cli containerd.io docker-compose-plugin caddy
 systemctl enable --now docker
 
-[ -d /opt/dt4lc/.git ] || git clone -q https://github.com/IPT-MMDA/DT4LC-project.git /opt/dt4lc
+[ -d /opt/dt4lc/.git ] || git clone -q https://github.com/IPT-MMDA/dt4lc.git /opt/dt4lc
 git -C /opt/dt4lc fetch -q --tags
 git -C /opt/dt4lc checkout -q "$REF"
 

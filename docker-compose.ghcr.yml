@@ -4,16 +4,16 @@
 # must `docker login ghcr.io` first.
 services:
   backend:
-    image: ghcr.io/ipt-mmda/dt4lc-project/backend:${DT4LC_IMAGE_TAG:-latest}
+    image: ghcr.io/ipt-mmda/dt4lc/backend:${DT4LC_IMAGE_TAG:-latest}
     build: !reset null
     pull_policy: always
 
   models-init:
-    image: ghcr.io/ipt-mmda/dt4lc-project/backend:${DT4LC_IMAGE_TAG:-latest}
+    image: ghcr.io/ipt-mmda/dt4lc/backend:${DT4LC_IMAGE_TAG:-latest}
     build: !reset null
     pull_policy: always
 
   frontend:
-    image: ghcr.io/ipt-mmda/dt4lc-project/frontend:${DT4LC_IMAGE_TAG:-latest}
+    image: ghcr.io/ipt-mmda/dt4lc/frontend:${DT4LC_IMAGE_TAG:-latest}
     build: !reset null
     pull_policy: always
