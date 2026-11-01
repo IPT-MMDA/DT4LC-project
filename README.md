@@ -1,5 +1,12 @@
 # DT4LC - Digital Twin for Land Cover
 
+[![CI](https://github.com/IPT-MMDA/dt4lc/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/IPT-MMDA/dt4lc/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/IPT-MMDA/dt4lc)](https://github.com/IPT-MMDA/dt4lc/releases)
+[![status](https://joss.theoj.org/papers/02dccf6580cc7f33d2b341001b07fe95/status.svg)](https://joss.theoj.org/papers/02dccf6580cc7f33d2b341001b07fe95)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23865435.svg)](https://doi.org/10.5281/zenodo.23865435N)
+
+
 A cognitive digital twin framework for land cover change detection and vegetation analysis using satellite imagery, machine learning, and LLM-powered orchestration.
 
 It is aimed at remote sensing researchers, environmental scientists and disaster response teams who need to perform land cover analysis without building custom processing pipelines.
