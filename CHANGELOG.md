@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to DT4LC are listed here, newest first. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each release, with its full notes and container images, is on the [GitHub releases page](https://github.com/IPT-MMDA/DT4LC-project/releases).
+All notable changes to DT4LC are listed here, newest first. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each release, with its full notes and container images, is on the [GitHub releases page](https://github.com/IPT-MMDA/dt4lc/releases).
 
 ## [0.6.0] - 2026-10-31
 
@@ -127,7 +127,7 @@ The revision for the JOSS review (openjournals/joss-reviews#11334). It also merg
 
 The version submitted to JOSS.
 
-[0.6.0]: https://github.com/IPT-MMDA/DT4LC-project/compare/v0.5.1...v0.6.0
-[0.5.1]: https://github.com/IPT-MMDA/DT4LC-project/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/IPT-MMDA/DT4LC-project/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/IPT-MMDA/DT4LC-project/tree/v0.4.0
+[0.6.0]: https://github.com/IPT-MMDA/dt4lc/compare/v0.5.1...v0.6.0
+[0.5.1]: https://github.com/IPT-MMDA/dt4lc/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/IPT-MMDA/dt4lc/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/IPT-MMDA/dt4lc/tree/v0.4.0

@@ -6,11 +6,11 @@ Thank you for your interest in contributing to DT4LC. This project is licensed u
 
 ### Getting Support
 
-Ask questions and get help by opening a [GitHub issue](https://github.com/IPT-MMDA/DT4LC-project/issues).
+Ask questions and get help by opening a [GitHub issue](https://github.com/IPT-MMDA/dt4lc/issues).
 
 ### Reporting Bugs
 
-Open a [GitHub issue](https://github.com/IPT-MMDA/DT4LC-project/issues) with:
+Open a [GitHub issue](https://github.com/IPT-MMDA/dt4lc/issues) with:
 
 - Steps to reproduce the problem
 - Expected vs actual behavior
@@ -43,8 +43,8 @@ Full guide: [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) (environment, str
 ### Backend
 
 ```bash
-git clone https://github.com/IPT-MMDA/DT4LC-project.git
-cd DT4LC-project
+git clone https://github.com/IPT-MMDA/dt4lc.git
+cd dt4lc
 cp .env.example .env        # configure LLM API keys
 uv sync --extra dev --extra server
 

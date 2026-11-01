@@ -7,8 +7,8 @@ Setup, layout, tests, adding algorithms, the COE flow, the job event stream, the
 **Prerequisites:** Python 3.10+, [uv](https://github.com/astral-sh/uv), optional [Task](https://taskfile.dev/).
 
 ```bash
-git clone https://github.com/IPT-MMDA/DT4LC-project.git
-cd DT4LC-project
+git clone https://github.com/IPT-MMDA/dt4lc.git
+cd dt4lc
 cp .env.example .env
 ```
 

@@ -107,8 +107,8 @@ The components, sessions, event stream and fallbacks are described in [docs/ARCH
 
 ```bash
 # 1. Clone and navigate to project
-git clone https://github.com/IPT-MMDA/DT4LC-project.git
-cd DT4LC-project
+git clone https://github.com/IPT-MMDA/dt4lc.git
+cd dt4lc
 
 # 2. Set up environment
 cp .env.example .env
@@ -811,12 +811,12 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 Besides the authors of the paper, these people contributed to DT4LC:
 
-- [Roman Petrov](https://github.com/pingmar): the EVI algorithm ([#31](https://github.com/IPT-MMDA/DT4LC-project/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/DT4LC-project/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/DT4LC-project/pull/47)).
-- [Kostia](https://github.com/Kostia9): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/DT4LC-project/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/DT4LC-project/pull/36)).
-- [Yehor](https://github.com/code1715): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/DT4LC-project/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/DT4LC-project/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/DT4LC-project/pull/42)).
-- [NataliaGon](https://github.com/NataliaGon): Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/DT4LC-project/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/DT4LC-project/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/DT4LC-project/pull/35)), which the v0.6.0 result layers build on.
-- [nik4nd](https://github.com/nik4nd): structured error responses ([#49](https://github.com/IPT-MMDA/DT4LC-project/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/DT4LC-project/pull/51)), which the v0.6.0 map mode builds on.
-- [Hanna Yailymova](https://github.com/annayailymova): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/DT4LC-project/pull/66)) and the repository's first commit.
+- [Roman Petrov](https://github.com/pingmar): the EVI algorithm ([#31](https://github.com/IPT-MMDA/dt4lc/pull/31)), the pre-commit hooks and their section in CONTRIBUTING ([#38](https://github.com/IPT-MMDA/dt4lc/pull/38)), and the file picker of the upload dropzone ([#47](https://github.com/IPT-MMDA/dt4lc/pull/47)).
+- [Kostia](https://github.com/Kostia9): the split of `server/app.py` into route modules ([#32](https://github.com/IPT-MMDA/dt4lc/pull/32)) and the SQLite job store ([#36](https://github.com/IPT-MMDA/dt4lc/pull/36)).
+- [Yehor](https://github.com/code1715): image input for the multimodal LLM providers ([#48](https://github.com/IPT-MMDA/dt4lc/pull/48)), the detailed health check ([#39](https://github.com/IPT-MMDA/dt4lc/pull/39)) and more backend tests ([#42](https://github.com/IPT-MMDA/dt4lc/pull/42)).
+- [NataliaGon](https://github.com/NataliaGon): Swagger UI and ReDoc through nginx, with response models on the routes ([#56](https://github.com/IPT-MMDA/dt4lc/pull/56)), and the developer guide ([#54](https://github.com/IPT-MMDA/dt4lc/pull/54)); "View on map" ([#35](https://github.com/IPT-MMDA/dt4lc/pull/35)), which the v0.6.0 result layers build on.
+- [nik4nd](https://github.com/nik4nd): structured error responses ([#49](https://github.com/IPT-MMDA/dt4lc/pull/49)); "Send to chat" from the map ([#51](https://github.com/IPT-MMDA/dt4lc/pull/51)), which the v0.6.0 map mode builds on.
+- [Hanna Yailymova](https://github.com/annayailymova): the CREODIAS deployment fixes ([#66](https://github.com/IPT-MMDA/dt4lc/pull/66)) and the repository's first commit.
 
 ## Citation
 
@@ -829,7 +829,7 @@ The paper describing DT4LC is under review at the [Journal of Open Source Softwa
   journal = {Journal of Open Source Software},
   year    = {2026},
   note    = {Under review; volume, issue, pages and DOI to be announced},
-  url     = {https://github.com/IPT-MMDA/DT4LC-project}
+  url     = {https://github.com/IPT-MMDA/dt4lc}
 }
 ```
 
@@ -841,7 +841,7 @@ To cite the software itself, use [CITATION.cff](CITATION.cff) (GitHub's "Cite th
   title   = {{DT4LC}: Digital Twin for Land Cover},
   version = {0.6.0},
   year    = {2026},
-  url     = {https://github.com/IPT-MMDA/DT4LC-project}
+  url     = {https://github.com/IPT-MMDA/dt4lc}
 }
 ```
 

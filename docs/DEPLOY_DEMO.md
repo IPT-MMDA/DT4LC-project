@@ -45,8 +45,8 @@ Contents:
 Get the code, and check out the release you deploy:
 
 ```bash
-git clone https://github.com/IPT-MMDA/DT4LC-project.git
-cd DT4LC-project
+git clone https://github.com/IPT-MMDA/dt4lc.git
+cd dt4lc
 git checkout <release tag>
 ```
 

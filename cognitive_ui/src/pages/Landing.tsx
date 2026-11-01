@@ -11,7 +11,7 @@ import type { SessionInfo } from '../types';
 // hero B, "What it can do", "How it works" and the footer. The hero sits on imagery
 // in both themes, so its ink (and its focus ring) is literal white.
 
-const GITHUB = 'https://github.com/IPT-MMDA/DT4LC-project';
+const GITHUB = 'https://github.com/IPT-MMDA/dt4lc';
 // The JOSS paper is in review and has no DOI yet: link its source in the repository.
 const PAPER = `${GITHUB}/blob/master/paper.md`;
 const HERO = '/landing/kakhovka_water_change_06-01_to_06-09';

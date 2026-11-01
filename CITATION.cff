@@ -56,7 +56,7 @@ authors:
   - given-names: Charlotte
     family-names: Poussin
     affiliation: "University of Geneva, Switzerland"
-repository-code: "https://github.com/IPT-MMDA/DT4LC-project"
+repository-code: "https://github.com/IPT-MMDA/dt4lc"
 url: "https://mmda.ipt.kpi.ua/"
 abstract: >-
   A cognitive digital twin framework for land cover change detection

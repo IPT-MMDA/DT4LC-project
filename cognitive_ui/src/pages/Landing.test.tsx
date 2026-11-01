@@ -257,9 +257,9 @@ describe('Landing', () => {
     expect(footer.getAllByTestId('logo-text-mark').map((m) => m.textContent)).toEqual(['SNSF']);
     expect(footer.getByText(/Grant 2023\.01\/0040/).textContent).toContain('Ukrainian-Swiss Joint Research Programme');
     expect(footer.getByText(/AGPL-3\.0/)).toBeTruthy();
-    expect(footer.getByRole('link', { name: 'GitHub ↗' }).getAttribute('href')).toBe('https://github.com/IPT-MMDA/DT4LC-project');
+    expect(footer.getByRole('link', { name: 'GitHub ↗' }).getAttribute('href')).toBe('https://github.com/IPT-MMDA/dt4lc');
     expect(footer.getByRole('link', { name: /Journal of Open Source Software/ }).getAttribute('href')).toBe(
-      'https://github.com/IPT-MMDA/DT4LC-project/blob/master/paper.md',
+      'https://github.com/IPT-MMDA/dt4lc/blob/master/paper.md',
     );
     expect(footer.getByText('Imagery: NASA HLS, Copernicus Sentinel-2')).toBeTruthy();
   });
