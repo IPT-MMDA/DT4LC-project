@@ -732,6 +732,17 @@ def test_prewar_prompts_route_to_the_prewar_comparison() -> None:
     assert idx.find_matching_item("Show how land cover changed since 2017").id == "algorithms/lulc-history"
 
 
+def test_broad_land_cover_questions_do_not_route_to_the_history() -> None:
+    """Change detection on the sample pair and the classifier keep their prompts: only "since <year>" is history."""
+    from dta.dti.coe.orchestrator import footprint_request
+    from dta.dti.coe.triggers import get_trigger_index
+
+    idx = get_trigger_index()
+    for p in ("How has land cover changed between 1 and 9 June?", "Show the land cover statistics"):
+        item = idx.find_matching_item(p)
+        assert (item.id if item else None) != "algorithms/lulc-history" and not footprint_request(p), p
+
+
 def test_hazard_land_is_named_in_words() -> None:
     kpi = features.KPI_CLASSES
     assert inference.land_text(["Crop", "Grass"], kpi) == "cropland and grassland"

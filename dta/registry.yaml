@@ -980,11 +980,8 @@ instances:
     inputs: [RasterPath]
     outputs: [LandCoverHistory]
     triggers:
-      keywords: ["land cover history", "land-cover history", "lulc history", "transition matrix",
-                 "land cover statistics", "land-cover statistics"]
+      keywords: ["land cover history", "land-cover history", "lulc history", "transition matrix"]
       action_phrases:
-        - "how land cover changed"
-        - "how has land cover changed"
         - "land cover changed since"
         - "show land cover history"
     user_guide:
