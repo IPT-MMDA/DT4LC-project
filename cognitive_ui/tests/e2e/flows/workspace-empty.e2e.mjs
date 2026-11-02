@@ -52,7 +52,7 @@ test('empty Workspace with the sample attached (?sample=1)', async () => {
     assert.match(await chip.innerText(), /HLS L30 · B2–B6 · 30 m · .* · 2023-06-01 → 06-09/);
     assert.match(await page.getByTestId('session-badge').innerText(), /^Guest\. \d+ of \d+ analyses left this hour · kept 24 h · no account\.$/);
     await page.getByRole('heading', { name: 'What do you want to know about this area?' }).waitFor();
-    assert.equal(await page.getByRole('list', { name: 'Suggestions' }).getByRole('button').count(), 5);
+    assert.equal(await page.getByRole('list', { name: 'Suggestions' }).getByRole('button').count(), 6);
     // The parameter is consumed, so a reload does not attach the sample again.
     await page.waitForURL((url) => !url.searchParams.has('sample'));
 
@@ -79,6 +79,7 @@ test('empty Workspace without the sample (?sample=0)', async () => {
         'Compare water before and after the dam breach ~50 s',
         'Detect field boundaries east of the river ~2 min',
         'Classify land cover on the flooded fields ~90 s',
+        'Predict future LULC ~1 min',
       ],
     );
     assert.equal(
