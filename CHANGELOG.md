@@ -2,6 +2,25 @@
 
 All notable changes to DT4LC are listed here, newest first. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each release, with its full notes and container images, is on the [GitHub releases page](https://github.com/IPT-MMDA/dt4lc/releases).
 
+## [0.6.1] - 2026-11-03
+
+The public demo and its deployment, and the CI that keeps it current.
+
+### Added
+
+- **A public demo host on Google Cloud**, described as Terraform in `deploy/gcp/terraform/`: the APIs, a static address, the firewall (80 and 443 public, SSH through IAP), an Earth Engine service account, a Debian 12 VM that provisions itself on first boot (`deploy/gcp/startup.sh`: Docker Engine, Compose v2, Caddy, the repository, a `.env` with every non-secret value), and an optional Cloud DNS zone. `deploy/gcp/finish.sh` starts the stack and runs the runbook's checks; `deploy/gcp/update.sh` moves the host to a release.
+- **Automatic deploys** (`.github/workflows/deploy.yml`): after the images of a release tag or of `master` are published, the demo host is updated over an IAP tunnel. GitHub Actions authenticates through Workload Identity Federation, so no key is stored; the project id and the host come from repository variables. Terraform plans on pull requests that touch the configuration and applies on `master` when enabled.
+- **`docker-compose.ghcr.yml`** runs the published images instead of building them (`DT4LC_IMAGE_TAG`).
+- **Release rules in CI:** the `Release gate` check admits pull requests into `master` from `dev` (a release), `hotfix/*` (a patch bump) or `docs/*` (documentation and workflows only); `Sync dev with master` opens a pull request from `master` into `dev` after each push to `master`; a documentation-only push to `master` builds no images.
+- `scripts/ghcr_prune.py` deletes stale container package versions by tag pattern.
+- README badges (CI, release, DOI, JOSS status, licence) and the Zenodo DOIs in `CITATION.cff`.
+
+### Changed
+
+- **The backend image installs torch from the CPU wheel index** (`TORCH_INDEX` build argument), so it no longer carries the CUDA libraries that no container used. A GPU image is `--build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu124`.
+- `CITATION.cff` cites the Zenodo concept DOI, which resolves to the latest release.
+- Hotfixes have a documented path: `hotfix/<topic>` from `master`, a patch bump, a pull request into `master`, then `master` back into `dev` (CONTRIBUTING).
+
 ## [0.6.0] - 2026-10-31
 
 A conversation-first workspace replaces the job-centred interface: you describe an analysis in plain language, and the assistant says what it will do, runs it and shows the result in the same message. `v0.6.0-alpha.1` was a preview with the backend contracts and the Workspace.
@@ -38,6 +57,7 @@ A conversation-first workspace replaces the job-centred interface: you describe 
 - **Breaking:** result statistics are keyed by band code (`B2`, …) instead of `band_<n>`, each date's change index is clipped to [−1, 1], artifact references gain `size_bytes` and `download_name` (their `url` ends in `&name=`), and every finished job has a `card`. Older jobs are returned as stored.
 - Map tiles are warped to Web Mercator, and multi-band rasters render in true colour by default.
 - The v0.5 routes (`/chat`, `/dashboard`, `/map`, `/jobs`, `/jobs/:jobId`, `/data`, `/models`, `/settings`) redirect to the new screens under `/app`.
+- The repository is `IPT-MMDA/dt4lc` (renamed from `IPT-MMDA/DT4LC-project`; the old address redirects), and the images are `ghcr.io/ipt-mmda/dt4lc/backend` and `/frontend`.
 - `CITATION.cff` and the README give the licence as `AGPL-3.0-or-later` (version 3 or any later version), as `pyproject.toml` does.
 - From this release on, `release/vX.Y.Z` is merged into `dev`, and `dev` into `master`, with merge commits, never squashed, so `master` keeps every commit with its author. The detailed v0.5.x history stays on the `release/v0.5.0` and `release/v0.5.1` branches.
 
@@ -127,6 +147,7 @@ The revision for the JOSS review (openjournals/joss-reviews#11334). It also merg
 
 The version submitted to JOSS.
 
+[0.6.1]: https://github.com/IPT-MMDA/dt4lc/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/IPT-MMDA/dt4lc/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/IPT-MMDA/dt4lc/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/IPT-MMDA/dt4lc/compare/v0.4.0...v0.5.0
