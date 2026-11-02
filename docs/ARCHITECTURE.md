@@ -33,7 +33,7 @@ DT4LC is a cognitive digital twin framework for geospatial analysis, combining:
 │  │ Digital Twin Instance (DTI)                                 ││
 │  │  • Pipeline Executor                                        ││
 │  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
-│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
+│  │  • Model Registry (Prithvi, Delineate-Anything, LULC hazard)││
 │  │  • Post-Processing (Visualization, Insights)                ││
 │  └─────────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────────┐│
@@ -463,7 +463,7 @@ dta/
 │   │   ├── plan_validator.py     # Validates plans
 │   │   └── orchestrator.py       # Main orchestration flow
 │   ├── algorithms/               # NDVI, Statistics, Change Detection
-│   ├── models/                   # Prithvi, Delineate-Anything
+│   ├── models/                   # Prithvi, Delineate-Anything, LULC change hazard
 │   ├── post_processing/          # Visualization, Insights
 │   └── executor.py               # Pipeline execution
 

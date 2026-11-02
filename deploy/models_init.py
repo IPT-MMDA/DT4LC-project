@@ -1,6 +1,6 @@
 """Pre-install the model weights for the public demo (the ``models-init`` service).
 
-Downloads every managed model (Prithvi EO v1 and Delineate-Anything) through the project's
+Downloads every managed model (Prithvi EO v1, Delineate-Anything, LULC change hazard) through the project's
 ModelManager into ``DT4LC_MODEL_CACHE`` (the ``models_data`` volume), so guests never trigger a
 download. A model already installed is skipped, so running it again is quick and harmless.
 ``DEMO_SKIP_MODEL_DOWNLOAD=1`` skips every download (smoke tests of the demo stack).
