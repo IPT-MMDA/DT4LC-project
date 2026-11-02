@@ -33,15 +33,15 @@ variable "vm_name" {
 }
 
 variable "machine_type" {
-  description = "e2-standard-4 runs the models on CPU in a few minutes; e2-standard-2 takes about twice as long."
+  description = "e2-standard-2 (2 vCPU, 8 GB) runs the models on CPU in some minutes; e2-standard-4 halves that at twice the price. Below 8 GB the model steps can run out of memory."
   type        = string
-  default     = "e2-standard-4"
+  default     = "e2-standard-2"
 }
 
 variable "disk_gb" {
-  description = "Boot disk: images about 1.2 GB, model weights 0.5 GB, the rest for uploads, results and the build cache."
+  description = "Boot disk: images about 1.2 GB, model weights 0.5 GB, the rest for uploads and results."
   type        = number
-  default     = 50
+  default     = 30
 }
 
 variable "manage_dns" {
