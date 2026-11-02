@@ -17,7 +17,7 @@ The public demo and its deployment, and the CI that keeps it current.
 
 ### Changed
 
-- **The backend image installs torch from the CPU wheel index** (`TORCH_INDEX` build argument), so it no longer carries the CUDA libraries that no container used. A GPU image is `--build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu124`.
+- **The backend image installs torch from the CPU wheel index** (`TORCH_INDEX` build argument), so it no longer carries the CUDA libraries that no container used: 1.1 GB instead of 12.3 GB. A GPU image is `--build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu124`.
 - `CITATION.cff` cites the Zenodo concept DOI, which resolves to the latest release.
 - Hotfixes have a documented path: `hotfix/<topic>` from `master`, a patch bump, a pull request into `master`, then `master` back into `dev` (CONTRIBUTING).
 

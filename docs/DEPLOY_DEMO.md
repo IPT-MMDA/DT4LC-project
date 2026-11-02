@@ -32,7 +32,7 @@ Contents:
 ## 1. Prerequisites
 
 - **A Linux host with Docker Engine and the Docker Compose v2 plugin.** The override uses Compose's `!reset` tag, which older Compose releases reject; the `config` check in section 3 tells you whether yours accepts it. Docker Desktop is not suitable, because it hides the client addresses (see [Troubleshooting](#11-troubleshooting)).
-- **Disk:** at least 20 GB free. The backend image is about 12 GB and the model weights about 0.5 GB. The build cache, uploads and results come on top.
+- **Disk:** at least 20 GB free. The backend image is about 1.1 GB (since v0.6.1; it was 12 GB with the CUDA build of torch) and the model weights about 0.5 GB. The build cache, uploads and results come on top.
 - **A DNS name** for the demo pointing at the host. This runbook uses `demo.example.org`. Ports 80 and 443 must be open to the internet for the TLS proxy and its certificate.
 - **Outbound HTTPS:**
   - Docker Hub, PyPI and npm while building;

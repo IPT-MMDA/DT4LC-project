@@ -39,7 +39,7 @@ variable "machine_type" {
 }
 
 variable "disk_gb" {
-  description = "Boot disk; the backend image alone is about 12 GB."
+  description = "Boot disk: images about 1.2 GB, model weights 0.5 GB, the rest for uploads, results and the build cache."
   type        = number
   default     = 50
 }

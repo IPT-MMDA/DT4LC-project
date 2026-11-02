@@ -10,7 +10,7 @@ One Compute Engine VM runs the demo stack of [docs/DEPLOY_DEMO.md](../../docs/DE
 | `update.sh` | the VM | moves the checkout to a ref and the stack to the matching published images; what `deploy.yml` runs |
 | `Caddyfile` | the VM | the TLS proxy for the domain, with `www` redirected |
 
-Sizing: `e2-standard-4` (4 vCPU, 16 GB) runs the models on CPU in a few minutes; `e2-standard-2` works at about half the price and twice the time. The disk is 50 GB because the backend image is 12 GB.
+Sizing: `e2-standard-4` (4 vCPU, 16 GB) runs the models on CPU in a few minutes; `e2-standard-2` works at about half the price and twice the time. The disk is 50 GB: the images take about 1.2 GB, the model weights 0.5 GB, and the rest is for uploads, results and the build cache.
 
 ## Steps
 
