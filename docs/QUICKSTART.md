@@ -102,7 +102,7 @@ Without signing in you are a guest: by default 5 analyses an hour, kept for 24 h
 
 ```bash
 curl http://localhost:8000/v1/health
-# {"ok":true,"service":"DT4LC","version":"0.6.1","assistant":{"connected":false,"offline":true,"provider":null,"model":null},"llm_providers":null,"gee":null,"models":null,"disk":null}
+# {"ok":true,"service":"DT4LC","version":"0.6.2","assistant":{"connected":false,"offline":true,"provider":null,"model":null},"llm_providers":null,"gee":null,"models":null,"disk":null}
 ```
 
 `assistant` names the LLM provider that answers, or shows `"offline": true` when none is available (see [API.md](API.md#get-v1health)).

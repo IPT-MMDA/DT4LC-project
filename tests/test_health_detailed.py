@@ -143,6 +143,13 @@ class TestCollectGeeStatus:
             status = _collect_gee_status()
         assert status.service_account_configured is False
 
+    def test_service_account_true_with_default_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("GEE_SERVICE_ACCOUNT_KEY", raising=False)
+        monkeypatch.setenv("GEE_USE_DEFAULT_CREDENTIALS", "true")
+        with patch("server.routes.health.is_initialized", return_value=False):
+            status = _collect_gee_status()
+        assert status.service_account_configured is True
+
 
 class TestCollectLLMProviders:
     def test_returns_list_on_success(self) -> None:

@@ -7,9 +7,9 @@ MARK=/var/lib/dt4lc/provisioned
 [ -f "$MARK" ] && exit 0
 MD=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 DOMAIN=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-domain" || echo dt4lc.org)
-REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.1)
+REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.2)
 PROJECT=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)
-# Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.1 -> 0.6.1, master -> latest).
+# Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.2 -> 0.6.2, master -> latest).
 TAG=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-image-tag" || true)
 if [ -z "$TAG" ]; then case "$REF" in v[0-9]*) TAG=${REF#v} ;; *) TAG=latest ;; esac; fi
 export DEBIAN_FRONTEND=noninteractive

@@ -537,7 +537,9 @@ class GEEStatus(BaseModel):  # type: ignore[misc]
     """Google Earth Engine initialization status."""
 
     initialized: bool
-    service_account_configured: bool
+    service_account_configured: bool = Field(
+        description="Credentials are configured: a key file (GEE_SERVICE_ACCOUNT_KEY) or GEE_USE_DEFAULT_CREDENTIALS"
+    )
     error: str | None = None
 
 
