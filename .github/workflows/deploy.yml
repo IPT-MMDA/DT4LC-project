@@ -1,9 +1,9 @@
-name: Deploy demo
+name: Deploy dt4lc.org
 
 # Two jobs, both no-ops until the repository variables from `terraform output
 # github_actions_variables` are set, so forks and contributors are unaffected:
 # - app: after "Docker Build & Push" has published the images of a tag or of master, write the
-#   `demo` environment's variables and secrets into the host's .env (deploy/gcp/configure.sh) and
+#   `dt4lc.org` environment's variables and secrets into the host's .env (deploy/gcp/configure.sh) and
 #   update the host, both over an IAP tunnel (deploy/gcp/update.sh);
 # - terraform: once TF_STATE_BUCKET names a bucket that holds the state (and the deployer has the
 #   roles to manage every resource, see deploy/gcp/README.md), plan on pull requests that touch
@@ -43,7 +43,9 @@ jobs:
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
       )
     runs-on: ubuntu-latest
-    environment: demo
+    environment:
+      name: dt4lc.org
+      url: https://${{ vars.DEMO_DOMAIN }}
     timeout-minutes: 30
     steps:
       - name: Which ref and image tag
@@ -69,7 +71,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       # GitHub reserves the GITHUB_ prefix for its own names, hence OAUTH_CLIENT_* in the environment.
-      - name: Configure the host from the demo environment
+      - name: Configure the host from the dt4lc.org environment
         if: steps.target.outputs.deploy == 'true'
         env:
           CONFIG_GITHUB_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
