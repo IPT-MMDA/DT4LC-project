@@ -1,0 +1,47 @@
+name: Sync dev with master
+
+# After anything lands on master (a release merge, a hotfix), open a pull request from master into
+# dev when dev does not already contain it, so dev carries every fix and the next release starts
+# from the same history. The pull request needs the usual review; the checks of its head commit
+# already ran on the push to master. Needs "Allow GitHub Actions to create and approve pull
+# requests" (Settings > Actions > General > Workflow permissions).
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Pull request master -> dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Does dev contain master?
+        id: check
+        run: |
+          if git merge-base --is-ancestor origin/master origin/dev; then
+            echo "dev already contains master"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open the pull request, unless one is open
+        if: steps.check.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh pr list --base dev --head master --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then echo "pull request #$existing is already open"; exit 0; fi
+          gh pr create --base dev --head master \
+            --title "Merge master into dev" \
+            --body "Opened by the Sync dev workflow after a push to master (${{ github.sha }}). Merge with a merge commit, so dev carries the release or hotfix. The checks of the head commit ran on the push to master."

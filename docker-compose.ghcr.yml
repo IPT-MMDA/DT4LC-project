@@ -1,0 +1,19 @@
+# Run the published images instead of building them: add this file to COMPOSE_FILE after the
+# others and set DT4LC_IMAGE_TAG to a release (0.6.0) or to latest (the master branch).
+# The images are built by .github/workflows/docker.yml; the packages must be public, or the host
+# must `docker login ghcr.io` first.
+services:
+  backend:
+    image: ghcr.io/ipt-mmda/dt4lc/backend:${DT4LC_IMAGE_TAG:-latest}
+    build: !reset null
+    pull_policy: always
+
+  models-init:
+    image: ghcr.io/ipt-mmda/dt4lc/backend:${DT4LC_IMAGE_TAG:-latest}
+    build: !reset null
+    pull_policy: always
+
+  frontend:
+    image: ghcr.io/ipt-mmda/dt4lc/frontend:${DT4LC_IMAGE_TAG:-latest}
+    build: !reset null
+    pull_policy: always

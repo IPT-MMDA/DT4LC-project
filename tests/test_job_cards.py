@@ -57,6 +57,7 @@ def _providers_down(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:9")
     monkeypatch.delenv("GEE_PROJECT_ID", raising=False)
     monkeypatch.delenv("GEE_SERVICE_ACCOUNT_KEY", raising=False)
+    monkeypatch.delenv("GEE_USE_DEFAULT_CREDENTIALS", raising=False)
     monkeypatch.setattr(gee_common, "_ee_initialized", False)
     reset_llm_router()
     get_llm_router()

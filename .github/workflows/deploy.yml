@@ -1,0 +1,138 @@
+name: Deploy demo
+
+# Two jobs, both no-ops until the repository variables from `terraform output
+# github_actions_variables` are set, so forks and contributors are unaffected:
+# - app: after "Docker Build & Push" has published the images of a tag or of master, write the
+#   `demo` environment's variables and secrets into the host's .env (deploy/gcp/configure.sh) and
+#   update the host, both over an IAP tunnel (deploy/gcp/update.sh);
+# - terraform: once TF_STATE_BUCKET names a bucket that holds the state (and the deployer has the
+#   roles to manage every resource, see deploy/gcp/README.md), plan on pull requests that touch
+#   deploy/gcp/terraform and apply on master when TF_APPLY_IN_CI is "true".
+# Authentication is Workload Identity Federation (no stored key); see deploy/gcp/README.md.
+
+on:
+  workflow_run:
+    workflows: ["Docker Build & Push"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "git ref to deploy: a release tag (v0.6.1) or master"
+        required: true
+        default: master
+  pull_request:
+    paths: ["deploy/gcp/terraform/**"]
+  push:
+    branches: [master]
+    paths: ["deploy/gcp/terraform/**"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+jobs:
+  app:
+    name: Update the demo host
+    if: >-
+      vars.GCP_PROJECT_ID != '' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      )
+    runs-on: ubuntu-latest
+    environment: demo
+    timeout-minutes: 30
+    steps:
+      - name: Which ref and image tag
+        id: target
+        env:
+          REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_branch }}
+        run: |
+          case "$REF" in
+            v[0-9]*.[0-9]*.[0-9]*) echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "tag=${REF#v}" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
+            master)                echo "ref=master" >> "$GITHUB_OUTPUT"; echo "tag=latest" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
+            *)                     echo "not a release tag or master: $REF"; echo "deploy=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Authenticate to Google Cloud
+        if: steps.target.outputs.deploy == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        if: steps.target.outputs.deploy == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+
+      # GitHub reserves the GITHUB_ prefix for its own names, hence OAUTH_CLIENT_* in the environment.
+      - name: Configure the host from the demo environment
+        if: steps.target.outputs.deploy == 'true'
+        env:
+          CONFIG_GITHUB_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
+          CONFIG_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          CONFIG_OPERATOR_EMAILS: ${{ vars.OPERATOR_EMAILS }}
+          CONFIG_ALLOWED_EMAILS: ${{ vars.ALLOWED_EMAILS }}
+          CONFIG_ALLOWED_DOMAINS: ${{ vars.ALLOWED_DOMAINS }}
+          CONFIG_LLM_PROVIDER_ORDER: ${{ vars.LLM_PROVIDER_ORDER }}
+          CONFIG_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CONFIG_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CONFIG_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          # NAME=VALUE lines for the non-empty ones; configure.sh prints the names it set, never the values.
+          # The checkout moves to the ref first, so the script of that ref runs (update.sh repeats it, harmlessly).
+          { env | grep '^CONFIG_' || true; } | sed 's/^CONFIG_//' | { grep -vE '^[A-Z0-9_]+=$' || true; } \
+            | gcloud compute ssh "${{ vars.GCP_VM }}" --zone "${{ vars.GCP_ZONE }}" --tunnel-through-iap --quiet \
+                --command "sudo git -C /opt/dt4lc fetch -q --tags origin && sudo git -C /opt/dt4lc checkout -q '${{ steps.target.outputs.ref }}' && sudo /opt/dt4lc/deploy/gcp/configure.sh"
+
+      - name: Update the host
+        if: steps.target.outputs.deploy == 'true'
+        run: |
+          gcloud compute ssh "${{ vars.GCP_VM }}" --zone "${{ vars.GCP_ZONE }}" --tunnel-through-iap --quiet \
+            --command "sudo /opt/dt4lc/deploy/gcp/update.sh '${{ steps.target.outputs.ref }}' '${{ steps.target.outputs.tag }}'"
+
+  terraform:
+    name: Terraform (demo host)
+    if: >-
+      vars.GCP_PROJECT_ID != '' && vars.TF_STATE_BUCKET != '' && (
+        github.event_name == 'push' ||
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: deploy/gcp/terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_project: ${{ vars.GCP_PROJECT_ID }}
+      TF_VAR_zone: ${{ vars.GCP_ZONE }}
+      TF_VAR_domain: ${{ vars.DEMO_DOMAIN }}
+      TF_VAR_github_repository: ${{ github.repository }}
+      TF_VAR_ci_terraform_apply: ${{ vars.TF_APPLY_IN_CI == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Init (remote state)
+        run: |
+          cp backend.gcs.tf.example backend.gcs.tf
+          terraform init -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: Plan
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Apply
+        if: github.event_name == 'push' && vars.TF_APPLY_IN_CI == 'true'
+        run: terraform apply -no-color tfplan

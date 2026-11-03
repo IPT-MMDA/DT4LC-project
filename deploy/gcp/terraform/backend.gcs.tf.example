@@ -1,0 +1,9 @@
+# Remote state in a Cloud Storage bucket, for CI or a team. Copy to backend.gcs.tf (git-ignored),
+# create the bucket once, and pass its name at init; the bucket name never enters the repository.
+#   gcloud storage buckets create gs://<bucket> --location=EU --uniform-bucket-level-access
+#   terraform init -backend-config="bucket=<bucket>" -migrate-state
+terraform {
+  backend "gcs" {
+    prefix = "dt4lc-demo"
+  }
+}

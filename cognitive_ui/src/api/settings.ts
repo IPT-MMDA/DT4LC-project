@@ -65,7 +65,7 @@ export interface SettingsAccess extends Editable {
 }
 
 export interface SettingsDataSources extends Editable {
-  earth_engine: { configured: boolean; project_id_present: boolean; key_file_present: boolean };
+  earth_engine: { configured: boolean; project_id_present: boolean; key_file_present: boolean; default_credentials: boolean };
   uploads: { path: string; files: number; bytes: number };
   sample: { name: string; bundled: boolean; path: string };
 }

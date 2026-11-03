@@ -36,6 +36,13 @@ RUN mkdir -p dta server && \
     echo '__version__ = "0.0.0"' > dta/__init__.py && \
     touch server/__init__.py
 
+# Torch from the CPU wheel index first: the PyPI wheel drags in the CUDA libraries, about 9 GB that
+# no container here can use. TORCH_INDEX=https://download.pytorch.org/whl/cu124 builds a GPU image.
+# The version is the one uv.lock pins, so the project install below keeps it.
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+RUN TORCH_VERSION=$(grep -A1 '^name = "torch"$' uv.lock | grep -oP 'version = "\K[^"]+') && \
+    uv pip install --system --index-url "$TORCH_INDEX" "torch==${TORCH_VERSION}"
+
 # Install dependencies (this layer is cached unless pyproject.toml/uv.lock change)
 RUN uv pip install --system -e ".[server]"
 
