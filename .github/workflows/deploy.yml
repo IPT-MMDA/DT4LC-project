@@ -2,8 +2,9 @@ name: Deploy demo
 
 # Two jobs, both no-ops until the repository variables from `terraform output
 # github_actions_variables` are set, so forks and contributors are unaffected:
-# - app: after "Docker Build & Push" has published the images of a tag or of master, update the
-#   demo host over an IAP tunnel (deploy/gcp/update.sh);
+# - app: after "Docker Build & Push" has published the images of a tag or of master, write the
+#   `demo` environment's variables and secrets into the host's .env (deploy/gcp/configure.sh) and
+#   update the host, both over an IAP tunnel (deploy/gcp/update.sh);
 # - terraform: plan on pull requests that touch deploy/gcp/terraform, apply on master when
 #   TF_APPLY_IN_CI is "true".
 # Authentication is Workload Identity Federation (no stored key); see deploy/gcp/README.md.
@@ -41,6 +42,7 @@ jobs:
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
       )
     runs-on: ubuntu-latest
+    environment: demo
     timeout-minutes: 30
     steps:
       - name: Which ref and image tag
@@ -64,6 +66,26 @@ jobs:
       - name: Set up gcloud
         if: steps.target.outputs.deploy == 'true'
         uses: google-github-actions/setup-gcloud@v2
+
+      # GitHub reserves the GITHUB_ prefix for its own names, hence OAUTH_CLIENT_* in the environment.
+      - name: Configure the host from the demo environment
+        if: steps.target.outputs.deploy == 'true'
+        env:
+          CONFIG_GITHUB_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
+          CONFIG_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          CONFIG_OPERATOR_EMAILS: ${{ vars.OPERATOR_EMAILS }}
+          CONFIG_ALLOWED_EMAILS: ${{ vars.ALLOWED_EMAILS }}
+          CONFIG_ALLOWED_DOMAINS: ${{ vars.ALLOWED_DOMAINS }}
+          CONFIG_LLM_PROVIDER_ORDER: ${{ vars.LLM_PROVIDER_ORDER }}
+          CONFIG_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CONFIG_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CONFIG_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          # NAME=VALUE lines for the non-empty ones; configure.sh prints the names it set, never the values.
+          # The checkout moves to the ref first, so the script of that ref runs (update.sh repeats it, harmlessly).
+          { env | grep '^CONFIG_' || true; } | sed 's/^CONFIG_//' | { grep -vE '^[A-Z0-9_]+=$' || true; } \
+            | gcloud compute ssh "${{ vars.GCP_VM }}" --zone "${{ vars.GCP_ZONE }}" --tunnel-through-iap --quiet \
+                --command "sudo git -C /opt/dt4lc fetch -q --tags origin && sudo git -C /opt/dt4lc checkout -q '${{ steps.target.outputs.ref }}' && sudo /opt/dt4lc/deploy/gcp/configure.sh"
 
       - name: Update the host
         if: steps.target.outputs.deploy == 'true'
