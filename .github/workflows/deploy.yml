@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "git ref to deploy: a release tag (v0.6.1) or master"
+        description: "git ref to deploy: a release tag (v0.6.2) or master"
         required: true
         default: master
   pull_request:

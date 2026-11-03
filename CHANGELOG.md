@@ -2,6 +2,20 @@
 
 All notable changes to DT4LC are listed here, newest first. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each release, with its full notes and container images, is on the [GitHub releases page](https://github.com/IPT-MMDA/dt4lc/releases).
 
+## [0.6.2] - 2026-11-03
+
+Deployment and CI fixes after the first automatic deploy of v0.6.1. The software is unchanged.
+
+### Fixed
+
+- The first automatic deploy after a merge into `master` configured the host from its first-boot checkout, where the configure script did not exist, and failed; a branch deploy now checks out `origin/<branch>`. Tag deploys were unaffected.
+
+### Changed
+
+- The deploy targets a GitHub environment named after the site, `dt4lc.org`, instead of `demo`; the workflow is "Deploy dt4lc.org", and the Deployments page links to the site.
+- `Sync dev with master` fast-forwards `dev` to `master` after a release when `dev` has no commits of its own, with a deploy key that the `dev` ruleset admits (`SYNC_DEPLOY_KEY`), so the two branches point at the same commit; when `dev` has moved on it opens the pull request as before.
+- The `Release gate` admits `ci/*` branches with workflow and documentation changes only, like `docs/*` (CONTRIBUTING).
+
 ## [0.6.1] - 2026-11-03
 
 The public demo and its deployment, and the CI that keeps it current.

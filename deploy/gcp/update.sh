@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # On the demo host: move the checkout to a git ref and the stack to the matching published images,
 # then restart what changed. Run with sudo, by a person or by .github/workflows/deploy.yml:
-#   update.sh v0.6.1 0.6.1      # a release
+#   update.sh v0.6.2 0.6.2      # a release
 #   update.sh master latest     # the master branch
 set -euo pipefail
 REF=${1:?git ref (a tag or master)}
-TAG=${2:?image tag (0.6.1 or latest)}
+TAG=${2:?image tag (0.6.2 or latest)}
 cd /opt/dt4lc
 git fetch -q --tags origin
 git checkout -q "$REF"
