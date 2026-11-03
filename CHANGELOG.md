@@ -4,10 +4,11 @@ All notable changes to DT4LC are listed here, newest first. The format is based 
 
 ## [0.6.2] - 2026-11-03
 
-Deployment and CI fixes after the first automatic deploy of v0.6.1. The software is unchanged.
+A health-report fix, and the deployment and CI fixes after the first automatic deploy of v0.6.1.
 
 ### Fixed
 
+- The detailed health report (`/v1/health?detailed=true`) said the Earth Engine service account was not configured on a host that uses default credentials (`GEE_USE_DEFAULT_CREDENTIALS`); it now reports credentials from either source.
 - The first automatic deploy after a merge into `master` configured the host from its first-boot checkout, where the configure script did not exist, and failed; a branch deploy now checks out `origin/<branch>`. Tag deploys were unaffected.
 
 ### Changed
