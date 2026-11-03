@@ -25,6 +25,7 @@ from dta.dti.coe.llm.base import BaseLLMProvider
 from dta.dti.coe.llm.config import _get_models_list, _get_provider_order, _is_provider_enabled
 from dta.dti.coe.llm.router import _KEY_PATTERN
 from dta.dti.data_sources.gee_common import is_configured as ee_is_configured
+from dta.dti.data_sources.gee_common import uses_default_credentials as ee_uses_default_credentials
 from dta.dti.models import model_states
 
 from .capabilities import deployment
@@ -255,6 +256,7 @@ def _data_sources() -> dict[str, Any]:
             "configured": ee_is_configured(),
             "project_id_present": bool(os.environ.get("GEE_PROJECT_ID")),
             "key_file_present": bool(key) and Path(key).is_file(),
+            "default_credentials": ee_uses_default_credentials(),
         },
         "uploads": _uploads(),
         "sample": {

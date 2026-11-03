@@ -164,7 +164,12 @@ def test_dev_role_operator_gets_five_sections_and_no_key_value(settings_file: Pa
     assert access["sign_in"] == {"configured": False}
     assert access["editable"]["sign_in"] is False and access["editable"]["operator_emails"] is True
     data = body["data_sources"]
-    assert data["earth_engine"] == {"configured": False, "project_id_present": False, "key_file_present": False}
+    assert data["earth_engine"] == {
+        "configured": False,
+        "project_id_present": False,
+        "key_file_present": False,
+        "default_credentials": False,
+    }
     assert data["sample"]["name"] == "kakhovka_hls_l30"
     assert not any(data["editable"].values())
     server = body["server"]

@@ -4,6 +4,9 @@ on:
   push:
     branches: [master, main]
     tags: ["v*.*.*"]
+    # A documentation-only merge into master does not need new images. The filter is on push
+    # only: pull requests into master must still run the image jobs, which the ruleset requires.
+    paths-ignore: ["**.md", "docs/**", "CITATION.cff", ".zenodo.json", "LICENSE"]
   pull_request:
     branches: [master, main]
   workflow_dispatch:

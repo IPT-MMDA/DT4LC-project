@@ -4,8 +4,13 @@ message: >-
   If you use this software, please cite it using the metadata from this file
   and the preferred-citation below.
 type: software
-version: 0.6.0
-date-released: "2026-10-31"
+version: 0.6.1
+date-released: "2026-11-03"
+doi: 10.5281/zenodo.23865434
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23865434
+    description: "The Zenodo record of all versions; it resolves to the latest release, and each release's own DOI is listed there."
 authors:
   - given-names: Anton
     family-names: Chernyatevich

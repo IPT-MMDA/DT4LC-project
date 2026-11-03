@@ -178,6 +178,43 @@ jobs:
       - name: Build
         run: npm run build
 
+  release-gate:
+    name: Release gate
+    # Pull requests into master come from dev (a release), from hotfix/* with a patch bump, or from
+    # docs/* with documentation or workflow changes only.
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: dev, or a hotfix that bumps only the patch version
+        env:
+          HEAD: ${{ github.head_ref }}
+        run: |
+          ver() { grep -oP '__version__\s*=\s*"\K[^"]+' "$@"; }
+          if [ "$HEAD" = dev ]; then echo "a release from dev"; exit 0; fi
+          case "$HEAD" in
+            docs/*)
+              # Documentation or CI only: no version bump, and nothing that ships in the software.
+              other=$(git diff --name-only origin/master...HEAD | grep -vE '(\.md$|^docs/|^CITATION\.cff$|^\.zenodo\.json$|^LICENSE$|^\.github/)' || true)
+              if [ -n "$other" ]; then echo "::error::a docs/* pull request may change documentation and workflow files only; these are not: $other"; exit 1; fi
+              echo "documentation or CI only"; exit 0 ;;
+            hotfix/*) ;;
+            *) echo "::error::pull requests into master come from dev (a release), hotfix/* (a patch) or docs/* (documentation); this one is from $HEAD"; exit 1 ;;
+          esac
+          base=$(git show origin/master:dta/__init__.py | ver -)
+          head=$(ver dta/__init__.py)
+          IFS=. read -r bM bm bp <<< "$base"
+          IFS=. read -r hM hm hp <<< "$head"
+          if [ "$hM" = "$bM" ] && [ "$hm" = "$bm" ] && [ "${hp%%[^0-9]*}" -gt "${bp%%[^0-9]*}" ]; then
+            echo "hotfix: $base -> $head"
+          else
+            echo "::error::a hotfix bumps only the patch version: master has $base, this branch $head"; exit 1
+          fi
+
   e2e-smoke:
     name: E2E Smoke
     runs-on: ubuntu-latest

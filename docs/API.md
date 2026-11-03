@@ -38,7 +38,7 @@ Health check endpoint.
 {
   "ok": true,
   "service": "DT4LC",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "assistant": {"connected": false, "offline": true, "provider": null, "model": null},
   "llm_providers": null,
   "gee": null,
@@ -55,7 +55,7 @@ Health check endpoint.
 {
   "ok": true,
   "service": "DT4LC",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "assistant": {"connected": true, "offline": false, "provider": "gemini", "model": "gemini-3.5-flash-lite"},
   "llm_providers": [
     { "name": "gemini", "model": "gemini-3.5-flash-lite", "available": true },

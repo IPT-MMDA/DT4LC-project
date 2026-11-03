@@ -518,6 +518,7 @@ def test_ee_is_configured_needs_project_and_key_file(monkeypatch: pytest.MonkeyP
     key = tmp_path / "key.json"
     monkeypatch.setenv("GEE_PROJECT_ID", "demo-project")
     monkeypatch.setenv("GEE_SERVICE_ACCOUNT_KEY", str(key))
+    monkeypatch.delenv("GEE_USE_DEFAULT_CREDENTIALS", raising=False)
     assert gee_common.is_configured() is False  # key file missing
     key.write_text("{}")
     assert gee_common.is_configured() is True
@@ -525,3 +526,17 @@ def test_ee_is_configured_needs_project_and_key_file(monkeypatch: pytest.MonkeyP
     assert gee_common.is_configured() is False
     monkeypatch.setattr(gee_common, "_ee_initialized", True)
     assert gee_common.is_configured() is True
+
+
+def test_ee_is_configured_accepts_default_credentials_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(gee_common, "_ee_initialized", False)
+    monkeypatch.setenv("GEE_PROJECT_ID", "demo-project")
+    monkeypatch.delenv("GEE_SERVICE_ACCOUNT_KEY", raising=False)
+    assert gee_common.is_configured() is False
+    monkeypatch.setenv("GEE_USE_DEFAULT_CREDENTIALS", "true")
+    assert gee_common.is_configured() is True
+    monkeypatch.setenv("GEE_USE_DEFAULT_CREDENTIALS", "no")
+    assert gee_common.is_configured() is False
+    monkeypatch.setenv("GEE_USE_DEFAULT_CREDENTIALS", "1")
+    monkeypatch.delenv("GEE_PROJECT_ID")
+    assert gee_common.is_configured() is False  # the project id is still required
