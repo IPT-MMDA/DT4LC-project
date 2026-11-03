@@ -13,7 +13,8 @@ export function DataSourcesSection({ doc }: { doc: SettingsDoc }) {
       <InfoRow label="Earth Engine">
         <span data-testid="ee-status">{yesNo(ee.configured, 'Configured', 'Not configured')}</span>
         <span className="text-[12px] text-muted">
-          Project id {ee.project_id_present ? 'present' : 'missing'} · key file {ee.key_file_present ? 'present' : 'missing'}
+          Project id {ee.project_id_present ? 'present' : 'missing'} · credentials{' '}
+          {ee.key_file_present ? 'key file' : ee.default_credentials ? 'host default' : 'missing'}
         </span>
       </InfoRow>
       <InfoRow label="Uploads">

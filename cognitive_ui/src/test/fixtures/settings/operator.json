@@ -265,7 +265,8 @@
     "earth_engine": {
       "configured": false,
       "project_id_present": false,
-      "key_file_present": false
+      "key_file_present": false,
+      "default_credentials": false
     },
     "uploads": {
       "path": "/tmp/dt4lc-e2e-state/uploads",

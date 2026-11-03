@@ -18,6 +18,11 @@ def is_initialized() -> bool:
     return _ee_initialized
 
 
+def uses_default_credentials() -> bool:
+    """``GEE_USE_DEFAULT_CREDENTIALS`` is set: the host's default credentials stand in for a key file."""
+    return os.getenv("GEE_USE_DEFAULT_CREDENTIALS", "").strip().lower() in {"1", "true", "yes"}
+
+
 def is_configured() -> bool:
     """Whether Earth Engine is initialised, or can be.
 
@@ -34,7 +39,7 @@ def is_configured() -> bool:
     key = os.getenv("GEE_SERVICE_ACCOUNT_KEY", "")
     if key and Path(key).is_file():
         return True
-    return os.getenv("GEE_USE_DEFAULT_CREDENTIALS", "").strip().lower() in {"1", "true", "yes"}
+    return uses_default_credentials()
 
 
 def initialize_gee() -> bool:

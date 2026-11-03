@@ -138,6 +138,7 @@ class TestCollectGeeStatus:
 
     def test_service_account_false_when_env_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("GEE_SERVICE_ACCOUNT_KEY", raising=False)
+        monkeypatch.delenv("GEE_USE_DEFAULT_CREDENTIALS", raising=False)
         with patch("server.routes.health.is_initialized", return_value=False):
             status = _collect_gee_status()
         assert status.service_account_configured is False

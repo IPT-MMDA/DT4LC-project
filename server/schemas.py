@@ -950,6 +950,9 @@ class SettingsEarthEngine(BaseModel):  # type: ignore[misc]
     )
     project_id_present: bool
     key_file_present: bool = Field(description="GEE_SERVICE_ACCOUNT_KEY names an existing file")
+    default_credentials: bool = Field(
+        description="GEE_USE_DEFAULT_CREDENTIALS is set: the host's default credentials stand in for a key file"
+    )
 
 
 class SettingsUploads(BaseModel):  # type: ignore[misc]

@@ -103,7 +103,7 @@ describe('Settings: the five sections from GET /v1/settings', () => {
     tab('Data sources');
     const data = section('data_sources');
     expect(within(data).getByTestId('ee-status').textContent).toBe('Not configured');
-    expect(data.textContent).toContain('Project id missing · key file missing');
+    expect(data.textContent).toContain('Project id missing · credentials missing');
     expect(data.textContent).toContain('/tmp/dt4lc-e2e-state/uploads');
     expect(data.textContent).toContain('0 files · 0 B');
     expect(data.textContent).toContain('kakhovka_hls_l30');

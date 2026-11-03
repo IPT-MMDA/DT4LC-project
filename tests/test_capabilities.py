@@ -518,6 +518,7 @@ def test_ee_is_configured_needs_project_and_key_file(monkeypatch: pytest.MonkeyP
     key = tmp_path / "key.json"
     monkeypatch.setenv("GEE_PROJECT_ID", "demo-project")
     monkeypatch.setenv("GEE_SERVICE_ACCOUNT_KEY", str(key))
+    monkeypatch.delenv("GEE_USE_DEFAULT_CREDENTIALS", raising=False)
     assert gee_common.is_configured() is False  # key file missing
     key.write_text("{}")
     assert gee_common.is_configured() is True

@@ -76,6 +76,7 @@ def _ee_not_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     """No Earth Engine project or key file, and not initialised: ``is_configured()`` is False."""
     monkeypatch.delenv("GEE_PROJECT_ID", raising=False)
     monkeypatch.delenv("GEE_SERVICE_ACCOUNT_KEY", raising=False)
+    monkeypatch.delenv("GEE_USE_DEFAULT_CREDENTIALS", raising=False)
     monkeypatch.setattr(gee_common, "_ee_initialized", False)
     assert gee_common.is_configured() is False
 
