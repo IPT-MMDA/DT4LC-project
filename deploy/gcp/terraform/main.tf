@@ -101,5 +101,11 @@ resource "google_compute_instance" "demo" {
   }
   metadata_startup_script = file("${path.module}/../startup.sh")
 
+  lifecycle {
+    # startup.sh runs on first boot only (it leaves /var/lib/dt4lc/provisioned); a later edit
+    # of it must not replace the host. A new host always gets the current script.
+    ignore_changes = [metadata_startup_script]
+  }
+
   depends_on = [google_project_service.apis]
 }

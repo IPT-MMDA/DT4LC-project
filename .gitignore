@@ -60,3 +60,4 @@ deploy/gcp/terraform/*.tfstate
 deploy/gcp/terraform/*.tfstate.*
 deploy/gcp/terraform/terraform.tfvars
 deploy/gcp/terraform/backend.gcs.tf
+deploy/gcp/terraform/tfplan
