@@ -18,6 +18,15 @@ fi
 docker compose pull -q
 docker compose up -d --remove-orphans
 docker image prune -f >/dev/null
-sleep 5
-curl -sf http://127.0.0.1:8080/v1/health | head -c 200; echo
-echo "deployed $REF (images :$TAG)"
+# The backend loads its models after the containers start; give it up to two minutes.
+for _ in $(seq 1 24); do
+  if health=$(curl -sf http://127.0.0.1:8080/v1/health); then
+    echo "${health:0:200}"
+    echo "deployed $REF (images :$TAG)"
+    exit 0
+  fi
+  sleep 5
+done
+echo "update.sh: the backend did not answer /v1/health within two minutes" >&2
+docker compose ps
+exit 1

@@ -1,7 +1,7 @@
 # Copy to terraform.tfvars (git-ignored) and set your values.
 project = "my-project-id"
 domain  = "dt4lc.org"
-ref     = "v0.6.0"
+ref     = "v0.6.1"
 # region       = "europe-west1"
 # zone         = "europe-west1-b"
 # machine_type = "e2-standard-4"

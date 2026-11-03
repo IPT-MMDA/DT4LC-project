@@ -7,9 +7,9 @@ MARK=/var/lib/dt4lc/provisioned
 [ -f "$MARK" ] && exit 0
 MD=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 DOMAIN=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-domain" || echo dt4lc.org)
-REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.0)
+REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.1)
 PROJECT=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)
-# Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.0 -> 0.6.0, master -> latest).
+# Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.1 -> 0.6.1, master -> latest).
 TAG=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-image-tag" || true)
 if [ -z "$TAG" ]; then case "$REF" in v[0-9]*) TAG=${REF#v} ;; *) TAG=latest ;; esac; fi
 export DEBIAN_FRONTEND=noninteractive
@@ -37,39 +37,28 @@ sed "s/dt4lc\.org/$DOMAIN/g" /opt/dt4lc/deploy/gcp/Caddyfile > /etc/caddy/Caddyf
 systemctl enable --now caddy
 systemctl reload caddy
 
-# .env: the template, then each demo value set in place (never a second copy of a variable).
+# .env: the template, then the demo values set in place by configure.sh (never a second copy).
 ENV=/opt/dt4lc/.env
 if [ ! -f "$ENV" ]; then
   cp /opt/dt4lc/.env.example "$ENV"
   chmod 600 "$ENV"
-  setvar() {  # setvar NAME VALUE: replace the (possibly commented) line, or append
-    if grep -qE "^#? *$1=" "$ENV"; then
-      python3 - "$ENV" "$1" "$2" <<'PY'
-import re, sys
-path, name, value = sys.argv[1:]
-text = open(path).read()
-text, n = re.subn(rf"^#? *{re.escape(name)}=.*$", f"{name}={value}", text, count=1, flags=re.M)
-open(path, "w").write(text)
-PY
-    else
-      printf '%s=%s\n' "$1" "$2" >> "$ENV"
-    fi
-  }
   # Published images (docker-compose.ghcr.yml); drop that file from COMPOSE_FILE to build from source.
-  setvar COMPOSE_FILE docker-compose.yml:docker-compose.demo.yml:docker-compose.ghcr.yml
-  setvar DT4LC_IMAGE_TAG "$TAG"
-  setvar COMPOSE_PROFILES demo
-  setvar SESSION_SECRET "$(openssl rand -hex 32)"
-  setvar SESSION_COOKIE_SECURE true
-  setvar GUEST_ANALYSES_PER_HOUR 5
-  setvar GUEST_SESSION_HOURS 24
-  setvar GUEST_CLEANUP_MINUTES 60
-  setvar OAUTH_REDIRECT_BASE "https://$DOMAIN"
-  setvar FRONTEND_PORT 127.0.0.1:8080
-  setvar LLM_ENABLE_OLLAMA false
   # Earth Engine: this project, as the VM's service account (no key file).
-  setvar GEE_PROJECT_ID "$PROJECT"
-  setvar GEE_USE_DEFAULT_CREDENTIALS true
+  DT4LC_ENV="$ENV" bash /opt/dt4lc/deploy/gcp/configure.sh <<PAIRS
+COMPOSE_FILE=docker-compose.yml:docker-compose.demo.yml:docker-compose.ghcr.yml
+DT4LC_IMAGE_TAG=$TAG
+COMPOSE_PROFILES=demo
+SESSION_SECRET=$(openssl rand -hex 32)
+SESSION_COOKIE_SECURE=true
+GUEST_ANALYSES_PER_HOUR=5
+GUEST_SESSION_HOURS=24
+GUEST_CLEANUP_MINUTES=60
+OAUTH_REDIRECT_BASE=https://$DOMAIN
+FRONTEND_PORT=127.0.0.1:8080
+LLM_ENABLE_OLLAMA=false
+GEE_PROJECT_ID=$PROJECT
+GEE_USE_DEFAULT_CREDENTIALS=true
+PAIRS
   cat >> "$ENV" <<'NOTE'
 
 # ---- fill in before deploy/gcp/finish.sh (docs/DEPLOY_DEMO.md sections 2 and 5) ----

@@ -87,8 +87,8 @@ resource "google_compute_instance" "demo" {
     }
   }
 
-  # The VM carries the Earth Engine service account, for the day the backend reads default
-  # credentials; today it reads the key file (README).
+  # The VM runs as the Earth Engine service account: the backend uses its default credentials
+  # (GEE_USE_DEFAULT_CREDENTIALS in startup.sh), so there is no key file anywhere.
   service_account {
     email  = google_service_account.earth_engine.email
     scopes = ["cloud-platform"]

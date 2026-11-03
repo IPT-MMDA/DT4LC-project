@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # On the demo host: set .env values read as NAME=VALUE lines on stdin, one per line. Each name
-# replaces its existing or commented-out line, or is appended; never a second copy. Empty values
+# replaces its live line, else its commented-out line, else is appended; never a second copy. Empty values
 # and malformed lines are skipped. Prints the names it set, never the values. Run with sudo, by a
 # person or by .github/workflows/deploy.yml (the `demo` environment's variables and secrets):
 #   printf 'OPERATOR_EMAILS=%s\n' "$emails" | sudo deploy/gcp/configure.sh
@@ -23,9 +23,12 @@ for raw in os.environ["DT4LC_PAIRS"].splitlines():
     name = name.strip()
     if not re.fullmatch(r"[A-Z][A-Z0-9_]*", name) or value == "":
         continue
-    pattern = rf"^#? *{re.escape(name)}=.*$"
-    if re.search(pattern, text, flags=re.M):
-        text = re.sub(pattern, lambda _m: f"{name}={value}", text, count=1, flags=re.M)
+    # The live line if there is one (a commented example may precede it), else the first
+    # commented line, else append; never a second live copy.
+    for pattern in (rf"^{re.escape(name)}=.*$", rf"^# *{re.escape(name)}=.*$"):
+        if re.search(pattern, text, flags=re.M):
+            text = re.sub(pattern, lambda _m: f"{name}={value}", text, count=1, flags=re.M)
+            break
     else:
         text = text.rstrip("\n") + f"\n{name}={value}\n"
     names.append(name)
