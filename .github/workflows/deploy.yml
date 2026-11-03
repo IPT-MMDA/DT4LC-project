@@ -5,8 +5,9 @@ name: Deploy demo
 # - app: after "Docker Build & Push" has published the images of a tag or of master, write the
 #   `demo` environment's variables and secrets into the host's .env (deploy/gcp/configure.sh) and
 #   update the host, both over an IAP tunnel (deploy/gcp/update.sh);
-# - terraform: plan on pull requests that touch deploy/gcp/terraform, apply on master when
-#   TF_APPLY_IN_CI is "true".
+# - terraform: once TF_STATE_BUCKET names a bucket that holds the state (and the deployer has the
+#   roles to manage every resource, see deploy/gcp/README.md), plan on pull requests that touch
+#   deploy/gcp/terraform and apply on master when TF_APPLY_IN_CI is "true".
 # Authentication is Workload Identity Federation (no stored key); see deploy/gcp/README.md.
 
 on:
@@ -96,7 +97,7 @@ jobs:
   terraform:
     name: Terraform (demo host)
     if: >-
-      vars.GCP_PROJECT_ID != '' && (
+      vars.GCP_PROJECT_ID != '' && vars.TF_STATE_BUCKET != '' && (
         github.event_name == 'push' ||
         (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
       )
