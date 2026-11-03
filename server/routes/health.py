@@ -14,7 +14,7 @@ from dta.dti.coe.llm.config import get_default_config
 from dta.dti.coe.llm.dependencies import get_llm_router
 from dta.dti.coe.llm.router import LLMRouter
 from dta.dti.data_sources.gee_common import is_configured as ee_is_configured
-from dta.dti.data_sources.gee_common import is_initialized
+from dta.dti.data_sources.gee_common import is_initialized, uses_default_credentials
 from dta.dti.metrics import get_metrics_collector
 from dta.dti.models import model_states
 from dta.dti.models.registry import get_model_registry
@@ -110,7 +110,7 @@ def invalidate_assistant_status() -> None:
 
 
 def _collect_gee_status() -> GEEStatus:
-    sa_configured = bool(os.environ.get("GEE_SERVICE_ACCOUNT_KEY"))
+    sa_configured = bool(os.environ.get("GEE_SERVICE_ACCOUNT_KEY")) or uses_default_credentials()
     if not is_initialized():
         return GEEStatus(initialized=False, service_account_configured=sa_configured)
 

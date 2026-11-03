@@ -1,10 +1,14 @@
 name: Sync dev with master
 
-# After anything lands on master (a release merge, a hotfix), open a pull request from master into
-# dev when dev does not already contain it, so dev carries every fix and the next release starts
-# from the same history. The pull request needs the usual review; the checks of its head commit
-# already ran on the push to master. Needs "Allow GitHub Actions to create and approve pull
-# requests" (Settings > Actions > General > Workflow permissions).
+# After anything lands on master (a release merge, a hotfix, a docs or CI change), bring dev level
+# with it, so dev carries every fix and the next release starts from the same history:
+# - when dev has no commits of its own since the last release, dev is fast-forwarded to master:
+#   the branches then point at the same commit, with no extra merge commit. This push needs the
+#   SYNC_DEPLOY_KEY secret (the private half of a deploy key with write access) and that key in
+#   the bypass list of the dev ruleset; without the secret, a pull request is opened instead;
+# - when dev has moved on, a pull request from master into dev is opened for the usual review
+#   (needs "Allow GitHub Actions to create and approve pull requests" under Settings > Actions >
+#   General > Workflow permissions). Merge it with a merge commit.
 
 on:
   push:
@@ -17,7 +21,7 @@ permissions:
 
 jobs:
   sync:
-    name: Pull request master -> dev
+    name: dev level with master
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -35,8 +39,30 @@ jobs:
             echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open the pull request, unless one is open
+      - name: Fast-forward dev when it has nothing of its own
+        id: ff
         if: steps.check.outputs.needed == 'true'
+        env:
+          SYNC_DEPLOY_KEY: ${{ secrets.SYNC_DEPLOY_KEY }}
+        run: |
+          echo "done=false" >> "$GITHUB_OUTPUT"
+          if ! git merge-base --is-ancestor origin/dev origin/master; then
+            echo "dev has commits of its own since the last release: a pull request instead"; exit 0
+          fi
+          if [ -z "$SYNC_DEPLOY_KEY" ]; then
+            echo "no SYNC_DEPLOY_KEY secret: a pull request instead"; exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SYNC_DEPLOY_KEY" > ~/.ssh/sync_dev_key
+          chmod 600 ~/.ssh/sync_dev_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/sync_dev_key -o IdentitiesOnly=yes" \
+            git push "git@github.com:${{ github.repository }}.git" origin/master:refs/heads/dev
+          echo "dev fast-forwarded to master ($(git rev-parse --short origin/master))"
+          echo "done=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open the pull request, unless one is open
+        if: steps.check.outputs.needed == 'true' && steps.ff.outputs.done != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -44,4 +70,4 @@ jobs:
           if [ -n "$existing" ]; then echo "pull request #$existing is already open"; exit 0; fi
           gh pr create --base dev --head master \
             --title "Merge master into dev" \
-            --body "Opened by the Sync dev workflow after a push to master (${{ github.sha }}). Merge with a merge commit, so dev carries the release or hotfix. The checks of the head commit ran on the push to master."
+            --body "Opened by the Sync dev workflow after a push to master (${{ github.sha }}): dev has commits of its own, so it cannot be fast-forwarded. Merge with a merge commit, so dev carries the release or fix. The checks of the head commit ran on the push to master."

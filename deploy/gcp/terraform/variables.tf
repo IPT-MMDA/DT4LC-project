@@ -24,7 +24,7 @@ variable "domain" {
 variable "ref" {
   description = "The git ref the host checks out (a release tag)."
   type        = string
-  default     = "v0.6.1"
+  default     = "v0.6.2"
 }
 
 variable "vm_name" {

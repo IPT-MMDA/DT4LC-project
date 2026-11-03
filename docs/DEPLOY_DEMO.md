@@ -209,7 +209,7 @@ GITHUB_CLIENT_SECRET=<the client secret>
 OAUTH_REDIRECT_BASE=https://demo.example.org
 ```
 
-`OAUTH_REDIRECT_BASE` is the public origin of the demo as the browser sees it: the scheme and host, with no path. A trailing slash is ignored. On the Google Cloud host of `deploy/gcp/`, the first two come from the GitHub environment `demo` and are written by each deploy (`deploy/gcp/README.md`), so nothing is typed on the host.
+`OAUTH_REDIRECT_BASE` is the public origin of the demo as the browser sees it: the scheme and host, with no path. A trailing slash is ignored. On the Google Cloud host of `deploy/gcp/`, the first two come from the GitHub environment `dt4lc.org` and are written by each deploy (`deploy/gcp/README.md`), so nothing is typed on the host.
 
 Then create the backend again with the new environment:
 
