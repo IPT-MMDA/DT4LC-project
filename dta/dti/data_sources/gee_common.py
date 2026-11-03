@@ -19,15 +19,22 @@ def is_initialized() -> bool:
 
 
 def is_configured() -> bool:
-    """Whether Earth Engine is initialised, or can be: ``GEE_PROJECT_ID`` and an existing key file.
+    """Whether Earth Engine is initialised, or can be.
 
-    Cheap (no network, no ``ee.Initialize``). Default gcloud credentials count only once
-    :func:`initialize_gee` has used them.
+    Cheap (no network, no ``ee.Initialize``): ``GEE_PROJECT_ID`` plus either an existing
+    ``GEE_SERVICE_ACCOUNT_KEY`` file or ``GEE_USE_DEFAULT_CREDENTIALS=true``, which promises the
+    host's default credentials (the attached service account on Google Cloud, or
+    ``gcloud auth application-default login``). Default credentials that are merely present
+    count only once :func:`initialize_gee` has used them.
     """
     if _ee_initialized:
         return True
+    if not os.getenv("GEE_PROJECT_ID"):
+        return False
     key = os.getenv("GEE_SERVICE_ACCOUNT_KEY", "")
-    return bool(os.getenv("GEE_PROJECT_ID")) and bool(key) and Path(key).is_file()
+    if key and Path(key).is_file():
+        return True
+    return os.getenv("GEE_USE_DEFAULT_CREDENTIALS", "").strip().lower() in {"1", "true", "yes"}
 
 
 def initialize_gee() -> bool:
@@ -35,7 +42,8 @@ def initialize_gee() -> bool:
 
     Attempts to authenticate using:
     1. Service account credentials from GEE_SERVICE_ACCOUNT_KEY env var
-    2. Default credentials (if already authenticated via gcloud)
+    2. Default credentials: the attached service account on Google Cloud, or
+       ``gcloud auth application-default login``
 
     Requires GEE_PROJECT_ID environment variable to be set.
 

@@ -25,26 +25,21 @@ Sizing: `e2-standard-2` (2 vCPU, 8 GB, about 50 USD a month) runs the models on 
    terraform apply
    ```
 
-   The outputs give the static address, the zone's nameservers, the service account and the exact `gcloud` commands for the next steps. Re-running `apply` is safe; `terraform destroy` removes everything except the APIs.
+   The outputs give the static address, the zone's nameservers, the Earth Engine service account and the `ssh` command. Re-running `apply` is safe; `terraform destroy` removes everything except the APIs.
 3. **DNS.** With `manage_dns = true` (the default) Terraform created a Cloud DNS zone: at the registrar, replace the nameservers with the four from the `name_servers` output and wait for the change to spread (minutes to a few hours). With `manage_dns = false`, create two A records at the registrar instead, `@` and `www`, to the static address. Caddy fetches the certificate as soon as the name resolves to the host.
-4. **Earth Engine:** register the project for noncommercial use at <https://code.earthengine.google.com/register>, then create the service account's key with the `create_earth_engine_key` output command. The key is written to `~/.dt4lc/`, outside git.
+4. **Earth Engine:** register the project for noncommercial use at <https://code.earthengine.google.com/register>. The VM runs as the `earth_engine_service_account` output, so there is no key to create or copy: `startup.sh` sets `GEE_USE_DEFAULT_CREDENTIALS=true` and the client library takes the credentials from the instance metadata. (Organisation policy forbids service-account keys on new projects anyway.)
 5. **The GitHub OAuth app:** runbook section 5, with the callback `https://<domain>/v1/auth/github/callback`.
-6. **On the VM:** copy the key, complete `.env`, start.
+6. **On the VM:** complete `.env`, start.
 
    ```sh
-   # the copy_key and ssh outputs give these two with your values filled in
-   gcloud compute scp --zone <zone> --tunnel-through-iap ~/.dt4lc/gee-key-<project>.json dt4lc-demo:gee-key.json
-   gcloud compute ssh dt4lc-demo --zone <zone> --tunnel-through-iap
-   sudo mv ~/gee-key.json /opt/dt4lc/resources/.cache/gee-key.json && sudo chmod 600 /opt/dt4lc/resources/.cache/gee-key.json
-   sudo nano /opt/dt4lc/.env          # the OAuth app, the allowlists, the LLM key, GEE_PROJECT_ID
+   gcloud compute ssh dt4lc-demo --zone <zone> --tunnel-through-iap   # the ssh output
+   sudo nano /opt/dt4lc/.env          # the OAuth app, the allowlists, the LLM key
    sudo /opt/dt4lc/deploy/gcp/finish.sh
    ```
 
    `startup.sh` logs to the serial console; `sudo journalctl -u google-startup-scripts` shows it. It takes a few minutes after the VM boots.
 7. **Smoke test from outside:** the landing page, "Try with the Kakhovka sample", a sixth guest analysis refused, sign-in as an operator, `curl -s https://<domain>/v1/health`.
-8. **Upgrades and backups:** runbook section 10. `resources/.cache/` holds the job database, uploads, outputs, the settings overrides and the Earth Engine key.
-
-The key file stays in `~/.dt4lc/` on your machine and under `resources/.cache/` on the host; both are outside git.
+8. **Upgrades and backups:** runbook section 10. `resources/.cache/` holds the job database, uploads, outputs and the settings overrides.
 
 ## Automatic deploys from GitHub Actions
 

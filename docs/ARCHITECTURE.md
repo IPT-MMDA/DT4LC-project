@@ -191,7 +191,7 @@ FastAPI application with:
 
 - the assistant: the cached status that `GET /v1/health` reports (30 s), the only part that may touch the network;
 - models: file checks of the model cache (`model_states()`), combined with the caller's role and `MODEL_DOWNLOAD_ON_DEMAND` (installed, downloads on first use, not available for guests, not installed); a built-in analysis that needs a model takes the model's status;
-- data sources: the bundled sample's files, and an Earth Engine configuration check (`GEE_PROJECT_ID` and an existing key file);
+- data sources: the bundled sample's files, and an Earth Engine configuration check (`GEE_PROJECT_ID` with an existing key file or `GEE_USE_DEFAULT_CREDENTIALS`);
 - `DT4LC_DEPLOYMENT`, which adds "public demo" to the summary line, and the session's role and quota.
 
 ## Job event stream and proposals

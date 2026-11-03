@@ -8,6 +8,7 @@ MARK=/var/lib/dt4lc/provisioned
 MD=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 DOMAIN=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-domain" || echo dt4lc.org)
 REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.0)
+PROJECT=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)
 # Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.0 -> 0.6.0, master -> latest).
 TAG=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-image-tag" || true)
 if [ -z "$TAG" ]; then case "$REF" in v[0-9]*) TAG=${REF#v} ;; *) TAG=latest ;; esac; fi
@@ -66,14 +67,15 @@ PY
   setvar OAUTH_REDIRECT_BASE "https://$DOMAIN"
   setvar FRONTEND_PORT 127.0.0.1:8080
   setvar LLM_ENABLE_OLLAMA false
-  setvar GEE_SERVICE_ACCOUNT_KEY /app/resources/.cache/gee-key.json
+  # Earth Engine: this project, as the VM's service account (no key file).
+  setvar GEE_PROJECT_ID "$PROJECT"
+  setvar GEE_USE_DEFAULT_CREDENTIALS true
   cat >> "$ENV" <<'NOTE'
 
 # ---- fill in before deploy/gcp/finish.sh (docs/DEPLOY_DEMO.md sections 2 and 5) ----
 # GITHUB_CLIENT_ID=            GITHUB_CLIENT_SECRET=         (the OAuth app; callback https://<domain>/v1/auth/github/callback)
 # OPERATOR_EMAILS=             ALLOWED_EMAILS=               (primary verified GitHub emails, comma-separated)
 # LLM_PROVIDER_ORDER=gemini    GEMINI_API_KEY=               (any provider you have a key for)
-# GEE_PROJECT_ID=              (the Google Cloud project; the key file is resources/.cache/gee-key.json)
 NOTE
 fi
 mkdir -p /opt/dt4lc/resources/.cache

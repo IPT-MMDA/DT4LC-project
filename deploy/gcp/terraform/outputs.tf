@@ -11,16 +11,8 @@ output "earth_engine_service_account" {
   value = google_service_account.earth_engine.email
 }
 
-output "create_earth_engine_key" {
-  value = "gcloud iam service-accounts keys create ~/.dt4lc/gee-key-${var.project}.json --iam-account ${google_service_account.earth_engine.email}"
-}
-
 output "ssh" {
   value = "gcloud compute ssh ${var.vm_name} --zone ${var.zone} --tunnel-through-iap"
-}
-
-output "copy_key" {
-  value = "gcloud compute scp --zone ${var.zone} --tunnel-through-iap ~/.dt4lc/gee-key-${var.project}.json ${var.vm_name}:gee-key.json"
 }
 
 output "github_actions_variables" {

@@ -945,7 +945,9 @@ class SettingsAccess(BaseModel):  # type: ignore[misc]
 
 
 class SettingsEarthEngine(BaseModel):  # type: ignore[misc]
-    configured: bool = Field(description="Initialised, or GEE_PROJECT_ID and an existing key file")
+    configured: bool = Field(
+        description="Initialised, or GEE_PROJECT_ID with an existing key file or GEE_USE_DEFAULT_CREDENTIALS"
+    )
     project_id_present: bool
     key_file_present: bool = Field(description="GEE_SERVICE_ACCOUNT_KEY names an existing file")
 
