@@ -52,8 +52,8 @@ jobs:
           REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_branch }}
         run: |
           case "$REF" in
-            v[0-9]*.[0-9]*.[0-9]*) echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "tag=${REF#v}" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
-            master)                echo "ref=master" >> "$GITHUB_OUTPUT"; echo "tag=latest" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
+            v[0-9]*.[0-9]*.[0-9]*) echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "tag=${REF#v}" >> "$GITHUB_OUTPUT"; echo "checkout=$REF" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
+            master)                echo "ref=master" >> "$GITHUB_OUTPUT"; echo "tag=latest" >> "$GITHUB_OUTPUT"; echo "checkout=origin/master" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
             *)                     echo "not a release tag or master: $REF"; echo "deploy=false" >> "$GITHUB_OUTPUT" ;;
           esac
 
@@ -83,10 +83,11 @@ jobs:
           CONFIG_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           # NAME=VALUE lines for the non-empty ones; configure.sh prints the names it set, never the values.
-          # The checkout moves to the ref first, so the script of that ref runs (update.sh repeats it, harmlessly).
+          # The checkout moves to the ref first, so the script of that ref runs (update.sh repeats it,
+          # harmlessly). For master that is origin/master: the host's local master is the first-boot one.
           { env | grep '^CONFIG_' || true; } | sed 's/^CONFIG_//' | { grep -vE '^[A-Z0-9_]+=$' || true; } \
             | gcloud compute ssh "${{ vars.GCP_VM }}" --zone "${{ vars.GCP_ZONE }}" --tunnel-through-iap --quiet \
-                --command "sudo git -C /opt/dt4lc fetch -q --tags origin && sudo git -C /opt/dt4lc checkout -q '${{ steps.target.outputs.ref }}' && sudo /opt/dt4lc/deploy/gcp/configure.sh"
+                --command "sudo git -C /opt/dt4lc fetch -q --tags origin && sudo git -C /opt/dt4lc checkout -q --detach '${{ steps.target.outputs.checkout }}' && sudo /opt/dt4lc/deploy/gcp/configure.sh"
 
       - name: Update the host
         if: steps.target.outputs.deploy == 'true'
