@@ -16,6 +16,7 @@ A health-report fix, and the deployment and CI fixes after the first automatic d
 - The deploy targets a GitHub environment named after the site, `dt4lc.org`, instead of `demo`; the workflow is "Deploy dt4lc.org", and the Deployments page links to the site.
 - `Sync dev with master` fast-forwards `dev` to `master` after a release when `dev` has no commits of its own, with a deploy key that the `dev` ruleset admits (`SYNC_DEPLOY_KEY`), so the two branches point at the same commit; when `dev` has moved on it opens the pull request as before.
 - The `Release gate` admits `ci/*` branches with workflow and documentation changes only, like `docs/*` (CONTRIBUTING).
+- Who can deploy is who can get a commit onto `master` or tag it: the CI identity on Google Cloud trusts only jobs of the `dt4lc.org` environment, a manual image build publishes only from `master` or a `v*` tag, and the sync deploy key lives in a `sync-dev` environment limited to `master`. A workflow on any other branch can neither deploy, nor overwrite a published image, nor push to `dev`.
 
 ## [0.6.1] - 2026-11-03
 

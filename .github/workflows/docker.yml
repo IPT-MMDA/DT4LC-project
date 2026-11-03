@@ -54,12 +54,13 @@ jobs:
       - name: Check if should push
         id: check
         run: |
-          # Push on: tags, master/main branch push, or manual trigger with push_images=true
+          # Push on: tags, master/main branch push, or a manual run of master or a v* tag with
+          # push_images=true. A branch build never publishes, so it cannot overwrite a released tag.
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             echo "push=true" >> $GITHUB_OUTPUT
           elif [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/main") ]]; then
             echo "push=true" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.push_images }}" == "true" ]]; then
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.push_images }}" == "true" && ("${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == refs/tags/v*) ]]; then
             echo "push=true" >> $GITHUB_OUTPUT
           else
             echo "push=false" >> $GITHUB_OUTPUT

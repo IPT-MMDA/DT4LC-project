@@ -56,6 +56,12 @@ variable "github_repository" {
   default     = "IPT-MMDA/dt4lc"
 }
 
+variable "github_environment" {
+  description = "The GitHub environment whose jobs may impersonate the deployer; its branch rule limits them to master and release tags."
+  type        = string
+  default     = "dt4lc.org"
+}
+
 variable "ci_terraform_apply" {
   description = "Also let the CI identity apply this configuration (it then needs project-wide roles). Off: CI only updates the containers."
   type        = bool
