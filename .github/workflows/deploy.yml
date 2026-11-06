@@ -2,9 +2,11 @@ name: Deploy dt4lc.org
 
 # Two jobs, both no-ops until the repository variables from `terraform output
 # github_actions_variables` are set, so forks and contributors are unaffected:
-# - app: after "Docker Build & Push" has published the images of a tag or of master, write the
-#   `dt4lc.org` environment's variables and secrets into the host's .env (deploy/gcp/configure.sh) and
-#   update the host, both over an IAP tunnel (deploy/gcp/update.sh);
+# - app: after "Docker Build & Push" has published the images of a tag, of master or of dev, write
+#   the target environment's variables and secrets into that host's .env (deploy/gcp/configure.sh)
+#   and update the host, both over an IAP tunnel (deploy/gcp/update.sh). A tag or master goes to
+#   the `dt4lc.org` environment, dev to `dev.dt4lc.org`; each environment's GCP_VM and DEMO_DOMAIN
+#   override the repository variables, so the same steps reach either host;
 # - terraform: once TF_STATE_BUCKET names a bucket that holds the state (and the deployer has the
 #   roles to manage every resource, see deploy/gcp/README.md), plan on pull requests that touch
 #   deploy/gcp/terraform and apply on master when TF_APPLY_IN_CI is "true".
@@ -17,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "git ref to deploy: a release tag (v0.6.2) or master"
+        description: "git ref to deploy: a release tag (v0.6.2) or master to dt4lc.org, dev to dev.dt4lc.org"
         required: true
         default: master
   pull_request:
@@ -30,49 +32,67 @@ permissions:
   contents: read
   id-token: write
 
+# One deploy at a time per host. A newly queued run replaces an older pending run of its group, so
+# each host has its own group: a push to dev must not cancel a release deploy that is waiting.
 concurrency:
-  group: deploy-demo
+  group: deploy-${{ (github.event.workflow_run.head_branch == 'dev' || inputs.ref == 'dev') && 'dev' || 'demo' }}
   cancel-in-progress: false
 
 jobs:
-  app:
-    name: Update the demo host
+  target:
+    name: Which host, ref and image tag
     if: >-
       vars.GCP_PROJECT_ID != '' && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
       )
     runs-on: ubuntu-latest
-    environment:
-      name: dt4lc.org
-      url: https://${{ vars.DEMO_DOMAIN }}
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.target.outputs.deploy }}
+      environment: ${{ steps.target.outputs.environment }}
+      ref: ${{ steps.target.outputs.ref }}
+      tag: ${{ steps.target.outputs.tag }}
+      checkout: ${{ steps.target.outputs.checkout }}
     steps:
-      - name: Which ref and image tag
+      - name: Which host, ref and image tag
         id: target
         env:
           REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_branch }}
         run: |
+          # The environment, not its branch rule, selects the host: under workflow_run GITHUB_REF is
+          # always master, so both environments admit master. A branch is checked out as
+          # origin/<branch>: the host's local branch is the first-boot one.
           case "$REF" in
-            v[0-9]*.[0-9]*.[0-9]*) echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "tag=${REF#v}" >> "$GITHUB_OUTPUT"; echo "checkout=$REF" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
-            master)                echo "ref=master" >> "$GITHUB_OUTPUT"; echo "tag=latest" >> "$GITHUB_OUTPUT"; echo "checkout=origin/master" >> "$GITHUB_OUTPUT"; echo "deploy=true" >> "$GITHUB_OUTPUT" ;;
-            *)                     echo "not a release tag or master: $REF"; echo "deploy=false" >> "$GITHUB_OUTPUT" ;;
+            v[0-9]*.[0-9]*.[0-9]*) env=dt4lc.org;     ref=$REF;   tag=${REF#v}; checkout=$REF ;;
+            master)                env=dt4lc.org;     ref=master; tag=latest;   checkout=origin/master ;;
+            dev)                   env=dev.dt4lc.org; ref=dev;    tag=dev;      checkout=origin/dev ;;
+            *) echo "not a release tag, master or dev: $REF"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
           esac
+          { echo "deploy=true"; echo "environment=$env"; echo "ref=$ref"; echo "tag=$tag"; echo "checkout=$checkout"; } >> "$GITHUB_OUTPUT"
+          echo "$ref (images :$tag) to the $env environment"
 
+  app:
+    name: Update ${{ needs.target.outputs.environment }}
+    needs: [target]
+    if: needs.target.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.target.outputs.environment }}
+      url: https://${{ vars.DEMO_DOMAIN }}
+    timeout-minutes: 30
+    steps:
       - name: Authenticate to Google Cloud
-        if: steps.target.outputs.deploy == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SA }}
 
       - name: Set up gcloud
-        if: steps.target.outputs.deploy == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       # GitHub reserves the GITHUB_ prefix for its own names, hence OAUTH_CLIENT_* in the environment.
-      - name: Configure the host from the dt4lc.org environment
-        if: steps.target.outputs.deploy == 'true'
+      - name: Configure the host from its environment
         env:
           CONFIG_GITHUB_CLIENT_ID: ${{ vars.OAUTH_CLIENT_ID }}
           CONFIG_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
@@ -80,22 +100,22 @@ jobs:
           CONFIG_ALLOWED_EMAILS: ${{ vars.ALLOWED_EMAILS }}
           CONFIG_ALLOWED_DOMAINS: ${{ vars.ALLOWED_DOMAINS }}
           CONFIG_LLM_PROVIDER_ORDER: ${{ vars.LLM_PROVIDER_ORDER }}
+          CONFIG_GUEST_ANALYSES_PER_HOUR: ${{ vars.GUEST_ANALYSES_PER_HOUR }}
           CONFIG_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CONFIG_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           CONFIG_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           # NAME=VALUE lines for the non-empty ones; configure.sh prints the names it set, never the values.
           # The checkout moves to the ref first, so the script of that ref runs (update.sh repeats it,
-          # harmlessly). For master that is origin/master: the host's local master is the first-boot one.
+          # harmlessly).
           { env | grep '^CONFIG_' || true; } | sed 's/^CONFIG_//' | { grep -vE '^[A-Z0-9_]+=$' || true; } \
             | gcloud compute ssh "${{ vars.GCP_VM }}" --zone "${{ vars.GCP_ZONE }}" --tunnel-through-iap --quiet \
-                --command "sudo git -C /opt/dt4lc fetch -q --tags origin && sudo git -C /opt/dt4lc checkout -q --detach '${{ steps.target.outputs.checkout }}' && sudo /opt/dt4lc/deploy/gcp/configure.sh"
+                --command "sudo git -C /opt/dt4lc fetch -q --tags origin && sudo git -C /opt/dt4lc checkout -q --detach '${{ needs.target.outputs.checkout }}' && sudo /opt/dt4lc/deploy/gcp/configure.sh"
 
       - name: Update the host
-        if: steps.target.outputs.deploy == 'true'
         run: |
           gcloud compute ssh "${{ vars.GCP_VM }}" --zone "${{ vars.GCP_ZONE }}" --tunnel-through-iap --quiet \
-            --command "sudo /opt/dt4lc/deploy/gcp/update.sh '${{ steps.target.outputs.ref }}' '${{ steps.target.outputs.tag }}'"
+            --command "sudo /opt/dt4lc/deploy/gcp/update.sh '${{ needs.target.outputs.ref }}' '${{ needs.target.outputs.tag }}'"
 
   terraform:
     name: Terraform (demo host)
