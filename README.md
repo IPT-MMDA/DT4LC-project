@@ -10,6 +10,8 @@ A cognitive digital twin framework for land cover change detection and vegetatio
 
 It is aimed at remote sensing researchers, environmental scientists and disaster response teams who need to perform land cover analysis without building custom processing pipelines.
 
+A public demo of the latest release runs at <https://dt4lc.org>, and the latest `dev` at <https://dev.dt4lc.org> (sign-in required to run analyses).
+
 What changed in each release: [CHANGELOG.md](CHANGELOG.md).
 
 ## Features

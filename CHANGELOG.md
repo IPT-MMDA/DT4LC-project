@@ -2,6 +2,22 @@
 
 All notable changes to DT4LC are listed here, newest first. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Each release, with its full notes and container images, is on the [GitHub releases page](https://github.com/IPT-MMDA/dt4lc/releases).
 
+## [Unreleased]
+
+### Added
+
+- A dev host: a second VM of the same size as the demo serves the latest `dev` branch at <https://dev.dt4lc.org>. Every push to `dev` that changes more than documentation publishes the `dev` images and deploys them through a GitHub environment `dev.dt4lc.org`, which holds the host's own OAuth app and sets `GUEST_ANALYSES_PER_HOUR=0`: anyone may look, only signed-in team members run analyses. Terraform creates it with `dev_vm = true` ([deploy/gcp/README.md](deploy/gcp/README.md#the-dev-host)).
+
+### Fixed
+
+- A manual deploy took any text after a release tag's digits as its ref, and that text reached the command run on the host; the deploy now accepts only a release tag, `master` or `dev`.
+
+### Changed
+
+- Who can deploy is who can get a commit onto `master`, a `v*` tag or `dev`: the CI identity on Google Cloud trusts only jobs of the deploy environments (`dt4lc.org`, `dev.dt4lc.org`), a manual image build publishes only from `master`, `dev` or a `v*` tag, and the sync deploy key lives in a `sync-dev` environment limited to `master`. A workflow on any other branch can neither deploy, nor overwrite a published image, nor push to `dev`.
+- The host scripts follow any branch: the image tag is derived from it, a branch other than `master` is checked out as `origin/<branch>`, and the `www` redirect is written only for an apex domain.
+- The `Release gate` admits `deploy/gcp/` and the workflow test in `docs/*` and `ci/*` pull requests (CONTRIBUTING).
+
 ## [0.6.2] - 2026-11-03
 
 A health-report fix, and the deployment and CI fixes after the first automatic deploy of v0.6.1.
@@ -16,7 +32,6 @@ A health-report fix, and the deployment and CI fixes after the first automatic d
 - The deploy targets a GitHub environment named after the site, `dt4lc.org`, instead of `demo`; the workflow is "Deploy dt4lc.org", and the Deployments page links to the site.
 - `Sync dev with master` fast-forwards `dev` to `master` after a release when `dev` has no commits of its own, with a deploy key that the `dev` ruleset admits (`SYNC_DEPLOY_KEY`), so the two branches point at the same commit; when `dev` has moved on it opens the pull request as before.
 - The `Release gate` admits `ci/*` branches with workflow and documentation changes only, like `docs/*` (CONTRIBUTING).
-- Who can deploy is who can get a commit onto `master` or tag it: the CI identity on Google Cloud trusts only jobs of the `dt4lc.org` environment, a manual image build publishes only from `master` or a `v*` tag, and the sync deploy key lives in a `sync-dev` environment limited to `master`. A workflow on any other branch can neither deploy, nor overwrite a published image, nor push to `dev`.
 
 ## [0.6.1] - 2026-11-03
 

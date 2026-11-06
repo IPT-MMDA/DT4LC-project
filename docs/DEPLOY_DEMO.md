@@ -195,7 +195,7 @@ The volume's name starts with the Compose project name, which is the directory n
    | Authorization callback URL | `https://demo.example.org/v1/auth/github/callback` |
    | Enable Device Flow | Leave it unchecked |
 
-   The server always sends `${OAUTH_REDIRECT_BASE}/v1/auth/github/callback` as the callback, so register exactly that. An OAuth app has one callback URL, so a second host (a staging copy, say) needs its own app.
+   The server always sends `${OAUTH_REDIRECT_BASE}/v1/auth/github/callback` as the callback, so register exactly that. An OAuth app has one callback URL, so a second host (a staging copy, say) needs its own app; the dev host of the Google Cloud kit has one, with the callback `https://dev.dt4lc.org/v1/auth/github/callback` ([deploy/gcp/README.md](../deploy/gcp/README.md#the-dev-host)).
 3. Click **Register application**.
 4. On the app's page, copy the **Client ID**. Under **Client secrets**, click **Generate a new client secret** and copy it straight away: GitHub shows it only once.
 
