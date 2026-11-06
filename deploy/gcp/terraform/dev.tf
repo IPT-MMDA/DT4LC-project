@@ -47,8 +47,9 @@ resource "google_compute_instance" "dev" {
   metadata_startup_script = file("${path.module}/../startup.sh")
 
   lifecycle {
-    # As for the demo: startup.sh runs on first boot only, and a later edit must not replace the host.
-    ignore_changes = [metadata_startup_script]
+    # As for the demo: startup.sh runs on first boot only, and neither a later edit of it nor a
+    # newer debian-12 image may replace the host.
+    ignore_changes = [metadata_startup_script, boot_disk[0].initialize_params[0].image]
   }
 
   depends_on = [google_project_service.apis]

@@ -103,8 +103,10 @@ resource "google_compute_instance" "demo" {
 
   lifecycle {
     # startup.sh runs on first boot only (it leaves /var/lib/dt4lc/provisioned); a later edit
-    # of it must not replace the host. A new host always gets the current script.
-    ignore_changes = [metadata_startup_script]
+    # of it must not replace the host. A new host always gets the current script. The boot image
+    # is the latest of the debian-12 family at creation; the family moves on every few weeks, and
+    # that must not replace the host either (the disk is upgraded with apt, as any Debian).
+    ignore_changes = [metadata_startup_script, boot_disk[0].initialize_params[0].image]
   }
 
   depends_on = [google_project_service.apis]
