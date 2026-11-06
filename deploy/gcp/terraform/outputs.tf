@@ -26,3 +26,19 @@ output "github_actions_variables" {
     DEMO_DOMAIN      = var.domain
   } : {}
 }
+
+output "dev_static_ip" {
+  value = var.dev_vm ? google_compute_address.dev[0].address : null
+}
+
+output "dev_ssh" {
+  value = var.dev_vm ? "gcloud compute ssh ${var.dev_vm_name} --zone ${var.zone} --tunnel-through-iap" : null
+}
+
+output "github_actions_variables_dev" {
+  description = "Variables of the dev.dt4lc.org environment (Settings > Environments); in its jobs they override the repository variables of the same name."
+  value = var.dev_vm ? {
+    GCP_VM      = var.dev_vm_name
+    DEMO_DOMAIN = "${var.dev_subdomain}.${var.domain}"
+  } : {}
+}

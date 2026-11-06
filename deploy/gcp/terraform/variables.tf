@@ -67,3 +67,37 @@ variable "ci_terraform_apply" {
   type        = bool
   default     = false
 }
+
+variable "dev_vm" {
+  description = "Also create the dev host (dev.tf): a second VM that serves the dev branch at <dev_subdomain>.<domain>."
+  type        = bool
+  default     = false
+}
+
+variable "dev_vm_name" {
+  type    = string
+  default = "dt4lc-dev"
+}
+
+variable "dev_subdomain" {
+  description = "The dev host's name under the domain (dev -> dev.dt4lc.org)."
+  type        = string
+  default     = "dev"
+}
+
+variable "dev_ref" {
+  description = "The git branch the dev host checks out on first boot; deploy.yml keeps it at the branch's latest commit."
+  type        = string
+  default     = "dev"
+}
+
+variable "dev_machine_type" {
+  description = "The same size as the demo by default, so a result on dev reproduces there; the backend holds about 1.4 GiB idle and grows with each analysis."
+  type        = string
+  default     = "e2-standard-2"
+}
+
+variable "dev_disk_gb" {
+  type    = number
+  default = 30
+}

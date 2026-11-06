@@ -6,3 +6,4 @@ ref     = "v0.6.2"
 # zone         = "europe-west1-b"
 # machine_type = "e2-standard-4"
 # manage_dns   = true
+# dev_vm       = true   # a second host for the dev branch at dev.<domain> (dev.tf)
