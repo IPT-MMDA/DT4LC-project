@@ -1,6 +1,7 @@
 # The TLS proxy of the DT4LC demo host (docs/DEPLOY_DEMO.md section 6). Caddy fetches and renews
 # the certificate itself, replaces X-Forwarded-For with the client's address, and passes event
-# streams through. deploy/gcp/startup.sh substitutes the domain.
+# streams through. deploy/gcp/startup.sh substitutes the domain and keeps the www block only for
+# an apex domain (two labels); a subdomain host has no www record.
 dt4lc.org {
     reverse_proxy 127.0.0.1:8080
 }
