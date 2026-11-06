@@ -136,7 +136,9 @@ class JobRegion(BaseModel):  # type: ignore[misc]
     bbox: list[float] | None = Field(None, description="[west, south, east, north] in degrees")
     name: str | None = Field(None, max_length=80, description="Region name, e.g. 'Dnipro floodplain'")
     place: str | None = Field(None, max_length=80, description="Place, e.g. 'Kherson'")
-    dataset: Literal["HLS L30", "HLS S30", "Sentinel-2", "Landsat 8/9", "MODIS"]
+    dataset: Literal["HLS L30", "HLS S30", "Sentinel-2", "Landsat 8/9", "MODIS", "LULC"] = Field(
+        description="Imagery to fetch, or LULC: the area for the land-cover analyses, which fetch no imagery"
+    )
     start_date: date
     end_date: date
     bands: list[str] | None = Field(
@@ -148,7 +150,7 @@ class JobRegion(BaseModel):  # type: ignore[misc]
 
     @model_validator(mode="after")  # type: ignore[misc]
     def _check(self) -> "JobRegion":
-        from dta.dti.data_sources.gee_region import DATASETS, band_code
+        from dta.dti.data_sources.gee_region import DATASETS, LULC, band_code
 
         from .regions import MAX_REGION_KM2, area_km2, format_area, region_shape
 
@@ -161,6 +163,8 @@ class JobRegion(BaseModel):  # type: ignore[misc]
                 f"region is {format_area(area)}; the limit is {format_area(MAX_REGION_KM2)}. Draw a smaller region."
             )
         if self.bands is not None:
+            if self.dataset == LULC:
+                raise ValueError("LULC has no bands; leave region bands out")
             if not self.bands:
                 raise ValueError("region bands is empty; leave it out for the dataset's default bands")
             codes = [band_code(self.dataset, b) for b in self.bands]
@@ -175,12 +179,12 @@ class JobRegion(BaseModel):  # type: ignore[misc]
 
     def echo(self, note: str | None = None) -> dict[str, Any]:
         """The job's ``region``: the request (bands resolved), ``bounds``, ``area_km2``, ``line`` and ``note``."""
-        from dta.dti.data_sources.gee_region import DATASETS
+        from dta.dti.data_sources.gee_region import DATASETS, LULC
 
         from .regions import region_line
 
         echo: dict[str, Any] = self.model_dump(mode="json")
-        echo["bands"] = self.bands or list(DATASETS[self.dataset].default_bands)
+        echo["bands"] = [] if self.dataset == LULC else self.bands or list(DATASETS[self.dataset].default_bands)
         echo["bounds"] = self._bounds
         echo["area_km2"] = round(self._area_km2, 1)
         echo["line"] = region_line(echo)
@@ -803,7 +807,7 @@ class GEELayerIdResponse(BaseModel):  # type: ignore[misc]
 # A nested read-only object (``sign_in``, ``earth_engine``, ``storage``...) is one ``false``
 # entry of its parent's map.
 
-LLMProviderName = Literal["gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai"]
+LLMProviderName = Literal["gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai", "openrouter"]
 DownloadPolicy = Literal["all", "members", "operators", "none"]
 SettingSource = Literal["override", "env", "default"]
 

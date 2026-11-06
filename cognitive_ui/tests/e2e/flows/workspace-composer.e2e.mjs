@@ -61,11 +61,11 @@ test('assistant offline: one line above the controls, with the sample attached',
     // A guest's badge is the design's either way; the composer line tells the assistant is offline.
     assert.match(await page.getByTestId('session-badge').innerText(), /^Guest\. \d+ of \d+ analyses left this hour · kept 24 h · no account\.$/);
     assert.equal(await page.getByTestId('no-conversations').innerText(), NO_CONVERSATIONS);
-    // Five suggestions with the sample, NDMI composed, Prithvi named.
+    // Six suggestions with the sample, NDMI composed, Prithvi named.
     const suggestions = page.getByRole('list', { name: 'Suggestions' }).getByRole('button');
-    assert.equal(await suggestions.count(), 5);
-    assert.match(await suggestions.nth(3).innerText(), /Map moisture change with NDMI between the two dates\s+Composed\s+~60 s/);
-    assert.match(await suggestions.nth(4).innerText(), /Fill the cloud gaps in the 9 June image\s+Prithvi · ~3 min/);
+    assert.equal(await suggestions.count(), 6);
+    assert.match(await suggestions.nth(4).innerText(), /Map moisture change with NDMI between the two dates\s+Composed\s+~60 s/);
+    assert.match(await suggestions.nth(5).innerText(), /Fill the cloud gaps in the 9 June image\s+Prithvi · ~3 min/);
 
     await screenshot(page, 'workspace-assistant-offline.png');
     assert.deepEqual(errors, []);

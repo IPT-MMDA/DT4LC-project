@@ -48,7 +48,7 @@ const suggestionTexts = () =>
     .map((b) => b.textContent);
 
 describe('empty state', () => {
-  it('without the sample: the three ways to add data and three suggestions', () => {
+  it('without the sample: the three ways to add data and four suggestions', () => {
     renderColumn();
     expect(screen.getByRole('heading', { name: 'What do you want to know?' })).toBeTruthy();
     for (const name of ['+ Attach the Kakhovka sample', 'Upload GeoTIFF', 'Pick a region on the map']) {
@@ -58,17 +58,18 @@ describe('empty state', () => {
       'Compare water before and after the dam breach~50 s',
       'Detect field boundaries east of the river~2 min',
       'Classify land cover on the flooded fields~90 s',
+      'Predict future LULC~1 min',
     ]);
   });
 
-  it('with the sample: its chip with ×, and five suggestions', () => {
+  it('with the sample: its chip with ×, and six suggestions', () => {
     sampleAttachments(SAMPLE).forEach(useChatStore.getState().addAttachment);
     renderColumn();
     expect(screen.getByRole('heading', { name: 'What do you want to know about this area?' })).toBeTruthy();
     expect(screen.getByText(/^The Kakhovka sample is attached\./)).toBeTruthy();
     expect(screen.getAllByTestId('attachment-chip')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: '+ Attach the Kakhovka sample' })).toBeNull();
-    expect(suggestionTexts().slice(3)).toEqual([
+    expect(suggestionTexts().slice(4)).toEqual([
       'Map moisture change with NDMI between the two datesComposed~60 s',
       'Fill the cloud gaps in the 9 June imagePrithvi · ~3 min',
     ]);

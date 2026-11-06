@@ -27,7 +27,15 @@ from server.jobs import JobQueue, MemoryJobStore
 
 SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
 SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
-_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
+_KEY_VARS = (
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENAI_API_KEY",
+    "GPT_SECRET",
+    "ANTHROPIC_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+)
 CONVERSATION = "conversation"
 
 # Where each follow-up must go: a conversation reply, or exactly one analysis step with these
@@ -44,6 +52,10 @@ EXPECTED: dict[str, str | tuple[str, dict[str, Any]]] = {
     "Map snow cover with NDSI": ("algorithms/ndsi", {}),
     "Classify land cover in this image": ("algorithms/lulc-classifier", {}),
     "Give me statistics for every band": ("algorithms/statistics", {}),
+    "Map where land cover is most likely to change": ("models/lulc-change-hazard", {}),
+    "Forecast the land cover map for the coming years": ("models/lulc-forecast", {}),
+    "Show how land cover changed since 2017": ("algorithms/lulc-history", {}),
+    "Compare land cover with the pre-war state": ("algorithms/lulc-since-prewar", {}),
 }
 
 

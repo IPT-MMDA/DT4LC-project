@@ -653,6 +653,59 @@ class TestOpenAIProvider:
         assert response.provider == "openai"
 
 
+class TestOpenRouterProvider:
+    """OpenRouter: the OpenAI provider on OpenRouter's endpoint and key."""
+
+    def test_client_uses_openrouter_endpoint_and_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        pytest.importorskip("openai")
+        from dta.dti.coe.llm.openrouter import DEFAULT_OPENROUTER_BASE_URL, OpenRouterProvider
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-test")
+        monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-must-not-be-used")
+        captured: dict[str, object] = {}
+        provider = OpenRouterProvider()
+        assert provider.name == "openrouter" and provider.model == "openai/gpt-4o-mini" and provider.is_available()
+        with patch(
+            "dta.dti.coe.llm.openrouter.openai.OpenAI", side_effect=lambda **kw: captured.update(kw) or MagicMock()
+        ):
+            provider._get_client()
+        assert captured["api_key"] == "sk-or-v1-test" and captured["base_url"] == DEFAULT_OPENROUTER_BASE_URL
+
+    def test_unavailable_without_its_own_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        pytest.importorskip("openai")
+        from dta.dti.coe.llm.openrouter import OpenRouterProvider
+
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+        provider = OpenRouterProvider()
+        assert provider.is_available() is False
+        with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+            provider.generate([LLMMessage(role="user", content="Hi")])
+
+    def test_sampling_follows_the_openai_rule_on_the_bare_name(self) -> None:
+        pytest.importorskip("openai")
+        from dta.dti.coe.llm.openrouter import OpenRouterProvider
+
+        assert OpenRouterProvider("openai/gpt-4o-mini")._supports_sampling() is True
+        assert OpenRouterProvider("openai/gpt-5-mini")._supports_sampling() is False
+        assert OpenRouterProvider("anthropic/claude-haiku-4.5")._supports_sampling() is True
+
+    def test_selected_through_provider_order(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        pytest.importorskip("openai")
+        from dta.dti.coe.llm.config import create_router_from_env, get_default_config
+        from dta.dti.coe.llm.openrouter import OpenRouterProvider
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-test")
+        monkeypatch.delenv("OPENROUTER_MODELS", raising=False)
+        monkeypatch.setenv("LLM_ENABLE_OPENROUTER", "true")
+        monkeypatch.setenv("LLM_PROVIDER_ORDER", "openrouter,ollama")
+        assert get_default_config()["providers"][0] == {"type": "openrouter", "model": "openai/gpt-4o-mini"}
+        assert isinstance(create_router_from_env().providers[0], OpenRouterProvider)
+        monkeypatch.delenv("OPENROUTER_API_KEY")
+        assert "openrouter" not in [p["type"] for p in get_default_config()["providers"]]
+
+
 class TestLLMRouter:
     """Tests for LLM router."""
 

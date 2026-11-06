@@ -6,6 +6,9 @@ types:
  - EVIMap
  - SnowClassification  # Multi-criteria snow classification
  - LULCMap  # Land use / land cover classification
+ - ChangeHazardMap  # Ranks of land-cover change probability (models/lulc-change-hazard)
+ - LandCoverForecast  # Esri map some years ahead, its class amounts and transitions (models/lulc-forecast)
+ - LandCoverHistory  # Esri class amounts and transitions since 2017 (algorithms/lulc-history)
  - Reconstruction  # Prithvi MAE reconstruction outputs
  - RasterPath
  - RasterPathBefore
@@ -88,6 +91,22 @@ instances:
       entrypoint: "dta.dti.data_sources.gee_region"
     integration:
       type: google-earth-engine
+      url: https://earthengine.google.com
+      status: active
+
+  # The region's bounds only, for a plan whose analyses build their own data from the area
+  # (config region_input: footprint); swapped in by the same injection, step config {name, bbox}.
+  - id: input/region-footprint
+    kind: input
+    display_name: "Region area"
+    description: The region's bounding box as a tiny GeoTIFF; no imagery is fetched.
+    inputs: []
+    outputs: [RasterPath]
+    runner:
+      type: python
+      entrypoint: "dta.dti.data_sources.region_footprint"
+    integration:
+      type: map-region
       url: https://earthengine.google.com
       status: active
 
@@ -785,6 +804,272 @@ instances:
       args_map:
         RasterPath: "${RasterPath}"
         delineate_model: "small"
+
+  # The input raster gives only the area: the features come from Earth Engine (dta.dti.models.lulc_hazard.features).
+  - id: models/lulc-change-hazard
+    kind: model
+    display_name: "Land-cover change hazard"
+    ui:
+      tier: builtin
+      group: models
+      order: 3
+      title: Land-cover change hazard
+      description: >-
+        Where KPI-Ukraine land cover is most likely to change: any change, built-up expansion, tree cover loss,
+        cropland expansion and tree cover gain, each at the longest horizon it was checked for.
+      inputs: [Area (upload or map region)]
+      outputs: [Rank per hazard (national and within the area), start class]
+      time: "~1 min"
+      prompt: Map where land cover is most likely to change
+      followups:
+        - Forecast the land cover map for the coming years
+        - Show how land cover changed since 2017
+      model:
+        title: LULC change model (KPI-Ukraine)
+        short: LULC change model
+        description: Boosted trees per start class on KPI-Ukraine neighbourhoods, terrain and AlphaEarth; ranks hazards and places forecast change.
+    description: |
+      Change-probability ranks for KPI-Ukraine land cover (C7x legend, 7 classes) on a 30 m grid. The model is
+      a boosted-tree classifier per start class, trained on Ukrainian windows; its features (class shares of
+      the KPI map in 3, 7 and 15 cell squares, elevation, slope, aspect and the 64 AlphaEarth embedding bands
+      of the origin year) are fetched from Earth Engine for the area of the input raster. The origin year is
+      the latest with both a KPI map and an AlphaEarth embedding of the area; the input's dates play no part.
+    interpretation: |
+      One layer per hazard in statistics.hazards, each for its own year (t0 + its horizon_years, the longest
+      horizon at which the hazard beat the nulls in a backtest). Values are percentiles (0-100) of the hazard's
+      probability among the training cells that could make that change, not probabilities: 90 means more likely
+      than 90 % of them. The <key>_local layers rank the same score among this area's own cells (where first).
+      Risk levels cut the national rank: high = top 5 %, elevated = top 5-10 %, moderate = top 10-15 %. A level's
+      percent is the share of the hazard's land here at that level and region_percent its share across Ukraine,
+      so a high percent above 5 means this area is more prone to that change than the country, below 5 less. The hazards overlap (one cell can be at risk of several) and each is ranked on its own scale, so their
+      high-risk areas do not add up to that of any change, and a large high-risk area of a rare change (see
+      skill.observed_rate, the share of such land across Ukraine that made it in the backtest) does not mean much
+      of it will change. Not a forecast of how much will change, and not a hazard in the disaster-risk sense.
+    keywords: [forecast, prediction, future, change, hazard, risk, transition, land-cover, lulc, kpi, alphaearth,
+               deforestation, urbanisation, abandonment]
+    inputs: [RasterPath]
+    outputs: [ChangeHazardMap]
+    model_id: lulc-change-hazard-kpi
+    triggers:
+      keywords: ["change hazard", "change risk", "likely to change", "urban expansion risk", "forest loss risk",
+                 "abandonment risk", "cropland abandonment", "re-cultivation", "recultivation", "overgrowth risk",
+                 "built-up expansion", "tree cover loss", "tree cover gain", "cropland expansion"]
+      action_phrases:
+        - "forecast land cover change"
+        - "predict land cover change"
+        - "where will land cover change"
+        - "where is land cover likely to change"
+        - "where is land cover most likely to change"
+        - "land cover most likely to change"
+        - "where land cover is most likely to change"
+        - "map land cover change hazard"
+        - "map land cover hazards"
+        - "where is urban expansion likely"
+        - "where is forest loss likely"
+    user_guide:
+      capability_response: |
+        Yes, I can rank where KPI-Ukraine land cover is most likely to change, from Earth Engine features of the area
+        (Ukraine only for now). Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area.
+      missing_file_response: |
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll rank where land
+        cover is most likely to change.
+      summary_template: "Ranking land-cover change hazard"
+    runner:
+      type: python
+      entrypoint: "dta.dti.models.lulc_hazard.inference"
+      function: run
+      args_map:
+        RasterPath: "${RasterPath}"
+        model_dir: "${MODEL_PATH}"
+    config:
+      region_input: footprint  # a map region needs no imagery fetch (dta.dti.data_sources.region_footprint)
+
+  # Same bundle as models/lulc-change-hazard; served only up to the horizon its backtest passed (bundle "served").
+  - id: models/lulc-forecast
+    kind: model
+    display_name: "Land-cover forecast"
+    ui:
+      tier: builtin
+      group: models
+      order: 4
+      title: Land-cover forecast
+      description: >-
+        The KPI-Ukraine land-cover map some years ahead, with the area of each class and the transition matrix:
+        the amounts follow the recent trend around the area, the model places them.
+      inputs: [Area (upload or map region)]
+      outputs: [Forecast class map, class areas, transition matrix, summary]
+      time: "~1 min"
+      prompt: Forecast the land cover map for the coming years
+      followups:
+        - Map where land cover is most likely to change
+        - Show how land cover changed since 2017
+      model:
+        title: LULC change model (KPI-Ukraine)
+        short: LULC change model
+        description: Boosted trees per start class on KPI-Ukraine neighbourhoods, terrain and AlphaEarth; ranks hazards and places forecast change.
+    description: |
+      KPI-Ukraine land cover (C7x legend, 7 classes, 30 m) at t0 + h, t0 the latest year with KPI and
+      AlphaEarth data and h the longest horizon at which the forecast maps passed their backtest. How much of
+      each class changes into each other class follows the latest h-year KPI pair ending by the bundle's
+      trend_last year, in a 12 km square around the area (Markov trend); where it changes follows the
+      change-hazard model's probabilities, highest first.
+    interpretation: |
+      statistics.summary holds sentences written from the numbers; repeat them, do not compute new ones.
+      statistics.amounts is "expected" only where the backtest found the trend's amounts closer to the outcome
+      than assuming no change; otherwise the amounts are a trend scenario ("if the trend continues"). The
+      placement was checked against random placement and a neighbourhood rule.
+    keywords: [forecast, prediction, future, land-cover, lulc, kpi, map, transition, matrix, scenario]
+    inputs: [RasterPath]
+    outputs: [LandCoverForecast]
+    model_id: lulc-change-hazard-kpi
+    triggers:
+      keywords: ["land cover forecast", "land-cover forecast", "lulc forecast", "lulc prediction",
+                 "land cover prediction", "future land cover", "future land-cover", "future lulc"]
+      action_phrases:
+        - "forecast the land cover map"
+        - "forecast land cover map"
+        - "predict the land cover map"
+        - "predict future land cover"
+        - "forecast future land cover"
+    user_guide:
+      capability_response: |
+        Yes, I can forecast the KPI-Ukraine land-cover map a few years ahead for an area in Ukraine, with class areas
+        and a transition matrix. Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area.
+      missing_file_response: |
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll forecast its land
+        cover.
+      summary_template: "Forecasting land cover"
+    runner:
+      type: python
+      entrypoint: "dta.dti.models.lulc_hazard.inference"
+      function: run_forecast
+      args_map:
+        RasterPath: "${RasterPath}"
+        model_dir: "${MODEL_PATH}"
+    config:
+      region_input: footprint
+
+  - id: algorithms/lulc-history
+    kind: algorithm
+    display_name: "Land-cover history"
+    ui:
+      tier: builtin
+      group: change
+      order: 5
+      title: Land-cover history
+      description: >-
+        How KPI-Ukraine land cover of an area changed since 2017: area of each class per year, the transition
+        matrix between the first and last three years, and the main changes in words.
+      inputs: [Area (upload or map region)]
+      outputs: [Class maps then and now, class areas per year, transition matrix, summary]
+      time: "~30 s"
+      prompt: Show how land cover changed since 2017
+      followups:
+        - Map where land cover is most likely to change
+        - Compare land cover with the pre-war state
+    description: |
+      KPI-Ukraine annual land cover (10 m, C7x legend, 3 x 3 majority to 30 m) of every year from 2017 for the
+      area of the input raster, from the Earth Engine collection kpi_ukraine_lc; Ukraine only. The main
+      comparison is between the majority class of the first three years and of the last three, which damps
+      year-to-year flicker.
+    interpretation: |
+      statistics.summary holds sentences written from the numbers; repeat them, do not compute new ones.
+      changed_percent (between the periods) below changed_percent_single_years shows how much of a single-year
+      comparison is flicker. Observed KPI labels, not a forecast and not field-checked change.
+    keywords: [history, past, trend, land-cover, lulc, kpi, transition, matrix, statistics, change]
+    inputs: [RasterPath]
+    outputs: [LandCoverHistory]
+    triggers:
+      keywords: ["land cover history", "land-cover history", "lulc history", "transition matrix"]
+      action_phrases:
+        - "land cover changed since"
+        - "show land cover history"
+    user_guide:
+      capability_response: |
+        Yes, I can show how KPI-Ukraine land cover of an area changed since 2017, with class areas per year and a
+        transition matrix. Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area.
+      missing_file_response: |
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll show how its land
+        cover changed since 2017.
+      summary_template: "Summarising land-cover history"
+    runner:
+      type: python
+      entrypoint: "dta.dti.models.lulc_hazard.history"
+      function: run
+      args_map:
+        RasterPath: "${RasterPath}"
+        source: kpi
+    config:
+      region_input: footprint
+
+  # A fixed, descriptive comparison: KPI 2021 (the last pre-war year) against 2024. No war attribution.
+  - id: algorithms/lulc-since-prewar
+    kind: algorithm
+    display_name: "Land cover since the pre-war state"
+    ui:
+      tier: builtin
+      group: change
+      order: 6
+      title: Land cover since the pre-war state
+      description: >-
+        How KPI-Ukraine land cover of an area differs between 2021, the last pre-war year, and 2024: class areas,
+        the transition matrix, the main changes in words, and the area the map marks as not cultivated each year.
+      inputs: [Area (upload or map region)]
+      outputs: [Class maps 2021 and 2024, class areas per year, transition matrix, summary]
+      time: "~40 s"
+      prompt: Compare land cover with the pre-war state
+      followups:
+        - Show how land cover changed since 2017
+        - Map where land cover is most likely to change
+    description: |
+      KPI-Ukraine annual land cover (10 m, C7x legend, 3 x 3 majority to 30 m) of 2021 against 2024, as single
+      years, for the area of the input raster; Ukraine only. Also the area of raw KPI class 20 ("not cultivated",
+      counted as Crop in C7x) for every year 2017-2024. A description of the maps, not the effect of the war.
+    interpretation: |
+      statistics.summary holds sentences written from the numbers; repeat them, do not compute new ones, and do
+      not say the war caused a change: this compares two maps. statistics.checked names the known map artefacts
+      of the period; mention them when a change in Tree or Crop is the answer.
+    keywords: [pre-war, war, invasion, history, change, land-cover, lulc, kpi, transition, matrix, statistics]
+    inputs: [RasterPath]
+    outputs: [LandCoverHistory]
+    triggers:
+      keywords: ["pre-war", "prewar", "pre war", "before the war", "since the war", "since the invasion",
+                 "post-war", "postwar", "wartime", "war period"]
+      action_phrases:
+        - "since the pre-war state"
+        - "compare land cover with the pre-war state"
+        - "compare land cover with pre-war"
+        - "how has land cover changed since the pre-war state"
+        - "land cover changed since the pre-war"
+        - "land cover changed since before the war"
+        - "land cover change since the war"
+        - "land cover change since the invasion"
+        - "land cover changes since the war"
+        - "land cover changes since the invasion"
+        - "lulc changes since the war"
+        - "lulc changes since the invasion"
+        - "lulc since the war"
+        - "changed since the war"
+        - "changed since the invasion"
+        - "compared to pre-war"
+        - "compared to before the war"
+    user_guide:
+      capability_response: |
+        Yes, I can compare KPI-Ukraine land cover of an area in 2021, the last pre-war year, with 2024, with class
+        areas, a transition matrix and the area marked not cultivated each year. Draw a region on the map with the LULC dataset (up to
+        400 km²) or upload a GeoTIFF of the area.
+      missing_file_response: |
+        Draw a region on the map with the LULC dataset (up to 400 km²) or upload a GeoTIFF of the area, and I'll compare its land cover
+        in 2021 and 2024.
+      summary_template: "Comparing land cover with the pre-war state"
+    runner:
+      type: python
+      entrypoint: "dta.dti.models.lulc_hazard.history"
+      function: run_prewar
+      args_map:
+        RasterPath: "${RasterPath}"
+    config:
+      region_input: footprint
 
   - id: post-processing/agent-analysis
     kind: postprocess

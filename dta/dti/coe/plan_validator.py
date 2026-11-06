@@ -12,6 +12,7 @@ from dta.dti.validation import PlanValidator
 
 BAND_MATH_ENTRYPOINT = "dta.dti.algorithms.band_math"
 EE_FETCH_ENTRYPOINT = "dta.dti.data_sources.gee_region"
+FOOTPRINT_ENTRYPOINT = "dta.dti.data_sources.region_footprint"
 
 
 class PlanError(Exception):
@@ -51,11 +52,19 @@ def validate(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
         if it.runner and it.runner.type == "python" and not it.runner.entrypoint:
             raise PlanError(f"{it.id} missing python entrypoint")
 
-        # Step config: only band math and the Earth Engine fetch take one; a formula must be safe before anything runs.
+        # Step config: only band math, the Earth Engine fetch and the region footprint take one; a formula must be
+        # safe before anything runs.
         if it.runner and it.runner.entrypoint == BAND_MATH_ENTRYPOINT:
             _check_band_math(step.config.get("formula", ""), [bound[i] for i in it.inputs if i in bound], it.id)
         elif it.runner and it.runner.entrypoint == EE_FETCH_ENTRYPOINT:
             _check_ee_fetch(step.config, it.id)
+        elif it.runner and it.runner.entrypoint == FOOTPRINT_ENTRYPOINT:
+            from dta.dti.data_sources.region_footprint import check_config
+
+            try:
+                check_config(step.config)
+            except ValueError as e:
+                raise PlanError(f"Step {it.id}: {e}") from e
         elif step.config:
             raise PlanError(f"Step {it.id} takes no config, got {sorted(step.config)}.")
 

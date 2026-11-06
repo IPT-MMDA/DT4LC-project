@@ -254,14 +254,19 @@ class TriggerIndex:
 
     def asks_for_change(self, prompt: str) -> bool:
         """True if the prompt names a trigger of an item producing a ChangeMap (change detection's
-        "compare", "change", "before", "difference", "between the two dates", "gained", "lost", ...)."""
+        "compare", "change", "before", "difference", "between the two dates", "gained", "lost", ...),
+        except inside a longer trigger of an item that produces none ("change" in "likely to change")."""
         p = without_rejected(prompt.lower())
-        return any(
-            phrase_in(t, p)
-            for item in self.user_runnable_items
-            if item.triggers is not None and "ChangeMap" in item.outputs
-            for t in item.triggers.keywords + item.triggers.action_phrases
-        )
+        change: list[tuple[int, int]] = []
+        other: list[tuple[int, int]] = []
+        for item in self.user_runnable_items:
+            if item.triggers is None:
+                continue
+            spans = change if "ChangeMap" in item.outputs else other
+            for t in item.triggers.keywords + item.triggers.action_phrases:
+                if t.strip():
+                    spans += [m.span() for m in _phrase_pattern(t.strip().lower()).finditer(p)]
+        return any(not any(s <= a and b <= e and e - s > b - a for s, e in other) for a, b in change)
 
     # --- Response rendering -----------------------------------------------
 

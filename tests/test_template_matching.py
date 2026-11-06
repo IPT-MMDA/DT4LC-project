@@ -27,7 +27,15 @@ from dta.dti.validation import PlanValidator, ValidationError
 
 SAMPLE_0601 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
 SAMPLE_0609 = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
-_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
+_KEY_VARS = (
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENAI_API_KEY",
+    "GPT_SECRET",
+    "ANTHROPIC_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+)
 DELINEATE = "models/delineate-anything"
 NDMI_PROMPT = "Map moisture change with NDMI between the two dates"
 UNRELATED = [

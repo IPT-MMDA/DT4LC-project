@@ -189,7 +189,7 @@ def get_model_registry() -> ModelRegistry:
 def _initialize_default_models() -> None:
     """Initialize default models.
 
-    Note: Models (Prithvi, Delineate-Anything) are now managed through ModelManager
+    Note: Models (Prithvi, Delineate-Anything, LULC change hazard) are now managed through ModelManager
     and downloaded on-demand. They are executed via the registry.yaml configuration
     and the pipeline executor. See:
     - dta/dti/models/model_manager.py (download management)

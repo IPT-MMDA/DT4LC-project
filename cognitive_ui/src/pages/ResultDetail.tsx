@@ -14,7 +14,8 @@ import { Failure } from '../components/chat/analysis/AnalysisMessage';
 import { StatusGlyph, StatusPill, type PillStatus } from '../components/chat/analysis/StatusPill';
 import { attachmentChips } from '../components/chat/attachmentChips';
 import { FileChip, RegionChip } from '../components/chat/Chips';
-import { downloadName, resultCardOf, type CardView, type ResultCardModel } from '../components/chat/result/resultModel';
+import { downloadName, resultCardOf, type CardView, type LandCoverModel, type ResultCardModel } from '../components/chat/result/resultModel';
+import { HazardControls, HazardList, LandCoverLegend, LandCoverSummary, LandCoverTable, TransitionList, ViewToggle } from '../components/chat/result/ResultCard';
 import {
   changeIndexLabel,
   contextFromJob,
@@ -35,6 +36,7 @@ import { useResultActions } from '../components/detail/useResultActions';
 import { analysisContext, whenLabel } from '../components/library/libraryModel';
 import { useAttachFiles } from '../hooks/useAttachFiles';
 import { interpretationOf } from '../hooks/useJobEvents';
+import { useLandCoverView } from '../hooks/useLandCoverView';
 import { useChatStore } from '../store/useChatStore';
 
 // /app/results/:id: one analysis from
@@ -140,6 +142,9 @@ function MapPanel({ title, meta, view, legend, height, actions }: { title: strin
         </div>
       </header>
       <div className={cn('relative bg-surface2', height)}>
+        {view.base && shown && (
+          <img src={resolveApiUrl(view.base.url)} alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain opacity-40 grayscale" />
+        )}
         {shown ? (
           <img data-testid="detail-image" src={resolveApiUrl(shown.url)} alt={title} className="absolute inset-0 w-full h-full object-contain" />
         ) : (
@@ -218,10 +223,58 @@ const SINGLE_TITLES: Record<ResultCardModel['kind'], string> = {
   fields: 'Field boundaries',
   statistics: 'Statistics',
   image: 'Map',
+  landcover: 'Map',
 };
+
+/** A land-cover result: the map with its view (and region / this area) toggles, the summary, then its tables. */
+function LandCoverPanels({ model, meta }: { model: LandCoverModel; meta: string }) {
+  const state = useLandCoverView(model);
+  const { base, view, setActive } = state;
+  if (!base || !view) return null;
+  return (
+    <>
+      {model.hazards.length > 0 ? (
+        <section aria-label="Hazards" className={panel}>
+          <HazardList hazards={model.hazards} active={base.key} onChange={setActive} region={model.region ?? 'the training region'} />
+        </section>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewToggle views={model.views} active={base.key} onChange={setActive} />
+        </div>
+      )}
+      {model.hazards.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <HazardControls model={model} state={state} />
+        </div>
+      )}
+      <MapPanel title={view.layerName} meta={view.overlay || meta} view={view} legend={<LandCoverLegend model={model} view={view} />} height="h-[360px]" actions />
+      {(model.summary.length > 0 || model.checked) && (
+        <section aria-label="Summary" className={panel}>
+          <header className="px-[14px] py-[10px] border-b border-border2">
+            <h2 className="text-[13px] font-semibold">Summary</h2>
+          </header>
+          <LandCoverSummary lines={model.summary} lead={model.lead} className="px-[14px] py-[10px]" />
+          <TransitionList items={model.transitions} className="px-[14px] pb-[10px]" />
+          {model.checked && <p className="px-[14px] pb-[10px] text-[12px] text-muted">{model.checked}</p>}
+        </section>
+      )}
+      {model.tables.map((t) => (
+        <section key={t.title} aria-label={t.title} className={panel}>
+          <header className="px-[14px] py-[10px] border-b border-border2">
+            <h2 className="text-[13px] font-semibold">{t.title}</h2>
+          </header>
+          <div className="px-[6px] py-2">
+            <LandCoverTable table={t} />
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
 
 function Maps({ job, model, meta, dates: [from, to] }: { job: DetailJob; model: ResultCardModel; meta: string; dates: string[] }) {
   if (model.kind === 'statistics') return null;
+  if (model.kind === 'landcover') return <LandCoverPanels model={model} meta={meta} />;
   if (model.kind === 'change') {
     const index = changeIndexLabel(job);
     const [difference, ...dates] = model.views;

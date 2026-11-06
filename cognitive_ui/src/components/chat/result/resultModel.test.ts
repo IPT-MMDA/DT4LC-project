@@ -15,6 +15,7 @@ import {
   dayMonth,
   downloadName,
   formatKm2,
+  formatArea,
   formatPercent,
   formatValue,
   prettyFormula,
@@ -400,5 +401,200 @@ describe('source line', () => {
       end_date: '2023-06-09', cloud_max: 20, area_km2: 400,
     } as const;
     expect(sourceLine({ attachments: [], region: { ...region, geometry: { type: 'Point', coordinates: [0, 0] } } })).toBe('NASA MODIS');
+  });
+});
+
+describe('land-cover cards (models/lulc-change-hazard, models/lulc-forecast, algorithms/lulc-history)', () => {
+  const ref = (name: string, style?: unknown) => ({ kind: 'png', path: `/o/${name}.png`, url: `/v1/download?path=/o/${name}.png`, ...(style ? { stats: { style } } : {}) });
+  const tif = (name: string) => ({ kind: 'geotiff', path: `/o/${name}.tif`, url: `/v1/download?path=/o/${name}.tif` });
+  const classes = { kind: 'class', classes: { '1': '#419bdf', '2': '#397d49', '4': '#e49635', '5': '#c4281b', '8': '#e3e2c3' } };
+  const ramp = { kind: 'index', range: [0, 100], ramp: ['#f2efe6', '#5c1a1b'] };
+  const jobOf = (key: string, artifact: unknown) => ({ result: { execution: { artifacts: { [key]: artifact } } } });
+
+  it('formats areas in km²: two decimals under 10, one under 100, a trace as <0.01', () => {
+    expect([0.001, 0.36, 9.996, 48.31, 1204.4].map((v) => formatArea(v))).toEqual(['<0.01 km²', '0.36 km²', '10.0 km²', '48.3 km²', '1 204 km²']);
+    expect(formatArea(-1.45, { sign: true })).toBe('−1.45 km²');
+  });
+
+  it('hazards: rows sorted by high-risk share (any change last), level views over the faded start map', () => {
+    const vis: Record<string, unknown> = { start_class_map_bare: ref('start_bare', classes) };
+    const rasters: Record<string, unknown> = { start_class: tif('start_class') };
+    const shades = { kind: 'class', classes: { '3': '#b2182b', '2': '#d17480', '1': '#e8babf' } };
+    for (const k of ['change_rank', 'rank_forest_loss', 'rank_urban_expansion']) {
+      vis[`${k}_level_map_bare`] = ref(`${k}_level`, shades);
+      vis[`${k}_local_map_bare`] = ref(`${k}_local`, ramp);
+      rasters[`${k}_level`] = tif(`${k}_level`);
+      rasters[`${k}_local`] = tif(`${k}_local`);
+    }
+    const levels = (high: number) => [
+      { level: 'High', range: '10 % most likely in Ukraine', colour: '#b2182b', km2: high / 10, percent: high },
+      { level: 'Elevated', range: 'next 15 %', colour: '#d17480', km2: 0.2, percent: 15 },
+      { level: 'Moderate', range: 'next 25 %', colour: '#e8babf', km2: 0.3, percent: 25 },
+    ];
+    const hz = (group: string, title: string, year: number, high: number, skill?: unknown) => ({
+      group, title, year, colour: '#b2182b', raster: group === 'any_change' ? 'change_rank' : `rank_${group}`,
+      level_raster: `${group === 'any_change' ? 'change_rank' : `rank_${group}`}_level`, levels: levels(high), skill,
+      eligible_km2: group === 'forest_loss' ? 0.2 : 10,
+      land: group === 'forest_loss' ? 'tree cover' : 'cropland and grassland',
+      ...(group === 'urban_expansion' && { to_land: 'built-up land' }),
+    });
+    const c = card(jobOf('ChangeHazardMap', {
+      index_type: 'change_rank',
+      statistics: {
+        start_class_km2: { Trees: 18.5, Crops: 21 },
+        hazards: [hz('any_change', 'Any land-cover change', 2029, 30), hz('forest_loss', 'Forest loss', 2027, 2), hz('urban_expansion', 'Urban expansion', 2029, 10, { auc: 0.983, best_null_auc: 0.869, observed_rate: 0.0001 })],
+      },
+      metadata: { t0: 2025 },
+      visualizations: vis,
+      rasters,
+    }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.hazards.map((h) => [h.title, h.year, h.high])).toEqual([
+      ['Urban expansion', '2029', '1.00 km² · 10.0 %'],
+      ['Forest loss', '2027', '0.20 km² · 2.0 %'],
+      ['Any land-cover change', '2029', '3.00 km² · 30.0 %'],
+    ]);
+    expect(c.hazards[0].skill).toBe('AUC 0.98 vs 0.87');
+    expect(c.hazards[0].sentence).toBe('Cropland and grassland → built-up land · high risk 1.00 km² of 10.0 km² (10.0 %)');
+    expect(c.hazards[2].sentence).toBe('All land · high risk 3.00 km² of 10.0 km² (30.0 %)');  // no arrow on any change
+    // A job from before the risk levels: its high risk is the top decile it stored.
+    const old = card(jobOf('ChangeHazardMap', {
+      index_type: 'change_rank',
+      statistics: { hazards: [{ ...hz('forest_loss', 'Forest loss', 2027, 0), levels: [], top_decile_km2: 0.05, top_decile_percent: 25 }] },
+      metadata: { t0: 2025 }, visualizations: vis, rasters,
+    }));
+    if (old.kind !== 'landcover') throw new Error(old.kind);
+    expect(old.hazards[0].high).toBe('0.05 km² · 25.0 %');
+    expect(c.hazards.map((h) => h.overall)).toEqual([false, false, true]);
+    expect(c.tables[0].rows[0].cells.slice(-2)).toEqual(['0.01 %', 'AUC 0.98 vs 0.87']);
+    expect(c.source).toBeNull();
+    expect([c.hazards[1].sparse, c.hazards[1].sentence]).toEqual([true, 'Little tree cover here (0.20 km²)']);
+    expect(c.views.map((v) => v.key)).toEqual(['rank_urban_expansion_level', 'rank_forest_loss_level', 'change_rank_level', 'start_class']);
+    expect(c.views[0].base?.path).toBe('/o/start_bare.png');
+    expect(c.views[0].items?.map((i) => i.name)).toEqual(['High · top 10 % in Ukraine', 'Elevated · top 25 %', 'Moderate · top 50 %']);
+    expect(c.local.rank_urban_expansion_level.raster?.path).toBe('/o/rank_urban_expansion_local.tif');
+    expect(c.stats.map((x) => [x.label, x.value])).toEqual([
+      ['Area analysed', '39.5 km²'],
+      ['Highest relative risk', 'Urban expansion · 10.0 % high'],
+      ['Horizon', '2029 (Forest loss 2027)'],
+    ]);
+    // No metadata.compared_with (a job from before it): Ukraine; else the bundle's region.
+    expect(c.region).toBe('Ukraine');
+    const swiss = card(jobOf('ChangeHazardMap', { index_type: 'change_rank', statistics: { hazards: [hz('urban_expansion', 'Urban expansion', 2029, 10)] }, metadata: { t0: 2025, compared_with: 'Switzerland' }, visualizations: vis, rasters }));
+    if (swiss.kind !== 'landcover') throw new Error(swiss.kind);
+    expect([swiss.region, swiss.views[0].overlay, swiss.checked, swiss.note]).toEqual(['Switzerland', '', undefined, undefined]);
+    // A job from before region_percent: the old 10 / 15 / 25 % levels.
+    expect(c.tables[0].note).toContain('high = the top 10 % most likely');
+    expect(c.hazards[0].levels.map((l) => l.regionPercent)).toEqual([10, 15, 25]);
+    const narrow = card(jobOf('ChangeHazardMap', {
+      index_type: 'change_rank',
+      statistics: { hazards: [{ ...hz('urban_expansion', 'Built-up expansion', 2028, 4), levels: levels(4).map((l) => ({ ...l, region_percent: 5 })) }] },
+      metadata: { t0: 2025 }, visualizations: vis, rasters,
+    }));
+    if (narrow.kind !== 'landcover') throw new Error(narrow.kind);
+    expect(narrow.tables[0].note).toContain('elevated = the top 10 %, moderate = the top 15 %');
+  });
+
+  it('an old hazard job without a hazards list stays an index card', () => {
+    const c = card(jobOf('ChangeHazardMap', { index_type: 'change_rank', statistics: { mean: 50 }, visualizations: {}, rasters: {} }));
+    expect(c.kind).toBe('index');
+  });
+
+  it('forecast: the changes first over the faded start map, the condition once, the largest transitions', () => {
+    const c = card(jobOf('LandCoverForecast', {
+      statistics: {
+        t0: 2025, year: 2029, horizon_years: 4, changed_percent: 4.5, changed_km2: 3.31, amounts: 'trend scenario',
+        summary_lead: 'If the 2021–2025 trend continues, by 2029:',
+        summary: ['Crops would decrease by 24 % (net 1.45 km²); its largest loss is to Rangeland (3.45 km²).'],
+        checked: 'Where change lands was checked ...',
+        transitions: [{ from: 'Crops', to: 'Rangeland', km2: 3.45, percent_of_from: 5.7 }],
+        classes: [{ class: 'Crops', before_km2: 10, after_km2: 8.2, change_km2: -1.8, change_percent: -18 }],
+        matrix: { classes: ['Crops', 'Rangeland'], km2: [[8.2, 1.8], [0, 2]], row_percent: [[82, 18], [0, 100]] },
+        trend: { pair: [2021, 2025], area_km2: 144, matrix: { classes: ['Crops'], km2: [[10]], row_percent: [[100]] } },
+      },
+      visualizations: { class_forecast_map_bare: ref('f', classes), changed_map_bare: ref('c', classes), class_start_map_bare: ref('s', classes) },
+      rasters: { class_forecast: tif('f'), changed: tif('c'), class_start: tif('s') },
+    }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.title).toBe('Land-cover forecast · 2025 → 2029');
+    expect(c.note).toBe('scenario: 2021–2025 trend');
+    expect(c.views.map((v) => v.label)).toEqual(['Changes', '2029', '2025']);
+    expect(c.views[0].base?.path).toBe('/o/s.png');
+    expect(c.stats.map((x) => [x.label, x.value])).toEqual([['Changing', '3.31 km² · 4.5 %'], ['Largest change', 'Crops → Rangeland 3.45 km²'], ['Horizon', '4 years']]);
+    expect(c.lead).toBe('If the 2021–2025 trend continues, by 2029:');
+    expect([c.views[0].overlay, c.checked]).toEqual(['', 'Where change lands was checked ...']);
+    // Expected amounts: no note and no line on the backtest; only a scenario says what its amounts are.
+    const expected = card(jobOf('LandCoverForecast', { statistics: { t0: 2025, year: 2028, amounts: 'expected', checked: 'Placement and amounts checked ...' }, visualizations: {}, rasters: {} }));
+    if (expected.kind !== 'landcover') throw new Error(expected.kind);
+    expect([expected.note, expected.checked]).toEqual([undefined, undefined]);
+    expect(c.transitions).toEqual([{ from: 'Crops', to: 'Rangeland', fromColour: '#e49635', toColour: '#e3e2c3', area: '3.45 km²', share: '5.7 % of Crops in 2025' }]);
+    // Each map's legend has its own areas: what turns into each class, the forecast year's, the start year's.
+    expect(c.views.map((v) => v.items?.map((i) => `${i.name} ${i.value}`))).toEqual([['Rangeland 1.80 km²'], ['Crops 8.20 km²'], ['Crops 10.0 km²']]);
+    expect(c.tables[0].rows[0].cells).toEqual(['10.0 km²', '8.20 km²', '−1.80 km²', '−18 %']);
+    expect(c.tables[1].rows[0].cells).toEqual(['8.20 km² (82 %)', '1.80 km² (18 %)']);
+    expect(c.tables[1].rows[1].cells[0]).toBe('·');
+  });
+
+  it('forecast from the KPI model: class names and colours follow metadata.legend, no source line', () => {
+    const kpi = { kind: 'class', classes: { '1': '#e49635', '2': '#e3e2c3', '3': '#397d49', '4': '#c4281b' } };
+    const c = card(jobOf('LandCoverForecast', {
+      statistics: {
+        t0: 2025, year: 2028, horizon_years: 3, changed_percent: 2, changed_km2: 1, amounts: 'trend scenario',
+        transitions: [{ from: 'Grass', to: 'Tree', km2: 0.5, percent_of_from: 4 }],
+        classes: [{ class: 'Tree', before_km2: 3, after_km2: 3.5, change_km2: 0.5, change_percent: 16.7 }],
+        matrix: { classes: ['Grass', 'Tree'], km2: [[2, 0.5], [0, 3]], row_percent: [[80, 20], [0, 100]] },
+        trend: { pair: [2021, 2024], area_km2: 144, matrix: { classes: ['Grass'], km2: [[10]], row_percent: [[100]] } },
+      },
+      metadata: { legend: ['Crop', 'Grass', 'Tree', 'Built', 'Water', 'Wetland', 'Bare'], source: 'KPI-Ukraine national land cover (10 m), C7x legend' },
+      visualizations: { class_forecast_map_bare: ref('f', kpi), changed_map_bare: ref('c', kpi), class_start_map_bare: ref('s', kpi) },
+      rasters: { class_forecast: tif('f'), changed: tif('c'), class_start: tif('s') },
+    }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.source).toBeNull();
+    expect(c.transitions[0]).toMatchObject({ from: 'Grass', to: 'Tree', fromColour: '#e3e2c3', toColour: '#397d49' });
+    expect(c.classes).toEqual([{ name: 'Tree', colour: '#397d49', value: '3.50 km²' }]);
+    const legend = c.views[2]?.legend;
+    expect(legend?.kind === 'change' && legend.classes?.map((x) => x.label)).toEqual(['Crop', 'Grass', 'Tree', 'Built']);
+    expect(c.tables[2].rows[0].label).toBe('Grass');
+  });
+
+  it('since the pre-war state: single years in the title, the fixed note, the not-cultivated row', () => {
+    const kpi = { kind: 'class', classes: { '1': '#e49635', '2': '#e3e2c3' } };
+    const c = card(jobOf('LandCoverHistory', {
+      statistics: {
+        periods: { start: [2021], end: [2024] }, years: [2021, 2024], changed_percent: 1, changed_km2: 0.1,
+        area_km2: { Crop: [2, 1.9], Grass: [0, 0.1] }, classes: [], transitions: [],
+        not_cultivated_km2: { years: [2021, 2024], km2: [0.5, 1.25] }, checked: 'A description of the maps.',
+      },
+      metadata: { legend: ['Crop', 'Grass', 'Tree', 'Built', 'Water', 'Wetland', 'Bare'], source: 'KPI-Ukraine national land cover' },
+      visualizations: { class_start_map_bare: ref('s', kpi), changed_map_bare: ref('c', kpi), class_end_map_bare: ref('e', kpi) },
+      rasters: { class_start: tif('s'), changed: tif('c'), class_end: tif('e') },
+    }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.title).toBe('Land-cover history · 2021 → 2024');
+    expect(c.checked).toBe('A description of the maps.');
+    const fallow = c.tables.find((t) => t.title.startsWith('Marked not cultivated'));
+    expect(fallow?.columns).toEqual(['', '2021', '2024']);
+    expect(fallow?.rows[0].cells).toEqual(['0.50 km²', '1.25 km²']);
+  });
+
+  it('history: first and last year in the title, area analysed, no note, area per year in km², an older job in hectares too', () => {
+    const base = {
+      years: [2017, 2018], periods: { start: [2017, 2019], end: [2023, 2025] },
+      changed_percent: 12.5, changed_km2: 2.1, changed_percent_single_years: 20.1, single_year_pair: [2017, 2025],
+      classes: [{ class: 'Crops', before_km2: 10, after_km2: 12 }, { class: 'Grass', before_km2: 6.8, after_km2: 4.8 }],
+      matrix: { classes: [] }, summary: [],
+    };
+    const c = card(jobOf('LandCoverHistory', { statistics: { ...base, area_km2: { Crops: [15, 14] } }, visualizations: {}, rasters: {} }));
+    if (c.kind !== 'landcover') throw new Error(c.kind);
+    expect(c.title).toBe('Land-cover history · 2017 → 2025');
+    expect(c.note).toBeUndefined();
+    expect(c.views.map((v) => v.label)).toEqual(['Changes', '2025', '2017']);
+    expect(c.checked).toBeUndefined();
+    expect(c.stats.map((s) => [s.label, s.value])).toEqual([['Changed', '2.10 km² · 12.5 %'], ['Largest change', '—'], ['Area analysed', '16.8 km²']]);
+    const perYear = (m: ResultCardModel) => (m.kind === 'landcover' ? m.tables.find((t) => t.title === 'Area per year')?.rows : undefined);
+    expect(perYear(c)).toEqual([{ label: 'Crops', colour: undefined, cells: ['15.0 km²', '14.0 km²'] }]);
+    const old = card(jobOf('LandCoverHistory', { statistics: { ...base, area_ha: { Crops: [1500, 1400] } }, visualizations: {}, rasters: {} }));
+    expect(perYear(old)?.[0].cells).toEqual(['15.0 km²', '14.0 km²']);
   });
 });

@@ -90,7 +90,7 @@ From the browser end-to-end tests (`cognitive_ui/tests/e2e/`), on the bundled Ka
 │ │ Digital Twin Instance (DTI)                                    │ │
 │ │  • Pipeline Executor                                           │ │
 │ │  • Algorithms (indices, band math, change, classes, stats)     │ │
-│ │  • Models (Prithvi, Delineate-Anything)                        │ │
+│ │  • Models (Prithvi, Delineate-Anything, LULC change hazard)    │ │
 │ └────────────────────────────────────────────────────────────────┘ │
 └─────────┬──────────────────────────────────────────────────────────┘
           │ LLM calls: intent, context, plan, interpretation, replies

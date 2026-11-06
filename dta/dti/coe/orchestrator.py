@@ -5,16 +5,27 @@ from typing import Any
 
 from dta.dti.data_sources.gee_region import inject_region_fetch
 from dta.dti.registry import get_item, load_registry
-from dta.dti.schemas import Attachment, ChatRequest, ExecutionPlan, Registry
+from dta.dti.schemas import Attachment, ChatRequest, ExecutionPlan, PlanStep, Registry
 
-from .context_agent import analyze
+from .context_agent import _deterministic_context, analyze
 from .intent_classifier import IntentType, classify_intent
 from .named_indices import named_index_request, proposal_text
 from .plan_validator import PlanError, validate
 from .planner import plan
 from .prompt_dates import attachments_named_by_date
+from .triggers import get_trigger_index
 
 logger = logging.getLogger(__name__)
+
+
+def footprint_request(prompt: str) -> bool:
+    """The prompt names, by its triggers, an item that takes only the area (``config.region_input: footprint``).
+
+    Such an item has no parameter an assistant could add, and its trigger phrases ("where land cover is most likely
+    to change") lose their words in an assistant's rewrite of the goal, so it is planned from the prompt itself.
+    """
+    item = get_trigger_index().find_matching_item(prompt)
+    return item is not None and (item.config or {}).get("region_input") == "footprint"
 
 
 def orchestrate(req: ChatRequest) -> dict[str, Any]:
@@ -74,8 +85,12 @@ def orchestrate(req: ChatRequest) -> dict[str, Any]:
             return {"ok": False, "intent": "pipeline", "error": str(e), "candidate": named.plan.model_dump()}
         return {"ok": True, "intent": "pipeline", "plan": final_plan.model_dump(), "proposal": named.text}
 
-    ctx = analyze(req, registry_types=reg.types)
-    candidate = plan(ctx, reg)
+    if footprint_request(req.prompt):
+        ctx = _deterministic_context(req)
+        candidate = plan(ctx, reg, use_llm=False)
+    else:
+        ctx = analyze(req, registry_types=reg.types)
+        candidate = plan(ctx, reg)
     # A region sent from the map (the job queue passes it only when no file is attached): fetch it.
     region = req.metadata.get("region") if not req.attachments else None
 
@@ -140,9 +155,12 @@ def _analysis_steps(plan: ExecutionPlan, reg: Registry) -> list[str]:
 
 
 def require_analysis_step(plan: ExecutionPlan, reg: Registry) -> ExecutionPlan:
-    """``plan``, unless it has no algorithm or model step (only reads and summarises): PlanError."""
+    """``plan`` with the postprocess (the written interpretation) last, which the LLM planner can leave out;
+    PlanError if it has no algorithm or model step (only reads and summarises)."""
     if not _analysis_steps(plan, reg):
         raise PlanError(NO_ANALYSIS_STEP)
+    if not any(get_item(reg, s.uses).kind == "postprocess" for s in plan.steps):
+        plan.steps += [PlanStep(uses=it.id) for it in reg.instances if it.kind == "postprocess"][:1]
     return plan
 
 

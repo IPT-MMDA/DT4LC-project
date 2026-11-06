@@ -83,6 +83,7 @@ test('public demo, Models and Data: Delineate installed, Prithvi gated, Earth En
     assert.deepEqual(await page.getByTestId('tier-models').getByTestId('capability-status').allInnerTexts(), [
       'Installed on this server',
       'Not available for guests — ask an operator',
+      'Not available for guests — ask an operator',  // the KPI land-cover model, not staged on the demo
     ]);
     assert.deepEqual(await page.getByTestId('tier-data').getByTestId('capability-status').allInnerTexts(), ['Always', 'Always', 'Configured']);
     await page.getByText('Guests: up to 5 analyses per hour, results kept 24 h in this browser, no account needed.').waitFor();

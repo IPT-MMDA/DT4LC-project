@@ -8,7 +8,7 @@ Intelligently chooses between:
 import logging
 
 from dta.dti.coe.plan_validator import BAND_MATH_ENTRYPOINT
-from dta.dti.coe.triggers import phrase_in, without_rejected
+from dta.dti.coe.triggers import TriggerIndex, phrase_in, without_rejected
 from dta.dti.registry import find_items_by_keywords, find_items_producing
 from dta.dti.schemas import ContextUnderstanding, ExecutionPlan, PlanStep, Registry, RegistryItem
 
@@ -77,6 +77,11 @@ def _is_change_detection_request(ctx: ContextUnderstanding, reg: Registry) -> bo
     specific knowledge): "before AND after" co-occurrence, and the user
     explicitly requesting ChangeMap as a desired output.
     """
+    # The prompt's triggers already chose an item that makes no ChangeMap (_deterministic_context): its request.
+    matched = next((it for it in reg.instances if ctx.hints and it.id == ctx.hints.get("item")), None)
+    if matched is not None and "ChangeMap" not in matched.outputs:
+        return False
+
     item = _get_change_detection_item(reg)
     triggers_kw: list[str] = []
     if item is not None and item.triggers is not None:
@@ -87,6 +92,11 @@ def _is_change_detection_request(ctx: ContextUnderstanding, reg: Registry) -> bo
     keywords_lower = " ".join(kw.lower() for kw in keywords)
 
     has_strong_signal = any(phrase_in(kw, goal_lower) or phrase_in(kw, keywords_lower) for kw in triggers_kw)
+    # A change word inside another item's longer trigger ("likely to change" of the change-hazard model) is
+    # that item's, not a request for change detection (TriggerIndex.asks_for_change).
+    if has_strong_signal:
+        index = TriggerIndex.from_registry(reg)  # the plan's own registry; building an index is cheap
+        has_strong_signal = index.asks_for_change(goal_lower) or any(index.asks_for_change(k) for k in keywords)
 
     # Structural signals — generic, not algorithm-specific:
     # "before" + "after" co-occurrence, or explicit ChangeMap desired output.

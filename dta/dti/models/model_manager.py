@@ -130,6 +130,18 @@ AVAILABLE_MODELS: dict[str, ModelInfo] = {
         github_repo="Lavreniuk/Delineate-Anything",
         github_tag="main",
     ),
+    # One JSON bundle (dta/dti/models/lulc_hazard/model.py), version 2026-10-28.
+    # Label source KPI-Ukraine (bundle target "kpi"); the runner still reads Esri bundles, none is listed.
+    "lulc-change-hazard-kpi": ModelInfo(
+        id="lulc-change-hazard-kpi",
+        name="LULC change hazard, KPI-Ukraine",
+        description="Boosted-tree ranks of KPI-Ukraine land-cover change from Earth Engine features",
+        huggingface_repo="LordZeee/lulc-change-hazard-kpi",
+        files=["lulc_hazard.json"],
+        size_mb=45,
+        license="CC-BY-4.0",
+        license_url="https://huggingface.co/LordZeee/lulc-change-hazard-kpi",
+    ),
 }
 
 

@@ -69,7 +69,7 @@ cd cognitive_ui && npm install && npm run dev   # http://localhost:5173
 |------|------|
 | `dta/dti/coe/` | Context Orchestration Engine (intent, context, plan, validate) |
 | `dta/dti/algorithms/` | Raster algorithms (`run(RasterPath=...)`) |
-| `dta/dti/models/` | ML models (Prithvi, Delineate-Anything) |
+| `dta/dti/models/` | ML models (Prithvi, Delineate-Anything, LULC change hazard) |
 | `dta/registry.yaml` | Types, components, triggers, runners |
 | `dta/dti/executor.py` | Runs validated execution plans |
 | `server/` | FastAPI (`app.py`, `routes/`, job queue) |

@@ -32,7 +32,7 @@ Contents:
 ## 1. Prerequisites
 
 - **A Linux host with Docker Engine and the Docker Compose v2 plugin.** The override uses Compose's `!reset` tag, which older Compose releases reject; the `config` check in section 3 tells you whether yours accepts it. Docker Desktop is not suitable, because it hides the client addresses (see [Troubleshooting](#11-troubleshooting)).
-- **Disk:** at least 20 GB free. The backend image is about 1.1 GB (since v0.6.1; it was 12 GB with the CUDA build of torch) and the model weights about 0.5 GB. The build cache, uploads and results come on top.
+- **Disk:** at least 20 GB free. The backend image is about 1.1 GB (since v0.6.1; it was 12 GB with the CUDA build of torch) and the model weights about 0.6 GB. The build cache, uploads and results come on top.
 - **A DNS name** for the demo pointing at the host. This runbook uses `demo.example.org`. Ports 80 and 443 must be open to the internet for the TLS proxy and its certificate.
 - **Outbound HTTPS:**
   - Docker Hub, PyPI and npm while building;
@@ -136,7 +136,7 @@ Start the stack:
 docker compose up -d --build
 ```
 
-The first build takes a while. Compose starts `models-init` first, the backend once `models-init` has exited successfully, and the frontend once the backend is healthy. On the first start the models download (about 0.5 GB); later starts skip them.
+The first build takes a while. Compose starts `models-init` first, the backend once `models-init` has exited successfully, and the frontend once the backend is healthy. On the first start the models download (about 0.6 GB); later starts skip them.
 
 Check it:
 
@@ -158,7 +158,8 @@ docker compose logs backend | grep -e SESSION_SECRET -e DEV_ROLE    # no output
 `models-init` runs `deploy/models_init.py` in the backend image. It installs every managed model into the `models_data` volume, which the backend mounts at `/app/models`:
 
 - Prithvi EO v1 (100M), about 450 MB, from Hugging Face;
-- Delineate-Anything (Small), about 85 MB, from Hugging Face, plus its code from GitHub.
+- Delineate-Anything (Small), about 85 MB, from Hugging Face, plus its code from GitHub;
+- LULC change hazard (KPI-Ukraine), about 45 MB, from Hugging Face (`LordZeee/lulc-change-hazard-kpi`). Its analyses also need Earth Engine.
 
 A model that is already installed is skipped. So the step is quick when it runs again, and after an upgrade it installs only what is new.
 
@@ -169,7 +170,7 @@ docker compose run --rm models-init    # retry and watch the output
 docker compose up -d
 ```
 
-To check what is installed, run `docker compose exec backend du -sh /app/models` (about 0.5 GB).
+To check what is installed, run `docker compose exec backend du -sh /app/models` (about 0.6 GB).
 
 Who may download later:
 

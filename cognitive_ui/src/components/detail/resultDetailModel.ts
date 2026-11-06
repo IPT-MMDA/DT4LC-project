@@ -164,7 +164,7 @@ function changeThreshold(job: Pick<JobRecord, 'result'>): number | undefined {
   return [obj(stats.water).threshold, obj(stats.vegetation).threshold, stats.threshold].find(isNum);
 }
 
-const SHOWN_ELSEWHERE = new Set(['formula', 'name', 'threshold']);
+const SHOWN_ELSEWHERE = new Set(['formula', 'name', 'threshold', 'region_input']);
 
 function stepParams(step: PlanStep, registry: Registry, files: MessageAttachment[], threshold: number | undefined): string[] {
   const binds = obj(step.binds);
@@ -178,7 +178,7 @@ function stepParams(step: PlanStep, registry: Registry, files: MessageAttachment
       return [role, date].filter((p): p is string => Boolean(p));
     });
   }
-  const change = step.uses.includes('change');
+  const change = /(^|\/)(change-detection|band-math-change)$/.test(step.uses);  // not lulc-change-hazard
   const index = str(binds.IndexType) ?? str(config.index_type);
   const formula = str(config.formula)
     ? prettyFormula(String(config.formula))

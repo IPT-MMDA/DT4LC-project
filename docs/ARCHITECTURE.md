@@ -33,7 +33,7 @@ DT4LC is a cognitive digital twin framework for geospatial analysis, combining:
 │  │ Digital Twin Instance (DTI)                                 ││
 │  │  • Pipeline Executor                                        ││
 │  │  • Algorithm Registry (NDVI, Statistics, Change Detection)  ││
-│  │  • Model Registry (Prithvi, Delineate-Anything)             ││
+│  │  • Model Registry (Prithvi, Delineate-Anything, LULC hazard)││
 │  │  • Post-Processing (Visualization, Insights)                ││
 │  └─────────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────────┐│
@@ -140,6 +140,7 @@ Executes plans step-by-step:
 
 - **Prithvi** (`prithvi.py`): NASA/IBM foundation model for geospatial features
 - **Delineate-Anything**: Field boundary detection
+- **LULC change hazard** (`lulc_hazard/`): ranks where land cover is most likely to change and forecasts the map (`models/lulc-change-hazard`, `models/lulc-forecast`); describes past change (`algorithms/lulc-history`, `algorithms/lulc-since-prewar`, `history.py`). The input raster gives only the area; `features.py` builds the features (land-cover neighbourhood shares, terrain, AlphaEarth) from Earth Engine on a 30 m grid, from a label source (`features.SOURCES`: KPI-Ukraine, or Esri); `model.py` loads and checks the one-file bundle `lulc_hazard.json` (format in its docstring; model `lulc-change-hazard-kpi`) and `inference.py` runs it. Risk levels compare each cell with the same land in the bundle's region (`domain`).
 
 #### Post-Processing (`post_processing/`)
 
@@ -462,7 +463,7 @@ dta/
 │   │   ├── plan_validator.py     # Validates plans
 │   │   └── orchestrator.py       # Main orchestration flow
 │   ├── algorithms/               # NDVI, Statistics, Change Detection
-│   ├── models/                   # Prithvi, Delineate-Anything
+│   ├── models/                   # Prithvi, Delineate-Anything, LULC change hazard
 │   ├── post_processing/          # Visualization, Insights
 │   └── executor.py               # Pipeline execution
 

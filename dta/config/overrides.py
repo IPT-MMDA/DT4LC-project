@@ -26,7 +26,7 @@ from . import CACHE_PATH
 
 logger = logging.getLogger(__name__)
 
-LLM_PROVIDERS = ("gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai")
+LLM_PROVIDERS = ("gemini", "groq", "ollama", "apertus", "anthropic", "mistral", "openai", "openrouter")
 
 OVERRIDABLE = frozenset(
     {
@@ -39,6 +39,7 @@ OVERRIDABLE = frozenset(
         "ANTHROPIC_MODELS",
         "MISTRAL_MODELS",
         "OPENAI_MODELS",
+        "OPENROUTER_MODELS",
         "MODEL_DOWNLOAD_ON_DEMAND",
         "ALLOWED_EMAILS",
         "ALLOWED_DOMAINS",

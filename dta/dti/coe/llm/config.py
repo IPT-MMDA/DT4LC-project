@@ -113,7 +113,7 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
     """Get configuration for a specific provider.
 
     Args:
-        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral, openai)
+        provider: Provider name (gemini, groq, ollama, apertus, anthropic, mistral, openai, openrouter)
 
     Returns:
         Provider config dict or None if the provider is unknown or its
@@ -177,6 +177,13 @@ def _get_provider_config(provider: str) -> dict[str, Any] | None:
             models = _get_models_list("OPENAI_MODELS", DEFAULT_OPENAI_MODEL)
             model = _get_next_model("openai", models)
             return {"type": "openai", "model": model}
+    elif provider == "openrouter":
+        if os.environ.get("OPENROUTER_API_KEY"):
+            from .openrouter import DEFAULT_OPENROUTER_MODEL
+
+            models = _get_models_list("OPENROUTER_MODELS", DEFAULT_OPENROUTER_MODEL)
+            model = _get_next_model("openrouter", models)
+            return {"type": "openrouter", "model": model}
     return None
 
 

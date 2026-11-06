@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { resolveApiUrl } from '../../../api/client';
 import { getJob } from '../../../api/jobs';
+import { useLandCoverView } from '../../../hooks/useLandCoverView';
 import { DOCKED_MAP_QUERY, useMediaQuery } from '../../../hooks/useMediaQuery';
 import { useAppStore } from '../../../store/useAppStore';
 import { findConversationByJobId, useChatStore } from '../../../store/useChatStore';
@@ -20,6 +21,10 @@ import {
   type LegendItem,
   type ResultCardModel,
   type Stat,
+  type TableModel,
+  type HazardItem,
+  type LandCoverModel,
+  type TransitionItem,
   type Tone,
 } from './resultModel';
 
@@ -73,9 +78,9 @@ function CardShell({ model, toggle, children }: { model: ResultCardModel; toggle
   );
 }
 
-function ViewToggle({ views, active, onChange }: { views: CardView[]; active: CardView['key']; onChange: (key: CardView['key']) => void }) {
+export function ViewToggle({ views, active, onChange }: { views: CardView[]; active: CardView['key']; onChange: (key: CardView['key']) => void }) {
   return (
-    <div role="group" aria-label="Result view" className="flex-none flex border border-border rounded-control overflow-hidden text-[11.5px]">
+    <div role="group" aria-label="Result view" className="flex-none flex max-w-full overflow-x-auto border border-border rounded-control text-[11.5px] whitespace-nowrap">
       {views.map((v, i) => (
         <button
           key={v.key}
@@ -95,17 +100,25 @@ function ViewToggle({ views, active, onChange }: { views: CardView[]; active: Ca
   );
 }
 
-/** The bare map full-bleed (transparent off the raster, over surface2); else the full figure, whole. */
-function MapImage({ view, alt }: { view: CardView; alt: string }) {
+/**
+ * The bare map full-bleed (transparent off the raster, over surface2); else the full figure, whole.
+ * `contain` shows the whole map at its own aspect (class maps, where a cropped edge hides classes);
+ * a view's `base` is drawn faded beneath it.
+ */
+function MapImage({ view, alt, contain = false }: { view: CardView; alt: string; contain?: boolean }) {
   const shown = view.bare ?? view.image;
+  const fit = view.bare && !contain ? 'object-cover' : 'object-contain';
   return (
     <div className="relative h-[250px] bg-surface2 border-b border-border2">
+      {view.base && shown && (
+        <img data-testid="result-image-base" src={resolveApiUrl(view.base.url)} alt="" aria-hidden className={cn('absolute inset-0 w-full h-full opacity-40 grayscale', fit)} />
+      )}
       {shown ? (
         <img
           data-testid="result-image"
           src={resolveApiUrl(shown.url)}
           alt={alt}
-          className={cn('absolute inset-0 w-full h-full', view.bare ? 'object-cover' : 'object-contain')}
+          className={cn('absolute inset-0 w-full h-full', fit)}
         />
       ) : (
         <p className="absolute inset-0 flex items-center justify-center text-control text-muted">No image for this view</p>
@@ -360,6 +373,244 @@ function ImageCard({ jobId, model }: { jobId: string; model: Extract<ResultCardM
   );
 }
 
+/** A class view's legend (its classes with the card's areas), else the view's ramp. */
+export function LandCoverLegend({ model, view }: { model: LandCoverModel; view: CardView }) {
+  if (view.items) {
+    return (
+      <>
+        <ClassLegend classes={view.items} />
+        {view.base && <span className="text-muted">grey: unchanged</span>}
+      </>
+    );
+  }
+  if (view.legend?.kind === 'ramp') {
+    return (
+      <span className="flex items-center gap-2">
+        <span className="text-muted">less likely</span>
+        <RampLegend ramp={view.legend} />
+        <span className="text-muted">more likely</span>
+      </span>
+    );
+  }
+  const shown = new Set((view.legend?.kind === 'change' ? view.legend.classes ?? [] : []).map((c) => c.label));
+  return <ClassLegend classes={model.classes.filter((c) => shown.size === 0 || shown.has(c.name))} />;
+}
+
+/** The sentences the server wrote from the numbers, under the period or condition they share. */
+export function LandCoverSummary({ lines, lead, className }: { lines: string[]; lead?: string; className?: string }) {
+  if (lines.length === 0) return null;
+  return (
+    <div data-testid="landcover-summary" className={cn('flex flex-col gap-[6px] text-[12.5px] leading-snug', className)}>
+      {lead && <p className="font-semibold">{lead}</p>}
+      <ul className="flex flex-col gap-[4px] list-disc pl-4">
+        {lines.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The largest class-to-class flows: "Trees → Crops   0.79 km²   4 % of Trees". */
+export function TransitionList({ items, className }: { items: TransitionItem[]; className?: string }) {
+  if (items.length === 0) return null;
+  return (
+    <div className={className}>
+      <p className="text-label uppercase text-muted mb-[6px]">Largest transitions</p>
+      <table data-testid="landcover-transitions" className="w-full text-[12px]">
+        <tbody>
+          {items.map((t) => (
+            <tr key={`${t.from}-${t.to}`}>
+              <th scope="row" className="py-[2px] pr-2 text-left font-normal whitespace-nowrap">
+                <span className="inline-flex items-center gap-[5px]">
+                  <Swatch style={t.fromColour ? { background: t.fromColour } : undefined} />
+                  {t.from}
+                  <span aria-hidden className="text-muted">→</span>
+                  <span className="sr-only">to</span>
+                  <Swatch style={t.toColour ? { background: t.toColour } : undefined} />
+                  {t.to}
+                </span>
+              </th>
+              <td className="py-[2px] pr-2 text-right font-mono whitespace-nowrap">{t.area}</td>
+              <td className="py-[2px] text-right font-mono text-muted whitespace-nowrap">{t.share}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function LandCoverTable({ table }: { table: TableModel }) {
+  const head = 'text-label uppercase text-muted font-semibold text-right first:text-left px-2 py-[6px] whitespace-nowrap';
+  const cell = 'px-2 py-1 text-right whitespace-nowrap';
+  return (
+    <div className="overflow-x-auto">
+      <table data-testid="landcover-table" aria-label={table.title} className="w-full font-mono text-[11.5px]">
+        <thead>
+          <tr>
+            {table.columns.map((c) => (
+              <th key={c} scope="col" className={head}>
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((r) => (
+            <tr key={r.label} className="border-t border-border2">
+              <th scope="row" className="px-2 py-1 text-left font-sans font-normal whitespace-nowrap">
+                <span className="flex items-center gap-[6px]">
+                  {r.colour && <Swatch style={{ background: r.colour }} />}
+                  {r.label}
+                </span>
+              </th>
+              {r.cells.map((v, i) => (
+                <td key={i} className={cell}>
+                  {v}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {table.note && <p className="px-2 pt-[6px] text-[11px] text-muted">{table.note}</p>}
+    </div>
+  );
+}
+
+/** National / within-area toggle of a hazard view; `local` null presses neither (the start map is shown). */
+export function ScopeToggle({ local, onChange, labels }: { local: boolean | null; onChange: (local: boolean) => void; labels: [string, string] }) {
+  return (
+    <div role="group" aria-label="Rank within" className="flex-none flex items-center gap-[6px] text-[11.5px]">
+      <span className="text-muted">Rank within</span>
+      <div className="flex border border-border rounded-control overflow-hidden">
+        {[false, true].map((on) => (
+          <button
+            key={String(on)}
+            type="button"
+            aria-pressed={local === on}
+            onClick={() => onChange(on)}
+            className={cn('px-[9px] py-1', on && 'border-l border-border', local === on ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
+          >
+            {on ? labels[1] : labels[0]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Below a hazard list: the scope toggle and the start-map button, both kept while the start map shows. */
+export function HazardControls({ model, state }: { model: LandCoverModel; state: ReturnType<typeof useLandCoverView> }) {
+  const { hasLocal, local, landNow, setLocal, setLandNow } = state;
+  return (
+    <>
+      {hasLocal && <ScopeToggle local={landNow ? null : local} onChange={setLocal} labels={[model.region ?? 'the training region', 'this area']} />}
+      <button
+        type="button"
+        aria-pressed={landNow}
+        onClick={() => setLandNow(!landNow)}
+        className={cn('px-[9px] py-1 rounded-control border border-border text-[11.5px]', landNow ? 'bg-text text-surface' : 'text-text2 hover:bg-surface2')}
+      >
+        Land cover now
+      </button>
+    </>
+  );
+}
+
+/** Where each risk level ends when the land matches the region: 5, 10 and 15 % (High, + Elevated, + Moderate). */
+const regionTicks = (levels: HazardItem['levels']) => levels.map((_, i) => levels.slice(0, i + 1).reduce((a, l) => a + l.regionPercent, 0));
+
+/** The hazards as selectable rows: hue, name, the high-risk area out of the area that could change, and a bar of the
+ *  risk levels over that area; a legend of the levels below. Rows where little could change are dimmed. */
+export function HazardList({ hazards, active, onChange, region }: { hazards: HazardItem[]; active: string; onChange: (key: string) => void; region: string }) {
+  const legend = (hazards.find((h) => h.key === active) ?? hazards[0])?.levels ?? [];
+  return (
+    <div className="flex flex-col border-b border-border2">
+      <div role="radiogroup" aria-label="Hazard" data-testid="hazard-list" className="flex flex-col">
+        {hazards.map((h) => {
+          const on = h.key === active;
+          return (
+            <button
+              key={h.key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(h.key)}
+              className={cn(
+                'grid grid-cols-[4px_minmax(0,1.6fr)_minmax(80px,1fr)] items-center gap-x-3 px-3 py-[7px] text-left border-b border-border2 last:border-b-0',
+                h.overall && 'border-t border-t-border',
+                on ? 'bg-surface2' : 'hover:bg-surface2/60',
+                h.sparse && 'opacity-50',
+              )}
+            >
+              <span aria-hidden className="h-full min-h-[28px] rounded-[2px]" style={{ background: h.colour }} />
+              <span className="min-w-0">
+                <span className={cn('block text-[12.5px]', on && 'font-semibold')}>
+                  {h.title} <span className="font-mono text-[10.5px] text-muted font-normal">by {h.year}</span>
+                </span>
+                <span className="block text-[11.5px] text-muted">{h.sentence}</span>
+              </span>
+              <span aria-hidden className="relative flex h-[8px] w-full rounded-[2px] overflow-hidden bg-surface2 border border-border2">
+                {h.levels.map((l) => (
+                  <span key={l.label} style={{ width: `${Math.min(100, l.percent)}%`, background: l.colour }} />
+                ))}
+                {regionTicks(h.levels).map((p) => <span key={p} className="absolute inset-y-0 w-px bg-text/60" style={{ left: `${p}%` }} />)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {legend.length > 0 && (
+        <div data-testid="hazard-legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-[6px] text-[10.5px] text-muted">
+          {legend.map((l) => (
+            <span key={l.label} className="inline-flex items-center gap-1">
+              <span aria-hidden className="inline-block h-[8px] w-[12px] rounded-[2px]" style={{ background: l.colour }} />
+              {l.label}: {l.range}
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1">
+            <span aria-hidden className="inline-block h-[10px] w-px bg-text/60" />
+            share at each level across {region}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LandCoverCard({ jobId, model }: { jobId: string; model: LandCoverModel }) {
+  const state = useLandCoverView(model);
+  const { base, view, setActive } = state;
+  if (!base || !view) return null;
+  return (
+    <CardShell model={model}>
+      {model.hazards.length > 0 ? (
+        <HazardList hazards={model.hazards} active={base.key} onChange={setActive} region={model.region ?? 'the training region'} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-border2">
+          <ViewToggle views={model.views} active={base.key} onChange={setActive} />
+        </div>
+      )}
+      {model.hazards.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-y border-border2">
+          <HazardControls model={model} state={state} />
+        </div>
+      )}
+      <MapImage view={view} alt={[model.title, view.overlay].filter(Boolean).join(', ')} contain />
+      <LegendBlock source={model.source}>
+        <LandCoverLegend model={model} view={view} />
+      </LegendBlock>
+      <StatsRow stats={model.stats} />
+      <LandCoverSummary lines={model.summary} lead={model.lead} className="px-3 py-[10px] border-b border-border2" />
+      <TransitionList items={model.transitions} className="px-3 py-[10px] border-b border-border2" />
+      {model.checked && <p data-testid="landcover-checked" className="px-3 py-2 text-[11.5px] text-muted border-b border-border2">{model.checked}</p>}
+      <Actions jobId={jobId} model={model} view={view} />
+    </CardShell>
+  );
+}
+
 export function ResultCardView({ jobId, model }: { jobId: string; model: ResultCardModel }) {
   switch (model.kind) {
     case 'change':
@@ -374,6 +625,8 @@ export function ResultCardView({ jobId, model }: { jobId: string; model: ResultC
       return <StatisticsCard jobId={jobId} model={model} />;
     case 'image':
       return <ImageCard jobId={jobId} model={model} />;
+    case 'landcover':
+      return <LandCoverCard jobId={jobId} model={model} />;
   }
 }
 

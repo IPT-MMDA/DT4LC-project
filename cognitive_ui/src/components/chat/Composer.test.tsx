@@ -58,7 +58,7 @@ const DRAWN: DrawnRegion = {
 beforeEach(() => {
   localStorage.clear();
   useChatStore.setState({ conversations: [], activeConversationId: null, pendingAttachments: [], pendingRegion: null, draft: '' });
-  useAppStore.setState({ selectedRegion: null, drawnRegions: [] });
+  useAppStore.setState({ selectedRegion: null, drawnRegions: [], imagery: null });
 });
 
 afterEach(() => {
@@ -198,6 +198,20 @@ describe('From map', () => {
 
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove region' }));
     expect(useChatStore.getState().pendingRegion).toBeNull();
+  });
+
+  it("takes the imagery panel's dataset: a LULC panel gives a LULC region", () => {
+    health(false);
+    useAppStore.setState({
+      drawnRegions: [DRAWN],
+      selectedRegion: DRAWN,
+      imagery: { dataset: 'LULC', start_date: '2023-06-01', end_date: '2023-06-09', cloud_max: 20, bands: [] },
+    });
+    renderComposer({ hasMessages: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'From map' }));
+    expect(useChatStore.getState().pendingRegion).toMatchObject({ id: 'region-1', dataset: 'LULC', bands: [] });
+    expect(screen.getByTestId('region-chip').textContent).toMatch(/^Region · Dnipro floodplain · Kherson8\d km² · LULC×$/);
   });
 
   it('opens the map when no region is selected', () => {

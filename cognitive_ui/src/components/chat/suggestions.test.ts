@@ -9,13 +9,14 @@ import { SAMPLE_SUGGESTIONS, SUGGESTIONS } from './suggestions';
 const ROUTING_TEST = fileURLToPath(new URL('../../../../tests/test_ui_prompt_routing.py', import.meta.url));
 
 describe('empty-state suggestions', () => {
-  it('are the screenshots\' prompts: three without the sample, five with it', () => {
+  it('are the screenshots\' prompts and the land-cover forecast: four without the sample, six with it', () => {
     expect(SUGGESTIONS.map((s) => `${s.prompt} ${s.time}`)).toEqual([
       'Compare water before and after the dam breach ~50 s',
       'Detect field boundaries east of the river ~2 min',
       'Classify land cover on the flooded fields ~90 s',
+      'Predict future LULC ~1 min',
     ]);
-    expect(SAMPLE_SUGGESTIONS.slice(3).map((s) => [s.prompt, s.badge, s.time])).toEqual([
+    expect(SAMPLE_SUGGESTIONS.slice(4).map((s) => [s.prompt, s.badge, s.time])).toEqual([
       ['Map moisture change with NDMI between the two dates', 'Composed', '~60 s'],
       ['Fill the cloud gaps in the 9 June image', undefined, 'Prithvi · ~3 min'],
     ]);

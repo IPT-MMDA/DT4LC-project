@@ -57,6 +57,7 @@ test('offline laptop: banner, tiers 1-2 greyed, member summary, models download 
     assert.deepEqual(await page.getByTestId('tier-models').getByTestId('capability-status').allInnerTexts(), [
       'Downloads on first use · 85 MB · ~14 s · AGPL-3.0',
       'Downloads on first use · 450 MB · ~75 s · Apache-2.0',
+      'Downloads on first use · 45 MB · ~7 s · CC-BY-4.0',
     ]);
     assert.equal(await page.locator('[data-testid="data-item"][data-id="earth-engine"]').getByTestId('capability-status').innerText(), 'Not configured');
     await screenshot(page, 'capabilities-offline-top.png');

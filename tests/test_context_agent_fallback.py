@@ -36,7 +36,15 @@ from server.jobs import JobQueue, JobStatus, SQLiteJobStore
 BEFORE = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230601.tif")
 AFTER = str(Path(ROOT_DIR) / "resources" / "kahovka_data" / "hlsl_20230609.tif")
 _CLOSED_PORT = "http://127.0.0.1:9"
-_KEY_VARS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "GPT_SECRET", "ANTHROPIC_API_KEY", "MISTRAL_API_KEY")
+_KEY_VARS = (
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENAI_API_KEY",
+    "GPT_SECRET",
+    "ANTHROPIC_API_KEY",
+    "MISTRAL_API_KEY",
+    "OPENROUTER_API_KEY",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -92,7 +100,7 @@ def test_outage_returns_deterministic_context(caplog: pytest.LogCaptureFixture) 
         goal="calculate NDVI",
         desired_outputs=["NDVIMap"],
         required_inputs=["RasterPath"],
-        hints={"keywords": ndvi.triggers.keywords},
+        hints={"keywords": ndvi.triggers.keywords, "item": "algorithms/ndvi"},
     )
     assert "All LLM providers failed: ollama" in caplog.text
 
