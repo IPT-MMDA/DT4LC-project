@@ -56,10 +56,10 @@ variable "github_repository" {
   default     = "IPT-MMDA/dt4lc"
 }
 
-variable "github_environment" {
-  description = "The GitHub environment whose jobs may impersonate the deployer; its branch rule limits them to master and release tags."
-  type        = string
-  default     = "dt4lc.org"
+variable "github_environments" {
+  description = "The GitHub environments whose jobs may impersonate the deployer, one per host; each environment's branch rule limits which branches and tags can use it."
+  type        = list(string)
+  default     = ["dt4lc.org", "dev.dt4lc.org"]
 }
 
 variable "ci_terraform_apply" {

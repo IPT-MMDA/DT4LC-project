@@ -18,15 +18,16 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github[0].workload_identity_pool_id
   workload_identity_pool_provider_id = "github"
   display_name                       = "GitHub"
-  # Only jobs that declare the deploy environment get a token: a token without the environment
-  # claim fails the mapping, and the environment's branch rule on GitHub admits master and release
-  # tags only. A workflow on any other branch therefore cannot impersonate the deployer.
+  # Only jobs that declare one of the deploy environments get a token: a token without the
+  # environment claim fails the mapping, and each environment's branch rule on GitHub admits only
+  # the refs it deploys (dt4lc.org: master and release tags; dev.dt4lc.org: master and dev). A
+  # workflow on any other branch therefore cannot impersonate the deployer.
   attribute_mapping = {
     "google.subject"        = "assertion.sub"
     "attribute.repository"  = "assertion.repository"
     "attribute.environment" = "assertion.environment"
   }
-  attribute_condition = "assertion.repository == \"${var.github_repository}\" && assertion.environment == \"${var.github_environment}\""
+  attribute_condition = "assertion.repository == \"${var.github_repository}\" && assertion.environment in ${jsonencode(var.github_environments)}"
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
   }
