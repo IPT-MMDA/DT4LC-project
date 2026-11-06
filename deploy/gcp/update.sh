@@ -3,13 +3,22 @@
 # then restart what changed. Run with sudo, by a person or by .github/workflows/deploy.yml:
 #   update.sh v0.6.2 0.6.2      # a release
 #   update.sh master latest     # the master branch
+#   update.sh dev dev           # the dev branch (the dev host)
 set -euo pipefail
-REF=${1:?git ref (a tag or master)}
-TAG=${2:?image tag (0.6.2 or latest)}
+REF=${1:?git ref (a tag or a branch)}
+TAG=${2:?image tag (0.6.2, latest or dev)}
 cd /opt/dt4lc
 git fetch -q --tags origin
-git checkout -q "$REF"
-[ "$REF" = master ] && git pull -q --ff-only origin master
+case "$REF" in
+  master) git checkout -q master; git pull -q --ff-only origin master ;;
+  *)
+    # Another branch follows GitHub, detached, whatever its first-boot local copy holds; a tag as is.
+    if git show-ref -q --verify "refs/remotes/origin/$REF"; then
+      git checkout -q --detach "origin/$REF"
+    else
+      git checkout -q "$REF"
+    fi ;;
+esac
 if grep -qE '^DT4LC_IMAGE_TAG=' .env; then
   sed -i -E "s|^DT4LC_IMAGE_TAG=.*|DT4LC_IMAGE_TAG=$TAG|" .env
 else

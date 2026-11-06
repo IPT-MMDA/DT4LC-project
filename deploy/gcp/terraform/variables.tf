@@ -56,8 +56,48 @@ variable "github_repository" {
   default     = "IPT-MMDA/dt4lc"
 }
 
+variable "github_environments" {
+  description = "The GitHub environments whose jobs may impersonate the deployer, one per host; each environment's branch rule limits which branches and tags can use it."
+  type        = list(string)
+  default     = ["dt4lc.org", "dev.dt4lc.org"]
+}
+
 variable "ci_terraform_apply" {
   description = "Also let the CI identity apply this configuration (it then needs project-wide roles). Off: CI only updates the containers."
   type        = bool
   default     = false
+}
+
+variable "dev_vm" {
+  description = "Also create the dev host (dev.tf): a second VM that serves the dev branch at <dev_subdomain>.<domain>."
+  type        = bool
+  default     = false
+}
+
+variable "dev_vm_name" {
+  type    = string
+  default = "dt4lc-dev"
+}
+
+variable "dev_subdomain" {
+  description = "The dev host's name under the domain (dev -> dev.dt4lc.org)."
+  type        = string
+  default     = "dev"
+}
+
+variable "dev_ref" {
+  description = "The git branch the dev host checks out on first boot; deploy.yml keeps it at the branch's latest commit."
+  type        = string
+  default     = "dev"
+}
+
+variable "dev_machine_type" {
+  description = "The same size as the demo by default, so a result on dev reproduces there; the backend holds about 1.4 GiB idle and grows with each analysis."
+  type        = string
+  default     = "e2-standard-2"
+}
+
+variable "dev_disk_gb" {
+  type    = number
+  default = 30
 }

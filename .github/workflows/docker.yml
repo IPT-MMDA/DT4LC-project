@@ -2,7 +2,8 @@ name: Docker Build & Push
 
 on:
   push:
-    branches: [master, main]
+    # dev too: its images (tag `dev`) are what dev.dt4lc.org runs, see deploy.yml.
+    branches: [master, main, dev]
     tags: ["v*.*.*"]
     # A documentation-only merge into master does not need new images. The filter is on push
     # only: pull requests into master must still run the image jobs, which the ruleset requires.
@@ -54,12 +55,14 @@ jobs:
       - name: Check if should push
         id: check
         run: |
-          # Push on: tags, master/main branch push, or manual trigger with push_images=true
+          # Push on: tags, a master/main or dev branch push, or a manual run of master, dev or a v*
+          # tag with push_images=true. Any other branch build never publishes, so it cannot overwrite
+          # a released tag; a dev build publishes only the `dev` tag and its sha tags, never `latest`.
           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
             echo "push=true" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/main") ]]; then
+          elif [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/dev") ]]; then
             echo "push=true" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.push_images }}" == "true" ]]; then
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.push_images }}" == "true" && ("${{ github.ref }}" == "refs/heads/master" || "${{ github.ref }}" == "refs/heads/dev" || "${{ github.ref }}" == refs/tags/v*) ]]; then
             echo "push=true" >> $GITHUB_OUTPUT
           else
             echo "push=false" >> $GITHUB_OUTPUT
@@ -100,7 +103,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             # Tag with major on release tags (v1.0.0 -> 1)
             type=semver,pattern={{major}}
-            # Tag with branch name (master -> master)
+            # Tag with branch name (master -> master, dev -> dev)
             type=ref,event=branch
             # Tag with PR number (pr-123)
             type=ref,event=pr
