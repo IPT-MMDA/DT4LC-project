@@ -4,8 +4,10 @@ name: Sync dev with master
 # with it, so dev carries every fix and the next release starts from the same history:
 # - when dev has no commits of its own since the last release, dev is fast-forwarded to master:
 #   the branches then point at the same commit, with no extra merge commit. This push needs the
-#   SYNC_DEPLOY_KEY secret (the private half of a deploy key with write access) and that key in
-#   the bypass list of the dev ruleset; without the secret, a pull request is opened instead;
+#   SYNC_DEPLOY_KEY secret of the `sync-dev` environment (the private half of a deploy key with
+#   write access; the environment is limited to master, so no other branch's workflow can read
+#   the key) and that key in the bypass list of the dev ruleset; without the secret, a pull
+#   request is opened instead;
 # - when dev has moved on, a pull request from master into dev is opened for the usual review
 #   (needs "Allow GitHub Actions to create and approve pull requests" under Settings > Actions >
 #   General > Workflow permissions). Merge it with a merge commit.
@@ -23,6 +25,7 @@ jobs:
   sync:
     name: dev level with master
     runs-on: ubuntu-latest
+    environment: sync-dev
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4

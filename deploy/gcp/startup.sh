@@ -9,9 +9,26 @@ MD=http://metadata.google.internal/computeMetadata/v1/instance/attributes
 DOMAIN=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-domain" || echo dt4lc.org)
 REF=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-ref" || echo v0.6.2)
 PROJECT=$(curl -sf -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/project/project-id)
-# Image tag: the dt4lc-image-tag attribute, else derived from the ref (v0.6.2 -> 0.6.2, master -> latest).
+# Image tag: the dt4lc-image-tag attribute, else derived from the ref as the image build tags it:
+# v0.6.2 -> 0.6.2, master -> latest, another branch -> its name with / as - (dev -> dev).
+image_tag() {
+  case "$1" in
+    v[0-9]*) echo "${1#v}" ;;
+    master) echo latest ;;
+    *) echo "${1//\//-}" ;;
+  esac
+}
+# The Caddyfile for the domain, from the template. The www redirect only for an apex domain (two
+# labels): a subdomain such as dev.dt4lc.org has no www record, and Caddy would keep asking for a
+# certificate it cannot get.
+caddyfile() {  # caddyfile <domain> <template>
+  case "$1" in
+    *.*.*) sed -e '/^www\.dt4lc\.org {/,/^}/d' -e "s/dt4lc\.org/$1/g" "$2" ;;
+    *) sed "s/dt4lc\.org/$1/g" "$2" ;;
+  esac
+}
 TAG=$(curl -sf -H 'Metadata-Flavor: Google' "$MD/dt4lc-image-tag" || true)
-if [ -z "$TAG" ]; then case "$REF" in v[0-9]*) TAG=${REF#v} ;; *) TAG=latest ;; esac; fi
+[ -n "$TAG" ] || TAG=$(image_tag "$REF")
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -q
@@ -33,7 +50,7 @@ systemctl enable --now docker
 git -C /opt/dt4lc fetch -q --tags
 git -C /opt/dt4lc checkout -q "$REF"
 
-sed "s/dt4lc\.org/$DOMAIN/g" /opt/dt4lc/deploy/gcp/Caddyfile > /etc/caddy/Caddyfile
+caddyfile "$DOMAIN" /opt/dt4lc/deploy/gcp/Caddyfile > /etc/caddy/Caddyfile
 systemctl enable --now caddy
 systemctl reload caddy
 

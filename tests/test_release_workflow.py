@@ -54,3 +54,18 @@ def test_release_notes_pull_lowercase_images_and_run_from_source(tmp_path: Path)
     assert "git clone --branch v0.5.0 https://github.com/IPT-MMDA/dt4lc.git" in text
     assert "docker compose --profile ollama up -d" in text
     assert "dt4lc-deploy" not in text
+
+
+def test_dev_builds_publish_but_latest_stays_on_master() -> None:
+    """dev.dt4lc.org runs the `dev` images, so pushes to dev build; `latest` must still mean master."""
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "docker.yml").read_text(encoding="utf-8"))
+    on = workflow.get("on", workflow.get(True))  # YAML 1.1 reads the bare key `on` as true
+    assert "dev" in on["push"]["branches"]
+    check = next(s for s in workflow["jobs"]["prepare"]["steps"] if s.get("id") == "check")
+    assert '"refs/heads/dev"' in check["run"]
+    for job in ("backend", "frontend"):
+        meta = next(s for s in workflow["jobs"][job]["steps"] if s.get("id") == "meta")
+        latest = [line.strip() for line in meta["with"]["tags"].splitlines() if "value=latest" in line]
+        assert latest == [
+            "type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}"
+        ], job

@@ -181,7 +181,8 @@ jobs:
   release-gate:
     name: Release gate
     # Pull requests into master come from dev (a release), from hotfix/* with a patch bump, or from
-    # docs/* or ci/* with documentation or workflow changes only.
+    # docs/* or ci/* with documentation, workflow (with their test) or deployment-kit (deploy/gcp)
+    # changes only: the kit is operations, not part of the package.
     if: github.event_name == 'pull_request' && github.base_ref == 'master'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -198,12 +199,12 @@ jobs:
           if [ "$HEAD" = dev ]; then echo "a release from dev"; exit 0; fi
           case "$HEAD" in
             docs/*|ci/*)
-              # Documentation or CI only: no version bump, and nothing that ships in the software.
-              other=$(git diff --name-only origin/master...HEAD | grep -vE '(\.md$|^docs/|^CITATION\.cff$|^\.zenodo\.json$|^LICENSE$|^\.github/)' || true)
-              if [ -n "$other" ]; then echo "::error::a docs/* or ci/* pull request may change documentation and workflow files only; these are not: $other"; exit 1; fi
-              echo "documentation or CI only"; exit 0 ;;
+              # Documentation, CI or deployment only: no version bump, and nothing that ships in the software.
+              other=$(git diff --name-only origin/master...HEAD | grep -vE '(\.md$|^docs/|^CITATION\.cff$|^\.zenodo\.json$|^LICENSE$|^\.github/|^tests/test_release_workflow\.py$|^deploy/gcp/)' || true)
+              if [ -n "$other" ]; then echo "::error::a docs/* or ci/* pull request may change documentation, workflow (with tests/test_release_workflow.py) and deploy/gcp files only; these are not: $other"; exit 1; fi
+              echo "documentation, CI or deployment only"; exit 0 ;;
             hotfix/*) ;;
-            *) echo "::error::pull requests into master come from dev (a release), hotfix/* (a patch), docs/* (documentation) or ci/* (workflows); this one is from $HEAD"; exit 1 ;;
+            *) echo "::error::pull requests into master come from dev (a release), hotfix/* (a patch), docs/* (documentation) or ci/* (workflows and the deployment kit); this one is from $HEAD"; exit 1 ;;
           esac
           base=$(git show origin/master:dta/__init__.py | ver -)
           head=$(ver dta/__init__.py)
