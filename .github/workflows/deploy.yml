@@ -63,11 +63,15 @@ jobs:
           # The environment, not its branch rule, selects the host: under workflow_run GITHUB_REF is
           # always master, so both environments admit master. A branch is checked out as
           # origin/<branch>: the host's local branch is the first-boot one.
+          # The ref ends up in a remote command line, so it must be a plain ref name (a manual run
+          # takes any text): a release tag v1.2.3 with an optional -suffix, master or dev.
+          if ! [[ "$REF" =~ ^(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?|master|dev)$ ]]; then
+            echo "not a release tag, master or dev: $REF"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           case "$REF" in
-            v[0-9]*.[0-9]*.[0-9]*) env=dt4lc.org;     ref=$REF;   tag=${REF#v}; checkout=$REF ;;
-            master)                env=dt4lc.org;     ref=master; tag=latest;   checkout=origin/master ;;
-            dev)                   env=dev.dt4lc.org; ref=dev;    tag=dev;      checkout=origin/dev ;;
-            *) echo "not a release tag, master or dev: $REF"; echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
+            master) env=dt4lc.org;     ref=master; tag=latest;   checkout=origin/master ;;
+            dev)    env=dev.dt4lc.org; ref=dev;    tag=dev;      checkout=origin/dev ;;
+            *)      env=dt4lc.org;     ref=$REF;   tag=${REF#v}; checkout=$REF ;;
           esac
           { echo "deploy=true"; echo "environment=$env"; echo "ref=$ref"; echo "tag=$tag"; echo "checkout=$checkout"; } >> "$GITHUB_OUTPUT"
           echo "$ref (images :$tag) to the $env environment"
